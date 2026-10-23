@@ -187,6 +187,10 @@ GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…] 
 GET  <base>/planche/vignette?cle=…&f=…&w=320                            → image/jpeg
 GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]        → image/jpeg
 GET  <base>/planche/exporte?cle=…&id=…[&ind&nom&loc&dates]              → image/png (attachment)
+GET  <base>/planche/decors?cle=…           → [{"id","nom","nasa"}…]   (the backgrounds offered)
+GET  <base>/planche/decor-vignette?cle=…&d=…&w=240                      → image/jpeg
+POST <base>/planche/decor?cle=…&id=…       (body: a picture)            → {"ok":true,"decor":"decor_….jpg"}
+POST <base>/planche/ecusson?cle=…&id=…     (body: a picture)            → {"ok":true,"n"}   (ok false, raison "plein": 3 already)
 ```
 
 The template travels in the text form the phone keeps it in (`planche=1`,
@@ -202,6 +206,13 @@ slide), in the grid that makes them largest; `bascule` puts a picture on a
 fitted sheet or takes it off. The template's boxes are kept as `origine=`
 lines (and its texts as `texteorigine=`, when fitting moved them), to go back
 to with `n=0`; a client sends back the lines it does not know as it read them.
+
+The background of a generic sheet is a `decor=` line: one offered (`decors`)
+or the name of a picture sent with `decor`, always fitted to the sheet
+(filled, centred, cut rather than stretched). Patches, three at most, are
+`ecusson=file;x;y;w;h;contour` lines (`contour` 1: the plain surround made
+transparent), laid over everything else. A sheet sent back can only name
+files of the sheets folder; older versions ignore these lines.
 
 ### Pass journal
 

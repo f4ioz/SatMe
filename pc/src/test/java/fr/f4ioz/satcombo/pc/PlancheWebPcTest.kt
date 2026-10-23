@@ -103,4 +103,74 @@ class PlancheWebPcTest {
         assertTrue(File(dossier, "planches").listFiles()!!.any { it.name.startsWith("fond_") })
         assertEquals("400 Bad Request", pl.lit("/importe", emptyMap(), "GET", o).statut)
     }
+
+    private fun png(b: BufferedImage) = ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()
+
+    /** A round patch on black, as a mission badge is scanned (exp75a.jpg's shape): an orange disc ringed blue. */
+    private fun ecussonRond(): BufferedImage = BufferedImage(300, 306, BufferedImage.TYPE_INT_RGB).apply {
+        createGraphics().apply {
+            setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+            color = Color.BLACK; fillRect(0, 0, 300, 306)
+            color = Color(26, 90, 190); fillOval(10, 13, 280, 280)
+            color = Color(240, 140, 30); fillOval(22, 25, 256, 256)
+            dispose()
+        }
+    }
+
+    @Test
+    fun un_fond_et_un_ecusson_sans_son_contour_sur_la_planche_exportee() {
+        val pl = planche()
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "grille")).corps)).getString("id")
+        // The backgrounds offered, each with its small picture.
+        val decors = JSONArray(String(pl.lit("/decors").corps))
+        assertTrue(decors.length() >= 7)
+        for (k in 0 until decors.length()) {
+            val v = pl.lit("/decor-vignette", mapOf("d" to decors.getJSONObject(k).getString("id"), "w" to "120"))
+            assertEquals("image/jpeg", v.type)
+        }
+        assertEquals("404 Not Found", pl.lit("/decor-vignette", mapOf("d" to "../reglages.properties")).statut)
+        // A background of one's own: a plain green picture, far wider than the sheet — it fills it, cut, not stretched.
+        val vert = BufferedImage(3000, 900, BufferedImage.TYPE_INT_RGB).apply { createGraphics().apply { color = Color(20, 160, 60); fillRect(0, 0, 3000, 900); color = Color.RED; fillRect(0, 0, 300, 900); dispose() } }
+        val d = JSONObject(String(pl.lit("/decor", mapOf("id" to id), "POST", png(vert)).corps))
+        assertTrue(d.getBoolean("ok"))
+        // A patch, its black surround taken away.
+        val e = JSONObject(String(pl.lit("/ecusson", mapOf("id" to id), "POST", png(ecussonRond())).corps))
+        assertTrue(e.toString(), e.getBoolean("ok"))
+        var texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertTrue(texte.contains("decor=decor_")); assertTrue(texte.contains("ecusson=ecusson_"))
+        // The page ticks « remove the surround » and moves it to the top-left corner; a file of elsewhere is refused.
+        texte = texte.lines().joinToString("\n") { l ->
+            if (l.startsWith("ecusson=")) { val p = l.removePrefix("ecusson=").split(';'); "ecusson=${p[0]};0;0;0.2;${p[4]};1\necusson=../x.png;0;0;0.1;0.1;0" } else l
+        }
+        pl.lit("/enregistre", mapOf("id" to id), "POST", texte.toByteArray())
+        texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertEquals(1, texte.lines().count { it.startsWith("ecusson=") })
+        assertTrue(texte.lines().first { it.startsWith("ecusson=") }.endsWith(";1"))
+        val b = ImageIO.read(pl.lit("/exporte", mapOf("id" to id)).corps.inputStream())
+        assertEquals(2400, b.width)
+        fun rgb(x: Int, y: Int) = Color(b.getRGB(x, y))
+        // The patch's square is 480 px wide at the top left: its corner shows the background, its middle the patch.
+        val coin = rgb(6, 6); assertTrue("$coin", coin.green > 120 && coin.red < 80)
+        val milieu = rgb(240, 240); assertTrue("$milieu", milieu.red > 200 && milieu.green in 100..180)
+        // The background's red left edge was cut off (cover, centred): none at the right edge of the sheet either.
+        val droite = rgb(2395, 1600); assertTrue("$droite", droite.green > 120 && droite.red < 80)
+        // A fourth patch is refused.
+        repeat(2) { pl.lit("/ecusson", mapOf("id" to id), "POST", png(ecussonRond())) }
+        assertTrue(!JSONObject(String(pl.lit("/ecusson", mapOf("id" to id), "POST", png(ecussonRond())).corps)).getBoolean("ok"))
+    }
+
+    @Test
+    fun un_fond_nasa_integre_rendu_sur_la_planche() {
+        val pl = planche()
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "tour")).corps)).getString("id")
+        var texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        val avant = ImageIO.read(pl.lit("/apercu", mapOf("id" to id, "w" to "600")).corps.inputStream())
+        pl.lit("/enregistre", mapOf("id" to id), "POST", (texte + "decor=nasa_lagune\n").toByteArray())
+        texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertTrue(texte.contains("decor=nasa_lagune"))
+        val apres = ImageIO.read(pl.lit("/apercu", mapOf("id" to id, "w" to "600")).corps.inputStream())
+        // The nebula is bright where the starry sky was dark.
+        fun lum(b: BufferedImage) = (0 until b.width step 7).sumOf { x -> Color(b.getRGB(x, 2)).let { it.red + it.green + it.blue } }
+        assertTrue(lum(apres) > lum(avant) * 3)
+    }
 }

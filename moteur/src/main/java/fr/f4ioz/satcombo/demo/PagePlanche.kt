@@ -13,7 +13,8 @@ import fr.f4ioz.satcombo.i18n.t
 
 /**
  * The SSTV sheet, on the PC screen: the template large, its boxes and texts
- * moved with the mouse, the pictures dragged in, the texts typed.
+ * moved with the mouse, the pictures dragged in, the texts typed; its
+ * background chosen, patches laid on it, moved and resized.
  *
  * **What is shown is the phone's drawing.** The page lays boxes and frames
  * over the preview the phone draws ([PlancheWeb]); it never draws a sheet of
@@ -33,7 +34,9 @@ object PagePlanche {
         "voile_noir", "libre", "champ_indicatif", "champ_nom_locator", "champ_dates", "champ_titre", "champ_libre",
         "telecharger", "fabrication", "enregistre", "hors_ligne", "aucun_modele", "aucune_image", "choisir_case",
         "par_defaut", "pupitre", "journal", "nb_images", "nb_modele", "ajustee", "aide_ajustee", "avant", "apres",
-        "pleine")
+        "pleine", "decor", "fond_planche", "fond_choisir", "fond_aide", "fond_modele", "fond_perso", "ecussons", "ecusson",
+        "ecusson_ajouter", "ecusson_aide", "ecusson_contour", "ecusson_contour_aide", "ecusson_supprimer", "ecusson_plein",
+        "envoi", "image_illisible")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -88,6 +91,14 @@ object PagePlanche {
   .zone.choisie { border:2.5px solid var(--cyan); background:rgba(63,224,200,.10); }
   .zone.texte.choisie { border-color:var(--ambre); background:rgba(255,180,84,.10); }
   .zone.survol { background:rgba(63,224,200,.30); }
+  .zone.ecusson { border-color:rgba(229,72,229,.65); border-radius:6px; }
+  .zone.ecusson.choisie { border-color:#E85BE8; background:rgba(229,72,229,.08); }
+  .zone.ecusson .poignee { background:#E85BE8; }
+  .zone.ecusson .etiq { display:none; top:-20px; left:0; white-space:nowrap; }
+  .zone.ecusson:hover .etiq, .zone.ecusson.choisie .etiq { display:block; }
+  .decors { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .decors .img img { aspect-ratio:1.414; }
+  h3 { font-size:14px; margin:14px 0 6px; }
   .etiq { position:absolute; left:2px; top:2px; font-size:11px; font-weight:700; padding:0 5px;
           border-radius:4px; background:rgba(0,0,0,.6); color:var(--clair); pointer-events:none; }
   .etiq.droite { left:auto; right:2px; }
@@ -154,10 +165,13 @@ object PagePlanche {
     <div class="actions"><span class="aide" id="etat"></span></div>
   </div>
   <div class="panneau">
-    <div class="onglets"><button id="oImages"></button><button id="oDispo"></button><button id="oTextes"></button></div>
+    <div class="onglets"><button id="oImages"></button><button id="oDispo"></button><button id="oTextes"></button><button id="oDecor"></button></div>
     <div id="pImages"></div>
     <div id="pDispo" class="cache"></div>
     <div id="pTextes" class="cache"></div>
+    <div id="pDecor" class="cache"></div>
+    <input type="file" id="fichierDecor" accept="image/*" class="cache">
+    <input type="file" id="fichierEcusson" accept="image/*" class="cache">
   </div>
 </div>
 </div>
@@ -198,7 +212,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], autres: [] };
+  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [] };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -210,6 +224,8 @@ function litModele(txt) {
     else if (k === 'texte') { const p = v.split(';'); m.textes.push({ champ: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], couleur: parseInt(p[5]), fond: parseInt(p[6]), libre: unesc(p.slice(7).join(';')) }); }
     else if (k === 'image') { const j = v.indexOf(';'); m.images[+v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'origine') { const p = v.split(';').map(Number); m.origine.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
+    else if (k === 'decor') m.decor = unesc(v);
+    else if (k === 'ecusson') { const p = v.split(';'); m.ecussons.push({ fichier: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], sans: p[5] === '1' }); }
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
   });
@@ -222,6 +238,8 @@ function ecrit(m) {
   m.textes.forEach(t => s += 'texte=' + [t.champ, r5(t.x), r5(t.y), r5(t.w), r5(t.h), t.couleur | 0, t.fond | 0, esc(t.libre).split(';').join(',')].join(';') + '\n');
   Object.keys(m.images).forEach(i => s += 'image=' + i + ';' + m.images[i] + '\n');
   m.origine.forEach(z => s += 'origine=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
+  if (m.decor) s += 'decor=' + esc(m.decor) + '\n';
+  m.ecussons.forEach(e => s += 'ecusson=' + [e.fichier, r5(e.x), r5(e.y), r5(e.w), r5(e.h), e.sans ? 1 : 0].join(';') + '\n');
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -230,11 +248,15 @@ function ecrit(m) {
 const COULEURS = [0xFFFFFFFF | 0, 0xFF000000 | 0, 0xFF0B2D5B | 0, 0xFFFFC21A | 0, 0xFF00E5FF | 0, 0xFFE5484D | 0];
 const FONDS = [0, 0xE6F2F4F8 | 0, 0x99000000 | 0];
 const CHAMPS = ['INDICATIF', 'NOM_LOCATOR', 'DATES', 'TITRE', 'LIBRE'];
-let id = '', M = null, ratio = 1.414, galerie = [], choix = null, onglet = 'images', filtre = '';
+let id = '', M = null, ratio = 1.414, galerie = [], choix = null, onglet = 'images', filtre = '', aFond = false, decors = [];
 let defauts = { indicatif: '', nom: '', locator: '', dates: '' };
 const saisie = { ind: '', nom: '', loc: '', dates: '' };
 function css(v) { const u = v >>> 0; return 'rgba(' + ((u >>> 16) & 255) + ',' + ((u >>> 8) & 255) + ',' + (u & 255) + ',' + (((u >>> 24) & 255) / 255).toFixed(3) + ')'; }
-function zoneDe(c) { return c == null ? null : (c.k === 'c' ? M.cases[c.i] : M.textes[c.i]); }
+function zoneDe(c) { return c == null ? null : (c.k === 'c' ? M.cases[c.i] : c.k === 'e' ? M.ecussons[c.i] : M.textes[c.i]); }
+// A patch keeps its picture's shape: within the sheet, never larger.
+function borneEcusson(z) { const f = Math.min(1, 1 / Math.max(z.w, z.h, 0.001)); z.w = Math.max(0.005, z.w * f); z.h = Math.max(0.005, z.h * f); z.x = Math.min(1 - z.w, Math.max(0, z.x)); z.y = Math.min(1 - z.h, Math.max(0, z.y)); }
+function bornePour(c, z) { if (c && c.k === 'e') borneEcusson(z); else borne(z); }
+function echelle(z, f) { f = Math.max(0.03 / Math.max(z.w, 0.001), Math.min(f, 1 / Math.max(z.w, z.h, 0.001))); const w = z.w * f, h = z.h * f; z.x += (z.w - w) / 2; z.y += (z.h - h) / 2; z.w = w; z.h = h; borneEcusson(z); }
 function borne(z) { z.w = Math.min(1, Math.max(0.02, z.w)); z.h = Math.min(1, Math.max(0.02, z.h)); z.x = Math.min(1 - z.w, Math.max(0, z.x)); z.y = Math.min(1 - z.h, Math.max(0, z.y)); }
 function heure(t) { const d = new Date(t); const p = n => String(n).padStart(2, '0'); return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + 'Z'; }
 
@@ -279,14 +301,21 @@ function dessineCalque() {
   const n = M.cases.length;
   M.cases.forEach((z, i) => c.appendChild(zoneEl(z, 'c', i, (i + 1) + '/' + n)));
   M.textes.forEach((z, i) => c.appendChild(zoneEl(z, 't', i, T['champ_' + z.champ.toLowerCase()] || z.champ)));
+  // The patches over all the rest, as on the sheet.
+  M.ecussons.forEach((z, i) => c.appendChild(zoneEl(z, 'e', i, T.ecusson + ' ' + (i + 1))));
 }
 function zoneEl(z, k, i, etiquette) {
-  const d = el('div', { class: 'zone' + (k === 't' ? ' texte' : '') + (choix && choix.k === k && choix.i === i ? ' choisie' : '') });
+  const d = el('div', { class: 'zone' + (k === 't' ? ' texte' : k === 'e' ? ' ecusson' : '') + (choix && choix.k === k && choix.i === i ? ' choisie' : '') });
   place(d, z);
   // When the sheet numbers its boxes itself (top left), the editing label goes to the right: not over it.
   d.appendChild(el('span', { class: 'etiq' + (k === 'c' && M.numeros ? ' droite' : ''), text: etiquette }));
   const h = el('div', { class: 'poignee' }); d.appendChild(h);
   d.addEventListener('pointerdown', ev => debutGeste(ev, k, i, ev.target === h));
+  // The wheel over a patch: larger or smaller, round its centre.
+  if (k === 'e') d.addEventListener('wheel', ev => {
+    ev.preventDefault(); const z = M.ecussons[i]; if (!z) return;
+    choix = { k: 'e', i: i }; echelle(z, ev.deltaY < 0 ? 1.08 : 1 / 1.08); change();
+  }, { passive: false });
   if (k === 'c') {
     d.addEventListener('dragover', ev => { ev.preventDefault(); d.classList.add('survol'); });
     d.addEventListener('dragleave', () => d.classList.remove('survol'));
@@ -298,7 +327,7 @@ function place(d, z) { d.style.left = (z.x * 100) + '%'; d.style.top = (z.y * 10
 let geste = null;
 function debutGeste(ev, k, i, agrandit) {
   ev.preventDefault(); ev.stopPropagation();
-  choix = { k: k, i: i }; dessineCalque(); panneau();
+  choix = { k: k, i: i }; if (k === 'e') onglet = 'decor'; dessineCalque(); panneau();
   const z = zoneDe(choix), r = g('scene').getBoundingClientRect();
   geste = { x0: ev.clientX, y0: ev.clientY, z0: Object.assign({}, z), r: r, agrandit: agrandit, bouge: false };
 }
@@ -306,8 +335,9 @@ window.addEventListener('pointermove', ev => {
   if (!geste) return;
   const z = zoneDe(choix), dx = (ev.clientX - geste.x0) / geste.r.width, dy = (ev.clientY - geste.y0) / geste.r.height;
   if (Math.abs(dx) + Math.abs(dy) > 0.001) geste.bouge = true;
-  if (geste.agrandit) { z.w = geste.z0.w + dx; z.h = geste.z0.h + dy; } else { z.x = geste.z0.x + dx; z.y = geste.z0.y + dy; }
-  borne(z);
+  if (geste.agrandit && choix.k === 'e') { z.w = Math.max(0.005, geste.z0.w + dx); z.h = z.w * geste.z0.h / geste.z0.w; }
+  else if (geste.agrandit) { z.w = geste.z0.w + dx; z.h = geste.z0.h + dy; } else { z.x = geste.z0.x + dx; z.y = geste.z0.y + dy; }
+  bornePour(choix, z);
   const d = g('calque').querySelector('.choisie'); if (d) place(d, z);
 });
 window.addEventListener('pointerup', () => { if (geste && geste.bouge) change(); geste = null; });
@@ -317,7 +347,7 @@ document.addEventListener('keydown', ev => {
   const pas = ev.shiftKey ? 0.02 : 0.002, z = zoneDe(choix); if (!z) return;
   const d = { ArrowLeft: [-pas, 0], ArrowRight: [pas, 0], ArrowUp: [0, -pas], ArrowDown: [0, pas] }[ev.key];
   if (!d) return;
-  ev.preventDefault(); z.x += d[0]; z.y += d[1]; borne(z); change();
+  ev.preventDefault(); z.x += d[0]; z.y += d[1]; bornePour(choix, z); change();
 });
 
 // ------------------------------------------------------------ pictures
@@ -342,12 +372,12 @@ function suivi() {
 
 // ------------------------------------------------------------ the side panel
 function panneau() {
-  ['images', 'dispo', 'textes'].forEach(o => {
+  ['images', 'dispo', 'textes', 'decor'].forEach(o => {
     g('p' + o.charAt(0).toUpperCase() + o.slice(1)).classList.toggle('cache', onglet !== o);
     g('o' + o.charAt(0).toUpperCase() + o.slice(1)).classList.toggle('actif', onglet === o);
   });
   if (!M) { g('pImages').innerHTML = ''; g('pImages').appendChild(el('p', { class: 'aide', text: T.aucun_modele })); return; }
-  if (onglet === 'images') panneauImages(); else if (onglet === 'dispo') panneauDispo(); else panneauTextes();
+  if (onglet === 'images') panneauImages(); else if (onglet === 'dispo') panneauDispo(); else if (onglet === 'decor') panneauDecor(); else panneauTextes();
 }
 function panneauImages() {
   const p = g('pImages'); p.innerHTML = '';
@@ -416,7 +446,11 @@ function positionChoisie(p) {
   const r = el('div', { class: 'rangee' });
   ['x', 'y', 'w', 'h'].forEach(k => {
     const i = el('input', { type: 'number', step: '0.1', value: (z[k] * 100).toFixed(1), title: k });
-    i.addEventListener('change', () => { z[k] = (parseFloat(i.value) || 0) / 100; borne(z); change(); });
+    i.addEventListener('change', () => {
+      const v = (parseFloat(i.value) || 0) / 100;
+      // A patch's shape kept: its width or height sets the other.
+      if (choix.k === 'e' && k === 'w') { z.h = z.h * v / z.w; z.w = v; } else if (choix.k === 'e' && k === 'h') { z.w = z.w * v / z.h; z.h = v; } else z[k] = v;
+      bornePour(choix, z); change(); });
     r.appendChild(el('span', { text: k }));
     r.appendChild(i);
   });
@@ -476,6 +510,54 @@ function panneauTextes() {
   p.appendChild(el('button', { class: 'rouge', style: 'margin-top:8px', text: T.retirer_texte, onclick: () => { M.textes.splice(choix.i, 1); choix = null; change(); } }));
 }
 
+function panneauDecor() {
+  const p = g('pDecor'); p.innerHTML = '';
+  p.appendChild(el('h3', { text: T.fond_planche }));
+  if (aFond) p.appendChild(el('p', { class: 'aide', text: T.fond_modele }));
+  else {
+    const grille = el('div', { class: 'decors' });
+    const vignette = (d, nom) => {
+      const v = el('div', { class: 'img' + (M.decor === d ? ' placee' : ''), title: nom }, [
+        el('img', { src: url('/decor-vignette', { d: d, w: 240 }), loading: 'lazy' }), el('div', { class: 'l2', text: nom })]);
+      v.addEventListener('click', () => { M.decor = d; change(); });
+      grille.appendChild(v);
+    };
+    decors.forEach(d => vignette(d.id, d.nom));
+    if (M.decor && !decors.some(d => d.id === M.decor)) vignette(M.decor, T.fond_perso);
+    p.appendChild(grille);
+    p.appendChild(el('div', { class: 'rangee', style: 'margin-top:8px' }, [el('button', { class: 'discret', text: T.fond_choisir, onclick: () => g('fichierDecor').click() })]));
+    p.appendChild(el('p', { class: 'aide', text: T.fond_aide }));
+  }
+  p.appendChild(el('h3', { text: tf('ecussons', M.ecussons.length, 3) }));
+  const r = el('div', { class: 'rangee' });
+  M.ecussons.forEach((e, i) => r.appendChild(el('button', { class: choix && choix.k === 'e' && choix.i === i ? 'primaire' : 'discret',
+    text: T.ecusson + ' ' + (i + 1), onclick: () => { choix = { k: 'e', i: i }; dessineCalque(); panneau(); } })));
+  if (M.ecussons.length < 3) r.appendChild(el('button', { class: 'discret', text: T.ecusson_ajouter, onclick: () => g('fichierEcusson').click() }));
+  p.appendChild(r);
+  p.appendChild(el('p', { class: 'aide', text: M.ecussons.length < 3 ? T.ecusson_aide : T.ecusson_plein + ' ' + T.ecusson_aide }));
+  if (!choix || choix.k !== 'e' || !M.ecussons[choix.i]) return;
+  const e = M.ecussons[choix.i];
+  p.appendChild(caseACocher(T.ecusson_contour, e.sans, v => { e.sans = v; change(); }));
+  p.appendChild(el('p', { class: 'aide', text: T.ecusson_contour_aide }));
+  positionChoisie(p);
+  p.appendChild(el('button', { class: 'rouge', style: 'margin-top:8px', text: T.ecusson_supprimer, onclick: () => { M.ecussons.splice(choix.i, 1); choix = null; change(); } }));
+}
+// A picture sent to the station: a background or a patch; the sheet read again.
+async function envoie(route, f) {
+  if (!f || !M) return null;
+  await sauveMaintenant();
+  g('message').textContent = T.envoi;
+  try {
+    const r = await fetch(url(route, { id: id }), { method: 'POST', body: f });
+    if (r.status === 403) { porte(); return null; }
+    const j = await r.json();
+    if (!j.ok) { g('message').textContent = j.raison === 'plein' ? T.ecusson_plein : T.image_illisible; return null; }
+    g('message').textContent = '';
+    const o = onglet; await charge(id); onglet = o;
+    return j;
+  } catch (e) { g('message').textContent = T.image_illisible; return null; }
+}
+
 // ------------------------------------------------------------ templates
 async function sauveMaintenant() { if (minuteur) { clearTimeout(minuteur); minuteur = null; await sauve(); } }
 async function listeModeles() {
@@ -489,7 +571,7 @@ async function listeModeles() {
 async function charge(i) {
   id = i; g('modeles').value = i;
   const j = await lire('/modele', { id: i });
-  M = litModele(j.texte); ratio = j.ratio || M.ratio;
+  M = litModele(j.texte); ratio = j.ratio || M.ratio; aFond = !!j.fond;
   defauts.locator = j.locator; defauts.dates = j.dates; defauts.titre = j.titre;
   g('scene').style.aspectRatio = String(ratio);
   g('scene').style.setProperty('--ratio', String(ratio));
@@ -499,6 +581,7 @@ async function demarre() {
   g('porte').classList.add('cache'); g('editeur').classList.remove('cache');
   const l = await listeModeles();
   galerie = await lire('/galerie');
+  try { decors = await lire('/decors'); } catch (e) { decors = []; }
   if (l.length) await charge(l[l.length - 1].id); else panneau();
 }
 async function nouveau(type) { await sauveMaintenant(); const j = await lire('/nouveau', { type: type }); await listeModeles(); await charge(j.id); }
@@ -507,7 +590,13 @@ g('tPorte').textContent = T.titre; g('tCode').textContent = T.code; g('entrer').
 g('tTitre').textContent = 'SatMe · ' + T.titre; g('tModele').textContent = T.modele; g('tSous').textContent = T.sous;
 g('grille').textContent = T.grille; g('tour').textContent = T.tour; g('importer').textContent = T.importer;
 g('telecharger').textContent = T.telecharger; g('pupitre').textContent = T.pupitre; g('pupitre').href = base + '/'; g('journal').textContent = T.journal; g('journal').href = base + '/journal';
-g('oImages').textContent = T.images; g('oDispo').textContent = T.disposition; g('oTextes').textContent = T.textes;
+g('oImages').textContent = T.images; g('oDispo').textContent = T.disposition; g('oTextes').textContent = T.textes; g('oDecor').textContent = T.decor;
+g('oDecor').onclick = () => { onglet = 'decor'; panneau(); };
+g('fichierDecor').onchange = async () => { await envoie('/decor', g('fichierDecor').files[0]); g('fichierDecor').value = ''; };
+g('fichierEcusson').onchange = async () => {
+  const j = await envoie('/ecusson', g('fichierEcusson').files[0]); g('fichierEcusson').value = '';
+  if (j && M.ecussons.length) { choix = { k: 'e', i: M.ecussons.length - 1 }; dessineCalque(); panneau(); }
+};
 g('oImages').onclick = () => { onglet = 'images'; panneau(); };
 g('oDispo').onclick = () => { onglet = 'dispo'; panneau(); };
 g('oTextes').onclick = () => { onglet = 'textes'; panneau(); };

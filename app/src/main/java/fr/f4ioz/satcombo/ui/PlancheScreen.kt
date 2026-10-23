@@ -16,7 +16,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -50,6 +54,7 @@ import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.PlancheRendu
 import fr.f4ioz.satcombo.sstv.SstvHub
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -106,7 +111,10 @@ fun PlancheScreen(onClose: () -> Unit) {
         }
     }
     // Saved shortly after each change: no save button to forget.
-    LaunchedEffect(m) { val x = m ?: return@LaunchedEffect; delay(600); withContext(Dispatchers.IO) { rangement.enregistre(x) } }
+    LaunchedEffect(m) {
+        val x = m ?: return@LaunchedEffect; delay(600)
+        withContext(Dispatchers.IO) { rangement.enregistre(x); runCatching { rangement.nettoie() } }
+    }
 
     val places = m?.images.orEmpty().mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap()
     val valeurs = PlancheRendu.Valeurs(
@@ -128,7 +136,8 @@ fun PlancheScreen(onClose: () -> Unit) {
                 i to (b to s.second)
             }.toMap()
             apercus.keys.retainAll(x.images.values.toSet())
-            PlancheRendu.dessine(x, fondApercu, 1000, imgs, valeurs, logo)
+            PlancheRendu.dessine(x, fondApercu, 1000, imgs, valeurs, logo,
+                PlancheRendu.chargeDecor(rangement, x, 1000), PlancheRendu.chargeEcussons(rangement, x, 500))
         }
     }
 
@@ -144,6 +153,32 @@ fun PlancheScreen(onClose: () -> Unit) {
             }
         }
     }
+    // A background of one's own, a patch: kept in the sheets folder, the sheet changed.
+    val choisitDecor = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val x = m ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        occupe = true
+        scope.launch {
+            val nom = rangement.nouveauNom("decor", "jpg")
+            val ok = withContext(Dispatchers.IO) { PlancheRendu.gardeDecor({ ctx.contentResolver.openInputStream(uri) }, File(rangement.dossier, nom)) }
+            occupe = false
+            if (ok) change(x.copy(decor = nom)) else message = t("planche_import_echec")
+        }
+    }
+    val choisitEcusson = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val x = m ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        occupe = true
+        scope.launch {
+            val nom = rangement.nouveauNom("ecusson", "png")
+            val taille = withContext(Dispatchers.IO) { PlancheRendu.gardeEcusson({ ctx.contentResolver.openInputStream(uri) }, File(rangement.dossier, nom)) }
+            occupe = false
+            if (taille == null) { message = t("planche_import_echec"); return@launch }
+            val ratio = fondApercu?.let { it.width.toFloat() / it.height } ?: x.ratio
+            val n = Planche.ajouteEcusson(x, nom, taille.first, taille.second, ratio)
+            change(n); choix = choixEcusson(n.ecussons.size - 1)
+        }
+    }
     val enregistre = rememberEnregistrer()
 
     fun exporte(partager: Boolean) {
@@ -156,7 +191,8 @@ fun PlancheScreen(onClose: () -> Unit) {
                     val s = parNom[f] ?: return@mapNotNull null
                     PlancheRendu.charge(s.first, 2000)?.let { i to (it to s.second) }
                 }.toMap()
-                val b = PlancheRendu.dessine(x, fond, fond?.width ?: 2400, imgs, valeurs, logo)
+                val b = PlancheRendu.dessine(x, fond, fond?.width ?: 2400, imgs, valeurs, logo,
+                    PlancheRendu.chargeDecor(rangement, x, 4000), PlancheRendu.chargeEcussons(rangement, x, 1600))
                 val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
                 val jour = valeurs.dates.take(10).replace("-", "").ifBlank { "planche" }
                 // Shared: a JPEG, far smaller and quicker to make than the PNG (mail and messaging take it); saved: the PNG.
@@ -213,7 +249,7 @@ fun PlancheScreen(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 val ratio = fondApercu?.let { it.width.toFloat() / it.height } ?: x.ratio
-                ApercuPlanche(x, apercu, ratio, choix, onChoix = { choix = it }, onChange = { change(it) })
+                ApercuPlanche(x, apercu, ratio, choix, onChoix = { choix = it; if (ecussonChoisi(it) != null) onglet = 3 }, onChange = { change(it) })
                 // Where the series stands: what is still to receive.
                 val (recues, manquent) = Planche.suivi(x) { it in parNom }
                 if (x.ajustee) Text(tf("planche_ajustee", x.cases.size, x.origine.size), color = Cyan, fontSize = 13.sp,
@@ -233,7 +269,7 @@ fun PlancheScreen(onClose: () -> Unit) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("planche_images", "planche_disposition", "planche_textes").forEachIndexed { i, cle ->
+                    listOf("planche_images", "planche_disposition", "planche_textes", "planche_decor").forEachIndexed { i, cle ->
                         FilterChip(selected = onglet == i, onClick = { onglet = i }, label = { Text(t(cle), fontSize = 12.sp) })
                     }
                 }
@@ -243,6 +279,9 @@ fun PlancheScreen(onClose: () -> Unit) {
                         onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) },
                         onCalcule = { calcule(it) }, onMessage = { message = it })
                     1 -> OngletDisposition(x, choix, fondApercu, onChoix = { choix = it }, onChange = { change(it) })
+                    3 -> OngletDecor(x, choix, rangement, onChoix = { choix = it }, onChange = { change(it) },
+                        onFond = { choisitDecor.launch("image/*") },
+                        onEcusson = { if (x.ecussons.size >= Planche.ECUSSONS_MAX) message = t("planche_ecusson_plein") else choisitEcusson.launch("image/*") })
                     else -> OngletTextes(x, choix, indicatif, nom, valeurs,
                         onIndicatif = { indicatif = it },
                         onNom = { nom = it; reglages.plancheNom = it },
@@ -260,7 +299,15 @@ fun PlancheScreen(onClose: () -> Unit) {
     }
 }
 
-/** The preview, with the boxes and texts to move (drag) and resize (bottom-right corner). */
+/** The selection of patch [i] (boxes are >= 0, texts -1 - index). */
+private fun choixEcusson(i: Int) = -10_000 - i
+/** The patch selected, if a patch is. */
+private fun ecussonChoisi(c: Int?): Int? = c?.takeIf { it <= -10_000 }?.let { -10_000 - it }
+
+/**
+ * The preview, with the boxes, texts and patches to move (drag) and resize
+ * (bottom-right corner; a patch also with two fingers).
+ */
 @Composable
 private fun ApercuPlanche(
     m: Planche.Modele, apercu: Bitmap?, ratio: Float, choix: Int?,
@@ -269,15 +316,21 @@ private fun ApercuPlanche(
     val modele by rememberUpdatedState(m)
     val choixActuel by rememberUpdatedState(choix)
     val coinPx = with(LocalDensity.current) { 22.dp.toPx() }
-    // During a drag: the zone as it moves, drawn over the preview.
+    // During a gesture: the zone as it moves, drawn over the preview.
     var enCours by remember { mutableStateOf<Planche.Zone?>(null) }
 
-    fun zoneDe(i: Int): Planche.Zone? = if (i >= 0) modele.cases.getOrNull(i) else modele.textes.getOrNull(-1 - i)?.zone
-    fun avecZone(i: Int, z: Planche.Zone): Planche.Modele = if (i >= 0)
-        modele.copy(cases = modele.cases.toMutableList().also { it[i] = z })
-    else modele.copy(textes = modele.textes.toMutableList().also { it[-1 - i] = it[-1 - i].copy(zone = z) })
+    fun zoneDe(i: Int): Planche.Zone? = ecussonChoisi(i)?.let { modele.ecussons.getOrNull(it)?.zone }
+        ?: if (i >= 0) modele.cases.getOrNull(i) else modele.textes.getOrNull(-1 - i)?.zone
+    fun avecZone(i: Int, z: Planche.Zone): Planche.Modele {
+        ecussonChoisi(i)?.let { e ->
+            return modele.copy(ecussons = modele.ecussons.toMutableList().also { it[e] = it[e].copy(zone = Planche.ecussonBorne(z)) })
+        }
+        return if (i >= 0) modele.copy(cases = modele.cases.toMutableList().also { it[i] = z.bornee() })
+        else modele.copy(textes = modele.textes.toMutableList().also { it[-1 - i] = it[-1 - i].copy(zone = z.bornee()) })
+    }
     fun sous(px: Float, py: Float): Int? {
-        // Texts first: they often sit on top of a box.
+        // Patches first, then texts: they sit on top of the boxes.
+        modele.ecussons.indices.reversed().firstOrNull { modele.ecussons[it].zone.contient(px, py) }?.let { return choixEcusson(it) }
         modele.textes.indices.reversed().firstOrNull { modele.textes[it].zone.contient(px, py) }?.let { return -1 - it }
         return modele.cases.indices.firstOrNull { modele.cases[it].contient(px, py) }
     }
@@ -289,28 +342,46 @@ private fun ApercuPlanche(
                 detectTapGestures { o -> onChoix(sous(o.x / size.width, o.y / size.height)) }
             }
             .pointerInput(Unit) {
-                var cible = -1; var redim = false
-                detectDragGestures(
-                    onDragStart = { o ->
-                        val c = choixActuel
-                        val zc = c?.let { zoneDe(it) }
-                        redim = zc != null &&
-                            kotlin.math.abs(o.x - (zc.x + zc.w) * size.width) < coinPx &&
-                            kotlin.math.abs(o.y - (zc.y + zc.h) * size.height) < coinPx
-                        cible = if (redim) c!! else (sous(o.x / size.width, o.y / size.height) ?: -1000)
-                        if (cible != -1000) { onChoix(cible); enCours = zoneDe(cible) }
-                    },
-                    onDrag = { ch, d ->
-                        val z = enCours ?: return@detectDragGestures
-                        ch.consume()
-                        val dx = d.x / size.width; val dy = d.y / size.height
-                        enCours = if (redim) z.copy(w = z.w + dx, h = z.h + dy) else z.copy(x = z.x + dx, y = z.y + dy)
-                    },
-                    onDragEnd = {
-                        enCours?.let { if (cible != -1000) onChange(avecZone(cible, it.bornee())) }
-                        enCours = null
-                    },
-                    onDragCancel = { enCours = null })
+                awaitEachGesture {
+                    val bas = awaitFirstDown(requireUnconsumed = false)
+                    val o = bas.position
+                    val c = choixActuel
+                    val zc = c?.let { zoneDe(it) }
+                    val redim = zc != null &&
+                        kotlin.math.abs(o.x - (zc.x + zc.w) * size.width) < coinPx &&
+                        kotlin.math.abs(o.y - (zc.y + zc.h) * size.height) < coinPx
+                    val cible = if (redim) c!! else sous(o.x / size.width, o.y / size.height) ?: return@awaitEachGesture
+                    val ecusson = ecussonChoisi(cible) != null
+                    var z = zoneDe(cible) ?: return@awaitEachGesture
+                    var bouge = false; var cumul = Offset.Zero
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val appuis = ev.changes.filter { it.pressed }
+                        if (appuis.isEmpty()) break
+                        if (appuis.size >= 2 && ecusson) {
+                            // Two fingers on a patch: pinched larger or smaller, moved with them.
+                            val zoom = ev.calculateZoom(); val pan = ev.calculatePan()
+                            if (!bouge) { bouge = true; onChoix(cible) }
+                            z = Planche.echelle(z, zoom).let { it.copy(x = it.x + pan.x / size.width, y = it.y + pan.y / size.height) }
+                            ev.changes.forEach { it.consume() }
+                        } else {
+                            val ch = appuis.first(); val d = ch.positionChange()
+                            cumul += d
+                            if (!bouge && cumul.getDistance() > viewConfiguration.touchSlop) { bouge = true; onChoix(cible) }
+                            if (!bouge) continue
+                            ch.consume()
+                            val dx = d.x / size.width; val dy = d.y / size.height
+                            z = when {
+                                redim && ecusson -> (z.w + dx).coerceAtLeast(0.01f).let { w -> z.copy(w = w, h = z.h * w / z.w) }
+                                redim -> z.copy(w = z.w + dx, h = z.h + dy)
+                                else -> z.copy(x = z.x + dx, y = z.y + dy)
+                            }
+                        }
+                        enCours = z
+                    }
+                    if (bouge) onChange(avecZone(cible, z))
+                    enCours = null
+                }
             }
         ) {
             fun cadre(z: Planche.Zone, coul: Color, pointille: Boolean, epais: Float) {
@@ -319,8 +390,9 @@ private fun ApercuPlanche(
             }
             m.cases.forEachIndexed { i, z -> if (i != choix) cadre(z, Color.White.copy(alpha = 0.45f), false, 2f) }
             m.textes.forEachIndexed { i, tx -> if (-1 - i != choix) cadre(tx.zone, Amber.copy(alpha = 0.7f), true, 2f) }
+            m.ecussons.forEachIndexed { i, e -> if (choixEcusson(i) != choix) cadre(e.zone, Magenta.copy(alpha = 0.7f), true, 2f) }
             val c = choix
-            val z = enCours ?: c?.let { if (it >= 0) m.cases.getOrNull(it) else m.textes.getOrNull(-1 - it)?.zone }
+            val z = enCours ?: c?.let { zoneDe(it) }
             if (z != null) {
                 cadre(z, Cyan, false, 4f)
                 drawCircle(Cyan, 9.dp.toPx(), Offset((z.x + z.w) * size.width, (z.y + z.h) * size.height))
@@ -517,6 +589,67 @@ private fun OngletTextes(
     }
     TextButton(onClick = { onChange(m.copy(textes = m.textes.filterIndexed { j, _ -> j != i })); onChoix(null) }) {
         Text(t("planche_supprimer_texte"), color = Magenta, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun OngletDecor(
+    m: Planche.Modele, choix: Int?, rangement: Planche.Rangement, onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit,
+    onFond: () -> Unit, onEcusson: () -> Unit
+) {
+    Text(t("planche_fond_planche"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    if (m.fond.isNotBlank()) Text(t("planche_fond_modele"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
+    else {
+        // The backgrounds SatMe offers, small, and one's own when there is one.
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val ids = PlancheDecor.INTEGRES.map { it.id to t(it.cle) } +
+                listOfNotNull(m.decor.takeIf { it.isNotBlank() && PlancheDecor.integre(it) == null }?.let { it to t("planche_fond_perso") })
+            ids.forEach { (id, nom) ->
+                val b by produceState<Bitmap?>(null, id) {
+                    value = withContext(Dispatchers.IO) {
+                        PlancheDecor.integre(id)?.let { PlancheRendu.apercuDecor(it, 240) } ?: rangement.fichier(id)?.let { PlancheRendu.charge(it, 240) }
+                    }
+                }
+                Column(Modifier.width(110.dp).clip(RoundedCornerShape(8.dp)).background(SpaceCard)
+                    .border(3.dp, if (m.decor == id) Cyan else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable { onChange(m.copy(decor = id)) }) {
+                    b?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(1.414f)) }
+                        ?: Box(Modifier.fillMaxWidth().aspectRatio(1.414f))
+                    Text(nom, color = TextHi, fontSize = 10.sp, maxLines = 2, modifier = Modifier.padding(4.dp))
+                }
+            }
+        }
+        OutlinedButton(onClick = onFond) { Text(t("planche_fond_choisir"), color = Cyan, fontSize = 11.sp) }
+        Text(t("planche_fond_aide"), color = TextLo, fontSize = 10.sp, modifier = Modifier.padding(vertical = 4.dp))
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Text(tf("planche_ecussons", m.ecussons.size, Planche.ECUSSONS_MAX), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        m.ecussons.indices.forEach { i ->
+            FilterChip(selected = ecussonChoisi(choix) == i, onClick = { onChoix(choixEcusson(i)) },
+                label = { Text("${i + 1}", fontSize = 12.sp) })
+        }
+        if (m.ecussons.size < Planche.ECUSSONS_MAX) AssistChip(onClick = onEcusson,
+            label = { Text("＋ " + t("planche_ecusson_ajouter"), fontSize = 12.sp, color = Cyan) })
+    }
+    Text(t("planche_ecusson_aide"), color = TextLo, fontSize = 10.sp)
+    val i = ecussonChoisi(choix)
+    val e = i?.let { m.ecussons.getOrNull(it) }
+    if (i == null || e == null) {
+        if (m.ecussons.isNotEmpty()) Text(t("planche_ecusson_toucher"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        return
+    }
+    fun maj(n: Planche.Ecusson) = onChange(m.copy(ecussons = m.ecussons.toMutableList().also { it[i] = n }))
+    Spacer(Modifier.height(6.dp))
+    Text(tf("planche_ecusson_choisi", i + 1), color = TextHi, fontSize = 12.sp)
+    Interrupteur(t("planche_ecusson_contour"), t("planche_ecusson_contour_desc"), e.sansContour) { maj(e.copy(sansContour = it)) }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton(onClick = { maj(e.copy(zone = Planche.echelle(e.zone, 1f / 1.15f))) }) { Text(t("planche_ecusson_moins"), color = Cyan, fontSize = 11.sp) }
+        OutlinedButton(onClick = { maj(e.copy(zone = Planche.echelle(e.zone, 1.15f))) }) { Text(t("planche_ecusson_plus"), color = Cyan, fontSize = 11.sp) }
+    }
+    TextButton(onClick = { onChange(m.copy(ecussons = m.ecussons.filterIndexed { j, _ -> j != i })); onChoix(null) }) {
+        Text(t("planche_ecusson_supprimer"), color = Magenta, fontSize = 12.sp)
     }
 }
 

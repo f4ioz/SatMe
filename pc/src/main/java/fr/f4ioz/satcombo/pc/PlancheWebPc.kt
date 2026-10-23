@@ -13,6 +13,7 @@ import fr.f4ioz.satcombo.demo.PagePc
 import fr.f4ioz.satcombo.demo.PagePlanche
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -94,8 +95,12 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         val places = places(m)
         val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
         val fond = rangement.fond(m)?.let { PlancheRenduPc.charge(it, 1600) }
-        return PlancheRenduPc.dessine(m, fond, largeur, imgs, valeurs(m, places) { "" })
+        return PlancheRenduPc.dessine(m, fond, largeur, imgs, valeurs(m, places) { "" },
+            decor = PlancheRenduPc.chargeDecor(rangement, m, 1600), ecussons = PlancheRenduPc.chargeEcussons(rangement, m, 800))
     }
+
+    /** A picture sent from the page, read; null when it is none. */
+    private fun lisImage(octets: ByteArray?): BufferedImage? = octets?.let { runCatching { ImageIO.read(it.inputStream()) }.getOrNull() }
 
     /** One request of the sheet page: [route] what follows `/planche`, [corps] the body (a template sent, a picture). */
     fun sert(route: String, methode: String, p: (String) -> String, corps: () -> ByteArray?): ReponseWeb {
@@ -127,7 +132,8 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                         textes = lu.textes.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
                         titre = lu.titre.take(120), images = lu.images.filterKeys { it in lu.cases.indices.take(60) },
                         origine = lu.origine.take(60).map { it.bornee() }, textesOrigine = lu.textesOrigine.take(20))
-                    synchronized(this) { r.enregistre(m) }
+                        .let { Planche.decorVerifie(it) { n -> r.fichier(n) != null } }
+                    synchronized(this) { r.enregistre(m); r.nettoie() }
                     if (p("nom_station").isNotBlank()) station.settings.plancheNom = p("nom_station").take(60)
                     json("{\"ok\":true}")
                 }
@@ -179,6 +185,53 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     json("{\"ok\":${n != m || f !in Planche.choisies(m)},\"cases\":${n.cases.size}}")
                 }
 
+                // The built-in backgrounds, to choose one.
+                "/decors" -> json(PlancheDecor.INTEGRES.joinToString(",", "[", "]") {
+                    "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(fr.f4ioz.satcombo.i18n.t(it.cle))}\",\"nasa\":${it.ressource != null}}"
+                })
+
+                // A background small: a built-in one, or the picture chosen for a sheet.
+                "/decor-vignette" -> {
+                    val d = p("d")
+                    val w = p("w").toIntOrNull()?.coerceIn(80, 600) ?: 240
+                    val b = PlancheDecor.integre(d)?.let { PlancheRenduPc.apercuDecor(it, w) }
+                        ?: r.fichier(d)?.takeIf { d.startsWith("decor_") }?.let { f -> PlancheRenduPc.charge(f, w) } ?: return NON
+                    ReponseWeb("200 OK", "image/jpeg", jpeg(rgb(b), 0.85f), "Cache-Control: max-age=3600\r\n")
+                }
+
+                // A picture of one's own as the background: kept (3000 pixels at most), fitted to the sheet when drawn.
+                "/decor" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(p("id")) ?: return NON
+                    val b = lisImage(corps()) ?: return REFUS
+                    val nom = r.nouveauNom("decor", "jpg")
+                    File(r.dossier, nom).writeBytes(jpeg(rgb(if (b.width > 3000) PlancheRenduPc.reduit(b, 3000) else b), 0.9f))
+                    synchronized(this) { r.enregistre(m.copy(decor = nom)); r.nettoie() }
+                    json("{\"ok\":true,\"decor\":\"$nom\"}")
+                }
+
+                // A patch: kept as PNG (its transparency, if it has one), put near the middle of the sheet.
+                "/ecusson" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(p("id")) ?: return NON
+                    if (m.ecussons.size >= Planche.ECUSSONS_MAX) return json("{\"ok\":false,\"raison\":\"plein\"}")
+                    val b = lisImage(corps()) ?: return REFUS
+                    val petit = if (maxOf(b.width, b.height) > 1600) {
+                        val l = if (b.width >= b.height) 1600 else (1600L * b.width / b.height).toInt().coerceAtLeast(1)
+                        BufferedImage(l, (l.toLong() * b.height / b.width).toInt().coerceAtLeast(1), BufferedImage.TYPE_INT_ARGB).also {
+                            it.createGraphics().apply {
+                                setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                                drawImage(b, 0, 0, it.width, it.height, null); dispose()
+                            }
+                        }
+                    } else b
+                    val nom = r.nouveauNom("ecusson", "png")
+                    File(r.dossier, nom).outputStream().use { ImageIO.write(petit, "png", it) }
+                    val n = Planche.ajouteEcusson(m, nom, petit.width, petit.height)
+                    synchronized(this) { r.enregistre(n) }
+                    json("{\"ok\":true,\"n\":${n.ecussons.size}}")
+                }
+
                 "/galerie" -> json(galerie().joinToString(",", "[", "]") { (f, s) ->
                     "{\"f\":\"${js(f.name)}\",\"s\":\"${js(s.satName)}\",\"m\":\"${js(s.mode)}\",\"t\":${s.timeMs},\"c\":${s.complete},\"d\":${s.source == "live"}}"
                 })
@@ -198,12 +251,14 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     if (chemin == "/apercu") {
                         val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
                         val fond = r.fond(m)?.let { PlancheRenduPc.charge(it, 1600) }
-                        val b = PlancheRenduPc.dessine(m, fond, p("w").toIntOrNull()?.coerceIn(400, 1800) ?: 1400, imgs, v)
+                        val b = PlancheRenduPc.dessine(m, fond, p("w").toIntOrNull()?.coerceIn(400, 1800) ?: 1400, imgs, v,
+                            decor = PlancheRenduPc.chargeDecor(r, m, 1800), ecussons = PlancheRenduPc.chargeEcussons(r, m, 800))
                         ReponseWeb("200 OK", "image/jpeg", jpeg(b), "Cache-Control: no-store\r\n")
                     } else {
                         val fond = r.fond(m)?.let { PlancheRenduPc.charge(it, 4000) }
                         val imgs = places.mapNotNull { (i, x) -> PlancheRenduPc.charge(x.first, 2000)?.let { i to (it to x.second) } }.toMap()
-                        val b = PlancheRenduPc.dessine(m, fond, fond?.width ?: 2400, imgs, v)
+                        val b = PlancheRenduPc.dessine(m, fond, fond?.width ?: 2400, imgs, v,
+                            decor = PlancheRenduPc.chargeDecor(r, m, 4000), ecussons = PlancheRenduPc.chargeEcussons(r, m, 1600))
                         val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
                         val jour = v.dates.take(10).replace("-", "").ifBlank { "planche" }
                         val png = ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()

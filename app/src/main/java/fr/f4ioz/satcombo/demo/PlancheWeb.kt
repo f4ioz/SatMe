@@ -12,6 +12,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.PlancheRendu
 import fr.f4ioz.satcombo.sstv.SstvHub
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -148,7 +149,8 @@ object PlancheWeb {
                         titre = lu.titre.take(120),
                         images = lu.images.filterKeys { it in lu.cases.indices.take(60) },
                         origine = lu.origine.take(60).map { it.bornee() }, textesOrigine = lu.textesOrigine.take(20))
-                    synchronized(this) { r.enregistre(m) }
+                        .let { Planche.decorVerifie(it) { n -> r.fichier(n) != null } }
+                    synchronized(this) { r.enregistre(m); r.nettoie() }
                     if (p("nom_station").isNotBlank()) SettingsStore(ctx).plancheNom = p("nom_station").take(60)
                     json("{\"ok\":true}")
                 }
@@ -203,6 +205,44 @@ object PlancheWeb {
                     json("{\"ok\":${n != m || f !in Planche.choisies(m)},\"cases\":${n.cases.size}}")
                 }
 
+                // The built-in backgrounds, to choose one.
+                "/decors" -> json(PlancheDecor.INTEGRES.joinToString(",", "[", "]") {
+                    "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(fr.f4ioz.satcombo.i18n.t(it.cle))}\",\"nasa\":${it.ressource != null}}"
+                })
+
+                // A background small: a built-in one, or the picture chosen for a sheet.
+                "/decor-vignette" -> {
+                    val d = p("d")
+                    val w = p("w").toIntOrNull()?.coerceIn(80, 600) ?: 240
+                    val b = PlancheDecor.integre(d)?.let { PlancheRendu.apercuDecor(it, w) }
+                        ?: r.fichier(d)?.takeIf { d.startsWith("decor_") }?.let { f -> PlancheRendu.charge(f, w) } ?: return NON
+                    ReponseWeb("200 OK", "image/jpeg", jpeg(b, 85), "Cache-Control: max-age=3600\r\n")
+                }
+
+                // A picture of one's own as the background: kept (3000 pixels at most), fitted to the sheet when drawn.
+                "/decor" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(r, p("id")) ?: return NON
+                    val nom = r.nouveauNom("decor", "jpg")
+                    val octets = corps() ?: return REFUS
+                    if (!PlancheRendu.gardeDecor({ octets.inputStream() }, File(r.dossier, nom))) return REFUS
+                    synchronized(this) { r.enregistre(m.copy(decor = nom)); r.nettoie() }
+                    json("{\"ok\":true,\"decor\":\"$nom\"}")
+                }
+
+                // A patch: kept as PNG (its transparency, if it has one), put near the middle of the sheet.
+                "/ecusson" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(r, p("id")) ?: return NON
+                    if (m.ecussons.size >= Planche.ECUSSONS_MAX) return json("{\"ok\":false,\"raison\":\"plein\"}")
+                    val nom = r.nouveauNom("ecusson", "png")
+                    val octets = corps() ?: return REFUS
+                    val (w, h) = PlancheRendu.gardeEcusson({ octets.inputStream() }, File(r.dossier, nom)) ?: return REFUS
+                    val n = Planche.ajouteEcusson(m, nom, w, h)
+                    synchronized(this) { r.enregistre(n) }
+                    json("{\"ok\":true,\"n\":${n.ecussons.size}}")
+                }
+
                 // The SSTV pictures received, newest first.
                 "/galerie" -> json(galerie(ctx).joinToString(",", "[", "]") { (f, s) ->
                     "{\"f\":\"${js(f.name)}\",\"s\":\"${js(s.satName)}\",\"m\":\"${js(s.mode)}\",\"t\":${s.timeMs}," +
@@ -224,12 +264,14 @@ object PlancheWeb {
                     val logo = runCatching { ctx.packageManager.getApplicationIcon(ctx.applicationInfo) }.getOrNull()
                     if (chemin == "/apercu") {
                         val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
-                        val b = PlancheRendu.dessine(m, fondApercu(r, m), p("w").toIntOrNull()?.coerceIn(400, 1800) ?: 1400, imgs, v, logo)
+                        val b = PlancheRendu.dessine(m, fondApercu(r, m), p("w").toIntOrNull()?.coerceIn(400, 1800) ?: 1400, imgs, v, logo,
+                            PlancheRendu.chargeDecor(r, m, 1800), PlancheRendu.chargeEcussons(r, m, 800))
                         ReponseWeb("200 OK", "image/jpeg", jpeg(b), "Cache-Control: no-store\r\n")
                     } else {
                         val fond = r.fond(m)?.let { PlancheRendu.charge(it, 4000) }
                         val imgs = places.mapNotNull { (i, x) -> PlancheRendu.charge(x.first, 2000)?.let { i to (it to x.second) } }.toMap()
-                        val b = PlancheRendu.dessine(m, fond, fond?.width ?: 2400, imgs, v, logo)
+                        val b = PlancheRendu.dessine(m, fond, fond?.width ?: 2400, imgs, v, logo,
+                            PlancheRendu.chargeDecor(r, m, 4000), PlancheRendu.chargeEcussons(r, m, 1600))
                         val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
                         val jour = v.dates.take(10).replace("-", "").ifBlank { "planche" }
                         val png = ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()

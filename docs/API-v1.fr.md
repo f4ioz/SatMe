@@ -182,6 +182,10 @@ GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…] 
 GET  <base>/planche/vignette?cle=…&f=…&w=320                             → image/jpeg
 GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]         → image/jpeg
 GET  <base>/planche/exporte?cle=…&id=…[&ind&nom&loc&dates]               → image/png (pièce jointe)
+GET  <base>/planche/decors?cle=…           → [{"id","nom","nasa"}…]   (les fonds proposés)
+GET  <base>/planche/decor-vignette?cle=…&d=…&w=240                       → image/jpeg
+POST <base>/planche/decor?cle=…&id=…       (corps : une image)           → {"ok":true,"decor":"decor_….jpg"}
+POST <base>/planche/ecusson?cle=…&id=…     (corps : une image)           → {"ok":true,"n"}   (ok faux, raison « plein » : 3 déjà)
 ```
 
 Le modèle voyage sous la forme texte où le téléphone le garde (`planche=1`,
@@ -198,6 +202,14 @@ seule copie de chaque diapo), dans la grille qui les fait les plus grandes ;
 modèle sont gardées en lignes `origine=` (et ses textes en `texteorigine=`,
 quand l'ajustement les a déplacés), pour y revenir avec `n=0` ; un client
 renvoie telles qu'il les a lues les lignes qu'il ne connaît pas.
+
+Le fond d'une planche générique est une ligne `decor=` : un fond proposé
+(`decors`) ou le nom d'une image envoyée par `decor`, toujours ajustée à la
+planche (remplie, centrée, coupée plutôt que déformée). Les écussons, trois au
+plus, sont des lignes `ecusson=fichier;x;y;w;h;contour` (`contour` à 1 : le
+fond uni autour rendu transparent), posés par-dessus tout le reste. Une
+planche renvoyée ne peut désigner que des fichiers du dossier des planches ;
+les versions plus anciennes ignorent ces lignes.
 
 ### Journal des passages
 

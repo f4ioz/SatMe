@@ -184,7 +184,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 ### Et dans la 20.80
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
-- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, planche téléchargée en pleine résolution.
+- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, un fond (étoiles, dégradés, images NASA, ou la vôtre ajustée à la planche) et jusqu'à trois écussons de mission placés et redimensionnés à la souris, leur contour uni enlevé ; planche téléchargée en pleine résolution.
 - Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
 
 ## Fonctions

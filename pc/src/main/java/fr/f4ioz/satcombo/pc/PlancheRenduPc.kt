@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import java.awt.BasicStroke
 import java.awt.Color
@@ -97,11 +98,87 @@ object PlancheRenduPc {
         return r
     }
 
+    /** As [reduit], transparency kept (a patch). */
+    private fun reduitArgb(b: BufferedImage, largeur: Int): BufferedImage {
+        val h = (largeur.toLong() * b.height / b.width).toInt().coerceAtLeast(1)
+        val r = BufferedImage(largeur, h, BufferedImage.TYPE_INT_ARGB)
+        r.createGraphics().apply {
+            setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            drawImage(b, 0, 0, largeur, h, null); dispose()
+        }
+        return r
+    }
+
+    // The built-in pictures, decoded once at the size last asked.
+    @Volatile private var decorCache: Pair<String, BufferedImage>? = null
+
+    /**
+     * The background picture of [m] no wider than [largeurMax]: a built-in
+     * one or the file chosen; null when it is drawn (or the template has its own).
+     */
+    fun chargeDecor(r: Planche.Rangement, m: Planche.Modele, largeurMax: Int): BufferedImage? {
+        if (m.fond.isNotBlank()) return null
+        val d = PlancheDecor.integre(m.decor)
+        if (d != null) {
+            if (d.ressource == null) return null
+            val cle = d.id + "@" + largeurMax
+            decorCache?.let { (k, b) -> if (k == cle) return b }
+            return runCatching { PlancheDecor.ouvre(d)?.use { ImageIO.read(it) } }.getOrNull()
+                ?.let { if (it.width > largeurMax) reduit(it, largeurMax) else it }?.also { decorCache = cle to it }
+        }
+        return r.decor(m)?.let { charge(it, largeurMax) }
+    }
+
+    /** A built-in background, small ([largeur] wide, the sheet's shape): to choose it. */
+    fun apercuDecor(d: PlancheDecor.Decor, largeur: Int): BufferedImage {
+        val h = (largeur / 1.414f).toInt().coerceAtLeast(1)
+        val b = BufferedImage(largeur, h, BufferedImage.TYPE_INT_RGB)
+        val g = b.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        val img = if (d.ressource != null) runCatching { PlancheDecor.ouvre(d)?.use { ImageIO.read(it) } }.getOrNull() else null
+        if (img != null) {
+            val c = PlancheDecor.couvre(img.width, img.height, largeur.toFloat(), h.toFloat())
+            g.drawImage(img, 0, 0, largeur, h, c.x, c.y, c.x + c.w, c.y + c.h, null)
+        } else fondGenerique(g, largeur, h, d)
+        g.dispose()
+        return b
+    }
+
+    // Patches ready to draw (surround taken away when asked), by file, choice and size.
+    private val ecussons = object : LinkedHashMap<String, BufferedImage>(8, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, BufferedImage>?) = size > 12
+    }
+
+    /** A patch file no wider than [largeurMax], transparency kept; its surround taken away when [sansContour]. */
+    fun ecusson(f: File, sansContour: Boolean, largeurMax: Int): BufferedImage? {
+        val cle = f.name + "@" + f.lastModified() + "@" + sansContour + "@" + largeurMax
+        synchronized(ecussons) { ecussons[cle] }?.let { return it }
+        val b = runCatching { ImageIO.read(f) }.getOrNull() ?: return null
+        var a = if (b.width > largeurMax) reduitArgb(b, largeurMax) else if (b.type == BufferedImage.TYPE_INT_ARGB) b
+            else reduitArgb(b, b.width)
+        if (sansContour) {
+            val px = PlancheDecor.detoure(a.getRGB(0, 0, a.width, a.height, null, 0, a.width), a.width, a.height)
+            a = BufferedImage(a.width, a.height, BufferedImage.TYPE_INT_ARGB).apply { setRGB(0, 0, width, height, px, 0, width) }
+        }
+        synchronized(ecussons) { ecussons[cle] = a }
+        return a
+    }
+
+    /** The patches of [m] by their place in its list, each no wider than [largeurMax]. */
+    fun chargeEcussons(r: Planche.Rangement, m: Planche.Modele, largeurMax: Int): Map<Int, BufferedImage> =
+        m.ecussons.mapIndexedNotNull { i, e -> r.fichier(e.fichier)?.let { ecusson(it, e.sansContour, largeurMax) }?.let { i to it } }.toMap()
+
     private fun couleur(argb: Int) = Color(argb, true)
 
-    /** The sheet [largeur] pixels wide; [images] the pictures by box, with what is known of them. */
+    /**
+     * The sheet [largeur] pixels wide; [images] the pictures by box, with what is known of them;
+     * [decor] its background picture ([chargeDecor]), [ecussons] its patches ([chargeEcussons]).
+     */
     fun dessine(m: Planche.Modele, fond: BufferedImage?, largeur: Int, images: Map<Int, Pair<BufferedImage, SstvMeta.SstvShot>>,
-                v: Valeurs, logo: BufferedImage? = MarquePc.icone): BufferedImage {
+                v: Valeurs, logo: BufferedImage? = MarquePc.icone, decor: BufferedImage? = null,
+                ecussons: Map<Int, BufferedImage> = emptyMap()): BufferedImage {
         val ratio = if (fond != null) fond.width.toFloat() / fond.height else m.ratio
         val w = largeur; val h = (largeur / ratio).toInt().coerceAtLeast(1)
         val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
@@ -109,7 +186,12 @@ object PlancheRenduPc {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        if (fond != null) g.drawImage(fond, 0, 0, w, h, null) else fondGenerique(g, w, h)
+        if (fond != null) g.drawImage(fond, 0, 0, w, h, null)
+        else if (decor != null) {
+            // Fitted to the sheet: filled, centred, cut rather than stretched.
+            val c = PlancheDecor.couvre(decor.width, decor.height, w.toFloat(), h.toFloat())
+            g.drawImage(decor, 0, 0, w, h, c.x, c.y, c.x + c.w, c.y + c.h, null)
+        } else fondGenerique(g, w, h, PlancheDecor.integre(m.decor)?.takeIf { it.ressource == null } ?: PlancheDecor.ETOILES)
         val k = w / 1000f
         // Fitted to fewer pictures: the template's printed boxes ("NO IMAGE") hidden under one dark panel.
         if (fond != null && m.ajustee) Planche.englobe(m.origine)?.let { z ->
@@ -162,6 +244,15 @@ object PlancheRenduPc {
                 g.drawImage(logo, gauche.toInt(), haut.toInt(), cote.toInt(), cote.toInt(), null)
             }
         }
+        // The patches last, over everything, the last on top; never stretched.
+        m.ecussons.forEachIndexed { i, e ->
+            val img = ecussons[i] ?: return@forEachIndexed
+            val zw = e.zone.w * w; val zh = e.zone.h * h
+            val s = minOf(zw / img.width, zh / img.height)
+            val dw = img.width * s; val dh = img.height * s
+            val x = e.zone.x * w + (zw - dw) / 2; val y = e.zone.y * h + (zh - dh) / 2
+            g.drawImage(img, x.toInt(), y.toInt(), (x + dw).toInt(), (y + dh).toInt(), 0, 0, img.width, img.height, null)
+        }
         g.dispose()
         return b
     }
@@ -191,11 +282,11 @@ object PlancheRenduPc {
         for (l in lignes) { g.drawString(l, (r.x + r.width / 2) - g.fontMetrics.stringWidth(l) / 2f, y); y += pas }
     }
 
-    /** Night sky: deep blue to black, stars — the phone's generic background. */
-    private fun fondGenerique(g: Graphics2D, w: Int, h: Int) {
-        g.paint = LinearGradientPaint(0f, 0f, 0f, h.toFloat(), floatArrayOf(0f, 0.7f, 1f),
-            arrayOf(Color(0x02040A), Color(0x0A1630), Color(0x123A6B)))
+    /** A drawn background ([PlancheDecor.Decor]): its gradient, its stars — the phone's, stroke for stroke. */
+    private fun fondGenerique(g: Graphics2D, w: Int, h: Int, d: PlancheDecor.Decor = PlancheDecor.ETOILES) {
+        g.paint = LinearGradientPaint(0f, 0f, 0f, h.toFloat(), d.positions, d.couleurs.map { Color(it, true) }.toTypedArray())
         g.fillRect(0, 0, w, h)
+        if (!d.etoiles) return
         val r = Random(73)
         repeat(w * h / 4000) {
             g.color = Color(255, 255, 255, r.nextInt(90, 255))

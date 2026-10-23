@@ -69,21 +69,101 @@ object PlancheRendu {
         s?.let { f.name to it }
     }.toMap()
 
+    // The built-in pictures, decoded once at the size last asked.
+    @Volatile private var decorCache: Pair<String, Bitmap>? = null
+
+    /** A picture decoded no larger than needed for [largeurMax]; [ouvre] is read twice (size, then pixels). */
+    private fun decode(ouvre: () -> java.io.InputStream?, largeurMax: Int): Bitmap? = runCatching {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ouvre()?.use { BitmapFactory.decodeStream(it, null, o) }
+        var n = 1
+        while (o.outWidth / (n * 2) >= largeurMax) n *= 2
+        ouvre()?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = n }) }
+    }.getOrNull()
+
+    /**
+     * The background picture of [m], decoded for [largeurMax]: a built-in one
+     * or the file chosen; null when it is drawn (or the template has its own).
+     */
+    fun chargeDecor(r: Planche.Rangement, m: Planche.Modele, largeurMax: Int): Bitmap? {
+        if (m.fond.isNotBlank()) return null
+        val d = PlancheDecor.integre(m.decor)
+        if (d != null) {
+            if (d.ressource == null) return null
+            val cle = d.id + "@" + largeurMax
+            decorCache?.let { (k, b) -> if (k == cle) return b }
+            return decode({ PlancheDecor.ouvre(d) }, largeurMax)?.also { decorCache = cle to it }
+        }
+        return r.decor(m)?.let { charge(it, largeurMax) }
+    }
+
+    /** A picture of one's own kept as a background in [dest]: 3000 pixels wide at most, JPEG. */
+    fun gardeDecor(ouvre: () -> java.io.InputStream?, dest: File): Boolean = runCatching {
+        var b = decode(ouvre, 3000) ?: return false
+        if (b.width > 3000) b = Bitmap.createScaledBitmap(b, 3000, (3000L * b.height / b.width).toInt().coerceAtLeast(1), true)
+        dest.outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+    }.getOrDefault(false)
+
+    /** A patch kept in [dest]: 1600 pixels at most each way, PNG (its transparency kept); its size, or null. */
+    fun gardeEcusson(ouvre: () -> java.io.InputStream?, dest: File): Pair<Int, Int>? = runCatching {
+        var b = decode(ouvre, 1600) ?: return null
+        val k = 1600f / maxOf(b.width, b.height)
+        if (k < 1f) b = Bitmap.createScaledBitmap(b, (b.width * k).toInt().coerceAtLeast(1), (b.height * k).toInt().coerceAtLeast(1), true)
+        dest.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        b.width to b.height
+    }.getOrNull()
+
+    /** A built-in background, small ([largeur] wide, the sheet's shape): to choose it. */
+    fun apercuDecor(d: PlancheDecor.Decor, largeur: Int): Bitmap {
+        val h = (largeur / 1.414f).toInt().coerceAtLeast(1)
+        val b = Bitmap.createBitmap(largeur, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val img = if (d.ressource != null) decode({ PlancheDecor.ouvre(d) }, largeur) else null
+        if (img != null) dessineCouvert(c, img, RectF(0f, 0f, largeur.toFloat(), h.toFloat())) else fondGenerique(c, largeur, h, d)
+        return b
+    }
+
+    // Patches ready to draw (surround taken away when asked), by file, choice and size.
+    private val ecussons = object : LinkedHashMap<String, Bitmap>(8, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Bitmap>?) = size > 12
+    }
+
+    /** A patch file decoded for [largeurMax], transparency kept; its surround taken away when [sansContour]. */
+    fun ecusson(f: File, sansContour: Boolean, largeurMax: Int): Bitmap? {
+        val cle = f.name + "@" + f.lastModified() + "@" + sansContour + "@" + largeurMax
+        synchronized(ecussons) { ecussons[cle] }?.let { return it }
+        var b = charge(f, largeurMax) ?: return null
+        if (b.width > largeurMax) b = Bitmap.createScaledBitmap(b, largeurMax, (largeurMax.toLong() * b.height / b.width).toInt().coerceAtLeast(1), true)
+        if (sansContour) {
+            val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
+            b = Bitmap.createBitmap(PlancheDecor.detoure(px, b.width, b.height), b.width, b.height, Bitmap.Config.ARGB_8888)
+        }
+        synchronized(ecussons) { ecussons[cle] = b }
+        return b
+    }
+
+    /** The patches of [m] by their place in its list, each decoded for [largeurMax]. */
+    fun chargeEcussons(r: Planche.Rangement, m: Planche.Modele, largeurMax: Int): Map<Int, Bitmap> =
+        m.ecussons.mapIndexedNotNull { i, e -> r.fichier(e.fichier)?.let { ecusson(it, e.sansContour, largeurMax) }?.let { i to it } }.toMap()
+
     /**
      * The sheet [largeur] pixels wide. [images]: the pictures by box, with
-     * what is known of them (for the line under each).
+     * what is known of them (for the line under each); [decor] its background
+     * picture ([chargeDecor]), [ecussons] its patches ([chargeEcussons]).
      */
     fun dessine(
         m: Planche.Modele, fond: Bitmap?, largeur: Int,
         images: Map<Int, Pair<Bitmap, SstvMeta.SstvShot>>, v: Valeurs,
-        logo: android.graphics.drawable.Drawable? = null
+        logo: android.graphics.drawable.Drawable? = null,
+        decor: Bitmap? = null, ecussons: Map<Int, Bitmap> = emptyMap()
     ): Bitmap {
         val ratio = if (fond != null) fond.width.toFloat() / fond.height else m.ratio
         val w = largeur; val h = (largeur / ratio).toInt().coerceAtLeast(1)
         val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(b)
         if (fond != null) c.drawBitmap(fond, null, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-        else fondGenerique(c, w, h)
+        else if (decor != null) dessineCouvert(c, decor, RectF(0f, 0f, w.toFloat(), h.toFloat()))
+        else fondGenerique(c, w, h, PlancheDecor.integre(m.decor)?.takeIf { it.ressource == null } ?: PlancheDecor.ETOILES)
         val k = w / 1000f
         // Fitted to fewer pictures: the template's printed boxes ("NO IMAGE") hidden under one dark panel.
         if (fond != null && m.ajustee) Planche.englobe(m.origine)?.let { z ->
@@ -143,7 +223,22 @@ object PlancheRendu {
                 logo.draw(c)
             }
         }
+        // The patches last, over everything, the last on top; never stretched.
+        m.ecussons.forEachIndexed { i, e ->
+            val img = ecussons[i] ?: return@forEachIndexed
+            val zw = e.zone.w * w; val zh = e.zone.h * h
+            val s = minOf(zw / img.width, zh / img.height)
+            val dw = img.width * s; val dh = img.height * s
+            val x = e.zone.x * w + (zw - dw) / 2; val y = e.zone.y * h + (zh - dh) / 2
+            c.drawBitmap(img, null, RectF(x, y, x + dw, y + dh), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        }
         return b
+    }
+
+    /** A picture filling [r], cut to its shape rather than stretched ([PlancheDecor.couvre]). */
+    private fun dessineCouvert(c: Canvas, img: Bitmap, r: RectF) {
+        val k = PlancheDecor.couvre(img.width, img.height, r.width(), r.height())
+        c.drawBitmap(img, Rect(k.x, k.y, k.x + k.w, k.y + k.h), r, Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
     /** The picture filling its box, cut to its shape rather than stretched. */
@@ -175,12 +270,12 @@ object PlancheRendu {
         for (l in lignes) { c.drawText(l, r.centerX(), y, p); y += pas }
     }
 
-    /** Night sky: deep blue to black, stars, a thin horizon glow. */
-    private fun fondGenerique(c: Canvas, w: Int, h: Int) {
+    /** A drawn background ([PlancheDecor.Decor]): its gradient, its stars (the SatMe night sky by default). */
+    private fun fondGenerique(c: Canvas, w: Int, h: Int, d: PlancheDecor.Decor = PlancheDecor.ETOILES) {
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply {
-            shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0xFF02040A.toInt(), 0xFF0A1630.toInt(), 0xFF123A6B.toInt()),
-                floatArrayOf(0f, 0.7f, 1f), Shader.TileMode.CLAMP)
+            shader = LinearGradient(0f, 0f, 0f, h.toFloat(), d.couleurs, d.positions, Shader.TileMode.CLAMP)
         })
+        if (!d.etoiles) return
         val r = Random(73)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         repeat(w * h / 4000) {
