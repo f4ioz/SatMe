@@ -27,6 +27,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +53,8 @@ import androidx.media3.ui.PlayerView
 import fr.f4ioz.satcombo.datv.BandeLarge
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.DatvTelephone
+import fr.f4ioz.satcombo.datv.MonNiveau
+import fr.f4ioz.satcombo.datv.NiveauRecu
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
@@ -96,12 +101,16 @@ private fun StationsLarge(d: DatvTelephone) {
                 Switch(checked = on, onCheckedChange = { d.largeOn(it) })
             }
             if (!on) return@Column
+            Text(t("datv_large_pas_moi"), color = Moi, fontSize = 11.sp)
             if (!l.frais) { Text(l.etat.ifBlank { "connexion…" }, color = Amber, fontSize = 12.sp); return@Column }
             val signaux = l.signaux
             val maintenant = System.currentTimeMillis()
             fun nom(sg: fr.f4ioz.satcombo.datv.SignalLarge) = d.noms.nom(sg.centreKhz, sg.srKs, maintenant)
                 ?: if (sg.balise) t("datv_balise") else ""
-            Spectre(l.spectre, signaux, u.etat.actif, { d.tenu(it) }) { d.choisis(it) }
+            val mon = NiveauRecu.calcule(u.etat, u.reglage, signaux)
+            Legende()
+            Spectre(l.spectre, signaux, u.etat.actif, mon, { d.tenu(it) }) { d.choisis(it) }
+            mon?.let { Text(NiveauRecu.ligne(it), color = if (it.actif && !it.verrouille) Moi else TextHi, fontSize = 12.sp) }
             signaux.forEach { sg ->
                 val tenu = d.tenu(sg)
                 Row(Modifier.fillMaxWidth().clickable(enabled = !u.occupe) { d.choisis(sg) }.padding(vertical = 5.dp),
@@ -122,9 +131,31 @@ private fun StationsLarge(d: DatvTelephone) {
     }
 }
 
-/** The band as the ground station measures it, the signals shaded; a touch on one receives it. */
+/** « My level »'s colour: apart from the ground station's cyan, the amber and green of the signals. */
+private val Moi = Color(0xFFC084FC)
+
+/** Which colour is whose: the ground station's spectrum, our own reception. */
 @Composable
-private fun Spectre(v: IntArray, signaux: List<fr.f4ioz.satcombo.datv.SignalLarge>, actif: Boolean,
+private fun Legende() {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.size(14.dp, 8.dp).background(Cyan.copy(alpha = 0.6f), RoundedCornerShape(2.dp)))
+            Text(t("datv_niveau_legende_sol"), color = TextLo, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.size(14.dp, 8.dp).background(Moi.copy(alpha = 0.6f), RoundedCornerShape(2.dp)))
+            Text(t("datv_niveau_legende_moi"), color = TextLo, fontSize = 11.sp)
+        }
+    }
+}
+
+/**
+ * The band as the ground station measures it, the signals shaded; a touch
+ * on one receives it. Over it, [mon]: locked, a violet bar as high above
+ * the noise as our MER says; else hatched where we listen, nothing received.
+ */
+@Composable
+private fun Spectre(v: IntArray, signaux: List<fr.f4ioz.satcombo.datv.SignalLarge>, actif: Boolean, mon: MonNiveau?,
                     tenu: (fr.f4ioz.satcombo.datv.SignalLarge) -> Boolean, choisis: (fr.f4ioz.satcombo.datv.SignalLarge) -> Unit) {
     val sg by rememberUpdatedState(signaux)
     val ch by rememberUpdatedState(choisis)
@@ -150,6 +181,23 @@ private fun Spectre(v: IntArray, signaux: List<fr.f4ioz.satcombo.datv.SignalLarg
                 val yy = h - ((n - bas) / (haut - bas)).coerceIn(0f, 1f) * h
                 if (i > 0) drawLine(Cyan, Offset(px, py), Offset(xx, yy), 1.5f)
                 px = xx; py = yy
+            }
+        }
+        if (mon != null) {
+            val a = x(mon.khz - mon.largeurKhz / 2.0, w); val b = maxOf(a + 3f, x(mon.khz + mon.largeurKhz / 2.0, w))
+            fun y(n: Int) = h - ((n - bas) / (haut - bas)).coerceIn(0f, 1f) * h
+            val niveau = mon.niveau
+            if (mon.verrouille && niveau != null) {
+                val yb = y(BandeLarge.BRUIT); val yh = y(niveau)
+                drawRect(Moi.copy(alpha = 0.32f), Offset(a, yh), Size(b - a, yb - yh))
+                drawLine(Moi, Offset(a, yh), Offset(b, yh), 2.5f)
+                drawLine(Moi, Offset(a, yh), Offset(a, yb), 1.5f); drawLine(Moi, Offset(b, yh), Offset(b, yb), 1.5f)
+            } else {
+                clipRect(a, 0f, b, h) {
+                    var k = a - h
+                    while (k < b) { drawLine(Moi.copy(alpha = 0.55f), Offset(k, h), Offset(k + h, 0f), 1.5f); k += 8f }
+                }
+                drawRect(Moi, Offset(a, 0f), Size(b - a, h), style = Stroke(1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))))
             }
         }
     }

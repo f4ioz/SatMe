@@ -971,7 +971,7 @@ ${STYLE_JETONS}
     #v-datv .wb-boite:not([hidden]), #v-datv .wb-boite #wb-zone:not([hidden]), #v-datv .wb-bande { flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
     #v-datv .wb-spectre { flex:1 1 auto; min-height:100px; max-height:150px; }
     #v-datv .wb-grand .wb-spectre { min-height:150px; max-height:260px; }
-    #v-datv .wb-chute, #v-datv .wb-tete, #v-datv .wb-bas { flex:none; }
+    #v-datv .wb-chute, #v-datv .wb-tete, #v-datv .wb-bas, #v-datv .wb-moi { flex:none; }
     .vue > .grille2, .vue > .grille3c { height:100%; }
     .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
@@ -1172,6 +1172,13 @@ ${STYLE_JETONS}
   .wb-tete { align-items:center; gap:4px 14px; }
   .wb-tete #wb-plus-b { margin-left:auto; padding:2px 10px; }
   .wb-bande { position:relative; margin-top:4px; }
+  .wb-moi { display:flex; flex-wrap:wrap; gap:1px 12px; align-items:center; margin-bottom:3px; line-height:1.3; }
+  .wb-moi .cle { display:inline-flex; align-items:center; gap:4px; color:var(--gris); white-space:nowrap; }
+  .wb-moi .cle i { display:inline-block; width:14px; height:9px; border-radius:2px; }
+  .wb-moi .sol i { background:rgba(63,224,200,.45); border-top:2px solid #3FE0C8; }
+  .wb-moi .moi i { border:1px solid #C084FC; background:repeating-linear-gradient(135deg,rgba(192,132,252,.7) 0 2px,transparent 2px 4px); }
+  .wb-moi .cmp { color:var(--clair); }
+  .wb-moi .cmp.rien { color:#C084FC; font-weight:600; }
   .wb-spectre { display:block; width:100%; height:100px; background:#0E1720; border-radius:8px 8px 0 0; cursor:crosshair; }
   .wb-chute { display:block; width:100%; height:12px; background:#0E1720; border-radius:0 0 8px 8px; }
   .wb-grand .wb-spectre { height:150px; } .wb-grand .wb-chute { height:40px; }
@@ -2665,7 +2672,7 @@ ${rail()}
     </div>
     <div id="wb-boite" class="wb-boite" hidden>
       <div class="paire wb-tete">
-        <label class="petit" title="Le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert : rien n’y est envoyé"><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large (station sol)</label>
+        <label class="petit" title="Ce n’est pas votre réception : c’est le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert (rien n’y est envoyé). Votre niveau, celui du récepteur DATV, est superposé en violet sur la même échelle."><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large — <b>station sol, par Internet</b> (pas ma réception)</label>
         <span class="petit" id="wb-etat"></span>
         <span class="petit" id="wb-veille-etat"></span>
         <span class="petit wb-aide">un clic sur un signal : le récepteur s’y accorde (même OL, même entrée)</span>
@@ -2673,6 +2680,7 @@ ${rail()}
       </div>
       <div id="wb-zone" hidden>
         <div class="wb-bande">
+          <div id="wb-moi" class="wb-moi petit"></div>
           <canvas id="wb-spectre" class="wb-spectre"></canvas>
           <canvas id="wb-chute" class="wb-chute"></canvas>
           <div id="wb-bulle" class="wb-bulle" hidden></div>
@@ -3005,9 +3013,10 @@ ${rail()}
         <div class="petit" id="o-avert" style="margin-top:2px"></div>
       </div>
       <div class="carte tq-wb" id="tq-wb-carte">
-        <div class="paire wb-tete"><label class="petit" title="Le spectre public du transpondeur large bande mesuré par la station sol (BATC), reçu par Internet tant qu’un des onglets DATV ou QO-100 le montre : rien n’y est envoyé. Un clic sur un signal y accorde le récepteur DATV."><input type="checkbox" id="tq-wb-on" onchange="tqWbRegle(this.checked)"> Bande large DATV (station sol)</label>
+        <div class="paire wb-tete"><label class="petit" title="Ce n’est pas votre réception : c’est le spectre public du transpondeur large bande mesuré par la station sol (BATC), reçu par Internet tant qu’un des onglets DATV ou QO-100 le montre (rien n’y est envoyé). Votre niveau, celui du récepteur DATV, est superposé en violet. Un clic sur un signal y accorde le récepteur DATV."><input type="checkbox" id="tq-wb-on" onchange="tqWbRegle(this.checked)"> Bande large DATV — <b>station sol, par Internet</b></label>
           <span class="petit" id="tq-wb-etat"></span></div>
         <div id="tq-wb-zone" class="wb-bande" hidden>
+          <div id="tq-wb-moi" class="wb-moi petit"></div>
           <canvas id="tq-wb-spectre" class="wb-spectre"></canvas>
           <canvas id="tq-wb-chute" class="wb-chute"></canvas>
           <div id="tq-wb-bulle" class="wb-bulle" hidden></div>
@@ -7336,7 +7345,7 @@ async function ticLarge() {
   const ici = (enDatv ? ['wb'] : []).concat(enQo && qo ? ['tq-wb'] : []);
   if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; ici.forEach(p => wbChute(wbVals, p + '-chute')); }
   if (!j.frais) wbVals = null;
-  ici.forEach(p => wbSpectre(p + '-spectre'));
+  ici.forEach(p => { wbMoi(p + '-moi'); wbSpectre(p + '-spectre'); });
   if (enDatv) wbListe();
 }
 async function tqWbRegle(on) {
@@ -7353,8 +7362,28 @@ function wbX(khz, w) { return (khz - WB.debut) / WB.largeur * w; }
 function wbY(val, h) { return h - 13 - Math.max(0, Math.min(1, (val - WB_MIN) / (WB_MAX - WB_MIN))) * (h - 29); }
 // Where our receiver is, and our own signal while transmitting (sky frequency, occupied width, kHz).
 function wbRx() {
-  const r = WB && WB.recepteur;
-  return r ? { khz: r.ciel, larg: r.sr * 1.35, verrouille: r.verrouille, marge: D && D.verrouille && D.qualite ? D.qualite.marge : null } : null;
+  const m = WB && WB.monNiveau;
+  return m ? { khz: m.khz, larg: m.largeur, verrouille: m.verrouille, m: m } : null;
+}
+// « My level »: the DATV receiver gives no spectrum, only its state and MER where it listens — drawn in violet on the same scale.
+const WB_MOI = '#C084FC';
+function wbNomRx() { return D && D.recepteur === 'pluto' ? 'ADALM-PLUTO' : D && D.recepteur === 'bladerf' ? 'bladeRF' : 'MiniTiouner'; }
+function wbMoi(id) {
+  const m = WB.monNiveau;
+  const ht = '<span class="cle sol" title="Le spectre mesuré par la station sol de QO-100 (BATC), reçu par Internet"><i></i>Station sol (Internet)</span>' +
+    '<span class="cle moi" title="Votre récepteur DATV : il ne donne pas de spectre, seulement son état et son MER là où il écoute. Accroché : une barre dont la hauteur au-dessus du bruit vient du MER ((C+N)/N, même échelle que la station sol). Sinon : hachures, rien reçu ici."><i></i>Ma réception (' + wbNomRx() + ')</span>' +
+    (m ? '<span class="cmp' + (m.actif && !m.verrouille ? ' rien' : '') + '">' + esc(m.ligne) + '</span>'
+       : '<span class="cmp">chez moi : récepteur hors de la bande large</span>');
+  const e = g(id);
+  if (e && e.dataset.h !== ht) { e.dataset.h = ht; e.innerHTML = ht; }
+}
+function wbMoiTitre(m) {
+  const sol = m.stationDb != null ? '\nstation sol ici : ' + (m.stationDb >= 0 ? '+' : '−') + fr1(Math.abs(m.stationDb)) + ' dB au-dessus de son bruit' : '';
+  if (!m.actif) return 'Ma réception (' + wbNomRx() + ') : récepteur arrêté\naccord ' + mhz3(m.khz) + ' MHz · ' + wbSr(m.sr) + sol;
+  if (!m.verrouille) return 'Ma réception (' + wbNomRx() + ') : rien reçu ici (' + (m.etat === 0 ? 'démarrage' : m.etat === 2 ? 'en-têtes seulement' : 'recherche') + ')\naccord ' + mhz3(m.khz) + ' MHz · ' + wbSr(m.sr) + sol;
+  return 'Ma réception (' + wbNomRx() + ') : ' + mhz3(m.khz) + ' MHz · ' + wbSr(m.sr) + (m.modcod ? ' · ' + m.modcod : '') +
+    (m.mer != null ? '\nMER ' + fr1(m.mer) + ' dB ≈ C/N → +' + fr1(m.hauteur) + ' dB au-dessus du bruit ((C+N)/N, même échelle)' : '') +
+    (m.seuil != null ? '\nseuil ' + m.modcod + ' : ' + fr1(m.seuil) + ' dB' : '') + sol;
 }
 function wbTx() {
   if (!EM || !EM.emet) return null;
@@ -7396,8 +7425,6 @@ function wbSpectre(id) {
   };
   const rx = wbRx(), tx = wbTx();
   if (tx) marque(tx, 'rgba(229,72,77,.13)', '#E5484D', 'TX');
-  if (rx) marque(rx, rx.verrouille ? 'rgba(91,214,138,.12)' : 'rgba(255,180,84,.10)', rx.verrouille ? '#5BD68A' : '#FFB454',
-    'RX' + (rx.marge != null ? ' · D ' + (rx.marge >= 0 ? '+' : '−') + fr1(Math.abs(rx.marge)) : rx.verrouille ? '' : ' …'));
   if (!wbVals) { x.fillStyle = '#6F7D8A'; x.font = '11px sans-serif'; x.fillText('en attente du spectre…', w / 2, h / 2); c._b = []; return; }
   const n = wbVals.length;
   x.beginPath(); x.moveTo(0, bas);
@@ -7429,6 +7456,33 @@ function wbSpectre(id) {
     x.font = '10px sans-serif';
     c._b.push({ x0: x0, x1: x1, s: s });
   });
+  // My level over it: a violet bar as high as the MER says when locked, hatched « nothing here » otherwise.
+  if (rx) {
+    const m = rx.m, x0 = wbX(m.khz - m.largeur / 2, w), x1 = Math.max(x0 + 3, wbX(m.khz + m.largeur / 2, w)), yb = wbY(WB.bruit, h);
+    let lib, y;
+    x.save();
+    if (m.verrouille && m.niveau != null) {
+      y = wbY(m.niveau, h);
+      x.fillStyle = 'rgba(192,132,252,.30)'; x.fillRect(x0, y, x1 - x0, yb - y);
+      x.strokeStyle = WB_MOI; x.lineWidth = 2; x.beginPath(); x.moveTo(x0, yb); x.lineTo(x0, y); x.lineTo(x1, y); x.lineTo(x1, yb); x.stroke();
+      lib = 'moi · MER ' + fr1(m.mer);
+    } else {
+      y = 0;
+      x.beginPath(); x.rect(x0, 0, x1 - x0, bas); x.clip();
+      x.strokeStyle = 'rgba(192,132,252,.45)'; x.lineWidth = 1; x.beginPath();
+      for (let k = x0 - bas; k < x1; k += 7) { x.moveTo(k, bas); x.lineTo(k + bas, 0); }
+      x.stroke(); x.restore(); x.save();
+      x.strokeStyle = WB_MOI; x.setLineDash([3, 3]); x.lineWidth = 1.5; x.strokeRect(x0 + 0.5, 0.5, x1 - x0 - 1, bas - 1);
+      lib = m.actif ? 'moi : rien reçu ici' : 'moi : arrêté';
+    }
+    x.restore();
+    x.font = 'bold 11px sans-serif';
+    const lw = x.measureText(lib).width, cx = Math.max(lw / 2 + 2, Math.min(w - lw / 2 - 2, (x0 + x1) / 2));
+    const ly = [Math.max(11, y - 4), Math.max(11, y + 13), Math.round((y + yb) / 2) + 4, bas - 4].find(t => t >= 11 && t < bas && libre(cx - lw / 2 - 3, cx + lw / 2 + 3, t)) ?? Math.max(11, y - 4);
+    pris.push({ a: cx - lw / 2 - 3, b: cx + lw / 2 + 3, y: ly });
+    x.fillStyle = 'rgba(14,23,32,.75)'; x.fillRect(cx - lw / 2 - 2, ly - 10, lw + 4, 13);
+    x.fillStyle = WB_MOI; x.fillText(lib, cx, ly); x.font = '10px sans-serif';
+  }
   // The beacon's line named where no label is (at its right end, else its left).
   if (bal) {
     const yb = wbY(bal.niveau - WB.unitesDb, h) - 3, lib = 'balise − 1 dB', lw = x.measureText(lib).width;
@@ -7454,7 +7508,7 @@ c.onmousemove = e => {
   c._s = px;
   const khz = WB.debut + px / c.width * WB.largeur, rx = wbRx(), tx = wbTx();
   let t = b ? wbTitre(b.s) : mhz3(Math.round(khz)) + ' MHz · aucun signal ici';
-  if (!b && rx && Math.abs(khz - rx.khz) <= rx.larg / 2) t += '\ncanal du récepteur';
+  if (rx && Math.abs(khz - rx.khz) <= rx.larg / 2) t += '\n' + wbMoiTitre(rx.m);
   if (tx && Math.abs(khz - tx.khz) <= tx.larg / 2) t += '\nnotre émission : ' + mhz3(Math.round(tx.khz)) + ' MHz · ' + wbSr(tx.sr);
   const bu = g(bulle);
   bu.textContent = t; bu.hidden = false;

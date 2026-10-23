@@ -337,12 +337,14 @@ Montage proposes this wiring as soon as a joined node reports a MiniTiouner and 
 
 ### The wide band at a glance
 
-*Spectre de la bande large (station sol)*, off by default: the QO-100 ground station's public spectrum of the wide band (10490.5 – 10499.5 MHz, 4 frames a second), read while the option is on and the tab open.
+*Spectre de la bande large — station sol, par Internet (pas ma réception)*, off by default: the QO-100 ground station's public spectrum of the wide band (10490.5 – 10499.5 MHz, 4 frames a second), read over the Internet while the option is on and the tab open. **It is not what your own dish receives**: carriers show there even with the dish mis-pointed.
+
+- **My reception over it**, in purple (legend *Station sol (Internet)* / *Ma réception (MiniTiouner)*): the MiniTiouner gives no spectrum, only its state and MER where it listens. Locked, a bar at the frequency and width found, as high above the noise as its MER (≈ C/N, drawn as (C+N)/N on the ground station's dB scale); searching or stopped, hatching « nothing received here ». One line compares both, e.g. « Balise : +8,2 dB à la station sol · chez moi : MER 5,9 dB (seuil QPSK 4/5 4,7 dB) » or « chez moi : rien (recherche) — la balise est là : vérifier pointage / polarisation / LNB ». The phone (DATV screen) shows the same.
 
 - The **signals found**, each with its width rounded to the nearest symbol rate, its level against the beacon, and the station's **name** once read (service name, station card or callsign in the picture; kept 24 h for that frequency and rate).
 - **Click a signal**: the MiniTiouner tunes to it (same oscillator, same input).
 - **Veille**: the occupied channels in turn, held while locked, an optional recording named after the station; any tuning by hand stops it.
-- **In the QO-100 cockpit too**: *Bande large DATV (station sol)*, off by default, shows the same band under the narrow transponder; a click on a signal tunes the DATV receiver. The connection stays open only while one of the two tabs shows it.
+- **In the QO-100 cockpit too**: *Bande large DATV — station sol, par Internet*, off by default, shows the same band under the narrow transponder; a click on a signal tunes the DATV receiver. The connection stays open only while one of the two tabs shows it.
 
 <p align="center"><img src="images/pc-datv-bande-large.webp" width="100%" alt="The wide band spectrum from the ground station (real reception, 23 October 2026): the A71A beacon at 1.5 MS/s, PA0WCH at 333 kS/s named above its signal, the receiver's RX mark, the « balise − 1 dB » line"></p>
 

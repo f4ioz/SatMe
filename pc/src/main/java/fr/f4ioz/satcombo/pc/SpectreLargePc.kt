@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.BandeLarge
 import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.NiveauRecu
 import fr.f4ioz.satcombo.datv.NomsSignaux
 import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.datv.SignalLarge
@@ -216,6 +217,8 @@ class SpectreLargePc(
         } else o.put("signaux", JSONArray())
         o.put("recepteur", if (datv.etat.actif) JSONObject().put("ciel", datv.reglage.cielKhz).put("sr", datv.reglage.srKs)
             .put("verrouille", datv.etat.verrouille) else JSONObject.NULL)
+        // Our own level on the same scale: the MiniTiouner's state and MER where it listens.
+        o.put("monNiveau", NiveauRecu.calcule(datv.etat, datv.reglage, if (on && frais()) signaux else null)?.let { NiveauRecu.json(it) } ?: JSONObject.NULL)
         o.put("entendus", entendus.json())
         o.put("veille", JSONObject().put("on", veille.active).put("etat", if (veille.active && veillePause) "en pause : pas de spectre récent" else veille.etat)
             .put("attente", veille.attenteMs / 1000).put("balise", veille.avecBalise).put("enr", veilleEnregistre))

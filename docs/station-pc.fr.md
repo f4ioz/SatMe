@@ -337,12 +337,14 @@ Le Montage propose ce câblage dès qu'un node associé annonce un MiniTiouner e
 
 ### La bande large d'un coup d'œil
 
-*Spectre de la bande large (station sol)*, décoché d'origine : le spectre public de la bande large que publie la station sol de QO-100 (10490,5 – 10499,5 MHz, 4 images par seconde), lu tant que l'option est cochée et l'onglet ouvert.
+*Spectre de la bande large — station sol, par Internet (pas ma réception)*, décoché d'origine : le spectre public de la bande large que publie la station sol de QO-100 (10490,5 – 10499,5 MHz, 4 images par seconde), lu par Internet tant que l'option est cochée et l'onglet ouvert. **Ce n'est pas ce que reçoit votre antenne** : des porteuses s'y voient même parabole dépointée.
+
+- **Ma réception superposée**, en violet (légende *Station sol (Internet)* / *Ma réception (MiniTiouner)*) : le MiniTiouner ne donne pas de spectre, seulement son état et son MER là où il écoute. Accroché, une barre à la fréquence et à la largeur trouvées, aussi haute au-dessus du bruit que son MER (≈ C/N, tracé en (C+N)/N sur la même échelle en dB que la station sol) ; en recherche ou arrêté, des hachures « rien reçu ici ». Une ligne compare les deux, par exemple « Balise : +8,2 dB à la station sol · chez moi : MER 5,9 dB (seuil QPSK 4/5 4,7 dB) » ou « chez moi : rien (recherche) — la balise est là : vérifier pointage / polarisation / LNB ». Le téléphone (écran DATV) montre la même chose.
 
 - Les **signaux trouvés**, chacun avec sa largeur arrondie au débit de symboles le plus proche, son niveau face à la balise, et le **nom** de la station une fois lu (nom du service, carte de visite ou indicatif dans l'image ; gardé 24 h pour cette fréquence et ce débit).
 - **Cliquer un signal** : le MiniTiouner s'y accorde (même OL, même entrée).
 - **Veille** : les canaux occupés tour à tour, tenus tant qu'ils sont accrochés, un enregistrement au nom de la station en option ; tout accord à la main l'arrête.
-- **Dans le cockpit QO-100 aussi** : *Bande large DATV (station sol)*, décoché d'origine, y montre la même bande sous le transpondeur étroit ; un clic sur un signal y accorde le récepteur DATV. La connexion ne reste ouverte que tant qu'un des deux onglets la montre.
+- **Dans le cockpit QO-100 aussi** : *Bande large DATV — station sol, par Internet*, décoché d'origine, y montre la même bande sous le transpondeur étroit ; un clic sur un signal y accorde le récepteur DATV. La connexion ne reste ouverte que tant qu'un des deux onglets la montre.
 
 <p align="center"><img src="images/pc-datv-bande-large.webp" width="100%" alt="Le spectre de la bande large reçu de la station sol (réception réelle, 23 octobre 2026) : la balise A71A à 1,5 MS/s, PA0WCH à 333 kS/s nommé au-dessus de son signal, le repère RX du récepteur, la ligne « balise − 1 dB »"></p>
 
