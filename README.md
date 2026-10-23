@@ -127,6 +127,8 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🤖 SSTV campaigns on auto-pilot** — an ARISS series or a satellite sending pictures for a few days is entered like an appointment in the **Agenda**, or from the announcement's **flyer** read on the PC; the auto-pilot (off by default) prepares the rig, rotator, sound and decoder before each pass, records, keeps the pictures and puts everything back. Receive only, never transmits.
 
+**📣 Upcoming activities** — in the **Agenda**, what the online sources announce that SatMe decodes: ISS SSTV (437.550 MHz, Robot 36 since 2026) and other satellites, ARISS contacts, SSDV, METEOR seen recently; your passes during them, a banner for each new one, "on the air now" from AMSAT reports, and **Préparer la campagne SSTV** that fills in the auto-pilot, to check. On by default, each source can be turned off.
+
 **🧭 The rotator's plan** — the whole pass planned before AOS: which side of the end stop, **flipped at 180°** over the zenith or a single unwind placed where the satellite is low; **hidden zones** (roof, tree); the plan drawn on the Suivi sky, and each logged contact's rotator path.
 
 **🛰 QO-100 with a drifting LNB** — the beacon calibration follows a drift of a few Hz/s, a **beacon lock** takes the jumps out of the whole transponder, and FT8 tolerates drift. This mitigates, it does not replace an **LNB held by a GPSDO reference** ([how](docs/station-pc.md#lnb-and-gpsdo-reference)).
@@ -206,6 +208,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 ### Passes and prediction
 - Offline SGP4/SDP4 predictions: AOS, LOS, maximum elevation, azimuths, duration, and a polar plot of every pass.
 - Alerts before AOS, and a pass added to the phone's calendar in one tap.
+- **Upcoming activities** (menu, and from the SSTV and METEOR pages): ISS and other satellites' SSTV, ARISS contacts (FM voice), SSDV and METEOR LRPT as announced by online sources (ARISS calendar, AMSAT-UK, AMSAT-F, SatNOGS, AMSAT reports), each read at its own pace and kept offline; by day, with the frequency, the mode and your passes during them. A notification for a new activity, before each useful pass and when it is "on the air now" — each can be turned off, as each source. **Prepare the SSTV campaign** opens the agenda on a filled entry to check.
 - Printable PDF pass sheets: tick the satellites' passes, then choose how many coming passes of each to print (up to 20, two weeks ahead).
 - Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
 - Pass journal: every pass followed kept on the phone (real trajectory, rig frequencies, antennas, recording), on the sky or an OpenStreetMap map with the footprint; contacts, APRS stations and SSTV pictures in place; replayed with its sound, with cards for the stations; exported as a picture, a video, a GIF or a sound. Bookmarks, the IC-9700's S-meter, an accelerated replay, contacts entered from the replay. Past passes found again from the log, the pictures, the recordings and Wavelog / Cloudlog; a pass given to another station in one file.

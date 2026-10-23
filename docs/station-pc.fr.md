@@ -12,7 +12,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 
 1. [L'installer](#linstaller) — options, la page sur les autres machines et son mot de passe
 2. [Les onglets d'un coup d'œil](#les-onglets-dun-coup-dœil) — espaces de travail, bandeau, « Son », raccourcis, manuel intégré (F1)
-3. [Station et passages](#station-et-passages) — plan du rotor, mode automatique, campagnes SSTV et leur auto-pilote, préparer un passage, enregistrement, agenda, horizon
+3. [Station et passages](#station-et-passages) — plan du rotor, mode automatique, campagnes SSTV et leur auto-pilote, activités à venir (sources en ligne), préparer un passage, enregistrement, agenda, horizon
 4. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés, le passage et le rotor d'un contact
 5. [SatMe sur le téléphone](#satme-sur-le-téléphone)
 6. [Journal des passages](#journal-des-passages) — rapport de passage
@@ -162,6 +162,17 @@ Onglet **Agenda › SSTV · auto-pilote**. Un événement SSTV — une série AR
 - Les **passages 🤖** dans la liste de l'onglet, dans Suivi et sur la frise ; la campagne dans la palette **Ctrl+K**. Les campagnes sont gardées sur le PC (`sstv-campagnes.json`) et réarmées après un redémarrage.
 
 <p align="center"><img src="images/pc-agenda-sstv.webp" width="100%" alt="Agenda › SSTV · auto-pilote (données simulées) : le formulaire d'une campagne et sa chaîne de réception, l'auto-pilote actif et le prochain passage, l'import d'une affiche, la campagne ARISS SSTV Series 34 sur l'ISS, ses prochains passages prévus, l'historique"></p>
+
+### Activités à venir : les sources en ligne
+
+Onglet **Agenda › Activités à venir**. Ce que les satellites vont émettre et que SatMe décode, d'après des sources publiques : la **SSTV de l'ISS** (et d'autres satellites), les **contacts ARISS** avec les écoles (phonie FM), le **SSDV**, les images **METEOR LRPT**. Les satellites seulement ; jamais NOAA APT (arrêtés en 2025).
+
+- **Les sources**, chacune à son rythme : l'**agenda ARISS** (Google Agenda public, toutes les 6 h au plus), les actualités **AMSAT-UK** et **AMSAT-F** (RSS, toutes les 6 h au plus), **SatNOGS** pour METEOR-M2-3 et M2-4 (deux fois par jour : « vu récemment sur 137,900 MHz », une indication), les **écoutes AMSAT** (toutes les 30 min, seulement pendant une SSTV/SSDV annoncée). Actif d'origine ; un interrupteur général et un par source. Une source qui échoue le dit discrètement, avec sa dernière lecture ; tout est gardé sur le PC (`activites-cache.json`) et la liste reste hors ligne.
+- **La liste**, par jour : satellite, type, période (heure locale et UTC), fréquence, mode, rythme, sources et liens, et **tes passages** pendant l'activité avec leur élévation maximale (au moins l'élévation minimale des Réglages). Deux sources qui disent la même chose (15 h 10 ici, 15 h 30 là) font une seule activité : le début le plus tôt, la fin la plus tardive, toutes les sources. *Annoncé*, *confirmé par écoutes* (des rapports AMSAT pendant la période) ou *vu récemment* (SatNOGS).
+- **Prévenir** : une nouvelle activité (une fois ; un contact ARISS seulement s'il passe ici), avant chaque passage utile (10 min avant l'AOS d'origine) et « **ça émet maintenant** » quand des écoutes AMSAT arrivent ; chacun se coupe. Un bandeau en bas de la page et un compteur sur le sous-onglet.
+- **Préparer la campagne SSTV** : ouvre [Agenda › SSTV](#campagnes-sstv--lauto-pilote) avec le formulaire rempli (satellite, fréquence, mode, période, rythme, lien) ; rien n'est enregistré avant « Enregistrer la campagne ».
+
+<p align="center"><img src="images/pc-activites.webp" width="100%" alt="Agenda › Activités à venir : les sources lues, les alertes, METEOR-M2-3 et M2-4 vus récemment sur 137,900 MHz, la série ARISS SSTV 34 de l'ISS sur 437,550 MHz en Robot 36, confirmée par les écoutes, et les passages de la station"></p>
 
 ### Enregistrer le son
 
@@ -464,7 +475,7 @@ L'onglet **SSTV**, comme sur le téléphone : l'**image en direct** (dessinée �
 - Un spectre avec les tons marqués (1200 synchro, 1500 noir, 1900 VIS, 2300 blanc), le niveau, un conseil quand la source se tait.
 - **Images** : chaque image gardée dès un huitième de ses lignes, avec son propre son ; filtrées par satellite, ouvertes dans une visionneuse, redécodées, faites en GIF, supprimées.
 - **Mire** : la mire SSTV (comme sur le téléphone), jouée sur une sortie au choix ou écrite en WAV.
-- **Campagnes** : une série ARISS, ou un satellite qui envoie des images quelques jours, reçue toute seule passage après passage — voir [Campagnes SSTV : l'auto-pilote](#campagnes-sstv--lauto-pilote).
+- **Campagnes** : une série ARISS, ou un satellite qui envoie des images quelques jours, reçue toute seule passage après passage — voir [Campagnes SSTV : l'auto-pilote](#campagnes-sstv--lauto-pilote) ; les séries annoncées en ligne arrivent dans [Activités à venir](#activités-à-venir--les-sources-en-ligne). La SSTV de l'ISS est sur **437,550 MHz FM en Robot 36** depuis les séries de 2026.
 
 **Émission**, avec l'**ADALM-PLUTO** ou le **bladeRF 2.0** :
 

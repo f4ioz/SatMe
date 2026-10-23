@@ -12,7 +12,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 
 1. [Installing it](#installing-it) — options, the page on other machines and its password
 2. [The tabs at a glance](#the-tabs-at-a-glance) — workspaces, header, « Son », shortcuts, built-in manual (F1)
-3. [Station and passes](#station-and-passes) — the rotator's plan, automatic mode, SSTV campaigns and their auto-pilot, preparing a pass, recording, calendar, horizon
+3. [Station and passes](#station-and-passes) — the rotator's plan, automatic mode, SSTV campaigns and their auto-pilot, upcoming activities (online sources), preparing a pass, recording, calendar, horizon
 4. [The log (Carnet)](#the-log-carnet) — which satellite, correcting a contact, compound callsigns, a contact's pass and rotator path
 5. [SatMe on the phone](#satme-on-the-phone)
 6. [Pass journal](#pass-journal) — pass report
@@ -163,6 +163,16 @@ The same mode is on the phone (*Settings → Recording / SSTV & NOAA → Automat
 
 <p align="center"><img src="images/pc-agenda-sstv.webp" width="100%" alt="Agenda › SSTV · auto-pilote (simulated data): a campaign's form and its receive chain, the auto-pilot on and its next pass, the flyer import, the ARISS SSTV Series 34 campaign on the ISS, its next passes planned, the history"></p>
 
+### Upcoming activities: the online sources
+
+**Agenda › Activités à venir** tab. What satellites are about to send that SatMe decodes, from public sources: **ISS SSTV** (and other satellites), **ARISS school contacts** (FM voice), **SSDV**, **METEOR LRPT** pictures. Satellites only; never NOAA APT (all retired in 2025).
+
+- **The sources**, each at its own pace: the **ARISS calendar** (public Google Calendar, every 6 h at most), **AMSAT-UK** and **AMSAT-F** news (RSS, every 6 h at most), **SatNOGS** for METEOR-M2-3 and M2-4 (twice a day: "seen recently on 137.900 MHz", an indication), **AMSAT reports** (every 30 min, only during an announced SSTV/SSDV). On by default; one master switch and one per source. A failing source says so quietly, with its last successful read; everything is kept on the PC (`activites-cache.json`) and the list stays available offline.
+- **The list**, by day: satellite, type, period (local time and UTC), frequency, mode, rhythm, sources and links, and **your passes** during the activity with their maximum elevation (at least the minimum elevation from Settings). Two sources saying the same thing (15:10 here, 15:30 there) make one activity: the earliest start, the latest end, every source. *Announced*, *confirmed by reports* (AMSAT reports during the period) or *seen recently* (SatNOGS).
+- **Notify**: a new activity (once; an ARISS contact only when it passes over here), before each useful pass (10 min before AOS by default) and "**on the air now**" when AMSAT reports come in; each one can be turned off. A banner at the bottom of the page and a count on the sub-tab.
+- **Préparer la campagne SSTV** opens [Agenda › SSTV](#sstv-campaigns-the-auto-pilot) with the form filled (satellite, frequency, mode, period, rhythm, link); nothing is saved before "Enregistrer la campagne".
+
+<p align="center"><img src="images/pc-activites.webp" width="100%" alt="Agenda › Activités à venir: the sources read, the notices, METEOR-M2-3 and M2-4 seen recently on 137.900 MHz, the ISS ARISS SSTV series 34 on 437.550 MHz in Robot 36, confirmed by reports, and the station's passes"></p>
 ### Recording the sound
 
 - **● Record the sound** in Suivi, Carnet and Son: a WAV named after the satellite (`SatMe_RS-44_20261013_203051Z.wav`), as on the phone.
@@ -464,7 +474,7 @@ The **SSTV** tab, as on the phone: the **live picture** (drawn at its true size 
 - A spectrum with the tones marked (1200 sync, 1500 black, 1900 VIS, 2300 white), the level, a hint when the source is silent.
 - **Images**: every picture kept from an eighth of its lines, with its own sound; filtered by satellite, opened in a viewer, decoded again, made into a GIF, deleted.
 - **Mire**: the SSTV test card (as on the phone), played on a chosen output or written to WAV.
-- **Campaigns**: an ARISS series, or a satellite sending pictures for a few days, received by itself pass after pass — see [SSTV campaigns: the auto-pilot](#sstv-campaigns-the-auto-pilot).
+- **Campaigns**: an ARISS series, or a satellite sending pictures for a few days, received by itself pass after pass — see [SSTV campaigns: the auto-pilot](#sstv-campaigns-the-auto-pilot); the series announced online show up in [Upcoming activities](#upcoming-activities-the-online-sources). ISS SSTV is on **437.550 MHz FM in Robot 36** since the 2026 series.
 
 **Transmission** (*Émission*), with the **ADALM-PLUTO** or the **bladeRF 2.0**:
 

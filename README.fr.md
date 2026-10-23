@@ -127,6 +127,8 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🤖 Campagnes SSTV en auto-pilote** — une série ARISS ou un satellite qui envoie des images quelques jours s'entre comme un rendez-vous dans l'**Agenda**, ou depuis l'**affiche** de l'annonce lue sur le PC ; l'auto-pilote (coupé d'origine) prépare le poste, le rotor, le son et le décodeur avant chaque passage, enregistre, garde les images et remet tout comme avant. Réception seulement, jamais d'émission.
 
+**📣 Activités à venir** — dans l'**Agenda**, ce que les sources en ligne annoncent et que SatMe décode : la SSTV de l'ISS (437,550 MHz, Robot 36 depuis 2026) et d'autres satellites, les contacts ARISS, le SSDV, METEOR vu récemment ; tes passages pendant, un bandeau pour chaque nouveauté, « ça émet maintenant » d'après les écoutes AMSAT, et **Préparer la campagne SSTV** qui remplit l'auto-pilote, à vérifier. Actif d'origine, chaque source se coupe.
+
 **🧭 Le plan du rotor** — tout le passage prévu avant l'AOS : de quel côté de la butée, **retourné à 180°** par-dessus le zénith ou un seul déroulement placé quand le satellite est bas ; des **zones cachées** (toit, arbre) ; le plan dessiné sur le ciel de Suivi, et le chemin du rotor de chaque contact du carnet.
 
 **🛰 QO-100 avec un LNB qui dérive** — le calage sur la balise suit une dérive de quelques Hz/s, un **verrouillage sur la balise** ôte les sautillements de tout le transpondeur, et FT8 tolère la dérive. Cela atténue, sans remplacer un **LNB tenu par une référence GPSDO** ([la marche à suivre](docs/station-pc.fr.md#lnb-et-référence-gpsdo)).
@@ -206,6 +208,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 ### Passages et prévisions
 - Prévisions SGP4/SDP4 hors ligne : AOS, LOS, élévation maximale, azimuts, durée, et un tracé polaire pour chaque passage.
 - Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
+- **Activités à venir** (menu, et depuis les pages SSTV et METEOR) : la SSTV de l'ISS et d'autres satellites, les contacts ARISS (phonie FM), le SSDV et METEOR LRPT annoncés par des sources en ligne (agenda ARISS, AMSAT-UK, AMSAT-F, SatNOGS, écoutes AMSAT), chacune à son rythme et gardée hors ligne ; par jour, avec la fréquence, le mode et tes passages pendant. Une notification pour une nouvelle activité, avant chaque passage utile et quand « ça émet maintenant » — chacune se coupe, comme chaque source. **Préparer la campagne SSTV** ouvre l'agenda sur un rendez-vous rempli, à vérifier.
 - Fiches de passages en PDF à imprimer : coche les passages des satellites, puis choisis combien de prochains passages de chacun imprimer (jusqu'à 20, sur deux semaines).
 - Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
 - Journal des passages : chaque passage suivi gardé sur le téléphone (trajectoire réelle, fréquences du poste, antennes, enregistrement), sur le ciel ou une carte OpenStreetMap avec l'empreinte ; contacts, stations APRS et images SSTV à leur place ; rejoué avec son son, avec les fiches des stations ; exporté en image, vidéo, GIF ou son. Signets, S-mètre de l'IC-9700, lecture accélérée, contacts saisis depuis le rejeu. Anciens passages retrouvés d'après le carnet, les images, les enregistrements et Wavelog / Cloudlog ; un passage donné à une autre station en un fichier.
