@@ -96,6 +96,8 @@ class EmissionDatvPc(
     private val nouvelleAdaptation: () -> AdaptationModcod = { AdaptationModcod() },
     /** The SatMe-Node's transmitter when the operator chose to transmit through it, else null (no network asked). */
     private val noeudTx: () -> EmetteurNoeud.Fabrique? = { null },
+    /** The picture being transmitted, for the page (a copy of the stream: display only). */
+    val vue: VueEmisDatvPc = VueEmisDatvPc(),
 ) {
     /**
      * The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the
@@ -492,7 +494,7 @@ class EmissionDatvPc(
         val p = runCatching { fabrique.demarre(pts) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
-        thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen && processus === p } }
+        thread(isDaemon = true, name = "satme-datv-tx-ts") { f.copie = { q -> vue.paquet(q) }; f.lit(p.sortie) { generation == gen && processus === p } }
         val mod: ModulateurDatv = if (nrm == Norme.DVBS) ModulateurDvbs(td, sps, f) else ModulateurDvbs2(m, rolloff, sps, f)
         modulateur = mod; sortie = mod
         derniereVie = horloge()
@@ -541,6 +543,7 @@ class EmissionDatvPc(
         inserteur = ins; modcodEnCours = m; normeEnCours = nrm; tauxEnCours = if (nrm == Norme.DVBS) td else null; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
         adaptation = nouvelleAdaptation()
         etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs, parNoeud = noeud != null)
+        vue.emission(true)
         return null
     }
 
@@ -580,7 +583,11 @@ class EmissionDatvPc(
             commutation = true
         }
         try {
-            thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen && (processus === p || commutation) } }
+            // The page's copy from the new stream once it took over only.
+            thread(isDaemon = true, name = "satme-datv-tx-ts") {
+                f.copie = { q -> if (processus === p) vue.paquet(q) }
+                f.lit(p.sortie) { generation == gen && (processus === p || commutation) }
+            }
             // A frame's worth of the new stream before taking over.
             val fin = System.currentTimeMillis() + 3000
             val besoin = m.dfl / 1504 + 2
@@ -617,6 +624,7 @@ class EmissionDatvPc(
         adaptation?.arrete()
         val pe = px?.etatCommun()
         if (etat.emet) etat = etat.copy(emet = false, raison = pe?.raison ?: raison, erreur = pe?.erreur.orEmpty())
+        vue.emission(false)
     }
 
     /** A new gain while transmitting (clamped as at the start), kept for next time. */
@@ -633,6 +641,7 @@ class EmissionDatvPc(
      * the closed loop on our own signal.
      */
     fun tic() {
+        vue.tic()
         val px = tx
         if (px != null && !px.etatCommun().emet && etat.emet) {
             val pe = px.etatCommun()
@@ -796,6 +805,8 @@ class EmissionDatvPc(
             o.put("tramesVidesPct", 100.0 * m.partVide()).put("ecretages", (sortie ?: m).ecretages).put("paquets", m.paquets)
         }
         flux?.let { o.put("tsPerdus", it.perdus).put("tsKbps", it.kbps()) }
+        // The picture being transmitted, decoded here for the page.
+        o.put("vue", JSONObject().put("actif", vue.actif).put("images", vue.images).put("ecartes", vue.ecartes))
         val b = boucle.etat
         o.put("boucle", JSONObject().put("ecart", b.ecartDb ?: JSONObject.NULL).put("tropFort", b.tropFort).put("message", b.message).put("baisses", b.baisses))
         // The MODCOD fitted to our reception.
@@ -980,6 +991,9 @@ class EmissionDatvPc(
             System.arraycopy(p, 0, dst, 0, 188)
         }
 
+        /** Each packet as read, also given here (the page's view: it must not wait), or null. */
+        @Volatile var copie: ((ByteArray) -> Unit)? = null
+
         /** Reads [e] into packets while [encore]. */
         fun lit(e: InputStream, encore: () -> Boolean) {
             val b = ByteArray(188 * 64)
@@ -992,6 +1006,7 @@ class EmissionDatvPc(
                 while (n - k >= 188) {
                     if (b[k].toInt() != 0x47) { k++; continue }
                     val p = b.copyOfRange(k, k + 188)
+                    copie?.let { runCatching { it(p) } }
                     ajoute(inserteur?.traite(p) ?: p)
                     k += 188
                 }

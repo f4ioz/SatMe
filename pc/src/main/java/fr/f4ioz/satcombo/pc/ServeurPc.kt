@@ -464,6 +464,35 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
             }
         }
+        if (chemin == "/api/datv/emission/vue.mjpeg" && emission != null) {
+            // The picture being transmitted, decoded here from a copy of the stream (display only), while transmitting.
+            c.soTimeout = 0
+            sortie.write(("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=satme\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+            var vu: ByteArray? = null
+            var calme = 0
+            while (true) {
+                val img = emission.vue.demande()
+                if (img != null && img !== vu) {
+                    vu = img; calme = 0
+                    val ok = runCatching {
+                        sortie.write(("--satme\r\nContent-Type: image/jpeg\r\nContent-Length: ${img.size}\r\n\r\n").toByteArray())
+                        sortie.write(img); sortie.write("\r\n".toByteArray()); sortie.flush()
+                    }.isSuccess
+                    if (!ok) return
+                } else {
+                    // The transmission over (2 s), or nothing new for 30 s: the page asks again when it wants.
+                    calme++
+                    if ((!emission.etat.emet && calme > 50) || calme > 750) return
+                    Thread.sleep(40)
+                }
+            }
+        }
+        if (chemin == "/api/datv/emission/vue.jpg" && emission != null) {
+            val img = emission.vue.demande()
+            if (img == null) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas d'image émise".toByteArray())
+            else envoie(sortie, "200 OK", "image/jpeg", img)
+            return
+        }
         // The SSTV sheet: its page, and its routes (some POST a template or a picture).
         if (planche != null && (chemin == "/planche" || chemin == "/planche/")) {
             envoie(sortie, "200 OK", "text/html; charset=utf-8", planche.page().toByteArray()); return

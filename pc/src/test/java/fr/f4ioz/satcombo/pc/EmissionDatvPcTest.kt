@@ -107,7 +107,7 @@ class EmissionDatvPcTest {
     }
 
     /** A transport stream maker without ffmpeg: [n] numbered packets, then the pipe kept open. */
-    private class TsSynthetique(val n: Int) : EmissionDatvPc.FabriqueTs {
+    private class TsSynthetique(val n: Int, val attenteMs: Long = 0L) : EmissionDatvPc.FabriqueTs {
         val paquets = ArrayList<ByteArray>()
         var demandes = 0
         var parametres: EmissionDatvPc.ParametresTs? = null
@@ -118,7 +118,7 @@ class EmissionDatvPcTest {
             val r = java.util.Random(7)
             for (k in 0 until n) paquets += ByteArray(188).also { r.nextBytes(it); it[0] = 0x47; it[1] = 0x01; it[2] = 0x00; it[3] = (0x10 or (k and 15)).toByte() }
             val vivant = java.util.concurrent.atomic.AtomicBoolean(true)
-            thread(isDaemon = true) { runCatching { paquets.forEach { sortie.write(it) }; sortie.flush(); while (vivant.get()) Thread.sleep(50) } }
+            thread(isDaemon = true) { runCatching { Thread.sleep(attenteMs); paquets.forEach { sortie.write(it) }; sortie.flush(); while (vivant.get()) Thread.sleep(50) } }
             return object : EmissionDatvPc.Processus {
                 override val sortie: InputStream = entree
                 override val vivant: Boolean get() = vivant.get()
@@ -137,9 +137,9 @@ class EmissionDatvPcTest {
     }
 
     private fun emission(p: FauxPluto, ts: EmissionDatvPc.FabriqueTs, indicatif: String = "F4IOZ", vieMs: Long = 15_000L,
-                         reception: () -> EmissionDatvPc.Reception? = { null }, occupe: String? = null): EmissionDatvPc =
+                         reception: () -> EmissionDatvPc.Reception? = { null }, occupe: String? = null, vue: VueEmisDatvPc = VueEmisDatvPc()): EmissionDatvPc =
         EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif },
-            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs)
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs, vue = vue)
 
     @Test
     fun debit_ou_modcod_non_prevu_refuse_et_non_garde_en_silence() {
@@ -211,6 +211,50 @@ class EmissionDatvPcTest {
         // DVB-S settings checked against its own code rates.
         assertNull(EmissionDatvPc.refusReglage(null, "QPSK 7/8", false, fr.f4ioz.satcombo.datv.Norme.DVBS))
         assertNotNull(EmissionDatvPc.refusReglage(null, "8PSK 2/3", false, fr.f4ioz.satcombo.datv.Norme.DVBS))
+    }
+
+    @Test
+    fun image_emise_vue_sans_toucher_au_flux_emis() {
+        val p = FauxPluto().also { ouverts += it }
+        val ts = TsSynthetique(450, attenteMs = 400)
+        val copie = ByteArrayOutputStream()
+        val arrets = AtomicInteger()
+        val vue = VueEmisDatvPc({
+            object : VueEmisDatvPc.Decodeur {
+                override val entree = object : java.io.OutputStream() {
+                    override fun write(b: Int) { synchronized(copie) { copie.write(b) } }
+                    override fun write(b: ByteArray, off: Int, len: Int) { synchronized(copie) { copie.write(b, off, len) } }
+                }
+                override val sortie: InputStream = PipedInputStream(PipedOutputStream())
+                override val vivant = true
+                override fun arrete() { arrets.incrementAndGet() }
+            }
+        })
+        val e = emission(p, ts, vue = vue)
+        // Not transmitting: the page's request starts no decoder.
+        assertNull(vue.demande()); assertFalse(vue.actif)
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
+        e.frequenceKhz = 2_409_750L; e.gainDb = -30.0
+        assertNull(e.demarre(confirme = true, chargeFictive = false))
+        vue.demande()
+        assertTrue(vue.actif)
+        val ok = attends(8000) { e.vie(); e.tic(); vue.demande(); (e.json().optLong("paquets")) >= 425 && p.octets > 4L * 2_331_000 * 2 }
+        assertTrue(e.json().toString().take(600), ok)
+        assertTrue(e.json().getJSONObject("vue").getBoolean("actif"))
+        // The stream started 0,4 s late (dummy frames first): one second more on the air.
+        val o = p.octets
+        attends(4000) { e.vie(); p.octets > o + 4L * 2_331_000 }
+        e.arrete()
+        assertFalse(vue.actif)
+        assertTrue(attends(2000) { arrets.get() == 1 })
+        // The decoder got the packets as made; the Pluto's samples still carry them all, byte for byte.
+        val c = synchronized(copie) { copie.toByteArray() }
+        assertEquals(450 * 188, c.size)
+        for (k in 0 until 450) assertArrayEquals("copie $k", ts.paquets[k], c.copyOfRange(k * 188, k * 188 + 188))
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(p.iq()))
+        assertTrue("${b.paquets.size} paquets", b.paquets.size >= 425)
+        for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], b.paquets[k])
     }
 
     @Test

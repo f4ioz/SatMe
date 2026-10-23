@@ -479,9 +479,30 @@ ${STYLE_JETONS}
   .dc-bulle { align-self:flex-start; max-width:85%; background:#1B2A36; border-radius:12px 12px 12px 3px; padding:5px 10px; overflow-wrap:anywhere; }
   .dc-bulle.moi { align-self:flex-end; background:rgba(63,224,200,.18); border-radius:12px 12px 3px 12px; }
   .dc-bulle .petit { margin-right:6px; }
-  #d-cadre { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  #d-cadre, #d-cadre-tx { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
   #d-video { width:100%; height:100%; object-fit:contain; display:none; }
-  #d-vide { position:absolute; color:var(--gris); font-size:15px; }
+  #d-video-tx { width:100%; height:100%; object-fit:contain; }
+  #d-vide, .d-vide { position:absolute; color:var(--gris); font-size:15px; }
+  /* The picture transmitted beside the one received (while transmitting), each enlarged at will. */
+  .d-nom { position:absolute; left:8px; top:8px; z-index:2; padding:2px 9px; border-radius:6px; background:rgba(0,0,0,.66); color:#fff; font-weight:700; font-size:var(--fs-s); pointer-events:none; }
+  .d-nom-tx { box-shadow:0 0 0 1px var(--rose); } .d-nom-rx { box-shadow:0 0 0 1px var(--vert); }
+  .d-haut:not(.d-duo) .d-nom-rx { display:none; }
+  .d-agrandir { position:absolute; right:8px; bottom:8px; z-index:3; padding:1px 8px; font-size:16px; line-height:1.3; background:rgba(0,0,0,.55); color:#fff; border-radius:6px; opacity:.55; }
+  .d-agrandir:hover, .d-agrandir:focus-visible { opacity:1; }
+  .d-plein-arret { display:none; }
+  .d-leg { margin-top:-2px; min-height:1.3em; overflow-wrap:anywhere; }
+  .d-haut.d-duo { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"tx rx" "ltx lrx" "info info"; gap:4px 10px; }
+  .d-haut.d-duo #d-cadre-tx { grid-area:tx; }
+  .d-haut.d-duo #d-cadre { grid-area:rx; width:auto; }
+  .d-haut.d-duo #d-leg-tx { grid-area:ltx; } .d-haut.d-duo #d-leg-rx { grid-area:lrx; }
+  .d-haut.d-duo .d-info { grid-area:info; contain:none; }
+  .d-haut.d-duo .d-info .dc-carte { flex:none; } .d-haut.d-duo .d-info .dc-chat { max-height:220px; }
+  @media (max-width:900px) { .d-haut.d-duo { grid-template-columns:minmax(0,1fr); grid-template-areas:"tx" "ltx" "rx" "lrx" "info"; } }
+  .d-cadre:fullscreen { border-radius:0; aspect-ratio:auto; }
+  #v-datv .d-cadre.d-plein { position:fixed; inset:0; z-index:5000; width:auto; aspect-ratio:auto; border-radius:0; }
+  #v-datv .d-cadre.d-plein .d-plein-arret { display:block; position:absolute; right:8px; top:8px; z-index:4; }
+  #v-datv .d-cadre.d-plein .d-direct { right:110px; } #v-datv .d-cadre.d-plein .d-lu { top:48px; }
+  #d-duo-b:not([hidden]) + .mt-pop-b { margin-left:6px !important; }
   #q-boite { margin-top:12px; border-top:1px solid var(--bord); padding-top:10px; }
   .q-haut { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
   #q-marge { font-family:ui-monospace,Consolas,monospace; font-size:30px; font-weight:800; white-space:nowrap; }
@@ -2604,9 +2625,12 @@ ${rail()}
 <div class="vue" id="v-datv" hidden>
 <div class="d-grille">
   <div class="carte d-ecran">
-    <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span><button class="mt-pop-b" data-o="datv" style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="mtPopBascule('datv')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button></div>
+    <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span><button class="mt-pop-b" id="d-duo-b" hidden style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="dDuoBascule()" aria-pressed="true" title="L’image émise et l’image reçue de QO-100 côte à côte, pendant l’émission">Émis | Reçu</button><button class="mt-pop-b" data-o="datv" style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="mtPopBascule('datv')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button></div>
     <div class="d-haut">
-    <div id="d-cadre"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div></div>
+    <div id="d-cadre-tx" class="d-cadre" hidden ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><img id="d-video-tx" alt="Image émise" hidden><div id="d-vide-tx" class="d-vide">en attente de l’image émise…</div><span class="d-nom d-nom-tx">Émis</span><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
+    <div id="d-leg-tx" class="petit d-leg" hidden></div>
+    <div id="d-cadre" class="d-cadre" ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div><span class="d-nom d-nom-rx">Reçu</span><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
+    <div id="d-leg-rx" class="petit d-leg" hidden></div>
       <div class="d-info">
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
@@ -7097,6 +7121,54 @@ async function ticDatv(premier) {
     D.telephone ? (D.verrouille ? 'accroché : l’image est sur l’écran DATV du téléphone' : D.libelle + '…') : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
   dessineConstellation();
   qualiteDatv();
+  dDuo();
+}
+// ------------------------------------------------------------------ DATV: the picture transmitted beside the one received, each enlarged
+// While transmitting only: decoded by SatMe-PC from a copy of the stream sent (nothing more transmitted). Reception only: as before.
+let dDuoOn = (() => { try { return localStorage.getItem('datv-duo') !== '0'; } catch (x) { return true; } })(), dTxRelance = 0;
+function dDuoBascule() { dDuoOn = !dDuoOn; try { localStorage.setItem('datv-duo', dDuoOn ? '1' : '0'); } catch (x) {} dDuo(); }
+function dDuo() {
+  const emet = !!(EM && EM.emet), duo = emet && dDuoOn, b = g('d-duo-b'), c = g('d-cadre-tx'), v = g('d-video-tx');
+  b.hidden = !emet; b.setAttribute('aria-pressed', duo ? 'true' : 'false'); b.classList.toggle('actif', duo);
+  g('d-cadre').parentNode.classList.toggle('d-duo', duo);
+  c.hidden = !duo; g('d-leg-tx').hidden = !duo; g('d-leg-rx').hidden = !duo;
+  document.querySelectorAll('.d-plein-arret').forEach(x => { x.hidden = !emet; });
+  // The browser's full screen keeps Échap for itself: while transmitting, enlarged inside the window instead (Échap stops every transmission).
+  const fs = document.fullscreenElement;
+  if (emet && fs && fs.classList.contains('d-cadre')) { document.exitFullscreen().catch(() => {}); fs.classList.add('d-plein'); }
+  if (!duo) {
+    if (c.classList.contains('d-plein')) c.classList.remove('d-plein');
+    if (v.getAttribute('src')) v.removeAttribute('src');
+    v.hidden = true; g('d-vide-tx').hidden = false; return;
+  }
+  const vu = EM.vue || {}, n = vu.images || 0;
+  // « Mode distant »: a picture every 2 s, the video only when asked (as the reception's).
+  if (MD && !dDirect) { if (!mdSaute('vignTx', 2000)) { v.dataset.vign = '1'; v.src = 'api/datv/emission/vue.jpg?t=' + Date.now(); } }
+  else if (!v.getAttribute('src') || v.dataset.vign || (!vu.actif && Date.now() - dTxRelance > 5000)) {
+    // Asked again when the decoder stopped (the stream dropped): it starts with the request.
+    dTxRelance = Date.now(); delete v.dataset.vign; v.src = 'api/datv/emission/vue.mjpeg?t=' + Date.now();
+  }
+  v.hidden = !n; g('d-vide-tx').hidden = !!n;
+  txt('d-vide-tx', 'en attente de l’image émise…');
+  const mc = EM.modcodEnCours || EM.modcod;
+  g('d-leg-tx').innerHTML = '<b style="color:var(--rose)">● Émis</b> · ' + esc(mc) + ' · ' + mhz3(EM.khzEnCours) + ' MHz · TS ' + EM.tsKbps + ' kbit/s' +
+    (EM.restant != null ? ' · reste ' + duree(EM.restant * 1000) : '');
+  const nous = D && D.verrouille && EM.indicatif && (D.service === EM.indicatif || (D.carte && D.carte.indicatif === EM.indicatif));
+  g('d-leg-rx').innerHTML = !D || !D.actif ? '<b>Reçu</b> · réception arrêtée : « Recevoir » (sous-onglet Réception) sur la descente ' + mhz3(EM.descenteKhz || 0) + ' MHz' :
+    '<b style="color:' + (D.verrouille ? 'var(--vert)' : 'var(--ambre)') + '">Reçu</b> · ' + (D.verrouille ? 'accroché · MER <b>' + (D.mer == null ? '—' : fr1(D.mer) + ' dB') + '</b>' +
+      (D.modcod ? ' · ' + esc(D.modcod) : '') + (nous ? ' · <span style="color:var(--vert)">notre signal</span>' : D.service ? ' · ' + esc(D.service) : '') : esc(D.libelle) + '…');
+  g('d-leg-rx').title = 'Le retard aller-retour se lit en incrustant l’heure UTC (Émission › Incrustation sur l’image) : l’écart entre les deux horloges.';
+}
+function dAgrandit(c) {
+  if (c.classList.contains('d-plein') || document.fullscreenElement === c) { dReduit(); return; }
+  dReduit();
+  if (!(EM && EM.emet) && c.requestFullscreen) c.requestFullscreen().catch(() => c.classList.add('d-plein'));
+  else c.classList.add('d-plein');
+}
+function dReduit() {
+  document.querySelectorAll('.d-cadre.d-plein').forEach(x => x.classList.remove('d-plein'));
+  const fs = document.fullscreenElement;
+  if (fs && fs.classList.contains('d-cadre')) document.exitFullscreen().catch(() => {});
 }
 // ------------------------------------------------------------------ DATV reception quality
 let qEm = null, qEmPs = null;
@@ -7685,7 +7757,7 @@ async function ticEmission() {
   if (g('v-datv').hidden && !(EM && EM.emet)) return;
   let j; try { j = await (await fetch('api/datv/emission')).json(); } catch (x) { return; }
   if (!j.ok) { g('e-carte').hidden = true; return; }
-  EM = j; eVie(j.emet);
+  EM = j; eVie(j.emet); dDuo();
   const libre = !document.activeElement || !document.activeElement.id.startsWith('e-');
   if (ePremier || libre) {
     if (ePremier) {
@@ -15055,7 +15127,7 @@ async function arretEmissions() {
   try { if (!g('v-datv').hidden) ticEmission(); if (!g('v-sstv').hidden) { xsCharge(); ticMire(true); } if (!g('v-reglages').hidden) chargeIq(); } catch (x) {}
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { arretEmissions(); popCache(); if (MT.sel) mtFicheFerme(); return; }
+  if (e.key === 'Escape') { arretEmissions(); popCache(); dReduit(); if (MT.sel) mtFicheFerme(); return; }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); palette(); return; }
   const a = document.activeElement;
   if (e.ctrlKey || e.metaKey || e.altKey || (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]') || !g('man').hidden) return;
