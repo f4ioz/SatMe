@@ -175,7 +175,9 @@ GET  <base>/planche/modele?cle=…&id=…      → {"texte":"planche=1\n…","ra
 POST <base>/planche/enregistre?cle=…&id=…  (corps : le texte du modèle)  → {"ok":true}
 GET  <base>/planche/nouveau?cle=…&type=grille|tour                       → {"ok":true,"id":"…"}
 POST <base>/planche/importe?cle=…&nom=…    (corps : un JPEG ou un PNG, 25 Mo au plus) → {"ok":true,"id","cases"}
-GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                           → {"ok":true}
+GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                           → {"ok":true,"cases"}
+GET  <base>/planche/nombre?cle=…&id=…&n=4&sat=ISS                        → {"ok":true,"cases"}   (n=0 : les cases du modèle)
+GET  <base>/planche/bascule?cle=…&id=…&f=…                               → {"ok","cases"}   (ok faux : planche pleine)
 GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…]   (fichier, satellite, mode, heure, complète, en direct)
 GET  <base>/planche/vignette?cle=…&f=…&w=320                             → image/jpeg
 GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]         → image/jpeg
@@ -188,6 +190,14 @@ planche). Un modèle renvoyé garde son propre fond : le client ne peut pas le
 faire pointer vers un autre fichier. `vignette` ne sert que les images de la
 galerie. L'aperçu et la planche sont dessinés par le téléphone, avec le dessin
 de son propre écran.
+
+Une planche peut porter moins d'images que son modèle : `nombre` l'ajuste à
+`n` images (celles déjà posées gardées, les autres les meilleures reçues, une
+seule copie de chaque diapo), dans la grille qui les fait les plus grandes ;
+`bascule` pose une image sur une planche ajustée ou l'en retire. Les cases du
+modèle sont gardées en lignes `origine=` (et ses textes en `texteorigine=`,
+quand l'ajustement les a déplacés), pour y revenir avec `n=0` ; un client
+renvoie telles qu'il les a lues les lignes qu'il ne connaît pas.
 
 ### Journal des passages
 

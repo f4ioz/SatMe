@@ -64,6 +64,22 @@ object PlancheRenduPc {
         return r
     }
 
+    /** The panel over a template's own boxes when the sheet is fitted to its pictures (the phone's). */
+    const val PANNEAU = 0xF205080D.toInt()
+
+    // Signatures by file: the pictures do not change once written.
+    private val signatures = HashMap<String, Planche.Signature>()
+
+    /** [Planche.Signature] of each picture, from a small copy, kept. */
+    fun signatures(fichiers: List<File>): Map<String, Planche.Signature> = fichiers.mapNotNull { f ->
+        val cle = f.name + "@" + f.lastModified()
+        val s = synchronized(signatures) { signatures[cle] } ?: charge(f, 96)?.let { b ->
+            Planche.signature(b.getRGB(0, 0, b.width, b.height, null, 0, b.width), b.width, b.height)
+                .also { synchronized(signatures) { signatures[cle] = it } }
+        }
+        s?.let { f.name to it }
+    }.toMap()
+
     /** An image file, made no wider than [largeurMax]. */
     fun charge(f: File, largeurMax: Int): BufferedImage? = runCatching {
         val b = ImageIO.read(f) ?: return null
@@ -95,13 +111,18 @@ object PlancheRenduPc {
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
         if (fond != null) g.drawImage(fond, 0, 0, w, h, null) else fondGenerique(g, w, h)
         val k = w / 1000f
+        // Fitted to fewer pictures: the template's printed boxes ("NO IMAGE") hidden under one dark panel.
+        if (fond != null && m.ajustee) Planche.englobe(m.origine)?.let { z ->
+            g.color = couleur(PANNEAU)
+            g.fill(RoundRectangle2D.Float(z.x * w - 6 * k, z.y * h - 6 * k, z.w * w + 12 * k, z.h * h + 12 * k, 20 * k, 20 * k))
+        }
         val n = m.cases.size
         m.cases.forEachIndexed { i, z ->
             val r = Rectangle2D.Float(z.x * w, z.y * h, z.w * w, z.h * h)
             val img = images[i]
             if (img != null) {
                 // The line under the picture takes its share of the box.
-                val bande = if (m.legende) (r.height * 0.09f).coerceAtLeast(10f * k) else 0f
+                val bande = if (m.legende) (r.height * Planche.BANDE).coerceAtLeast(10f * k) else 0f
                 val ri = Rectangle2D.Float(r.x, r.y, r.width, r.height - bande)
                 dessineRempli(g, img.first, ri)
                 if (bande > 0f) {

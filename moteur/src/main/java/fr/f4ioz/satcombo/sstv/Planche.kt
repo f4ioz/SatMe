@@ -61,8 +61,18 @@ object Planche {
         val numeros: Boolean = false,
         val titre: String = "",
         /** Picture in each box: box index → PNG name in the gallery. */
-        val images: Map<Int, String> = emptyMap()
-    )
+        val images: Map<Int, String> = emptyMap(),
+        /**
+         * The template's own boxes while the sheet is fitted to the pictures
+         * chosen ([ajuste]): one box per picture. Empty = the template's layout.
+         */
+        val origine: List<Zone> = emptyList(),
+        /** The texts where the template had them, when fitting moved them aside. */
+        val textesOrigine: List<Texte> = emptyList()
+    ) {
+        /** Fitted to the pictures chosen, not the template's boxes. */
+        val ajustee: Boolean get() = origine.isNotEmpty()
+    }
 
     const val BLANC = 0xFFFFFFFF.toInt()
     const val NOIR = 0xFF000000.toInt()
@@ -100,6 +110,56 @@ object Planche {
             Zone(zone.x + col * cw + (cw - bw) / 2, zone.y + lig * ch + (ch - bh) / 2, bw, bh)
         }
     }
+
+    /**
+     * Columns and box width (in sheet heights) of the grid where [n] boxes of
+     * [aspect] are largest within [zone], [ecart] of a box between them.
+     */
+    private fun meilleure(n: Int, zone: Zone, ratioPlanche: Float, aspect: Float, ecart: Float): Pair<Int, Float> {
+        val zw = zone.w * ratioPlanche; val zh = zone.h
+        var c = 1; var b = 0f
+        for (cc in 1..n) {
+            val rr = (n + cc - 1) / cc
+            val bb = minOf(zw / (cc + ecart * (cc - 1)), zh / (rr / aspect + ecart * (rr - 1)))
+            if (bb > b * 1.0001f) { b = bb; c = cc }
+        }
+        return c to b
+    }
+
+    /**
+     * [n] boxes as large as [zone] allows, [aspect] (width / height) kept:
+     * the column count that makes them largest, the block centred, the last
+     * row centred too — no empty box.
+     */
+    fun grilleOptimale(n: Int, zone: Zone, ratioPlanche: Float = 1.414f, aspect: Float = 4f / 3f, ecart: Float = 0.06f): List<Zone> {
+        if (n <= 0 || zone.w <= 0f || zone.h <= 0f) return emptyList()
+        val (c, b) = meilleure(n, zone, ratioPlanche, aspect, ecart)
+        val r = (n + c - 1) / c
+        val zw = zone.w * ratioPlanche
+        val bh = b / aspect; val e = b * ecart
+        val y0 = zone.y + (zone.h - (r * bh + (r - 1) * e)) / 2
+        return (0 until n).map { i ->
+            val lig = i / c; val col = i % c
+            val k = if (lig == r - 1) n - lig * c else c
+            val x = zone.x * ratioPlanche + (zw - (k * b + (k - 1) * e)) / 2 + col * (b + e)
+            Zone(x / ratioPlanche, y0 + lig * (bh + e), b / ratioPlanche, bh)
+        }
+    }
+
+    /** Width / height of a box: a 4:3 picture, and the line under it when there is one. */
+    fun aspectCase(legende: Boolean): Float = if (legende) 4f / 3f * (1 - BANDE) else 4f / 3f
+
+    /** The share of a box the line under the picture takes. */
+    const val BANDE = 0.09f
+
+    /** The rectangle round [zones]; null when there are none. */
+    fun englobe(zones: List<Zone>): Zone? {
+        if (zones.isEmpty()) return null
+        val x0 = zones.minOf { it.x }; val y0 = zones.minOf { it.y }
+        return Zone(x0, y0, zones.maxOf { it.x + it.w } - x0, zones.maxOf { it.y + it.h } - y0)
+    }
+
+    private fun touche(a: Zone, b: Zone) = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
     /** Twelve boxes round the edge of a 4×4 grid, the middle left for the title. */
     fun tour(ratioPlanche: Float = 1.414f): List<Zone> {
@@ -142,6 +202,186 @@ object Planche {
                 Texte(Champ.NOM_LOCATOR, nl?.first ?: Zone(0.08f, 0.775f, 0.20f, 0.06f), MARINE, nl?.second ?: 0)))
     }
 
+    // ------------------------------------------------------- fitting
+
+    /** The pictures on the sheet, in the order of their boxes. */
+    fun choisies(m: Modele): List<String> = m.images.toSortedMap().values.distinct()
+
+    /** The texts at their template places, what was changed on them since kept. */
+    private fun textesDuModele(m: Modele): List<Texte> =
+        if (m.textesOrigine.isNotEmpty() && m.textesOrigine.size == m.textes.size)
+            m.textes.mapIndexed { i, t -> t.copy(zone = m.textesOrigine[i].zone) }
+        else m.textes
+
+    /**
+     * The sheet holding exactly [fichiers], in that order: one box each, in
+     * the grid that makes them largest where the template's pictures go —
+     * around its texts; on a generic background the texts may move to a side
+     * when the pictures gain much by it. The template's boxes are kept
+     * ([Modele.origine]) to go back to ([duModele]). None = the template's layout.
+     */
+    fun ajuste(m: Modele, fichiers: List<String>): Modele {
+        val l = fichiers.distinct()
+        if (l.isEmpty()) return duModele(m).copy(images = emptyMap())
+        val origine = m.origine.ifEmpty { m.cases }
+        val textes = textesDuModele(m)
+        val r = m.ratio; val a = aspectCase(m.legende); val n = l.size; val ecart = 0.06f
+        val generique = m.fond.isBlank()
+        // Where the pictures go: the whole sheet on a generic background, else where the template has its boxes.
+        val zone = (if (generique) null else englobe(origine)) ?: Zone(0.02f, 0.02f, 0.96f, 0.96f)
+        // Candidates: the place, the texts there, the gain a move must bring to be chosen.
+        val essais = ArrayList<Triple<Zone, List<Texte>, Float>>()
+        val genants = textes.filter { touche(it.zone, zone) }
+        if (genants.isEmpty()) essais += Triple(zone, textes, 1f) else {
+            val u = englobe(genants.map { it.zone })!!; val mg = 0.015f
+            val gauche = u.x - mg - zone.x; val droite = zone.x + zone.w - (u.x + u.w + mg)
+            val haut = u.y - mg - zone.y; val bas = zone.y + zone.h - (u.y + u.h + mg)
+            listOf(Zone(zone.x, zone.y, gauche, zone.h), Zone(u.x + u.w + mg, zone.y, droite, zone.h),
+                Zone(zone.x, zone.y, zone.w, haut), Zone(zone.x, u.y + u.h + mg, zone.w, bas))
+                .filter { it.w > 0.05f && it.h > 0.05f }.forEach { essais += Triple(it, textes, 1f) }
+        }
+        val bloc = englobe(textes.map { it.zone })
+        if (generique && bloc != null) {
+            // The texts together, as placed, moved to one side (made smaller if need be).
+            val mg = 0.02f
+            fun place(s: Float, x: Float, y: Float) = textes.map { t ->
+                t.copy(zone = Zone(x + (t.zone.x - bloc.x) * s, y + (t.zone.y - bloc.y) * s, t.zone.w * s, t.zone.h * s))
+            }
+            val sv = minOf(1f, 0.32f / bloc.w, 0.96f / bloc.h); val bw = bloc.w * sv; val yv = 0.5f - bloc.h * sv / 2
+            val sh = minOf(1f, 0.30f / bloc.h, 0.96f / bloc.w); val bh = bloc.h * sh; val xh = 0.5f - bloc.w * sh / 2
+            // Never so small the texts no longer read; worth it only for much larger pictures.
+            if (sv >= 0.6f) {
+                essais += Triple(Zone(2 * mg + bw, mg, 1 - 3 * mg - bw, 1 - 2 * mg), place(sv, mg, yv), 1.25f)
+                essais += Triple(Zone(mg, mg, 1 - 3 * mg - bw, 1 - 2 * mg), place(sv, 1 - mg - bw, yv), 1.25f)
+            }
+            if (sh >= 0.6f) {
+                essais += Triple(Zone(mg, 2 * mg + bh, 1 - 2 * mg, 1 - 3 * mg - bh), place(sh, xh, mg), 1.25f)
+                essais += Triple(Zone(mg, mg, 1 - 2 * mg, 1 - 3 * mg - bh), place(sh, xh, 1 - mg - bh), 1.25f)
+            }
+        }
+        if (essais.isEmpty()) essais += Triple(zone, textes, 1f)
+        val (z, tx, _) = essais.maxByOrNull { (z, _, gain) -> meilleure(n, z, r, a, ecart).second / gain }!!
+        val bouges = tx !== textes
+        return m.copy(cases = grilleOptimale(n, z, r, a, ecart), images = l.withIndex().associate { it.index to it.value },
+            origine = origine, textes = tx, textesOrigine = if (bouges) textes else emptyList())
+    }
+
+    /** Fitted again to the same pictures (after the line under them was switched, say). */
+    fun reajuste(m: Modele): Modele = if (m.ajustee) ajuste(m, choisies(m)) else m
+
+    /** Back to the template's boxes and texts, the pictures chosen in its first boxes. */
+    fun duModele(m: Modele): Modele {
+        if (!m.ajustee) return m
+        return m.copy(cases = m.origine, origine = emptyList(), textes = textesDuModele(m), textesOrigine = emptyList(),
+            images = choisies(m).take(m.origine.size).withIndex().associate { it.index to it.value })
+    }
+
+    /** As many pictures as the template has boxes, at most. */
+    fun nombreMax(m: Modele): Int = m.origine.ifEmpty { m.cases }.size
+
+    /**
+     * A picture put on a fitted sheet, or taken off it if it is there; the
+     * sheet fitted again. Unchanged when it is full ([nombreMax]).
+     */
+    fun bascule(m: Modele, fichier: String): Modele {
+        val l = choisies(m)
+        return when {
+            fichier in l -> ajuste(m, l - fichier)
+            l.size >= nombreMax(m) -> m
+            else -> ajuste(m, l + fichier)
+        }
+    }
+
+    /** The pictures of boxes [i] and [j] swapped. */
+    fun echange(m: Modele, i: Int, j: Int): Modele {
+        if (i !in m.cases.indices || j !in m.cases.indices) return m
+        val im = m.images.toMutableMap()
+        val a = im.remove(i); val b = im.remove(j)
+        if (a != null) im[j] = a
+        if (b != null) im[i] = b
+        return m.copy(images = im)
+    }
+
+    /**
+     * The sheet fitted to [n] pictures: those already on it kept in their
+     * order, the others taken from [images] as [remplitParReception] would,
+     * a copy of one already there never. 0 = the template's own layout.
+     */
+    fun avecNombre(m: Modele, n: Int, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele {
+        if (n <= 0) return duModele(m)
+        val deja = choisies(m).take(n)
+        if (deja.size >= n) return ajuste(m, deja)
+        val plus = distinctes(images.filter { it.fileName !in deja }, signatures, deja.mapNotNull { signatures[it] })
+            .take(n - deja.size).sortedBy { it.timeMs }.map { it.fileName }
+        return ajuste(m, deja + plus)
+    }
+
+    /** "Fill": the template's boxes, or as many pictures as the fitted sheet holds, the best of [images]. */
+    fun remplit(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele =
+        if (m.ajustee) avecNombre(m.copy(images = emptyMap()), m.cases.size, images, signatures)
+        else m.copy(images = remplitParReception(m.cases.size, images, signatures))
+
+    // ------------------------------------------------------- same picture
+
+    /**
+     * What a picture looks like, small: to tell two copies of one slide of
+     * a series (received on two passes, decoded twice) from two slides.
+     * [gris]: 16×12 grey; [bruit]: the share of it the
+     * decoder's green noise covers.
+     */
+    class Signature(val gris: IntArray, val bruit: Float)
+
+    /** The [Signature] of a picture, from its pixels (any size, a small copy is enough). */
+    fun signature(px: IntArray, w: Int, h: Int): Signature {
+        fun gris(gw: Int, gh: Int): IntArray {
+            val s = LongArray(gw * gh); val n = IntArray(gw * gh)
+            for (y in 0 until h) {
+                val gy = y * gh / h
+                for (x in 0 until w) { val k = gy * gw + x * gw / w; s[k] += lum(px[y * w + x]).toLong(); n[k]++ }
+            }
+            return IntArray(gw * gh) { if (n[it] > 0) (s[it] / n[it]).toInt() else 0 }
+        }
+        val g = gris(16, 12)
+        // Noise of a weak pass: the green speckle and streaks of the decoder, rare in a slide itself.
+        var vert = 0
+        for (c in px) {
+            val r = (c shr 16) and 0xFF; val v = (c shr 8) and 0xFF; val b = c and 0xFF
+            if (v > r + 50 && v > b + 50) vert++
+        }
+        return Signature(g, vert / px.size.coerceAtLeast(1).toFloat())
+    }
+
+    /**
+     * Two copies of one picture? Rows compared, the median row judged: the
+     * noise of a pass spoils a few rows, another slide most of them.
+     */
+    fun memeImage(a: Signature, b: Signature): Boolean {
+        val lignes = FloatArray(12) { y -> (0 until 16).sumOf { x -> abs(a.gris[y * 16 + x] - b.gris[y * 16 + x]) } / 16f }
+        lignes.sort()
+        return (lignes[5] + lignes[6]) / 2 < SEUIL_MEME
+    }
+
+    private const val SEUIL_MEME = 16f
+
+    /** Above this share of noise a picture is kept for last. */
+    private const val SALE = 0.06f
+
+    /**
+     * One copy of each picture, the best first: complete before partial,
+     * clean before spoilt by noise, then the earliest; of copies, the cleanest. [deja]: pictures already chosen,
+     * whose copies are left out.
+     */
+    private fun distinctes(images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature>,
+                           deja: List<Signature> = emptyList()): List<SstvMeta.SstvShot> {
+        val gardees = ArrayList<SstvMeta.SstvShot>(); val vues = ArrayList(deja)
+        for (s in images.sortedWith(compareBy({ !it.complete }, { signatures[it.fileName]?.bruit ?: 0f }, { it.timeMs }))) {
+            val sig = signatures[s.fileName]
+            if (sig != null && vues.any { memeImage(it, sig) }) continue
+            gardees += s; if (sig != null) vues += sig
+        }
+        return gardees.sortedWith(compareBy({ !it.complete }, { (signatures[it.fileName]?.bruit ?: 0f) > SALE }, { it.timeMs }))
+    }
+
     // ------------------------------------------------------------ texts
 
     private val jour = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
@@ -168,11 +408,12 @@ object Planche {
     /**
      * Boxes filled in order of reception with the pictures given, one per box,
      * the partial ones last (a series is sent again and again: a complete copy
-     * of a slide is worth more).
+     * of a slide is worth more). With [signatures], one copy of each slide:
+     * the cleanest — a box left empty rather than a slide twice.
      */
-    fun remplitParReception(nbCases: Int, images: List<SstvMeta.SstvShot>): Map<Int, String> {
-        val tri = images.sortedWith(compareBy({ !it.complete }, { it.timeMs }))
-            .take(nbCases).sortedBy { it.timeMs }
+    fun remplitParReception(nbCases: Int, images: List<SstvMeta.SstvShot>,
+                            signatures: Map<String, Signature> = emptyMap()): Map<Int, String> {
+        val tri = distinctes(images, signatures).take(nbCases).sortedBy { it.timeMs }
         return tri.mapIndexed { i, s -> i to s.fileName }.toMap()
     }
 
@@ -285,17 +526,26 @@ object Planche {
         append("numeros=").append(if (m.numeros) 1 else 0).append('\n')
         append("titre=").append(esc(m.titre)).append('\n')
         m.cases.forEach { append("case=").append(z(it)).append('\n') }
-        m.textes.forEach { t ->
-            append("texte=").append(t.champ.name).append(';').append(z(t.zone)).append(';')
+        fun texte(cle: String, t: Texte) {
+            append(cle).append('=').append(t.champ.name).append(';').append(z(t.zone)).append(';')
                 .append(t.couleur).append(';').append(t.fond).append(';').append(esc(t.libre).replace(";", ","))
                 .append('\n')
         }
+        m.textes.forEach { texte("texte", it) }
         m.images.toSortedMap().forEach { (i, f) -> append("image=").append(i).append(';').append(f).append('\n') }
+        // A sheet fitted to its pictures: the template's layout, to go back to (read by older versions as nothing).
+        m.origine.forEach { append("origine=").append(z(it)).append('\n') }
+        m.textesOrigine.forEach { texte("texteorigine", it) }
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
         var m = Modele(id = id, nom = id)
         val cases = ArrayList<Zone>(); val textes = ArrayList<Texte>(); val images = HashMap<Int, String>()
+        val origine = ArrayList<Zone>(); val textesOrigine = ArrayList<Texte>()
+        fun texte(v: String): Texte {
+            val p = v.split(';')
+            return Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
+        }
         texte.lineSequence().forEach { l ->
             val k = l.substringBefore('=', ""); val v = l.substringAfter('=', "")
             when (k) {
@@ -306,15 +556,13 @@ object Planche {
                 "numeros" -> m = m.copy(numeros = v == "1")
                 "titre" -> m = m.copy(titre = unesc(v))
                 "case" -> runCatching { cases += zone(v.split(';'), 0) }
-                "texte" -> runCatching {
-                    val p = v.split(';')
-                    textes += Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(),
-                        unesc(p.getOrElse(7) { "" }))
-                }
+                "texte" -> runCatching { textes += texte(v) }
                 "image" -> runCatching { images[v.substringBefore(';').toInt()] = v.substringAfter(';') }
+                "origine" -> runCatching { origine += zone(v.split(';'), 0) }
+                "texteorigine" -> runCatching { textesOrigine += texte(v) }
             }
         }
-        m.copy(cases = cases, textes = textes, images = images)
+        m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine)
     }.getOrNull()
 
     /** The sheets folder: templates ("*.planche") and their backgrounds. */

@@ -146,7 +146,8 @@ object PlancheWeb {
                         cases = lu.cases.take(60).map { it.bornee() },
                         textes = lu.textes.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
                         titre = lu.titre.take(120),
-                        images = lu.images.filterKeys { it in lu.cases.indices.take(60) })
+                        images = lu.images.filterKeys { it in lu.cases.indices.take(60) },
+                        origine = lu.origine.take(60).map { it.bornee() }, textesOrigine = lu.textesOrigine.take(20))
                     synchronized(this) { r.enregistre(m) }
                     if (p("nom_station").isNotBlank()) SettingsStore(ctx).plancheNom = p("nom_station").take(60)
                     json("{\"ok\":true}")
@@ -180,14 +181,26 @@ object PlancheWeb {
                     json("{\"ok\":true,\"id\":\"$id\",\"cases\":${m.cases.size}}")
                 }
 
-                // The boxes filled in order of reception, from the pictures shown (one satellite, or all).
-                "/remplit" -> {
+                // The boxes filled in order of reception, from the pictures shown (one satellite, or all),
+                // one copy of each slide; [n]: the sheet fitted to that many pictures (0: the template's boxes).
+                "/remplit", "/nombre" -> {
                     val m = modele(r, p("id")) ?: return NON
                     val sat = p("sat")
-                    val l = galerie(ctx).filter { sat.isBlank() || it.second.satName == sat }.map { it.second }
-                    val n = m.copy(images = Planche.remplitParReception(m.cases.size, l))
+                    val l = galerie(ctx).filter { sat.isBlank() || it.second.satName == sat }
+                    val sig = PlancheRendu.signatures(l.map { it.first })
+                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
+                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
                     synchronized(this) { r.enregistre(n) }
-                    json("{\"ok\":true}")
+                    json("{\"ok\":true,\"cases\":${n.cases.size}}")
+                }
+
+                // A picture put on a fitted sheet, or taken off it.
+                "/bascule" -> {
+                    val m = modele(r, p("id")) ?: return NON
+                    val f = galerie(ctx).firstOrNull { it.first.name == p("f") }?.first?.name ?: return NON
+                    val n = Planche.bascule(m, f)
+                    synchronized(this) { r.enregistre(n) }
+                    json("{\"ok\":${n != m || f !in Planche.choisies(m)},\"cases\":${n.cases.size}}")
                 }
 
                 // The SSTV pictures received, newest first.

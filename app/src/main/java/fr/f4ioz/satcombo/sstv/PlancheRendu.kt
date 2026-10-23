@@ -42,14 +42,32 @@ object PlancheRendu {
         }
     }
 
-    /** An image file decoded no larger than needed. */
-    fun charge(f: File, largeurMax: Int): Bitmap? = runCatching {
+    /** The panel over a template's own boxes when the sheet is fitted to its pictures. */
+    const val PANNEAU = 0xF205080D.toInt()
+
+    /** An image file decoded no larger than needed; [leger]: half the memory (a thumbnail). */
+    fun charge(f: File, largeurMax: Int, leger: Boolean = false): Bitmap? = runCatching {
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(f.absolutePath, o)
         var n = 1
         while (o.outWidth / (n * 2) >= largeurMax) n *= 2
-        BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = n })
+        BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply {
+            inSampleSize = n; if (leger) inPreferredConfig = Bitmap.Config.RGB_565
+        })
     }.getOrNull()
+
+    // Signatures by file: the gallery's pictures do not change once written.
+    private val signatures = HashMap<String, Planche.Signature>()
+
+    /** [Planche.Signature] of each picture, from a small copy, kept. */
+    fun signatures(fichiers: List<File>): Map<String, Planche.Signature> = fichiers.mapNotNull { f ->
+        val cle = f.name + "@" + f.lastModified()
+        val s = synchronized(signatures) { signatures[cle] } ?: charge(f, 80)?.let { b ->
+            val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
+            Planche.signature(px, b.width, b.height).also { synchronized(signatures) { signatures[cle] = it } }
+        }
+        s?.let { f.name to it }
+    }.toMap()
 
     /**
      * The sheet [largeur] pixels wide. [images]: the pictures by box, with
@@ -67,13 +85,18 @@ object PlancheRendu {
         if (fond != null) c.drawBitmap(fond, null, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
         else fondGenerique(c, w, h)
         val k = w / 1000f
+        // Fitted to fewer pictures: the template's printed boxes ("NO IMAGE") hidden under one dark panel.
+        if (fond != null && m.ajustee) Planche.englobe(m.origine)?.let { z ->
+            val r = RectF(z.x * w - 6 * k, z.y * h - 6 * k, (z.x + z.w) * w + 6 * k, (z.y + z.h) * h + 6 * k)
+            c.drawRoundRect(r, 10 * k, 10 * k, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PANNEAU })
+        }
         val n = m.cases.size
         m.cases.forEachIndexed { i, z ->
             val r = RectF(z.x * w, z.y * h, (z.x + z.w) * w, (z.y + z.h) * h)
             val img = images[i]
             if (img != null) {
                 // The line under the picture takes its share of the box.
-                val bande = if (m.legende) (r.height() * 0.09f).coerceAtLeast(10f * k) else 0f
+                val bande = if (m.legende) (r.height() * Planche.BANDE).coerceAtLeast(10f * k) else 0f
                 val ri = RectF(r.left, r.top, r.right, r.bottom - bande)
                 dessineRempli(c, img.first, ri)
                 if (bande > 0f) {
