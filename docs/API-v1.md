@@ -180,7 +180,9 @@ GET  <base>/planche/modele?cle=…&id=…      → {"texte":"planche=1\n…","ra
 POST <base>/planche/enregistre?cle=…&id=…  (body: the template's text)  → {"ok":true}
 GET  <base>/planche/nouveau?cle=…&type=grille|tour                      → {"ok":true,"id":"…"}
 POST <base>/planche/importe?cle=…&nom=…    (body: a JPEG or PNG, 25 MB at most) → {"ok":true,"id","cases"}
-GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                          → {"ok":true}
+GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                          → {"ok":true,"cases"}
+GET  <base>/planche/nombre?cle=…&id=…&n=4&sat=ISS                       → {"ok":true,"cases"}   (n=0: the template's boxes)
+GET  <base>/planche/bascule?cle=…&id=…&f=…                              → {"ok","cases"}   (ok false: the sheet is full)
 GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…]   (file, satellite, mode, time, complete, live)
 GET  <base>/planche/vignette?cle=…&f=…&w=320                            → image/jpeg
 GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]        → image/jpeg
@@ -193,6 +195,13 @@ sheet). A template sent back keeps its own background: the client cannot
 point it at another file. `vignette` serves only pictures of the gallery.
 The preview and the sheet are drawn by the phone, with the drawing of its
 own screen.
+
+A sheet can hold fewer pictures than its template: `nombre` fits it to `n`
+pictures (those on it kept, the rest the best received, one copy of each
+slide), in the grid that makes them largest; `bascule` puts a picture on a
+fitted sheet or takes it off. The template's boxes are kept as `origine=`
+lines (and its texts as `texteorigine=`, when fitting moved them), to go back
+to with `n=0`; a client sends back the lines it does not know as it read them.
 
 ### Pass journal
 
