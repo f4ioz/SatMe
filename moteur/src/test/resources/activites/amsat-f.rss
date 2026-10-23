@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>AMSAT Francophone</title>
+	<atom:link href="https://site.amsat-f.org/feed/" rel="self" type="application/rss+xml" />
+	<link>https://site.amsat-f.org</link>
+	<description>L&#039;activité radioamateur par satellite</description>
+	<lastBuildDate>Sat, 10 Oct 2026 07:47:32 +0000</lastBuildDate>
+	<language>fr-FR</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.3</generator>
+
+<image>
+	<url>https://i0.wp.com/site.amsat-f.org/wp-content/uploads/2024/11/Amsat-Francophone-favicon.png?fit=32%2C32&#038;ssl=1</url>
+	<title>AMSAT Francophone</title>
+	<link>https://site.amsat-f.org</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">110473721</site>	<item>
+		<title>La Fête de la Science 2026 : 10 &#038; 11 Octobre Animations radioamateurs et spatiales !</title>
+		<link>https://site.amsat-f.org/2026/10/09/la-fete-de-la-science-2026-10-11-octobre-animations-radioamateurs-et-spatiales/</link>
+					<comments>https://site.amsat-f.org/2026/10/09/la-fete-de-la-science-2026-10-11-octobre-animations-radioamateurs-et-spatiales/#respond</comments>
+		
+		<dc:creator><![CDATA[Xtophe]]></dc:creator>
+		<pubDate>Fri, 09 Oct 2026 12:32:54 +0000</pubDate>
+				<category><![CDATA[Association]]></category>
+		<guid isPermaLink="false">https://site.amsat-f.org/?p=123719</guid>
+
+					<description><![CDATA[La Fête de la Science bat son plein du 2 au 12 octobre 2026. Comme chaque année, l&#8217;effervescence est au rendez-vous dans les radioclubs et associations qui déploient leurs antennes sur tout le territoire pour faire découvrir notre passion au &#8230; <a href="https://site.amsat-f.org/2026/10/09/la-fete-de-la-science-2026-10-11-octobre-animations-radioamateurs-et-spatiales/">Continuer la lecture <span class="meta-nav">&#8594;</span></a>]]></description>
+		
+					<wfw:commentRss>https://site.amsat-f.org/2026/10/09/la-fete-de-la-science-2026-10-11-octobre-animations-radioamateurs-et-spatiales/feed/</wfw:commentRss>
+			<slash:comments>0</slash:comments>
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">123719</post-id>	</item>
+<item>
+		<title>Transmission SSTV depuis le nano-satellite UMKA-1 (RS40S) le 2 octobre 2026</title>
+		<link>https://site.amsat-f.org/2026/10/01/transmission-sstv-depuis-le-nano-satellite-umka-1-rs40s-le-2-octobre-2026/</link>
+					<comments>https://site.amsat-f.org/2026/10/01/transmission-sstv-depuis-le-nano-satellite-umka-1-rs40s-le-2-octobre-2026/#respond</comments>
+		
+		<dc:creator><![CDATA[Xtophe]]></dc:creator>
+		<pubDate>Thu, 01 Oct 2026 18:04:29 +0000</pubDate>
+				<category><![CDATA[Association]]></category>
+		<guid isPermaLink="false">https://site.amsat-f.org/?p=123679</guid>
+
+					<description><![CDATA[Annoncé sur Discord, une émission d&#8217;image SSTV est planifiée pour le 2 octobre 2026 : Deux images sont transmises : des extraits de clichés capturés par le télescope. Cette diffusion est organisée dans le cadre d&#8217;activités scolaires.. &#x26a0;&#xfe0f; Interruption anticipée &#8230; <a href="https://site.amsat-f.org/2026/10/01/transmission-sstv-depuis-le-nano-satellite-umka-1-rs40s-le-2-octobre-2026/">Continuer la lecture <span class="meta-nav">&#8594;</span></a>]]></description>
+		
+					<wfw:commentRss>https://site.amsat-f.org/2026/10/01/transmission-sstv-depuis-le-nano-satellite-umka-1-rs40s-le-2-octobre-2026/feed/</wfw:commentRss>
+			<slash:comments>0</slash:comments>
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">123679</post-id>	</item>
+<item>
+		<title>du 2 au 4 septembre 2026 :  Émission SSTV depuis le satellite SAKHACUBE-CHOLBON (RS18S)</title>
+		<link>https://site.amsat-f.org/2026/09/01/du-2-au-4-septembre-2026-emission-sstv-depuis-le-satellite-sakhacube-cholbon-rs18s/</link>
+					<comments>https://site.amsat-f.org/2026/09/01/du-2-au-4-septembre-2026-emission-sstv-depuis-le-satellite-sakhacube-cholbon-rs18s/#respond</comments>
+		
+		<dc:creator><![CDATA[Xtophe]]></dc:creator>
+		<pubDate>Tue, 01 Sep 2026 20:44:25 +0000</pubDate>
+				<category><![CDATA[SSTV]]></category>
+		<guid isPermaLink="false">https://site.amsat-f.org/?p=123584</guid>
+
+					<description><![CDATA[Du 2 au 4 septembre 2026, le nanosatellite SAKHACUBE-CHOLBON (RS18S) diffusera une série d&#8217;images au format SSTV . L&#8217;événement est organisé par la Mission permanente de la République de Sakha (Yakoutie) auprès du district fédéral de l&#8217;Extrême-Orient, en collaboration avec &#8230; <a href="https://site.amsat-f.org/2026/09/01/du-2-au-4-septembre-2026-emission-sstv-depuis-le-satellite-sakhacube-cholbon-rs18s/">Continuer la lecture <span class="meta-nav">&#8594;</span></a>]]></description>
+		
+					<wfw:commentRss>https://site.amsat-f.org/2026/09/01/du-2-au-4-septembre-2026-emission-sstv-depuis-le-satellite-sakhacube-cholbon-rs18s/feed/</wfw:commentRss>
+			<slash:comments>0</slash:comments>
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">123584</post-id>	</item>
+</channel>
+</rss>

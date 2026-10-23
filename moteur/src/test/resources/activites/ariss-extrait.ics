@@ -1,0 +1,331 @@
+BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:ARISS Scheduled Contacts (GMT)
+X-WR-TIMEZONE:Etc/GMT
+X-WR-CALDESC:Amateur Radio on the International Space Station\nARISS calend
+ ar with scheduled contacts in GMT
+BEGIN:VEVENT
+DTSTART:20190615T103900Z
+DTEND:20190615T105000Z
+DTSTAMP:20261023T195022Z
+UID:3rov78qnmfpdc85u38pesg022m@google.com
+CLASS:PUBLIC
+CREATED:20190605T193222Z
+DESCRIPTION:AOS: 10:39 UTC&nbsp\; <br>RX: <b>145.800</b> MHz - FM over Russ
+ ia
+LAST-MODIFIED:20260417T040354Z
+LOCATION:"Saransk Polytechnic College"\,  Saransk Russia
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:RSØISS (Oleg Konenenko) - R4UAB (Saransk Russia)
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261022T151000Z
+DTEND:20261026T174500Z
+DTSTAMP:20261023T195022Z
+UID:40sd8lqr4r2rmrsicrqkn14747@google.com
+CLASS:PUBLIC
+CREATED:20261020T134638Z
+DESCRIPTION:<u></u><u></u><u></u><u></u><p>An SSTV event on the ISS is sche
+ duled to begin on Thursday October 22\, 2026  around 15:10 UTC and will end
+  on Monday October 26\,  2026 at 17:45 UTC.</p><p>The ARISS Series 34 image
+ s are about ARISS Hardware.<br><br>The SSTV transmissions will be made usin
+ g the amateur radio station in the ISS Service Module. The transmission fre
+ quency will be 437.550 MHz FM\, (+/- 10 kHz Doppler shift) using SSTV mode 
+ Robot 36\, 36 seconds on with 2 minutes off gap. The ISS callsign will be R
+ S0ISS.</p><p>To support everyone interested in such events\, the European S
+ pace Agency released tutorials about how to receive pictures transmitted ov
+ er amateur radio by the International Space Station\; you can find them on:
+ <br><a href="https://www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_p
+ ictures_from_the_International_Space_Station_via_amateur_radio" target="_bl
+ ank">https://www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_pictures_
+ from_the_International_Space_Station_via_amateur_radio</a><br><br>You are i
+ nvited to upload decoded images in the ARISS gallery\, at: <a href="https:/
+ /ariss-usa.org/ARISS_SSTV/" target="_blank">https://ariss-usa.org/ARISS_SST
+ V/</a> Once you've submitted\, just clicking on the dedicated button you ca
+ n apply for the official ARISS SSTV award.<br><br>The transceiver will be s
+ et to 437.825 MHz in APRS mode following the SSTV transmission\, and will r
+ emain that way until the end of this year.<br><br></p><p><br></p><u></u><u>
+ </u><u></u><u></u>
+LAST-MODIFIED:20261020T134638Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:RSØISS - SSTV activity
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20190205T082500Z
+DTEND:20190205T083600Z
+DTSTAMP:20261023T195022Z
+UID:3ql4dcd1aq73bi3lmutng0djdi@google.com
+CLASS:PUBLIC
+CREATED:20190205T131904Z
+DESCRIPTION:AOS: 08:25 UTC&nbsp\; <br>RX: <b>145.800</b> MHz - FM over Russ
+ ia<br><br>About Gagarin From Space.<br><br>Conducting The Session Of The Ra
+ dio Loving Communication With Amgu G. Blagoveshchensk&nbsp\;<br>&nbsp\;
+LAST-MODIFIED:20260417T040407Z
+LOCATION:Amur State University\, Blagoveshchensk\, Russia
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:RSØISS (Oleg Konenenko) - RKØJ (Blagoveshchensk\, Russia)
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20251018T081500Z
+DTEND:20251018T082600Z
+DTSTAMP:20261023T195022Z
+UID:4lh6p1bbj3ordh2qi8ci31b6r2@google.com
+CLASS:PUBLIC
+CREATED:20251016T223904Z
+DESCRIPTION:<b>AOS</b>: 08:15:14 UTC <br>RX: <b>145.800 MHz</b> - FM over E
+ urope<br>webstream: <a href="https://live.ariss.org/hamtv/" target="_blank"
+ >https://live.ariss.org/hamtv/</a><br><br>The HamTV unit is scheduled to se
+ nd "tone and bars" during the 08:15 UTC pass as a Pre-Contact test. This te
+ st is the first attempt to use the recently reinstalled HamTV transmitter d
+ uring a ARISS contact.<br>HamTV DATV frequency is 2395 MHz.<br><br>Live vid
+ eo from the ISS will be attempted during the 09:51 UTC pass.
+LAST-MODIFIED:20260417T040354Z
+LOCATION:Europe
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:NA1SS (Jonny Kim KJ5HKP) - HamTV test pass with color bars
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261002T090000Z
+DTEND:20261006T155500Z
+DTSTAMP:20261023T195022Z
+UID:786glmopr4dp9q9l0h7fioc6t0@google.com
+CLASS:PUBLIC
+CREATED:20260930T231206Z
+DESCRIPTION:<u></u><u></u><u></u><u></u><p>An SSTV event on the ISS is sche
+ duled to begin on Friday October 2\, 2026  around 9:00 UTC and will end on 
+ Tuesday October 6\,  2026 at 15:55 UTC.</p><p>The ARISS Series 33 images ar
+ e in the concept phase.<br><br>The SSTV transmissions will be made using th
+ e amateur radio station in the ISS Service Module. The transmission frequen
+ cy will be 437.550 MHz FM\, (+/- 10 kHz Doppler shift) using SSTV mode Robo
+ t 36\, 36 seconds on  2 minutes off. The ISS callsign will be RS0ISS.</p><p
+ >To support everyone interested in such events\, the European Space Agency 
+ released tutorials about how to receive pictures transmitted over amateur r
+ adio by the International Space Station: you can find them on</p><p><a href
+ ="https://www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_pictures_fro
+ m_the_International_Space_Station_via_amateur_radio" target="_blank">https:
+ //www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_pictures_from_the_In
+ ternational_Space_Station_via_amateur_radio</a><br><br>The ARISS website is
+  temporarily experiencing technical problems\,  nevertheless\, you are invi
+ ted to upload decoded images in the ARISS gallery\, at: <a href="https://ar
+ iss-usa.org/ARISS_SSTV/" target="_blank">https://ariss-usa.org/ARISS_SSTV/<
+ /a> Once you've submitted\, just clicking on the dedicated button you can a
+ pply for the official ARISS SSTV award.<br><br></p><u></u><u></u><u></u><u>
+ </u>
+LAST-MODIFIED:20260930T231207Z
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:RSØISS - SSTV activity
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261022T162300Z
+DTEND:20261022T163400Z
+DTSTAMP:20261023T195022Z
+UID:5vsas06ol2co89kod046pp32n7@google.com
+CLASS:PUBLIC
+CREATED:20261020T141736Z
+DESCRIPTION:<u></u>AOS: 16:23:39 UTC<br>RX:<b> 145.800 MHz </b>- FM over US
+ A<br><br><b>School Information: <br></b>The Sarasota Military Academy\, fou
+ nded in 2002\, is a tuition-free\, nonprofit\, military public charter scho
+ ol located in Sarasota\, Florida. Our goal in our community is to equip our
+  cadets with the skills\, values\, and education that will enable them to l
+ ead productive and fulfilling lives. The Sarasota Military Academy is a one
+ -cost-center educational institution with two campuses\, serving middle sch
+ ool (grades 6-8) and high school (grades 9-12) students at each campus resp
+ ectively. All of our high school students are enrolled in the United States
+  Army’s JROTC (Junior Reserve Officer Training Corps) curriculum\, and both
+  campuses have strict student uniform and behavior standards.<br>In 2009\, 
+ at the request of founding headmaster Dan Kennedy\, George Becht N2SQ began
+  W4SMA\, our on-campus radio club. The club entered a period of suspended a
+ nimation in 2014\, and was rebooted by George Becht and John Geimer K4GEI i
+ n the spring of 2024. W4SMA now offers students the ability to take a scien
+ ce elective course focused on Radio\, Wireless Communications\, and Electro
+ nics and facilitates on-campus amateur radio testing. More than 30 cadets h
+ ave obtained their licenses\, and some have upgraded to General and Amateur
+  Extra. W4SMA strives to equip our students with the knowledge and skills n
+ ecessary to participate in the world of radio\, and to integrate that knowl
+ edge with whatever paths through life they choose.<br><br><b>Students First
+  Names &amp\; Questions:<br></b>1. In your opinion\, do you think military 
+ technologies have generally improved international relations in space?<br>2
+ . How did looking down at Earth change the way you view everyday problems b
+ ack home?<br>3. Do you think commercial public space travel is realistic wi
+ thin the next 20 years for anyone other than the ultra-wealthy?<br>4. Are t
+ here benefits or drawbacks to fielding astronauts with a purely civilian ba
+ ckground?<br>5. Do you think there will be another chance for international
+  cooperation in space after the ISS is retired?<br>6. How have experiments 
+ conducted on the Space Station influenced the lives of regular people in wa
+ ys they might not be aware of?<br>7. What would you consider a “very bad” d
+ ay on ISS?<br>8. How similar is the method of creating oxygen on a spacecra
+ ft to that of a submarine?<br>9. What are the most interesting physics demo
+ nstrations or experiments on the ISS that would have behaved differently if
+  conducted on Earth?<br>10. Do auroras look different in space than they do
+  on Earth?<br>11. In your opinion\, do you believe that modern technology h
+ as reached the point that it has practically plateaued?<br>12. How much has
+  the ISS contributed to advancing humans toward a higher class of civilizat
+ ion?<br>13. How do solar storms affect experiments on the ISS\, and what ha
+ ppens if something requires you redo an experiment?<br>14. How have experim
+ ents onboard the Space Station affected the sciences and technologies of pr
+ opulsion?<br>15. What is the most unexpected skill you have found yourself 
+ having to use during your time on the Space Station?<br>16. If you’re able 
+ to share\, what experiments are you currently working on?<br>17. How danger
+ ous are solar storms to the astronauts inside the ISS?
+LAST-MODIFIED:20261020T141737Z
+LOCATION:Sarasota Military Academy\, 801 N Orange Ave\, Sarasota\, FL 34236
+ \, USA
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:NA1SS (Luke Delaney KJ5PPF) - 24 deg - W4SMA ( Sarasota\, FL)
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20190615T181100Z
+DTEND:20190615T182200Z
+DTSTAMP:20261023T195022Z
+UID:0vv5gdg672a0ehc43m26m86dc3@google.com
+CLASS:PUBLIC
+CREATED:20190603T194038Z
+DESCRIPTION:AOS:&nbsp\;18:11:51 UTC  <br>RX:<b> 145.800 MHz </b>- FM over U
+ SA<br>&nbsp\;&nbsp\;<br><b>School Information:&nbsp\;</b><br>National Air a
+ nd Space Museum – Steven F. Udvar-Hazy Center<br>Innovations in Flight Fami
+ ly Day<br>The theme of this program is to give museum visitors the opportun
+ ity to learn about the innovations in aircraft design and what it takes to 
+ become a pilot by talking with pilots about how they learned to fly\, what 
+ they fly\, and how they use their aircraft.  The day is designed to inform 
+ visitors of the opportunities in both military and civilian aviation.  Visi
+ tors have the opportunity to talk with a diversified group of pilots to see
+  different types of aircraft.  This year we are celebrating the 50th Annive
+ rsary of the Apollo Program.<br>&nbsp\;&nbsp\;<br><b>Students First Names &
+ amp\; Questions:</b><br>1. Isaiah:  What is your favorite thing to do in mi
+ crogravity? <br>2. Joel:  How important are the people in mission control?&
+ nbsp\;<br>3. Natalia:  What is a normal day look like?&nbsp\;<br>4. Sonja: 
+  What was the launch like?&nbsp\;<br>5. Alejandro:  What is your least favo
+ rite part of being in space?&nbsp\;<br>6. Sam:  Are there any animals on st
+ ation?&nbsp\;<br>7. Joshua:  Did you know you wanted to be an astronaut whe
+ n you were a kid?&nbsp\;<br>8. Jake:  There is a NASA T-38 at this event\, 
+ what was your biggest challenge in learning to fly?&nbsp\;<br>9. Bryce:  Wh
+ ere are you now?&nbsp\;<br>10. Isaiah:  What is your favorite space food?&n
+ bsp\;<br>11. Joel:  What happens if someone gets sick?&nbsp\;<br>12. Natali
+ a:  What is around you?&nbsp\;<br>13. Sonja:  Do you have a degree in scien
+ ce?&nbsp\;<br>14. Alejandro:  What kind of exercise do you do?&nbsp\;<br>15
+ . Sam:  Do you have ice cream?&nbsp\;<br>16. Joshua:  Do you ever get bored
+ ?&nbsp\;<br>17. Jake:  What did you take up with you that is special?&nbsp\
+ ;<br>18. Bryce:  What do you miss?&nbsp\;
+LAST-MODIFIED:20260417T040354Z
+LOCATION:Smithsonian Air and Space – Udvar-Hazy\, Chantilly\, VA\, USA
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:NA1SS (Nick Hague KG5TMV) - 42 deg - (TB) W6SRJ (Chantilly\, VA)
+TRANSP:TRANSPARENT
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261016T112900Z
+DTEND:20261016T114000Z
+DTSTAMP:20261023T195022Z
+UID:0u6rb60dflsqud69925g60iqtf@google.com
+CLASS:PUBLIC
+CREATED:20261014T214933Z
+DESCRIPTION:<b>AOS</b>: 10:03:27 UTC<br>RX: <b>145.800 MHz</b> - FM over Eu
+ rope<br>Language: Frensh<br><br><b>School Information:<br></b>The "Ecole In
+ ternationale PACA" is located in Manosque\, South-East of France at 20 km f
+ rom the giant ITER construction site (International Thermonuclear Experimen
+ tal Reactor). <br>The project of contacting the ISS arose from two goals. F
+ irst\, given the current international context\, it became desirable to sho
+ wcase symbols of unity. The international school EIPACA\, the ITER consorti
+ um and the ISS all seemed good examples of a collaboration for the greater 
+ good. The second goal was to promote sciences and technology among students
+ \, most importantly women. The international school EIPACA occupies a singu
+ lar position within the French education system. The numbers speak for them
+ selves: 900 students\, 47 nationalities\, 6 language sections and 1 europea
+ n school. Designed from the beginning to welcome the children of the ITER s
+ taff\, the international consortium on nuclear fusion gathering South Korea
+ \, Japan\, the EU\, Switzerland\, the USA\, China\, India and Russia\, the 
+ International School is by design a place where multicultural identities de
+ velop and blossom. <br>The project of a radio contact between the ISS and t
+ he EIPACA aimed at showcasing sciences as a treasured place of collaboratio
+ n and communication between cultures\, allowing us to focus on what units u
+ s. The radiocontact with the ISS was also an opportunity to put illustrate 
+ and contextualize some elements of the different syllabi. Students from 11t
+ h and 12th grades studied and performed experiments on the signal modulatio
+ n and demodulation for AM and FM. Middle school students used the ISS and t
+ he radiocontact as an opportunity to learn about circular motions\, orbits\
+ , gravity and electromagnetic waves. <br>Even at the elementary school leve
+ l\, pupils were introduced to spatial observation and sciences. Although th
+ e challenges were different at every level\, tackling them at the same time
+  allowed us to foster a sense of unity among students of different ages and
+  backgrounds. We hope this will have helped students finding purpose in the
+ ir science classes. Noble as these ideals may be\, it would not have been p
+ ossible to implement them in practice if it were not for the help and colla
+ boration of the Radioclub from the Centre d'astronomie de St-Michel-L'Obser
+ vatoire. Their skills and devotion allowed our students to experience the r
+ adio through various workshops\, ranging from radio-detection to radio-comm
+ unication. Most importantly though\, it is thanks to their unwavering suppo
+ rt that the contact with the ISS is now possible. We are tremendously grate
+ ful for their help.<br><b><br>Questions:<br></b>1. Comment votre entraineme
+ nt sur Terre vous permet-il de vous adapter a la vie en micro-gravite?<br>2
+ . Est-ce que vous devez faire regulierement des ajustements a votre traject
+ oire pour rester sur l'orbite prevue? Si oui\, comment determinez-vous quel
+ les corrections doivent etre faites?<br>3. Est-ce que voir la Terre depuis 
+ l'ISS a un impact sur la maniere dont vous percevez les choses\, et si oui 
+ lequel?<br>4. Quelle est votre activite favorite a bord de l'ISS?<br>5. Que
+  faites-vous sur votre temps libre?<br>6. La vie a bord de l'ISS est-elle c
+ onforme a ce a quoi vous vous attendiez?<br>7. Par quels moyens parvenez-vo
+ us a garder le contact avec vos proches sur Terre?<br>8. Avez-vous le meme 
+ acces a Internet que celui dont vous jouissiez sur Terre?<br>9. Avez-vous d
+ eja fait une sortie extra-vehiculaire? Quel effet cela fait-il?<br>10. Est-
+ ce que vous pouvez voir la France depuis l'ISS?<br>11. Est-ce que vous avez
+  le vertige dans l'espace? Qu'est-ce que l'on ressent quand on est en chute
+  libre?<br>12. Est-ce que vous organisez des activites collectives avec les
+  autres astronautes de la station?<br>13. Avez-vous du faire face a des pro
+ blemes inattendus au cours de votre mission? Si oui\, lesquels?<br>14. Les 
+ astronautes ont ils parfois des nausees ou des troubles dus a l'apesanteur?
+  La digestion et la circulation sanguine sont-elles impactees?<br>15. Quell
+ e est la situation la plus difficile a laquelle vous avez du vous preparer?
+ <br>16. Quel est votre role au sein de l'ISS? Quelles sont les taches les p
+ lus interessantes que vous ayez eu a faire?<br>17. Comment gerez-vous le st
+ ock de nourriture pour la duree de la mission? Est-ce qu'il faut se rationn
+ er?<br>18. A quelle frequence avez-vous des contacts avec la Terre depuis l
+ 'ISS?<br>19. Comment renouvelez-vous l'air a bord de l'ISS?<br>20. Est-ce q
+ ue le fait d'etre dans l'espace vous interroge quant a la place de l'Humain
+  dans l'Univers?<br>21. Avez-vous le choix dans la nourriture lors de chaqu
+ e repas?
+LAST-MODIFIED:20261014T214934Z
+LOCATION:Ecole Internationale Manosque\, 159 Av. du Dr Bernard Foussier\, 0
+ 4100 Manosque\, France
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:OR4ISS (Joshua Kutryk KJ5BFU) - 53 deg -  F4KKM (Manosque\, France)
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20190205
+DTEND;VALUE=DATE:20190210
+DTSTAMP:20261023T195022Z
+UID:5fgntif593heojald6q8m686b5@google.com
+CLASS:PUBLIC
+CREATED:20190206T084823Z
+DESCRIPTION:You may be aware of the MarconISSta project that has been runni
+ ng on the ARISS station in the Columbus module of the ISS – https://marconi
+ ssta.com\n\nThe project team have been informed that the experiment is due 
+ to be decommissioned on Feb 9th and Martin Buscher DJ1MBB\, the lead for Ma
+ rconISSta\, has requested some support to help categorise the antennas on t
+ he ISS.  \n\nIf you have UHF tx capability and can track the ISS\, please h
+ ave a look at https://marconissta.com/2019/02/05/urgent-call-all-power-to-t
+ he-iss/ and help if you can.
+LAST-MODIFIED:20190206T160712Z
+SEQUENCE:1
+STATUS:CONFIRMED
+SUMMARY:MarconISSta UHF - categorise the antennas
+TRANSP:TRANSPARENT
+END:VEVENT
+END:VCALENDAR

@@ -1081,6 +1081,44 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("notify_lead", 5)
         set(v) { prefs.edit().putInt("notify_lead", v).apply() }
 
+    // « Activités à venir » (online sources): on by default, each source and
+    // each kind of notice can be turned off.
+    var activitesOn: Boolean
+        get() = prefs.getBoolean("act_on", true)
+        set(v) { prefs.edit().putBoolean("act_on", v).apply() }
+    var activitesAriss: Boolean
+        get() = prefs.getBoolean("act_ariss", true)
+        set(v) { prefs.edit().putBoolean("act_ariss", v).apply() }
+    var activitesAmsat: Boolean
+        get() = prefs.getBoolean("act_amsat", true)
+        set(v) { prefs.edit().putBoolean("act_amsat", v).apply() }
+    var activitesSatnogs: Boolean
+        get() = prefs.getBoolean("act_satnogs", true)
+        set(v) { prefs.edit().putBoolean("act_satnogs", v).apply() }
+    var activitesRss: Boolean
+        get() = prefs.getBoolean("act_rss", true)
+        set(v) { prefs.edit().putBoolean("act_rss", v).apply() }
+    /** A notice for a new activity announced (once). */
+    var activitesNotifNouvelle: Boolean
+        get() = prefs.getBoolean("act_n_nouvelle", true)
+        set(v) { prefs.edit().putBoolean("act_n_nouvelle", v).apply() }
+    /** A notice before each useful pass during an activity. */
+    var activitesNotifPassage: Boolean
+        get() = prefs.getBoolean("act_n_passage", true)
+        set(v) { prefs.edit().putBoolean("act_n_passage", v).apply() }
+    /** « Ça émet maintenant »: AMSAT reports during an announced SSTV/SSDV activity. */
+    var activitesNotifEmet: Boolean
+        get() = prefs.getBoolean("act_n_emet", true)
+        set(v) { prefs.edit().putBoolean("act_n_emet", v).apply() }
+    /** How long before AOS the pass notice comes (minutes). */
+    var activitesAvantMin: Int
+        get() = prefs.getInt("act_avant", 10)
+        set(v) { prefs.edit().putInt("act_avant", v.coerceIn(1, 60)).apply() }
+
+    /** The sources' switches, as [ActivitesEnLigne] takes them. */
+    val reglagesActivites: ActivitesEnLigne.Reglages
+        get() = ActivitesEnLigne.Reglages(activitesOn, activitesAriss, activitesAmsat, activitesSatnogs, activitesRss)
+
     /** Selected rig model: "IC9700", "THD72", or one of [fr.f4ioz.satcombo.cat.Postes.MODELES]. */
     var rigModel: String
         get() = prefs.getString("rig_model", "IC9700") ?: "IC9700"

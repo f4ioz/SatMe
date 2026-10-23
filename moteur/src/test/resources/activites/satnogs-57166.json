@@ -1,0 +1,74 @@
+[
+{
+"id": 15270955,
+"start": "2026-10-23T18:07:30Z",
+"end": "2026-10-23T18:16:40Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "Piszkesteto VHF",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+},
+{
+"id": 15275716,
+"start": "2026-10-23T18:05:02Z",
+"end": "2026-10-23T18:11:59Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "NKUA EVRIPOS - VHF",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+},
+{
+"id": 15269782,
+"start": "2026-10-23T15:13:42Z",
+"end": "2026-10-23T15:20:29Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "KB9LEB_Debian_12",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+},
+{
+"id": 15261790,
+"start": "2026-10-23T12:56:12Z",
+"end": "2026-10-23T13:09:58Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "JF6FYI Nishikazu, KitaKyushu, QFH (VHF)",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+},
+{
+"id": 15271229,
+"start": "2026-10-23T12:46:17Z",
+"end": "2026-10-23T12:57:56Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "I LOVE BALI",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+},
+{
+"id": 15271963,
+"start": "2026-10-23T10:59:45Z",
+"end": "2026-10-23T11:10:27Z",
+"norad_cat_id": 57166,
+"status": "good",
+"station_name": "VK4ATW - Discone",
+"transmitter_description": "LRPT IQ recording usage",
+"transmitter_downlink_low": 137900000,
+"transmitter_mode": "FSK",
+"observation_frequency": 137900000
+}
+]
