@@ -15,6 +15,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+## 2026.10.28
+
 ### fr
 - **Configuration rapide** au premier lancement : indicatif, locator (ou latitude et longitude), nom, heure UTC ou locale, langue, élévation minimale, accès depuis le réseau et port, en quelques étapes. Toujours là dans *Réglages › Démarrage*.
 - **Quoi de neuf** : cette fenêtre, au premier démarrage d'une nouvelle version ; ensuite dans le menu d'aide (**?**).
