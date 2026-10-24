@@ -504,6 +504,15 @@ C'est **une estimation** : ARISS fait des pauses, relance la boucle ou change l'
 
 **La planche** : *Remplir* et le choix du nombre d'images prennent une image par groupe, la mieux notée.
 
+### Image corrigée : re-décodée, nettoyée, fusionnée
+
+Dans la visionneuse (PC, page servie par le téléphone, et téléphone) : **Brute | Corrigée | Fusion**, et **Brute | Corrigée** côte à côte, un trait à glisser sur l'image. L'image reçue n'est **jamais modifiée** : la version traitée est un fichier à part (`sstv/corrigees/<nom>_corrigee.png`, `<groupe>_fusion.png`, avec un fichier compagnon : méthode, note avant → après, copies utilisées), toujours marquée « Traitée », jamais rangée avec les réceptions.
+
+- **✨ Corriger** : re-décodée depuis le son gardé de l'image quand il existe, sinon ses taches retirées. **⟳ Re-décoder depuis l'enregistrement** force le son. Le re-décodage prend toute l'image d'un coup (et non ligne à ligne comme en direct) : la durée de ligne cherchée sur toutes les synchros (dérive d'horloge, image penchée), chaque ligne recalée sur ses voisines (une synchro bruitée ne la déplace plus, un saut du son si), l'accord lu sur les synchros propres seulement, la chroma de Robot 36 votée sur toute l'image et l'échelle des tons recalée sur les séparateurs 1500/2300 Hz (un signal faible ne vire plus au vert), chaque point la médiane de sa durée (les clics du FM ne font plus de moucheté). Puis les taches : la couleur ramenée à la médiane de ses 3×3 voisins (la couleur de Robot 36 est moitié moins fine que la lumière), les points et lignes cassés repris de leurs voisins ; rien n'est inventé ni accentué.
+- **⧉ Fusionner les copies** (visionneuse, et en-tête de chaque diapo) : les copies d'une diapo, chacune re-décodée de son son quand il est gardé, calées sur la meilleure (décalage vertical d'une image commencée en retard, latéral), le même son décodé deux fois compté une fois, une autre diapo écartée ; chaque point la médiane pondérée des copies (propreté de chaque ligne).
+- **Mesuré sur la série 34 reçue (23–24 octobre 2026)**, note de la galerie et écart aux autres copies de la même diapo : sur les 40 images dont le son est gardé, note moyenne 91,6 → 95,8 (le re-décodage en direct « Redécoder son son » : 92,5), écart 10,5 → 8,2 ; des images mal décodées en direct (glissements de synchro) 24 → 91, 49 → 79, 91 → 99 ; les plus faibles 17 → 44, 36 → 62 (le texte revient, la photo reste bruitée). Sans son (images d'avant que SatMe le garde) : taches seulement, 82,0 → 83,9. La fusion vaut surtout quand aucune copie n'est propre (diapo 7 : 88 → 96) ; face à une copie déjà excellente, elle fait à peu près jeu égal.
+- **La planche** : *Versions corrigées* met à la place de chaque image la fusion de sa diapo ou sa version corrigée quand elles existent, marquées « corrigée » / « fusion de n copies » (dans la légende, sinon dans un coin).
+
 <p align="center"><img src="images/pc-sstv-diapos.webp" width="100%" alt="SSTV, sous-onglet Images : la carte Diapos de la série (ARISS série 34, diapos reçues, horaire ajusté, passages à venir et diapos attendues) et la galerie rangée par diapo, chaque image notée"></p>
 
 ## FT8 / FT4

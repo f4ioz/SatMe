@@ -503,6 +503,15 @@ It is **an estimate**: ARISS pauses, restarts the loop or changes the order with
 
 **The sheet**: *Remplir* and the number of pictures take one picture per group, the best marked.
 
+### Corrected picture: decoded again, cleaned, fused
+
+In the viewer (PC, the page the phone serves, and the phone): **Brute | Corrigée | Fusion** (raw, corrected, fused), and **Brute | Corrigée** side by side, a line to drag over the picture. The received picture is **never changed**: the processed one is a separate file (`sstv/corrigees/<name>_corrigee.png`, `<group>_fusion.png`, with a sidecar: method, mark before → after, copies used), always marked « Traitée », never listed with the receptions.
+
+- **✨ Corriger**: decoded again from the picture's kept sound when there is one, else its specks removed. **⟳ Re-décoder depuis l'enregistrement** forces the sound. Decoding again takes the whole picture at once (not line by line as live): the line length searched over every sync pulse (clock drift, slant), each line placed on its neighbours' pulses (a noisy pulse no longer moves it, a jump in the sound still does), the tuning read on clean pulses only, Robot 36's chroma voted over the picture and the tone scale set again on the 1500/2300 Hz separators (a weak signal no longer turns green), each pixel the median of its span (FM clicks no longer speckle). Then the specks: colour brought to its 3×3 median (Robot 36's colour is half as fine as its brightness), broken pixels and rows taken from their neighbours; nothing invented or sharpened.
+- **⧉ Fusionner les copies** (viewer, and each slide's heading): the slide's copies, each decoded again from its sound when kept, placed on the best one (up/down for a late start, sideways), the same sound decoded twice counted once, another slide left out; each pixel the weighted median of the copies (each row's cleanliness).
+- **Measured on the series 34 received (23–24 October 2026)**, the gallery's mark and the gap to the other copies of the slide: over the 40 pictures whose sound is kept, mean mark 91.6 → 95.8 (the live decoder run again, « Redécoder son son »: 92.5), gap 10.5 → 8.2; pictures garbled live (sync slips) 24 → 91, 49 → 79, 91 → 99; the weakest 17 → 44, 36 → 62 (the text comes back, the photo stays noisy). Without a sound (pictures from before SatMe kept it): specks only, 82.0 → 83.9. Fusion counts mostly when no copy is clean (slide 7: 88 → 96); next to an already excellent copy it is about even.
+- **The sheet**: *Versions corrigées* puts in each picture's place its slide's fusion or its corrected version when there is one, marked « corrigée » / « fusion de n copies » (in the legend, else in a corner).
+
 <p align="center"><img src="images/pc-sstv-diapos.webp" width="100%" alt="SSTV, Images sub-tab: the « Diapos de la série » card (ARISS series 34, slides received, fitted timetable, passes to come and slides expected) and the gallery sorted by slide, each picture marked"></p>
 
 ## FT8 / FT4
