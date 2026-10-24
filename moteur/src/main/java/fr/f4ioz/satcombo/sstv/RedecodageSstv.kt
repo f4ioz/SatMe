@@ -28,7 +28,9 @@ import kotlin.math.sin
  *  - each line is then nudged by what its neighbours' pulses say (a running
  *    median, then the mean of those that agree): a noisy pulse no longer
  *    moves its line, a jump in the sound (samples lost by a sound card)
- *    still moves every line after it;
+ *    still moves every line after it; a jump beyond the ±25 ms each pulse is
+ *    looked for in leaves a run of lines without one: that run is searched
+ *    again over almost a line for the offset its lines agree on;
  *  - the tuning error is read on the clean sync pulses only (1200 Hz; a
  *    noisy one reads nearer the band's middle) and followed slowly;
  *  - Robot 36's tone scale is set again on the separators (1500 and 2300 Hz
@@ -74,6 +76,8 @@ object RedecodageSstv {
         val chromaInterpolee: Boolean = true,
         /** Robot 36: the tone scale set again on each line's separator (1500 or 2300 Hz), see [decode]. */
         val calibre: Boolean = true,
+        /** Runs of lines without a pulse searched again over almost a line (a jump of the sound beyond ±25 ms), see [decode]. */
+        val recaleSegments: Boolean = true,
     )
 
     class Resultat(
@@ -150,11 +154,12 @@ object RedecodageSstv {
         val rayon = (25 * spms).toInt()
         val lisse = moyenneGlissante(f, (0.5 * spms).roundToInt().coerceAtLeast(1))
         val residu = DoubleArray(nbK) { Double.NaN }
-        for (k in 0 until nbK) {
-            val c = (pMeilleur + k * periode).roundToInt()
+        /** Line [k]'s pulse looked for within [r] of the comb shifted by [decal], placed by its trailing edge: its gap to the comb, or NaN. */
+        fun place(k: Int, decal: Int, r: Int): Double {
+            val c = (pMeilleur + k * periode).roundToInt() + decal
             var bs = Float.NEGATIVE_INFINITY; var bp = c
-            for (s in maxOf(0, c - rayon)..minOf(n - 1, c + rayon)) if (score[s] > bs) { bs = score[s]; bp = s }
-            if (bs < 0.5f) continue
+            for (s in maxOf(0, c - r)..minOf(n - 1, c + r)) if (score[s] > bs) { bs = score[s]; bp = s }
+            if (bs < 0.5f) return Double.NaN
             // The trailing edge (1200 → 1500 Hz, through 1350) does not move with the picture.
             val fin = bp + lSync
             var bord = Double.NaN
@@ -164,8 +169,15 @@ object RedecodageSstv {
                     if (bord.isNaN() || abs(e - fin) < abs(bord - fin)) bord = e
                 }
             }
-            residu[k] = (if (bord.isNaN()) bp.toDouble() else bord - lSync) - (pMeilleur + k * periode)
+            return (if (bord.isNaN()) bp.toDouble() else bord - lSync) - (pMeilleur + k * periode)
         }
+        for (k in 0 until nbK) residu[k] = place(k, 0, rayon)
+        // **Beyond ±25 ms.** A bigger jump of the sound (33 ms lost by a sound card, 20261024_034726) leaves the
+        // lines on one side of it with no pulse where the comb (set by the longer side) looks: filled from their
+        // neighbours, they were drawn shifted (a green band). Each run of lines without a pulse is searched again
+        // over almost a whole line, for one offset that most of its lines agree on — as the live decoder adopts a
+        // step only once two pulses in a row say it. Several jumps: each run its own.
+        if (o.recaleSegments) recaleSegments(residu, nbK, t0, spms) { k, c, r -> place(k, c, r) }
         // A running median (keeps a jump), then the mean of the pulses that agree with it (removes the noise).
         val mediane = DoubleArray(nbK) { k ->
             val v = (maxOf(0, k - 4)..minOf(nbK - 1, k + 4)).map { residu[it] }.filter { !it.isNaN() }.sorted()
@@ -360,6 +372,49 @@ object RedecodageSstv {
         val trouves = (k0 until kFin).count { nette[it] >= 0.5f }
         return Resultat(mode, px, lignesMax, blocs >= mode.blocks, dMeilleur, ecartGlobal, entete, trouves / blocs.toFloat(), bruitHz, etendue, filtreHz, (0 until blocs).filter { cal[it] }.map { gain[it] }.sorted().let { if (it.isEmpty()) 1.0 else it[it.size / 2] }, DoubleArray(blocs) { debutLigne[k0 + it] })
     }
+
+    /**
+     * The runs of [residu] without a pulse (NaN), [MIN_TROU] lines or more:
+     * for each, the offset within ±0.45 line ([t0] samples) where most of its
+     * lines find a clean pulse ([place] around it, ±1.5 ms); kept when at
+     * least [MIN_ACCORD] lines in a row and half of the run agree. A run that
+     * does not agree as a whole is tried again in two halves (a jump inside it).
+     */
+    private fun recaleSegments(residu: DoubleArray, nbK: Int, t0: Double, spms: Double, place: (Int, Int, Int) -> Double) {
+        val large = (0.45 * t0).roundToInt()
+        val pres = (1.5 * spms).roundToInt().coerceAtLeast(2)
+        val origine = residu.copyOf()
+        fun essaie(a: Int, b: Int, profondeur: Int) {
+            val l = b - a
+            if (l < MIN_TROU) return
+            // Each line of the run looked at over the wide window; the offset most of them agree on, to ±1.5 ms.
+            val vus = DoubleArray(l) { place(a + it, 0, large) }
+            val offs = vus.filter { !it.isNaN() }.sorted()
+            var choix = Double.NaN; var accord = 0
+            for (x in offs) { val m = offs.count { abs(it - x) <= pres }; if (m > accord) { accord = m; choix = x } }
+            if (!choix.isNaN() && accord >= MIN_ACCORD && accord * 2 >= l) {
+                // Placed again near that offset; adopted when enough of them in a row confirm it (a step, not noise).
+                val d = choix.roundToInt()
+                val ici = DoubleArray(l) { place(a + it, d, pres).takeIf { r -> !r.isNaN() && abs(r - choix) <= pres } ?: Double.NaN }
+                var suite = 0; var plusLongue = 0
+                for (r in ici) if (r.isNaN()) suite = 0 else { suite++; plusLongue = maxOf(plusLongue, suite) }
+                if (plusLongue >= MIN_ACCORD) { for (j in 0 until l) if (!ici[j].isNaN()) residu[a + j] = ici[j]; return }
+            }
+            if (profondeur < 3 && l >= 2 * MIN_TROU) { essaie(a, a + l / 2, profondeur + 1); essaie(a + l / 2, b, profondeur + 1) }
+        }
+        var k = 0
+        while (k < nbK) {
+            if (!origine[k].isNaN()) { k++; continue }
+            var e = k
+            while (e < nbK && origine[e].isNaN()) e++
+            essaie(k, e, 0)
+            k = e
+        }
+    }
+
+    /** Lines without a pulse in a row searched again over almost a line, from this many; lines in a row that must agree. */
+    private const val MIN_TROU = 3
+    private const val MIN_ACCORD = 2
 
     /** Lines without a pulse after the last one: the picture ended there. */
     private const val FIN_LIGNES = 20

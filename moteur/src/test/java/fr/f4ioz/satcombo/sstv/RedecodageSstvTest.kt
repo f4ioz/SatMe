@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.sstv
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -130,6 +131,31 @@ class RedecodageSstvTest {
         println("rafales : direct moyenne ${eD.average()} pire ${eD.max()}, tout d'un coup moyenne ${eN.average()} pire ${eN.max()}")
         assertTrue("moyenne ${eN.average()} / direct ${eD.average()}", eN.average() < eD.average())
         assertTrue("pire ligne ${eN.max()}", eN.max() < 20.0 && eN.max() < eD.max())
+    }
+
+    /**
+     * A jump beyond the ±25 ms search (33 and 60 ms lost at line 41, as
+     * 20261024_034726): the 40 lines before it were filled from the lines
+     * after and drawn shifted (a green band at the top). Each side now finds
+     * its own pulses; the picture as received elsewhere is unchanged.
+     */
+    @Test fun un_grand_saut_du_son_recale_chaque_segment() {
+        val img = mire()
+        val debutImage = (0.12 + 0.91) * rate
+        for (perduMs in doubleArrayOf(33.0, 60.0)) {
+            val propre = son(img, -80.0, bruit = 800.0, graine = 6)
+            val coupe = (debutImage + 41.3 * 0.150 * rate).toInt()
+            val pcm = propre.copyOfRange(0, coupe) + propre.copyOfRange(coupe + (perduMs / 1000 * rate).toInt(), propre.size)
+            val r = RedecodageSstv.decode(pcm, rate, r36)!!
+            val sans = RedecodageSstv.decode(pcm, rate, r36, RedecodageSstv.Options(recaleSegments = false))!!
+            val haut = ecart(img, r.pixels, y0 = 2, y1 = 40); val hautSans = ecart(img, sans.pixels, y0 = 2, y1 = 40)
+            val bas = ecart(img, r.pixels, y0 = 46, y1 = 238)
+            assertTrue("$perduMs ms : en haut $haut (sans recalage $hautSans), en bas $bas", haut < 8.0 && haut < hautSans / 2 && bas < 8.0)
+            assertTrue(r.entete)
+        }
+        // A clean sound: the same picture with or without.
+        val p = son(img, 300.0, bruit = 600.0)
+        assertArrayEquals(RedecodageSstv.decode(p, rate, r36, RedecodageSstv.Options(recaleSegments = false))!!.pixels, RedecodageSstv.decode(p, rate, r36)!!.pixels)
     }
 
     @Test fun pas_d_image_dans_le_silence() {
