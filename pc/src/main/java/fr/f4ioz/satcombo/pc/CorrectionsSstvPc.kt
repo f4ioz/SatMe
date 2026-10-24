@@ -18,7 +18,7 @@ import javax.imageio.ImageIO
 /**
  * The corrected SSTV pictures on the PC ([CorrectionsGalerie]: kept apart in
  * `corrigees/`, the received ones untouched): the viewer's « Corrigée »,
- * « Re-décoder depuis l'enregistrement », « Fusionner les copies », and the
+ * « Version corrigée depuis l’enregistrement », « Fusionner les copies », and the
  * sheet's « versions corrigées ».
  */
 class CorrectionsSstvPc(sstv: SstvPc, classement: ClassementSstvPc) {

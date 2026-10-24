@@ -1976,6 +1976,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sstv/supprime" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
+                // Its « à garder » mark goes with it (a picture of the same name received later is not kept for it).
+                optionsSstv?.oublieGarde(q["nom"].orEmpty())
             }
             "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")

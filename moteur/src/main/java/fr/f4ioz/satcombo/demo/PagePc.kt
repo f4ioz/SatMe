@@ -2487,7 +2487,7 @@ ${rail()}
       <div class="ligne" style="margin-top:8px"><span class="petit">Image QSL</span><select id="so-dispo" style="flex:none" onchange="soReglage('dispo', this.value)"><option value="BANDEAU">bandeau dessous</option><option value="INCRUSTE">incrusté</option></select>
         <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> signer « SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
       <div class="petit" id="so-station"></div>
-      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
+      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" onclick="viFichier(event, this)" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
       <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
@@ -4593,22 +4593,22 @@ ${rail()}
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
   <div class="ligne" id="vi-outils" style="margin-top:6px">
     <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
-    <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur">⟳ Redécoder son son</button>
+    <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur : une image de plus dans la galerie (une copie de plus de la même diapo). Pour une version corrigée à côté de la reçue : « Version corrigée depuis l’enregistrement »">⟳ Redécoder en nouvelle image</button>
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
-    <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
+    <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 », sur le nombre de diapos de sa série) : vaut pour toutes les copies du groupe"></select></label>
     <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
-  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (Images › Réglages › Options SSTV)">🪪 QSL</button></a>
-    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer"><button>Voir la QSL</button></a>
-    <a id="vi-ariss" download><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
+  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download onclick="viFichier(event, this)"><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (SSTV › Réglages)">🪪 QSL</button></a>
+    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer" onclick="viFichier(event, this, true)"><button>Voir la QSL</button></a>
+    <a id="vi-ariss" download onclick="viFichier(event, this)"><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
     <button id="vi-garde" onclick="viGarde()" title="Jamais supprimée par la rétention des enregistrements (ni le son de son passage)">☆ À garder</button></div>
   <div class="ligne" id="vi-corr" style="margin-top:6px" hidden>
     <span class="seg"><button id="vi-v-brute" onclick="viMontre('brute')" title="L’image telle que reçue">Brute</button><button id="vi-v-corr" onclick="viMontre('corr')" title="Sa version corrigée (un fichier à part : la réception n’est jamais modifiée)">Corrigée</button><button id="vi-v-fus" onclick="viMontre('fus')" title="Les copies de cette diapo mises ensemble">Fusion</button><button id="vi-v-cmp" onclick="viMontre('cmp')" title="Brute à gauche, traitée à droite : glisser sur l’image">Brute | Corrigée</button></span>
     <input type="range" id="vi-curseur" min="0" max="100" value="50" style="width:110px" hidden oninput="viCurseur()">
     <button id="vi-corriger" onclick="viCorrige('auto')" title="La meilleure correction : re-décodée de son enregistrement quand SatMe l’a gardé, sinon ses taches retirées. L’image reçue n’est pas modifiée.">✨ Corriger</button>
-    <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part">⟳ Re-décoder depuis l’enregistrement</button>
+    <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part (pas une image de plus dans la galerie)">⟳ Version corrigée depuis l’enregistrement</button>
     <button id="vi-fusionner" onclick="viFusionne()" title="Mettre ensemble les copies de cette diapo (chacune re-décodée de son son quand il est gardé) : le bruit d’un passage n’est jamais aux mêmes pixels">⧉ Fusionner les copies</button>
     <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
   <div class="petit" id="vi-sans-son"></div>
@@ -8764,12 +8764,12 @@ function rendSon() {
   if (ouverte('sstv')) clTic();
   if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
   // The sorting's numbers too: each picture's slide badge.
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
-      ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
+      ' · ' + (i.t ? clJour(i.t) + '/' + new Date(i.t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(i.t) + (utc() ? ' UTC' : '') : '') + (i.complete ? '' : ' · partielle') +
       (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
@@ -8921,7 +8921,7 @@ async function clNumerote() {
 }
 async function viDiapo(n) {
   if (!viNom) return;
-  const j = await post('api/sstv/diapo?nom=' + enc(viNom) + '&n=' + enc(n) + '&sur=12');
+  const j = await post('api/sstv/diapo?nom=' + enc(viNom) + '&n=' + enc(n) + '&sur=' + viTotal);
   if (j && j.ok !== false) clTic(true);
 }
 async function viGroupe(v) {
@@ -8929,6 +8929,8 @@ async function viGroupe(v) {
   const j = await post('api/sstv/groupe?nom=' + enc(viNom) + '&vers=' + enc(v));
   if (j && j.ok !== false) clTic(true);
 }
+// The slides of the picture's series: its group's count, else the series', else 12.
+let viTotal = 12;
 // The viewer's line on the sorting: the mark, the slide, the group.
 function viClasse() {
   const gr = clGroupeDe(viNom);
@@ -8938,12 +8940,13 @@ function viClasse() {
   g('vi-classe').hidden = !gr;
   if (!gr) return;
   const i = gr.images.find(x => x.nom === viNom);
-  txt('vi-note', 'Note ' + i.note + '/100 ' + clEtoiles(i.note) + (i.manque ? ' · ' + i.manque + ' % manquant' : '') + (i.abimees ? ' · ' + i.abimees + ' % abîmé' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : ''));
-  const cle = viNom + JSON.stringify(CL.groupes.map(x => [x.id, x.diapo, x.origine, x.images.length]));
+  viTotal = gr.total > 0 ? gr.total : (CL && CL.serie && CL.serie.nb) || 12;
+  txt('vi-note', 'Note ' + i.note + '/100 ' + clEtoiles(i.note) + (i.manque ? ' · ' + i.manque + ' % manquant' : '') + (i.abimees ? ' · ' + i.abimees + ' % abîmé' : '') + (i.lu ? ' · lue ' + i.lu + '/' + viTotal : ''));
+  const cle = viNom + viTotal + JSON.stringify(CL.groupes.map(x => [x.id, x.diapo, x.origine, x.images.length]));
   if (g('vi-classe').dataset.vu === cle) return;
   g('vi-classe').dataset.vu = cle;
   g('vi-diapo').innerHTML = '<option value="0">' + (gr.diapo && gr.origine !== 'main' ? (gr.origine === 'estime' ? '≈' : 'lue ') + gr.diapo + '/' + gr.total : '—') + '</option>' +
-    Array.from({ length: 12 }, (_, k) => '<option value="' + (k + 1) + '">' + (k + 1) + '/12</option>').join('');
+    Array.from({ length: viTotal }, (_, k) => '<option value="' + (k + 1) + '">' + (k + 1) + '/' + viTotal + '</option>').join('');
   g('vi-diapo').value = gr.origine === 'main' ? String(gr.diapo) : '0';
   const autres = CL.groupes.filter(x => x !== gr && x.sat === gr.sat);
   g('vi-groupe').innerHTML = '<option value="">' + (i.groupeMain ? 'tri automatique' : 'celui-ci (' + gr.images.length + ')') + '</option><option value="seule">à part</option>' +
@@ -9193,7 +9196,7 @@ async function viSatellite() {
   if (j && j.ok !== false) { i.sat = v.trim(); imagesVus = ''; voisImage(viN); }
 }
 async function viSupprime() {
-  if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son et son GIF) ?')) return;
+  if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son, son GIF, sa version corrigée et sa marque « à garder ») ?')) return;
   const j = await post('api/sstv/supprime?nom=' + enc(viNom));
   if (j && j.ok !== false) { g('visionneuse').close(); imagesVus = ''; }
 }
@@ -9234,6 +9237,23 @@ function viQslMaj() {
   txt('vi-garde', garde ? '★ Gardée' : '☆ À garder'); g('vi-garde').setAttribute('aria-pressed', garde ? 'true' : 'false');
   g('vi-qsl').hidden = !r;
 }
+// A file asked of the station (the QSL, an ARISS pack): a refusal said here (« aucune image »), never a raw JSON page.
+async function viFichier(ev, a, voir) {
+  ev.preventDefault();
+  const w = voir ? window.open('', '_blank') : null;
+  let r = null; try { r = await fetch(a.href); } catch (x) {}
+  if (!r || !r.ok || (r.headers.get('Content-Type') || '').indexOf('json') >= 0) {
+    let e = ''; try { e = (await r.json()).erreur || ''; } catch (x) {}
+    if (w) w.close();
+    annonce('Pas de fichier : ' + (e || 'la station ne répond pas')); return;
+  }
+  const u = URL.createObjectURL(await r.blob());
+  setTimeout(() => URL.revokeObjectURL(u), 120000);
+  if (w) { w.location = u; return; }
+  const x = document.createElement('a'); x.href = u;
+  x.download = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'SatMe';
+  document.body.appendChild(x); x.click(); x.remove();
+}
 async function viGarde() {
   if (!viNom || !SO) return;
   const on = SO.gardes.indexOf(viNom) < 0;
@@ -9250,7 +9270,7 @@ async function sqCharge() {
   g('sq-vu').style.width = (db == null ? 0 : pc(db)) + '%';
   g('sq-vu').style.background = Q.niveau === 'SATURE' ? 'var(--danger)' : Q.niveau === 'FORT' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : Q.niveau === 'SILENCE' ? 'var(--gris)' : 'var(--vert)';
   g('sq-crete').style.left = (Q.creteDb == null ? 0 : pc(Q.creteDb)) + '%';
-  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS (crête ' + Q.creteDb.toFixed(0) + ')');
+  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS' + (Q.creteDb == null ? '' : ' (crête ' + Q.creteDb.toFixed(0) + ')'));
   const avis = { SATURE: '⚠ Le son sature : baisser le volume ou le gain.', FORT: 'Son fort, près de saturer.', FAIBLE: '⚠ Son trop faible : monter le volume.', SILENCE: 'Aucun son.', BON: '' }[Q.niveau] || '';
   txt('sq-avis', avis); g('sq-avis').style.color = Q.niveau === 'SATURE' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : '';
   const c = g('sq-lignes'), x = c.getContext('2d'), w = c.width, h = c.height, n = Math.max(Q.hauteur || 0, Q.qualites.length, 1);

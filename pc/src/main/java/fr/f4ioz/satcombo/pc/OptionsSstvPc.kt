@@ -233,6 +233,9 @@ class OptionsSstvPc(
     private fun refus(t: String) = json(JSONObject().put("ok", false).put("erreur", t))
     private fun fichier(b: ByteArray, nom: String, type: String) = ReponseWeb("200 OK", type, b, "Content-Disposition: attachment; filename=\"$nom\"\r\n")
 
+    /** A picture deleted: its « à garder » mark taken off too. */
+    fun oublieGarde(nom: String) { File(nom).name.takeIf { it.isNotBlank() }?.let { RetentionSon.marqueGarde(fichierGardes, it, false) } }
+
     fun sert(chemin: String, methode: String, p: (String) -> String): ReponseWeb {
         val route = chemin.removePrefix("/api/sstv-options")
         if (methode != "POST") return when (route) {

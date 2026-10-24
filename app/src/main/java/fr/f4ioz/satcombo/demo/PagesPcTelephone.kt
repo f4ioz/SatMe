@@ -848,7 +848,9 @@ object PagesPcTelephone {
             "/api/sstv/supprime" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
-                fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
+                fr.f4ioz.satcombo.sstv.SstvHub.delete(f)
+                // Its « à garder » mark goes with it.
+                fr.f4ioz.satcombo.sstv.OptionsSstvTelephone.marqueGarde(ctx, f.name, false); OK
             }
             "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
                 fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(vm.getApplication<android.app.Application>()).action(route, p) ?: JSONObject().put("ok", false)
