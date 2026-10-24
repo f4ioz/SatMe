@@ -4544,7 +4544,7 @@ ${rail()}
 </dialog>
 <dialog id="aide-dlg" class="dlg-aide" aria-labelledby="aide-titre">
   <div class="dlg-tete"><b id="aide-titre">Raccourcis clavier</b><button class="discret" onclick="g('aide-dlg').close()" aria-label="Fermer">✕</button></div>
-  <div class="aide-arret"><kbd>Échap</kbd><span><b>Arrêt de toute émission</b> : DATV, SSTV, calibration I/Q, mire. N'arrête que, ne démarre jamais rien. Aussi : le voyant <b class="tx-mot">TX</b> rouge de l'en-tête, d'un clic.</span></div>
+  <div class="aide-arret"><kbd>Échap</kbd><span><b>Arrêt de toute émission</b> : DATV, SSTV, calibration I/Q, mire, et relâche le PTT de l’IC-9700. N'arrête que, ne démarre jamais rien. Aussi : le voyant <b class="tx-mot">TX</b> rouge de l'en-tête, d'un clic.</span></div>
   <div class="aide-grille">
     <div><kbd>Ctrl</kbd> <kbd>K</kbd></div><div>Commandes : aller à un onglet, accorder le récepteur (réception seulement), suivre un satellite, ouvrir un indicatif dans le carnet, actions courantes</div>
     <div><kbd>1</kbd> … <kbd>6</kbd></div><div>Espaces : 1 Ciel · 2 QO-100 · 3 DATV · 4 Modes · 5 Carnet · 6 Station (le dernier onglet vu de chacun)</div>
@@ -4552,7 +4552,7 @@ ${rail()}
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>S</kbd></div><div>Le son des décodeurs (en-tête « Son ») : changer de source, démarrer, arrêter, décodeurs, enregistrer</div>
-    <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement)</div>
+    <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement). Sur l'onglet Montage, <kbd>E</kbd> sert à « Modifier » le dessin et n'enregistre pas</div>
     <div><kbd>P</kbd></div><div>Préparer le passage du satellite suivi : sa source, les décodeurs de son émetteur, l'enregistrement (réception seulement)</div>
     <div><kbd>N</kbd></div><div>Noter un contact : le carnet, le curseur sur l'indicatif</div>
     <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
@@ -16046,7 +16046,8 @@ document.addEventListener('keydown', e => {
   else if (e.key >= '1' && e.key <= '6' && ESPACES_WS[+e.key - 1]) { e.preventDefault(); wsOuvre(ESPACES_WS[+e.key - 1]); }
   // Receive side only: the decoders' sound, the recording, the pass made ready, a contact noted.
   else if ((e.key === 's' || e.key === 'S') && !g('hs-boite').hidden) { e.preventDefault(); hsBascule(); }
-  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); enregistre(); }
+  // On the Montage (SatMe-PC), E is its own « Modifier » key: one action per key, never both.
+  else if ((e.key === 'e' || e.key === 'E') && !(ouverte('montage') && !MT.telephone)) { e.preventDefault(); enregistre(); }
   else if ((e.key === 'p' || e.key === 'P') && !window.SATME_TELEPHONE) { e.preventDefault(); preparePassage(); }
   else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); vue('carnet'); }
   else if (e.key === '[') railRegle(!document.body.classList.contains('rail-ouvert'));
@@ -16302,7 +16303,7 @@ function palSources() {
     l.push({ g: 'Réglages', nom: 'Réglages › ' + c.nom, info: c.desc, ico: ICO[c.ico] || '', mots: 'reglages ' + c.nom + ' ' + c.desc + ' ' + c.cartes.join(' '), go: () => { vue('reglages'); montreReglages(c.id); } });
   });
   const A = (nom, info, go, cl) => l.push({ g: 'Actions', nom, info, go, cl, mots: nom + ' ' + info });
-  A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire', arretEmissions, 'arret');
+  A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire, PTT de l’IC-9700', arretEmissions, 'arret');
   if (AP && AP.campagnes) {
     A('Auto-pilote SSTV : ' + (AP.maitre ? 'couper' : 'activer'), 'interrupteur général · campagnes de l’agenda (réception)', apMaitreBascule);
     A('Agenda › SSTV : campagnes', 'auto-pilote, importer une affiche', apOuvre);
