@@ -687,7 +687,9 @@ function majHeureContact() {
 let deQuoi = 'tout', titre = '';
 function panneauFabriquer(p) {
   const radio = (nom, val, lib, coche, sur) => { const r = el('input', { type: 'radio', name: nom, value: val }); r.checked = coche; r.addEventListener('change', sur); return el('label', {}, [r, document.createTextNode(' ' + lib)]); };
-  p.appendChild(el('div', { class: 'rangee' }, [radio('quoi', 'sel', T.de_quoi_sel, deQuoi === 'sel', () => { deQuoi = 'sel'; }),
+  // The stretch's times and length beside its choice, so a tiny one is seen before making it.
+  const libSel = sel ? T.de_quoi_sel + ' (' + hms(sel[0]) + ' → ' + hms(sel[1]) + ', ' + duree(sel[1] - sel[0]) + ')' : T.de_quoi_sel;
+  p.appendChild(el('div', { class: 'rangee' }, [radio('quoi', 'sel', libSel, deQuoi === 'sel', () => { deQuoi = 'sel'; }),
     radio('quoi', 'tout', T.de_quoi_tout, deQuoi === 'tout', () => { deQuoi = 'tout'; })]));
   const ti = el('input', { placeholder: T.titre_extrait, style: 'width:100%', value: titre }); ti.addEventListener('input', () => titre = ti.value);
   p.appendChild(ti);
@@ -1066,10 +1068,14 @@ function dessineFrise() {
 }
 function installeFrise() {
   const c = g('frise'); let pres = null;
-  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.offsetX, t: tDeX(ev.offsetX, c.clientWidth), bouge: false }; });
-  c.addEventListener('pointermove', ev => { if (!pres) return; if (Math.abs(ev.offsetX - pres.x) > 4) pres.bouge = true;
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.offsetX, t: tDeX(ev.offsetX, c.clientWidth), bouge: false, avant: sel }; });
+  // A stretch only from a real drag (12 px); one under 10 s is dropped (the stretch before it kept), the press read as a click.
+  c.addEventListener('pointermove', ev => { if (!pres) return; if (Math.abs(ev.offsetX - pres.x) > 12) pres.bouge = true;
     if (pres.bouge) { const b = tDeX(ev.offsetX, c.clientWidth); sel = [Math.min(pres.t, b), Math.max(pres.t, b)]; maj(); } });
-  c.addEventListener('pointerup', () => { if (pres && !pres.bouge) cherche(pres.t); else if (sel) deQuoi = 'sel'; pres = null; maj(); if (onglet === 'fabriquer') panneau(); });
+  c.addEventListener('pointerup', () => {
+    if (pres && pres.bouge && sel && sel[1] - sel[0] < 10000) { sel = pres.avant; pres.bouge = false; }
+    if (pres && !pres.bouge) cherche(pres.t); else if (sel) deQuoi = 'sel';
+    pres = null; maj(); if (onglet === 'fabriquer') panneau(); });
   c.addEventListener('wheel', ev => { ev.preventDefault(); const w = c.clientWidth, m = tDeX(ev.offsetX, w), k = ev.deltaY > 0 ? 1.25 : 0.8;
     const l = Math.max(20000, Math.min((P.t1 - P.t0) + 1200000, (vue1 - vue0) * k));
     vue0 = m - (m - vue0) / (vue1 - vue0) * l; vue1 = vue0 + l; dessineFrise(); }, { passive: false });
