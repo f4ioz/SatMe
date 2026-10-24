@@ -51,6 +51,41 @@ class CorrectionSstvTest {
         return p
     }
 
+    /** Colour grain over everything (a very weak FM signal): every pixel's Cb and Cr moved at random, brightness kept. */
+    private fun grain(src: IntArray, graine: Long, ampl: Double): IntArray {
+        val r = java.util.Random(graine)
+        return IntArray(src.size) { i ->
+            val c = src[i]; val rr = (c shr 16) and 255; val gg = (c shr 8) and 255; val bb = c and 255
+            val y = 0.299 * rr + 0.587 * gg + 0.114 * bb
+            val u = 0.564 * (bb - y) + r.nextGaussian() * ampl; val v = 0.713 * (rr - y) + r.nextGaussian() * ampl
+            val R = (y + 1.402 * v).toInt().coerceIn(0, 255); val G = (y - 0.344 * u - 0.714 * v).toInt().coerceIn(0, 255); val B = (y + 1.772 * u).toInt().coerceIn(0, 255)
+            (0xFF shl 24) or (R shl 16) or (G shl 8) or B
+        }
+    }
+
+    @Test fun le_lissage_large_de_la_couleur_seulement_sur_un_signal_tres_faible() {
+        val d = diapo()
+        val g = grain(d, 5, 18.0)
+        // A clean or ordinary signal (sync noise under 45 Hz, above about 18 dB): exactly as without the noise said.
+        for (b in doubleArrayOf(0.0, 12.0, 30.0, 44.0)) {
+            assertEquals(1, CorrectionSstv.rayonChroma(CorrectionSstv.Options(bruitHz = b)))
+            assertArrayEquals("bruit $b Hz", CorrectionSstv.corrige(g, w, h), CorrectionSstv.corrige(g, w, h, o = CorrectionSstv.Options(bruitHz = b)))
+            assertArrayEquals("propre, bruit $b Hz", CorrectionSstv.corrige(d, w, h), CorrectionSstv.corrige(d, w, h, o = CorrectionSstv.Options(bruitHz = b)))
+        }
+        // Very weak: the grain goes, closer to the slide than the 3×3 alone; wider still under about 12 dB.
+        val e3 = ecart(d, CorrectionSstv.corrige(g, w, h))
+        val e5 = ecart(d, CorrectionSstv.corrige(g, w, h, o = CorrectionSstv.Options(bruitHz = 60.0)))
+        val e7 = ecart(d, CorrectionSstv.corrige(g, w, h, o = CorrectionSstv.Options(bruitHz = 120.0)))
+        assertEquals(2, CorrectionSstv.rayonChroma(CorrectionSstv.Options(bruitHz = 60.0)))
+        assertEquals(3, CorrectionSstv.rayonChroma(CorrectionSstv.Options(bruitHz = 120.0)))
+        assertTrue("3×3 $e3, 5×5 $e5, 7×7 $e7", e5 < e3 && e7 < e5)
+        // The brightness kept: the letters as sharp.
+        fun lum(c: Int) = (((c shr 16) and 255) * 299 + ((c shr 8) and 255) * 587 + (c and 255) * 114) / 1000
+        val c7 = CorrectionSstv.corrige(d, w, h, o = CorrectionSstv.Options(bruitHz = 120.0))
+        val dl = d.indices.sumOf { abs(lum(d[it]) - lum(c7[it])) } / d.size.toDouble()
+        assertTrue("luminance $dl", dl < 1.5)
+    }
+
     @Test fun une_image_propre_reste_propre() {
         val d = diapo()
         val c = CorrectionSstv.corrige(d, w, h)

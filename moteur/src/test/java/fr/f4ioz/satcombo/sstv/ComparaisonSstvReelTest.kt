@@ -88,7 +88,10 @@ class ComparaisonSstvReelTest {
             val r = runCatching { RedecodageSstv.decode(pcm, rate, r36) }.getOrNull()
             o.put("redec_ms", (System.nanoTime() - t0) / 1e6)
             if (r != null) {
-                val px = CorrectionSstv.corrige(SstvNettoyage.nettoie(r.pixels, 320, 240, r.lignes), 320, 240, r.lignes)
+                // SATME_CMP_CHROMA=seuil,seuil2 (Hz): the wider colour smoothing's thresholds, to try them.
+                val ch = System.getenv("SATME_CMP_CHROMA")?.split(",")?.mapNotNull { it.trim().toDoubleOrNull() }
+                val co = if (ch != null && ch.size == 2) CorrectionSstv.Options(bruitHz = r.bruitHz, seuilChromaHz = ch[0], seuilChroma2Hz = ch[1]) else CorrectionSstv.Options(bruitHz = r.bruitHz)
+                val px = CorrectionSstv.corrige(SstvNettoyage.nettoie(r.pixels, 320, 240, r.lignes), 320, 240, r.lignes, co)
                 png(File(out, "satme-redec/$stem.png"), px, 320, r.lignes)
                 png(File(out, "satme-redec-brut/$stem.png"), r.pixels, 320, r.lignes)
                 o.put("redec_lignes", r.lignes).put("redec_complete", r.complete).put("redec_entete", r.entete).put("redec_syncs", r.syncs.toDouble())

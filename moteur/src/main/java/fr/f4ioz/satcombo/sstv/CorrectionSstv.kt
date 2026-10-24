@@ -40,7 +40,22 @@ object CorrectionSstv {
         val seuilCouleur: Int = 48,
         /** Brightness gap from which a pixel is a speck. */
         val seuilLumiere: Int = 56,
+        /**
+         * The noise measured in the picture's sync pulses, Hz ([RedecodageSstv.Resultat.bruitHz]; 0 unknown).
+         * From [seuilChromaHz] on (about 18 dB SNR), the colour is smoothed over a wider neighbourhood, see [corrige].
+         */
+        val bruitHz: Double = 0.0,
+        val seuilChromaHz: Double = 45.0,
+        /** From this noise on (about 12 dB), wider still, Hz. */
+        val seuilChroma2Hz: Double = 90.0,
     )
+
+    /** The colour's neighbourhood radius for noise [bruitHz] (1: 3×3, nothing more). */
+    fun rayonChroma(o: Options): Int = when {
+        o.bruitHz >= o.seuilChroma2Hz -> 3
+        o.bruitHz >= o.seuilChromaHz -> 2
+        else -> 1
+    }
 
     /** [px] ARGB, [w]×[h], its first [lignes] rows received (the rest left alone). */
     fun corrige(px: IntArray, w: Int, h: Int, lignes: Int = h, o: Options = Options()): IntArray {
@@ -69,6 +84,28 @@ object CorrectionSstv {
                 // Softly: any colour off its neighbourhood (a rounding step or two left alone); else only the specks.
                 val d = abs(cb[i] - mb) + abs(cr[i] - mr)
                 if (d > (if (o.couleurDouce) 4 else o.seuilCouleur)) { nb[i] = mb; nr[i] = mr; touche[i] = true }
+            }
+            System.arraycopy(nb, 0, cb, 0, tot); System.arraycopy(nr, 0, cr, 0, tot)
+        }
+        // **A weak signal** (under about 18 dB SNR): the colour noise is no longer specks but a grain over
+        // everything, wider than 3×3. Robot 36's colour is half as fine as its brightness, a slide's colours
+        // are flat areas: the colour takes the median of a 5×5 (7×7 under about 12 dB) neighbourhood, the
+        // brightness kept. Measured on the owner's 42 ISS pictures (the gap to the other copies of the same
+        // slide): better on every one it touches (31.6 → 29.3, 33.8 → 31.1, 32.3 → 30.0), and still better
+        // down to 28 Hz; the pictures above 18 dB are never touched by it.
+        val rc = rayonChroma(o)
+        if (o.couleur && rc > 1) {
+            val nb = cb.copyOf(); val nr = cr.copyOf()
+            val t = IntArray((2 * rc + 1) * (2 * rc + 1))
+            for (yy in 0 until n) for (x in 0 until w) {
+                var k = 0
+                for (dy in -rc..rc) { val r0 = (yy + dy).coerceIn(0, n - 1) * w; for (dx in -rc..rc) t[k++] = cb[r0 + (x + dx).coerceIn(0, w - 1)] }
+                t.sort(); val mb = t[t.size / 2]
+                k = 0
+                for (dy in -rc..rc) { val r0 = (yy + dy).coerceIn(0, n - 1) * w; for (dx in -rc..rc) t[k++] = cr[r0 + (x + dx).coerceIn(0, w - 1)] }
+                t.sort(); val mr = t[t.size / 2]
+                val i = yy * w + x
+                if (mb != cb[i] || mr != cr[i]) { nb[i] = mb; nr[i] = mr; touche[i] = true }
             }
             System.arraycopy(nb, 0, cb, 0, tot); System.arraycopy(nr, 0, cr, 0, tot)
         }

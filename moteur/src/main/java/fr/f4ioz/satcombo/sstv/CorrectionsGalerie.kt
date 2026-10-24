@@ -216,7 +216,7 @@ class CorrectionsGalerie(
         val image = if (methode != Methode.SON) CorrectionSstv.corrige(brute.px, brute.w, brute.h) else null
         val son = if (methode != Methode.IMAGE) duSon(galerie, s) else null
         if (methode == Methode.SON && son == null) return Issue(null, if (aUnSon(galerie, s)) RIEN_DANS_LE_SON else SANS_SON)
-        val sonPx = son?.let { CorrectionSstv.corrige(it.px, it.w, it.h, it.lignes) }
+        val sonPx = son?.let { CorrectionSstv.corrige(it.px, it.w, it.h, it.lignes, CorrectionSstv.Options(bruitHz = it.r?.bruitHz ?: 0.0)) }
         val noteSon = sonPx?.let { note(it, son.w, son.h, hm, son.lignes >= son.h) } ?: -1
         val noteImage = image?.let { note(it, brute.w, brute.h, hm, s.complete) } ?: -1
         val prendSon = sonPx != null && (methode == Methode.SON || noteSon >= noteImage - 3)
@@ -248,7 +248,7 @@ class CorrectionsGalerie(
         val hm = SstvMode.byName(s.mode)?.height ?: 0
         val avant = note(brute.px, brute.w, brute.h, hm, s.complete)
         val son = duSon(galerie, s) ?: return Issue(null, if (aUnSon(galerie, s)) RIEN_DANS_LE_SON else SANS_SON)
-        val px = CorrectionSstv.corrige(son.px, son.w, son.h, son.lignes)
+        val px = CorrectionSstv.corrige(son.px, son.w, son.h, son.lignes, CorrectionSstv.Options(bruitHz = son.r?.bruitHz ?: 0.0))
         val apres = note(px, son.w, son.h, hm, son.lignes >= son.h)
         if (apres <= avant) return Issue(null, PAS_MIEUX)
         val r = son.r!!
