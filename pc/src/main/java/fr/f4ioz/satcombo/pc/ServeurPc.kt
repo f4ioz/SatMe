@@ -558,7 +558,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             envoie(sortie, "200 OK", "text/html; charset=utf-8", journal.page().toByteArray()); return
         }
         if (journal != null && chemin.startsWith("/journal/")) {
-            val rep = journal.sert(chemin.removePrefix("/journal"), { q[it].orEmpty() }) { f ->
+            val rep = journal.sert(chemin.removePrefix("/journal"), { q[it].orEmpty() }, r.methode) { f ->
                 // A pass's recording or picture, written to disk as it comes.
                 r.methode == "POST" && RequeteHttp.versFichier(c.getInputStream(), r, fr.f4ioz.satcombo.domain.NouveauPassage.OCTETS_MAX, f)
             }

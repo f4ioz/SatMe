@@ -649,7 +649,8 @@ object JournalRendu {
         prepare(ctx, sc, w)
         sc.flashMs = sc.flashS * 1000L
         val b = image(w, h, sc, instant ?: sc.e.finMs)
-        val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, nom(sc.e, ".png"))
+        // « Image de ce moment »: named after its moment, not the pass's start.
+        val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, if (instant != null) nomExtrait(sc.e, "moment", instant) + ".png" else nom(sc.e, ".png"))
         f.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
         f
     }.getOrNull()
