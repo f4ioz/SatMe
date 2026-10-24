@@ -98,7 +98,10 @@ object JournalWeb {
                       moment: LongRange?, titre: String?, image: Boolean, p: (String) -> String = { "" }): JournalRendu.Scene {
         val reglages = SettingsStore(ctx)
         val l = liens(j, e)
-        val marques = j.marques(l)
+        // Each SSTV picture as the pass chose it (as received by default), « corrigée » said only when asked.
+        val sstv = JournalSstvTelephone.api(ctx, j)
+        val montrees = runCatching { sstv.montrees(e, l.images) }.getOrDefault(emptyMap())
+        val marques = sstv.marques(e, j.marques(l), montrees)
         val fiches = kotlinx.coroutines.runBlocking { runCatching { j.fiches(marques) }.getOrDefault(emptyMap()) }
         val qth = fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)
         val etiquette = if (opt(p, "locator", j.affLocator())) listOf(reglages.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null
@@ -113,7 +116,9 @@ object JournalWeb {
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             affSmetre = opt(p, "smetre", j.affSmetre()), affFreq = opt(p, "freq", j.affFreq()), etiquetteQth = etiquette,
             frequences = frequences(j, e, l), affTx = opt(p, "tx", j.affTx()),
-            cadreSstv = if (p("cadreSstv").isBlank()) CadreSstv.lit(j.cadreSstv()) else CadreSstv.lit(p("cadreSstv")))
+            cadreSstv = if (p("cadreSstv").isBlank()) CadreSstv.lit(j.cadreSstv()) else CadreSstv.lit(p("cadreSstv")),
+            options = e.options, donnees = if (e.options.elements.values.any { it.actif }) runCatching { sstv.donnees(e) }.getOrNull() else null,
+            etiquettes = sstv.etiquettes(e, montrees))
     }
 
     private fun fabrique(ctx: Context, j: JournalDesPassages, e: JournalPassage.Entree, quoi: String,
@@ -186,6 +191,8 @@ object JournalWeb {
         val j = journal ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val chemin = route.substringBefore('?')
         return runCatching {
+            // The pass's SSTV versions and the report's panels: the same answers as SatMe-PC's.
+            if (chemin.startsWith("/sstv")) return JournalSstvTelephone.api(ctx, j).sert(chemin, p, methode) ?: NON
             when (chemin) {
                 // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
                 "/nouveau/satellites" -> json(org.json.JSONArray(PagesPcTelephone.vm?.ui?.value?.satellites.orEmpty().sortedBy { it.name.uppercase() }
@@ -324,11 +331,21 @@ object JournalWeb {
                 }
 
                 // An SSTV picture of the gallery, whole (never another file).
+                // With the pass (id): the version its pictures show (as received, corrected, fused).
                 "/image" -> {
-                    val f = runCatching { SstvHub.shots(ctx) }.getOrDefault(emptyList()).firstOrNull { it.first.name == p("f") }?.first ?: return NON
-                    ReponseWeb("200 OK", "image/png", fichier = f, entetes = "Cache-Control: max-age=3600\r\n")
+                    val choisie = p("id").takeIf { it.isNotBlank() }?.let { JournalSstvTelephone.api(ctx, j).image(it, File(p("f")).name) }
+                    val f = choisie ?: runCatching { SstvHub.shots(ctx) }.getOrDefault(emptyList()).firstOrNull { it.first.name == p("f") }?.first ?: return NON
+                    ReponseWeb("200 OK", "image/png", fichier = f, entetes = "Cache-Control: no-store\r\n")
                 }
-                "/vignette" -> PlancheWeb.sert("/vignette", "GET", p) { null }
+                "/vignette" -> {
+                    val choisie = p("id").takeIf { it.isNotBlank() }?.let { JournalSstvTelephone.api(ctx, j).image(it, File(p("f")).name) }
+                    if (choisie == null || choisie.name == File(p("f")).name) PlancheWeb.sert("/vignette", "GET", p) { null }
+                    else {
+                        val b = fr.f4ioz.satcombo.sstv.PlancheRendu.charge(choisie, p("w").toIntOrNull()?.coerceIn(80, 800) ?: 320) ?: return NON
+                        val o = java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+                        ReponseWeb("200 OK", "image/jpeg", o, "Cache-Control: no-store\r\n")
+                    }
+                }
 
                 // Something to make: a sound, a picture of the moment, a video, a GIF, the pass file.
                 "/fabrique" -> {

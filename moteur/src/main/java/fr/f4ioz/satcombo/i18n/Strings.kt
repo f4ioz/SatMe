@@ -2445,6 +2445,7 @@ val FR: Map<String, String> = mapOf(
     "pj_el_evenement" to "Événement : {0}",
     "pj_el_sans_evenement" to "Aucun événement SSTV pour ce passage : la grille des diapos, le bilan et la planche ne sont pas proposés.",
     "pj_el_simple" to "Pas de montage ici : la chaîne simple.",
+    "pj_el_aide_tel" to "Chacun à sa place d'origine ; la page du journal servie au PC les place à la souris et choisit image par image.",
     "pj_el_montage" to "Montage de réception",
     "pj_el_diapos" to "Grille des diapos",
     "pj_el_ciel" to "Ciel du passage",

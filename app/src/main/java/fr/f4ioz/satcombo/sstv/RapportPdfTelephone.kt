@@ -47,22 +47,10 @@ object RapportPdfTelephone {
         private var page: PdfDocument.Page? = null
         private var n = 0
         private val bitmaps = IdentityHashMap<ByteArray, Bitmap?>()
-        private val texte = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
-        private val trait = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-        private val fond = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private val image = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val mesure = ToileCanvas(null, bitmaps)
 
-        private fun police(taille: Float, gras: Boolean) = texte.apply {
-            textSize = taille; typeface = if (gras) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        }
-
-        override fun largeur(s: String, taille: Float, gras: Boolean): Float = police(taille, gras).measureText(s)
-
-        override fun taille(image: ByteArray): Pair<Int, Int>? {
-            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(image, 0, image.size, o)
-            return if (o.outWidth > 0 && o.outHeight > 0) o.outWidth to o.outHeight else null
-        }
+        override fun largeur(s: String, taille: Float, gras: Boolean): Float = mesure.largeur(s, taille, gras)
+        override fun taille(image: ByteArray): Pair<Int, Int>? = mesure.taille(image)
 
         fun ferme() { page?.let { doc.finishPage(it) }; page = null }
         fun libere() { bitmaps.values.forEach { it?.recycle() }; bitmaps.clear() }
@@ -71,67 +59,97 @@ object RapportPdfTelephone {
             ferme()
             val p = doc.startPage(PdfDocument.PageInfo.Builder(RapportPdf.LARGEUR.toInt(), RapportPdf.HAUTEUR.toInt(), ++n).create())
             page = p
-            return Toile(p.canvas)
+            return ToileCanvas(p.canvas, bitmaps)
         }
+    }
+}
 
-        private inner class Toile(val c: Canvas) : RapportPdf.Toile {
-            private fun trace(couleur: Int, epaisseur: Float, pointilles: FloatArray?, rond: Boolean) = trait.apply {
-                color = couleur; strokeWidth = epaisseur.coerceAtLeast(0.1f)
-                pathEffect = pointilles?.let { DashPathEffect(it, 0f) }
-                strokeCap = if (rond) Paint.Cap.ROUND else Paint.Cap.BUTT
-                strokeJoin = if (rond) Paint.Join.ROUND else Paint.Join.MITER
-            }
-            private fun remplit(couleur: Int) = fond.apply { color = couleur }
+/**
+ * The report's drawing ([RapportPdf.Toile]) on an Android [Canvas]: the
+ * PDF's pages, and the journal's pictures and videos (the report's panels,
+ * [ElementsJournal]). The colours' alpha kept, the curves drawn as curves,
+ * the pictures decoded once ([bitmaps], shared by the pages of a document).
+ * Without a canvas ([c] null): measures only.
+ */
+class ToileCanvas(private val c: Canvas?, private val bitmaps: MutableMap<ByteArray, Bitmap?> = IdentityHashMap()) : RapportPdf.Toile, RapportPdf.Mesure {
+    private val texte = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
+    private val trait = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val fond = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val image = Paint(Paint.FILTER_BITMAP_FLAG)
 
-            override fun texte(s: String, x: Float, y: Float, taille: Float, couleur: Int, gras: Boolean) {
-                if (s.isBlank()) return
-                c.drawText(s, x, y, police(taille, gras).apply { color = couleur })
-            }
+    private fun police(taille: Float, gras: Boolean) = texte.apply {
+        textSize = taille; typeface = if (gras) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+    }
 
-            override fun ligne(xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, ferme: Boolean, fond: Int?) {
-                if (xy.size < 4) return
-                val p = Path().apply {
-                    moveTo(xy[0], xy[1])
-                    var i = 2
-                    while (i + 1 < xy.size) { lineTo(xy[i], xy[i + 1]); i += 2 }
-                    if (ferme) close()
-                }
-                fond?.let { c.drawPath(p, remplit(it)) }
-                couleur?.let { c.drawPath(p, trace(it, epaisseur, pointilles, rond)) }
-            }
+    override fun largeur(s: String, taille: Float, gras: Boolean): Float = police(taille, gras).measureText(s)
 
-            override fun rect(x: Float, y: Float, w: Float, h: Float, fond: Int?, trait: Int?, epaisseur: Float, rayon: Float, pointilles: FloatArray?) {
-                if (w <= 0f || h <= 0f) return
-                val r = RectF(x, y, x + w, y + h)
-                val rr = rayon.coerceAtMost(minOf(w, h) / 2)
-                fond?.let { c.drawRoundRect(r, rr, rr, remplit(it)) }
-                trait?.let { c.drawRoundRect(r, rr, rr, trace(it, epaisseur, pointilles, false)) }
-            }
+    override fun taille(image: ByteArray): Pair<Int, Int>? {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(image, 0, image.size, o)
+        return if (o.outWidth > 0 && o.outHeight > 0) o.outWidth to o.outHeight else null
+    }
 
-            override fun cercle(x: Float, y: Float, r: Float, fond: Int?, trait: Int?, epaisseur: Float) {
-                if (r <= 0f) return
-                fond?.let { c.drawCircle(x, y, r, remplit(it)) }
-                trait?.let { c.drawCircle(x, y, r, trace(it, epaisseur, null, false)) }
-            }
+    private fun trace(couleur: Int, epaisseur: Float, pointilles: FloatArray?, rond: Boolean) = trait.apply {
+        color = couleur; strokeWidth = epaisseur.coerceAtLeast(0.1f)
+        pathEffect = pointilles?.let { DashPathEffect(it, 0f) }
+        strokeCap = if (rond) Paint.Cap.ROUND else Paint.Cap.BUTT
+        strokeJoin = if (rond) Paint.Join.ROUND else Paint.Join.MITER
+    }
+    private fun remplit(couleur: Int) = fond.apply { color = couleur }
 
-            override fun chemin(ops: CharArray, xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, fond: Int?) {
-                if (ops.isEmpty()) return
-                val p = Path()
-                var i = 0
-                for (o in ops) when (o) {
-                    'M' -> { p.moveTo(xy[i], xy[i + 1]); i += 2 }
-                    'L' -> { p.lineTo(xy[i], xy[i + 1]); i += 2 }
-                    'C' -> { p.cubicTo(xy[i], xy[i + 1], xy[i + 2], xy[i + 3], xy[i + 4], xy[i + 5]); i += 6 }
-                    'Z' -> p.close()
-                }
-                fond?.let { c.drawPath(p, remplit(it)) }
-                couleur?.let { c.drawPath(p, trace(it, epaisseur, pointilles, rond)) }
-            }
+    override fun texte(s: String, x: Float, y: Float, taille: Float, couleur: Int, gras: Boolean) {
+        val c = c ?: return
+        if (s.isBlank()) return
+        c.drawText(s, x, y, police(taille, gras).apply { color = couleur })
+    }
 
-            override fun image(octets: ByteArray, x: Float, y: Float, w: Float, h: Float) {
-                val b = bitmaps.getOrPut(octets) { runCatching { BitmapFactory.decodeByteArray(octets, 0, octets.size) }.getOrNull() } ?: return
-                c.drawBitmap(b, null, RectF(x, y, x + w, y + h), image)
-            }
+    override fun ligne(xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, ferme: Boolean, fond: Int?) {
+        val c = c ?: return
+        if (xy.size < 4) return
+        val p = Path().apply {
+            moveTo(xy[0], xy[1])
+            var i = 2
+            while (i + 1 < xy.size) { lineTo(xy[i], xy[i + 1]); i += 2 }
+            if (ferme) close()
         }
+        fond?.let { c.drawPath(p, remplit(it)) }
+        couleur?.let { c.drawPath(p, trace(it, epaisseur, pointilles, rond)) }
+    }
+
+    override fun rect(x: Float, y: Float, w: Float, h: Float, fond: Int?, trait: Int?, epaisseur: Float, rayon: Float, pointilles: FloatArray?) {
+        val c = c ?: return
+        if (w <= 0f || h <= 0f) return
+        val r = RectF(x, y, x + w, y + h)
+        val rr = rayon.coerceAtMost(minOf(w, h) / 2)
+        fond?.let { c.drawRoundRect(r, rr, rr, remplit(it)) }
+        trait?.let { c.drawRoundRect(r, rr, rr, trace(it, epaisseur, pointilles, false)) }
+    }
+
+    override fun cercle(x: Float, y: Float, r: Float, fond: Int?, trait: Int?, epaisseur: Float) {
+        val c = c ?: return
+        if (r <= 0f) return
+        fond?.let { c.drawCircle(x, y, r, remplit(it)) }
+        trait?.let { c.drawCircle(x, y, r, trace(it, epaisseur, null, false)) }
+    }
+
+    override fun chemin(ops: CharArray, xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, fond: Int?) {
+        val c = c ?: return
+        if (ops.isEmpty()) return
+        val p = Path()
+        var i = 0
+        for (o in ops) when (o) {
+            'M' -> { p.moveTo(xy[i], xy[i + 1]); i += 2 }
+            'L' -> { p.lineTo(xy[i], xy[i + 1]); i += 2 }
+            'C' -> { p.cubicTo(xy[i], xy[i + 1], xy[i + 2], xy[i + 3], xy[i + 4], xy[i + 5]); i += 6 }
+            'Z' -> p.close()
+        }
+        fond?.let { c.drawPath(p, remplit(it)) }
+        couleur?.let { c.drawPath(p, trace(it, epaisseur, pointilles, rond)) }
+    }
+
+    override fun image(octets: ByteArray, x: Float, y: Float, w: Float, h: Float) {
+        val c = c ?: return
+        val b = bitmaps.getOrPut(octets) { runCatching { BitmapFactory.decodeByteArray(octets, 0, octets.size) }.getOrNull() } ?: return
+        c.drawBitmap(b, null, RectF(x, y, x + w, y + h), image)
     }
 }

@@ -86,10 +86,11 @@ class ApiJournalSstv(private val p: Plateforme) {
         return VersionsJournal.choisit(c, dossier, f, png, g?.notes?.get(png) ?: -1, g, v)
     }
 
-    /** Each picture of [e] (its file as received) and what it shows with the pass's choices. */
-    fun montrees(e: JournalPassage.Entree): Map<String, Montre> {
+    /** Each picture of [e] (its file as received; [images] those the screen shows) and what it shows with the pass's choices. */
+    fun montrees(e: JournalPassage.Entree, images: List<Pair<File, SstvMeta.SstvShot>> = p.images(e)): Map<String, Montre> {
+        if (images.isEmpty()) return emptyMap()
         val gs = groupes()
-        return p.images(e).associate { (f, s) -> f.absolutePath to montre(f, s.fileName, e.options.versionDe(s.fileName), gs) }
+        return images.associate { (f, s) -> f.absolutePath to montre(f, s.fileName, e.options.versionDe(s.fileName), gs) }
     }
 
     /**

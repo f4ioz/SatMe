@@ -2421,6 +2421,7 @@ val EN: Map<String, String> = mapOf(
     "pj_el_evenement" to "Event: {0}",
     "pj_el_sans_evenement" to "No SSTV event for this pass: the slide grid, the figures and the sheet are not offered.",
     "pj_el_simple" to "No montage here: the simple chain.",
+    "pj_el_aide_tel" to "Each at its own place; the journal page served to the PC places them with the mouse and chooses picture by picture.",
     "pj_el_montage" to "Receive montage",
     "pj_el_diapos" to "Slide grid",
     "pj_el_ciel" to "Pass sky plot",
