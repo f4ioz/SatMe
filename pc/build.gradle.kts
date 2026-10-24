@@ -67,3 +67,11 @@ tasks.processResources {
         into("marque")
     }
 }
+
+// « Quoi de neuf » and the update's notes: pc/NOUVEAUTES.md (one section per version, FR and EN), bundled as written.
+tasks.processResources {
+    from(".") {
+        include("NOUVEAUTES.md")
+        into("nouveautes")
+    }
+}

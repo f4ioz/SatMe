@@ -1,0 +1,45 @@
+{
+  "url": "https://api.github.com/repos/f4ioz/SatMe/releases/422931736",
+  "html_url": "https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.10.27",
+  "id": 422931736,
+  "tag_name": "satme-pc-2026.10.27",
+  "target_commitish": "main",
+  "name": "SatMe-PC 2026.10.27",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-10-24T19:09:09Z",
+  "published_at": "2026-10-24T19:17:27Z",
+  "body": "**SatMe-PC** (Linux, Windows, Raspberry Pi) and **SatMe-Node** (Raspberry Pi next to the antenna): `satme-pc.tar`; on Windows, all in one (Java, ffmpeg, rtl_tcp included): `satme-pc-windows.msi`, or `satme-pc-windows.zip` without installing.\n\n- SatMe-PC on Linux: [install guide](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc.md) · [guide d'installation](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc.fr.md)\n- SatMe-PC on Windows: [install guide](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc-windows.md) · [guide d'installation](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc-windows.fr.md)\n- SatMe-Node on a Raspberry Pi 3: [install guide](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.md) · [guide d'installation](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.fr.md)\n- What SatMe-PC does: [SatMe-PC](https://github.com/f4ioz/SatMe/blob/main/docs/station-pc.md) · [en français](https://github.com/f4ioz/SatMe/blob/main/docs/station-pc.fr.md)\n\nLinux: Java 17 or later. `SHA256SUMS` checks the download. The Android app is on [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).\n",
+  "assets": [
+    {
+      "name": "satme-pc-2026.10.27.tar",
+      "content_type": "application/x-tar",
+      "size": 22218240,
+      "browser_download_url": "https://github.com/f4ioz/SatMe/releases/download/satme-pc-2026.10.27/satme-pc-2026.10.27.tar"
+    },
+    {
+      "name": "satme-pc-windows.msi",
+      "content_type": "application/x-msi",
+      "size": 145339072,
+      "browser_download_url": "https://github.com/f4ioz/SatMe/releases/download/satme-pc-2026.10.27/satme-pc-windows.msi"
+    },
+    {
+      "name": "satme-pc-windows.zip",
+      "content_type": "application/zip",
+      "size": 140280388,
+      "browser_download_url": "https://github.com/f4ioz/SatMe/releases/download/satme-pc-2026.10.27/satme-pc-windows.zip"
+    },
+    {
+      "name": "satme-pc.tar",
+      "content_type": "application/x-tar",
+      "size": 22218240,
+      "browser_download_url": "https://github.com/f4ioz/SatMe/releases/download/satme-pc-2026.10.27/satme-pc.tar"
+    },
+    {
+      "name": "SHA256SUMS",
+      "content_type": "application/octet-stream",
+      "size": 343,
+      "browser_download_url": "https://github.com/f4ioz/SatMe/releases/download/satme-pc-2026.10.27/SHA256SUMS"
+    }
+  ]
+}
