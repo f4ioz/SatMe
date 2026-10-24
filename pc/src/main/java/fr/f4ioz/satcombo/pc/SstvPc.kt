@@ -160,6 +160,14 @@ class SstvPc(
      */
     @Volatile var posteEntend: () -> Boolean = { false }
 
+    /**
+     * A picture just kept with its own sound (its folder, its sidecar): for the
+     * re-decoding at its end ([fr.f4ioz.satcombo.sstv.RedecodageAuto]), which
+     * only queues it — the decoder goes on at once. Set by whoever has the
+     * gallery's corrections.
+     */
+    @Volatile var imageGardee: (File, SstvMeta.SstvShot) -> Unit = { _, _ -> }
+
     /** The sound card's blocks (the dongle's too when it is the card's source). */
     fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
         if (!actif) return
@@ -234,6 +242,10 @@ class SstvPc(
             val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, sat, h?.momentMs ?: horloge(),
                 if (h != null) RELECTURE else "live", if (h != null) h.fichier else if (sat == c.satellite) c.enregistrement else "", c.locator, c.indicatif,
                 sonDe(decodeur, memoire), note = if (h == null && sat == c.satellite) c.note else "", entree = sourceActive) else null
+            if (nom != null) runCatching {
+                val s = SstvMeta.decode(nom, File(dossier, SstvMeta.sidecarName(nom)).readText(Charsets.UTF_8))
+                if (SstvSon.fichier(File(dossier, nom)).isFile) imageGardee(dossier, s)
+            }
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
         }

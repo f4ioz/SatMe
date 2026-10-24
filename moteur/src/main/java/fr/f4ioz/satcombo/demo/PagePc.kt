@@ -2471,6 +2471,7 @@ ${rail()}
       <div class="t">Décodage</div>
       <label class="petit" style="display:block;margin-top:0" title="Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+      <label class="petit" style="display:block;margin-top:4px" title="À la fin de chaque image, son propre son est décodé à nouveau en entier, en arrière-plan, puis corrigé ; la version corrigée est gardée à côté (corrigees/) seulement si sa note est meilleure, l’image reçue n’est jamais modifiée"><input type="checkbox" id="so-redecode" onchange="soReglage('redecode', this.checked ? 1 : 0)"> Re-décoder chaque image à la fin <span class="petit">(version corrigée gardée si meilleure)</span></label>
     </div>
     <div class="carte" id="so-carte">
       <div class="t">Options SSTV</div>
@@ -9229,7 +9230,7 @@ async function soCharge() {
   if (!SO || !SO.ok) { g('so-carte').hidden = true; return; }
   g('so-carte').hidden = false;
   const r = SO.reglages;
-  [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
+  [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-redecode', r.redecode], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
   [['so-avant', r.avant], ['so-note', r.note], ['so-jours', r.jours], ['so-mo', r.mo], ['so-dispo', r.dispo]].forEach(([i, v]) => { if (document.activeElement !== g(i)) g(i).value = v; });
   txt('so-enreg-etat', SO.enregistreMaintenant ? '— en cours pour ce passage' : '');
   g('so-prochaines').innerHTML = !r.activites ? '<span class="ambre">« Activités à venir » est coupé : aucune alerte.</span>' :

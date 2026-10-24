@@ -428,6 +428,9 @@ fun main(args: Array<String>) {
         if (r.on && r.veut(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS)) annonces.file.propose(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS, t)
     }
     son.enregistreSerie = { optionsSstv.enregistreSerie() }
+    // « Re-décoder chaque image à la fin »: each picture kept live, decoded again from its sound in the background.
+    val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin })
+    son.sstv.imageGardee = { d, s -> redecodageAuto.demande(d, s) }
     serveur.optionsSstv = optionsSstv
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(30_000)

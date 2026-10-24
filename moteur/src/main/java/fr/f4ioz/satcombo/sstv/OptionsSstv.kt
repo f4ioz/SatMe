@@ -41,6 +41,16 @@ class OptionsSstv(private val prefs: Stockage) {
         get() = prefs.getBoolean("sstvo_enreg", false)
         set(v) { prefs.edit().putBoolean("sstvo_enreg", v).apply() }
 
+    /**
+     * « Re-décoder chaque image à la fin » (on by default): each picture
+     * received, once its own sound is kept, decoded again from it in the
+     * background ([RedecodageAuto]); its corrected version kept beside when it
+     * marks better (the picture as received untouched).
+     */
+    var redecodeFin: Boolean
+        get() = prefs.getBoolean("sstvo_redecode_fin", true)
+        set(v) { prefs.edit().putBoolean("sstvo_redecode_fin", v).apply() }
+
     /** Retention: days (0 for ever) and size (MB, 0 no limit); both off by default. */
     var retentionJours: Int
         get() = prefs.getInt("sstvo_ret_jours", 0).coerceIn(0, 3650)

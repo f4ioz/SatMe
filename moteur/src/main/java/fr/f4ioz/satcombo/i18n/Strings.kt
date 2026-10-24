@@ -3240,6 +3240,8 @@ val FR: Map<String, String> = mapOf(
     "so_ret_jours" to "Jours (0 : toujours)",
     "so_ret_mo" to "Mo au plus (0 : sans limite)",
     "so_ret_journal" to "Garder aussi ceux du journal des passages",
+    "so_redecode" to "Re-décoder chaque image à la fin",
+    "so_redecode_aide" to "Son propre son décodé à nouveau en entier, en arrière-plan, puis corrigé : la version corrigée est gardée à côté si sa note est meilleure (l’image reçue n’est jamais modifiée). Pas en économie d’énergie.",
     "so_ret_aide" to "Jamais supprimés : ceux d'une image utilisée dans une planche ou marquée « à garder », ceux de moins d'un jour. Chaque suppression est notée dans retention-sons.log.",
     "so_ret_bilan" to "{0} enregistrement(s) SSTV ({1}) ; {2} à supprimer ({3})",
     "so_ret_appliquer" to "Appliquer maintenant",

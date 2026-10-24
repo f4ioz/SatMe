@@ -3215,6 +3215,8 @@ val EN: Map<String, String> = mapOf(
     "so_ret_jours" to "Days (0: forever)",
     "so_ret_mo" to "MB at most (0: no limit)",
     "so_ret_journal" to "Also keep those of the pass journal",
+    "so_redecode" to "Decode each picture again at its end",
+    "so_redecode_aide" to "Its own sound decoded again as a whole, in the background, then corrected: the corrected version is kept beside it when it marks better (the picture as received is never changed). Not in battery saver.",
     "so_ret_aide" to "Never deleted: those of a picture used in a sheet or marked « keep », those less than a day old. Each deletion is written to retention-sons.log.",
     "so_ret_bilan" to "{0} SSTV recording(s) ({1}); {2} to delete ({3})",
     "so_ret_appliquer" to "Apply now",

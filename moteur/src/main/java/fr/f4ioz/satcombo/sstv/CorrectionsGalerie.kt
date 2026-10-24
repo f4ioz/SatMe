@@ -57,6 +57,8 @@ class CorrectionsGalerie(
         val derivePpm: Int = 0,
         val bruitHz: Int = 0,
         val gain: Double = 1.0,
+        /** Made on its own at the picture's end ([RedecodageAuto]), not asked for. */
+        val auto: Boolean = false,
     )
 
     /** The result of an action: the fiche, or why not ([ILLISIBLE], [SANS_SON], [RIEN_DANS_LE_SON], [ECRITURE], [UNE_COPIE]). */
@@ -72,6 +74,10 @@ class CorrectionsGalerie(
         const val RIEN_DANS_LE_SON = "rien_dans_le_son"
         const val ECRITURE = "ecriture"
         const val UNE_COPIE = "une_copie"
+        /** [corrigeSiMieux]: a corrected version is already there (made by hand, or before). */
+        const val DEJA = "deja"
+        /** [corrigeSiMieux]: decoded again, it marks no better than as received: nothing kept. */
+        const val PAS_MIEUX = "pas_mieux"
 
         fun dossier(galerie: File) = File(galerie, DOSSIER)
 
@@ -98,6 +104,7 @@ class CorrectionsGalerie(
             if (f.copies.isNotEmpty()) put("copies", f.copies.joinToString(";"))
             if (f.duSon > 0) put("duson", f.duSon)
             if (f.methode == Methode.SON) { put("ppm", f.derivePpm); put("bruit", f.bruitHz); put("gain", String.format(java.util.Locale.US, "%.3f", f.gain)) }
+            if (f.auto) put("auto", 1)
         }
 
         fun decode(fichier: String, texte: String?): Fiche? {
@@ -106,7 +113,7 @@ class CorrectionsGalerie(
             val methode = Methode.de(m["methode"].orEmpty()) ?: return null
             return Fiche(m["source"].orEmpty(), fichier, methode, m["avant"]?.toIntOrNull() ?: -1, m["apres"]?.toIntOrNull() ?: -1,
                 m["quand"]?.toLongOrNull() ?: 0L, m["copies"]?.split(';')?.filter { it.isNotBlank() }.orEmpty(), m["duson"]?.toIntOrNull() ?: 0,
-                m["ppm"]?.toIntOrNull() ?: 0, m["bruit"]?.toIntOrNull() ?: 0, m["gain"]?.toDoubleOrNull() ?: 1.0)
+                m["ppm"]?.toIntOrNull() ?: 0, m["bruit"]?.toIntOrNull() ?: 0, m["gain"]?.toDoubleOrNull() ?: 1.0, m["auto"] == "1")
         }
 
         private fun note(px: IntArray, w: Int, h: Int, hauteurMode: Int, complete: Boolean) =
@@ -225,6 +232,32 @@ class CorrectionsGalerie(
             corrigee(galerie, s.fileName)
         }
         return Issue(f)
+    }
+
+    /**
+     * Picture [s] decoded again from its own sound and corrected, kept only
+     * when it marks better than as received — for the automatic re-decoding at
+     * a picture's end ([RedecodageAuto]). Never replaces a corrected version
+     * already there (one made by hand stays); the picture as received is never
+     * touched. Its fiche, else why not ([DEJA], [PAS_MIEUX], [SANS_SON],
+     * [RIEN_DANS_LE_SON], [ILLISIBLE], [ECRITURE]).
+     */
+    fun corrigeSiMieux(galerie: File, s: SstvMeta.SstvShot): Issue {
+        if (corrigee(galerie, s.fileName) != null) return Issue(null, DEJA)
+        val brute = charge(File(galerie, s.fileName)) ?: return Issue(null, ILLISIBLE)
+        val hm = SstvMode.byName(s.mode)?.height ?: 0
+        val avant = note(brute.px, brute.w, brute.h, hm, s.complete)
+        val son = duSon(galerie, s) ?: return Issue(null, if (aUnSon(galerie, s)) RIEN_DANS_LE_SON else SANS_SON)
+        val px = CorrectionSstv.corrige(son.px, son.w, son.h, son.lignes)
+        val apres = note(px, son.w, son.h, hm, son.lignes >= son.h)
+        if (apres <= avant) return Issue(null, PAS_MIEUX)
+        val r = son.r!!
+        val h = son.lignes.coerceIn(1, son.h)
+        val nom = nomCorrigee(s.fileName)
+        if (corrigee(galerie, s.fileName) != null) return Issue(null, DEJA)
+        if (!garde(galerie, nom, px.copyOf(son.w * h), son.w, h, Fiche(s.fileName, nom, Methode.SON, avant, apres, horloge(),
+                derivePpm = Math.round(r.derivePpm).toInt(), bruitHz = Math.round(r.bruitHz).toInt(), gain = r.gain, auto = true))) return Issue(null, ECRITURE)
+        return Issue(corrigee(galerie, s.fileName))
     }
 
     /**

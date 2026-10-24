@@ -266,6 +266,7 @@ class OptionsSstvPc(
                     "jours" -> o.retentionJours = v.toIntOrNull() ?: 0
                     "mo" -> o.retentionMaxMo = v.toIntOrNull() ?: 0
                     "journal" -> o.retentionJournal = on
+                    "redecode" -> o.redecodeFin = on
                     "dispo" -> o.qslDisposition = runCatching { QslSstv.Disposition.valueOf(v) }.getOrDefault(QslSstv.Disposition.BANDEAU)
                     "satme" -> o.qslSatme = on
                     "jpeg" -> o.qslJpeg = on
@@ -300,7 +301,7 @@ class OptionsSstvPc(
         return JSONObject().put("ok", true)
             .put("reglages", JSONObject().put("alerte", o.alerteDiapo).put("avant", o.alerteAvantMin).put("note", o.alerteNoteMin)
                 .put("enreg", o.enregistrePassages).put("jours", o.retentionJours).put("mo", o.retentionMaxMo).put("journal", o.retentionJournal)
-                .put("dispo", o.qslDisposition.name).put("satme", o.qslSatme).put("jpeg", o.qslJpeg)
+                .put("redecode", o.redecodeFin).put("dispo", o.qslDisposition.name).put("satme", o.qslSatme).put("jpeg", o.qslJpeg)
                 .put("activites", station.settings.activitesOn).put("indicatif", station.settings.callsign).put("locator", station.etat.value.locator))
             .put("enregistreMaintenant", runCatching { enregistreSerie() }.getOrDefault(false))
             .put("prochaines", JSONArray(prochaines(t).map { a ->

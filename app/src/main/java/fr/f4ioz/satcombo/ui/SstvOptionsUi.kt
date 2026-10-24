@@ -157,6 +157,9 @@ fun CarteOptionsSstv() {
                 Nombre(t("so_alerte_note"), o.alerteNoteMin) { o.alerteNoteMin = it }
                 Text(t("so_alerte_aide"), color = TextLo, fontSize = 10.sp)
                 Spacer(Modifier.height(6.dp))
+                Coche(t("so_redecode"), o.redecodeFin) { change { o.redecodeFin = it } }
+                Text(t("so_redecode_aide"), color = TextLo, fontSize = 10.sp)
+                Spacer(Modifier.height(6.dp))
                 Coche(t("so_enreg"), o.enregistrePassages) { change { o.enregistrePassages = it } }
                 Text(t("so_enreg_aide"), color = TextLo, fontSize = 10.sp)
                 Spacer(Modifier.height(6.dp))

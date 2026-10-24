@@ -353,6 +353,8 @@ object SstvHub {
             if (ctx != null && linesDone >= mode.height / 8) {
                 saved = save(ctx, bmp, mode, liveSat, complete, "live", recording = liveEnregistrement, son = sonDe(live, liveSon))
                 count++
+                // Decoded again from its own sound, off this thread (the option, battery saver off).
+                saved?.let { CorrectionsTelephone.apresImage(ctx, File(dir(ctx), it)) }
             }
             _state.value = _state.value.copy(
                 modeName = null, progress = 0f, preview = bmp, decoding = false,

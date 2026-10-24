@@ -46,6 +46,32 @@ object CorrectionsTelephone {
         }
     }
 
+    @Volatile private var auto: RedecodageAuto? = null
+
+    /**
+     * « Re-décoder chaque image à la fin »: one background-class thread, the
+     * option on and the battery saver off (asked again when a picture's turn
+     * comes).
+     */
+    fun auto(ctx: Context): RedecodageAuto = auto ?: synchronized(this) {
+        auto ?: run {
+            val app = ctx.applicationContext
+            val energie = app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            RedecodageAuto(api(app).corrections,
+                { OptionsSstvTelephone.options(app).redecodeFin && energie?.isPowerSaveMode != true },
+                RedecodageAuto.filBas { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }).also { auto = it }
+        }
+    }
+
+    /** A picture just saved live with its sound: decoded again in the background (returns at once). */
+    fun apresImage(ctx: Context, png: File) {
+        runCatching {
+            if (!SstvSon.fichier(png).isFile) return
+            val s = SstvMeta.decode(png.name, File(png.parentFile, SstvMeta.sidecarName(png.name)).readText(Charsets.UTF_8))
+            auto(ctx).demande(png.parentFile ?: return, s)
+        }
+    }
+
     /** A picture deleted: its corrected version with it. */
     fun oublie(png: File) {
         val d = CorrectionsGalerie.dossier(png.parentFile ?: return)
