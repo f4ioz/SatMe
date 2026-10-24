@@ -221,7 +221,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 ### Pointing
 - Phone compass with guided calibration, or a WitMotion Bluetooth module fixed on the antenna boom.
-- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. A pass over the end stop planned before it (far side of the zenith, over the top, a turn only when worth it), the path shown on the compass. Flip over the zenith, park after the pass, and simulated antennas to watch the tracking before moving the real ones.
+- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. A pass over the end stop planned before it (far side of the zenith, over the top, a turn only when worth it), the path shown on the compass. Flip over the zenith, park after the pass, a calibration assistant (the controller's own O2/F2/O/F, a verification table, a software correction per axis), and simulated antennas to watch the tracking before moving the real ones.
 
 ### Rig control and Doppler
 - RX and TX Doppler correction, linear transponders (inverting or not) and FM, with a calibration kept per satellite.
