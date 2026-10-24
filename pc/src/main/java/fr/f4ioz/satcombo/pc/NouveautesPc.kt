@@ -117,7 +117,8 @@ class NouveautesPc(source: String?) {
                 }
                 fun part(k: String) = parts[k]?.joinToString("\n")?.trim().orEmpty()
                 val commun = part("*")
-                Notes(version, part("fr").ifBlank { commun }, part("en").ifBlank { commun })
+                // A section still empty (« ## Prochaine version » just after a release) is no notes at all.
+                Notes(version, part("fr").ifBlank { commun }, part("en").ifBlank { commun }).takeIf { it.fr.isNotBlank() || it.en.isNotBlank() }
             }
         }
     }
