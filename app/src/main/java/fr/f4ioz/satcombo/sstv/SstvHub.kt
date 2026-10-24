@@ -515,6 +515,7 @@ object SstvHub {
         runCatching { SstvSon.video(file).delete() }
         runCatching { SstvSon.video(file, hd = true).delete() }
         runCatching { SstvSon.gif(file).delete() }
+        CorrectionsTelephone.oublie(file)
         return runCatching { file.delete() }.getOrDefault(false)
     }
 

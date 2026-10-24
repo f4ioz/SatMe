@@ -279,8 +279,10 @@ object PagesPcTelephone {
                     val ctx = vm.getApplication<android.app.Application>()
                     val e = fr.f4ioz.satcombo.sstv.ClassementTelephone.etat(ctx)
                     val prev = runCatching { kotlinx.coroutines.runBlocking { fr.f4ioz.satcombo.sstv.ClassementTelephone.prevision(ctx, e) } }.getOrNull()
-                    json(ApiClassementSstv.json(e, prev, System.currentTimeMillis()))
+                    val corr = fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx)
+                    json(ApiClassementSstv.json(e, prev, System.currentTimeMillis()) { g -> corr.pourGroupe(g) })
                 }
+                "/api/sstv/correction" -> json(fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(vm.getApplication<android.app.Application>()).etat(p("nom")))
                 "/api/sstv/encours.png" -> {
                     val b = fr.f4ioz.satcombo.sstv.SstvHub.state.value.preview ?: return NON
                     val o = java.io.ByteArrayOutputStream()
@@ -845,6 +847,8 @@ object PagesPcTelephone {
                 val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
                 fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
             }
+            "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
+                fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(vm.getApplication<android.app.Application>()).action(route, p) ?: JSONObject().put("ok", false)
             "/api/sstv/diapo", "/api/sstv/groupe" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 ApiClassementSstv.action(route, p, fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie,
@@ -1068,6 +1072,8 @@ object PagesPcTelephone {
                 ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
             chemin.startsWith("/sondes/") -> ApiSon.fichier(fr.f4ioz.satcombo.sonde.SondeHub.logDir(ctx), nom("/sondes/"), ".csv", ".kml", ".gpx", ".txt", ".log")
                 ?.let { ReponseWeb("200 OK", "application/octet-stream", fichier = it, entetes = "Content-Disposition: attachment; filename=\"${it.name}\"\r\n") }
+            chemin.startsWith("/sstv/corrigees/") -> fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx).fichier(nom("/sstv/corrigees/"))
+                ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
             chemin.startsWith("/sstv/") -> ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), nom("/sstv/"), ".png", ".wav", ".gif")
                 ?.let { ReponseWeb("200 OK", when (it.extension) { "wav" -> "audio/wav"; "gif" -> "image/gif"; else -> "image/png" }, fichier = it) }
             chemin.startsWith("/enregistrements/") -> ApiSon.fichier(dossierEnregistrements(ctx), nom("/enregistrements/"), ".mp3", ".wav")

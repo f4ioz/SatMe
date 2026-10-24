@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -591,14 +592,12 @@ private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Un
     }
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
                 Text(file.name, color = TextHi, fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace)
                 Spacer(Modifier.height(8.dp))
-                if (bmp != null) {
-                    Image(bmp.asImageBitmap(), null, contentScale = ContentScale.FillWidth,
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
-                }
+                // As received, or its corrected / fused version (apart), compared side by side.
+                SstvImageCorrigee(file, shot, bmp)
                 Spacer(Modifier.height(8.dp))
                 if (son.isFile) {
                     // Just this picture's sound: hear it, decode it again, share it, or as a video.
