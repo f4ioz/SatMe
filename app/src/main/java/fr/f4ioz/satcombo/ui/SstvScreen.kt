@@ -232,6 +232,8 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp)))
                     }
+                    // The reception's quality while listening (level, each line, the mark it heads for).
+                    if (st.listening) QualiteSstvDirect()
                     // Where the decoded audio comes from.
                     //
                     // USB input already worked (the recorder opens USB inputs since
@@ -273,6 +275,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
 
         // -------------------------------------------------------- re-decode
         // ISS SSTV on its own, pass after pass.
+        if (onglet == "DIRECT") item { CarteOptionsSstv() }
         if (onglet == "AUTO") item { LienActivites(vm) }
         if (onglet == "AUTO") item { CarteSstvIss(ui, vm) }
 
@@ -599,6 +602,8 @@ private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Un
                     Image(bmp.asImageBitmap(), null, contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
                 }
+                // Its QSL, the ARISS award pack, « à garder ».
+                OutilsQslSstv(file, shot) { f, type -> partage(f, type) }
                 Spacer(Modifier.height(8.dp))
                 if (son.isFile) {
                     // Just this picture's sound: hear it, decode it again, share it, or as a video.

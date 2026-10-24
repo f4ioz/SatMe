@@ -50,7 +50,9 @@ class ActivitesWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
     override suspend fun doWork(): Result {
         val ctx = applicationContext
         val s = SettingsStore(ctx)
-        if (!s.activitesOn) { WorkManager.getInstance(ctx).cancelAllWorkByTag(TAG_PASSAGE); return Result.success() }
+        // The SSTV recordings kept as long as chosen (off by default: nothing deleted).
+        runCatching { fr.f4ioz.satcombo.sstv.OptionsSstvTelephone.appliqueRetention(ctx, "réglage") }
+        if (!s.activitesOn) { WorkManager.getInstance(ctx).cancelAllWorkByTag(TAG_PASSAGE); WorkManager.getInstance(ctx).cancelAllWorkByTag(fr.f4ioz.satcombo.sstv.OptionsSstvTelephone.TAG); return Result.success() }
         val en = ActivitesTelephone.enLigne(ctx)
         val sats = ActivitesTelephone.satellites(ctx)
         runCatching { en.rafraichit(s.reglagesActivites, sats.map { it.name to it.catalogNumber }) }
@@ -98,6 +100,8 @@ class ActivitesWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
             m = m.copy(emises = m.emises + emet.map(ActivitesAVenir::cle))
             ActivitesTelephone.garde(ctx, m)
             planifiePassages(ctx, ActivitesAVenir.alertesPassages(l, utiles, t, s.activitesAvantMin).filter { it.cle !in m.passages }, s.activitesNotifPassage)
+            // « Diapo manquante attendue »: the series' passes sending a slide still wanted.
+            runCatching { fr.f4ioz.satcombo.sstv.OptionsSstvTelephone.planifieAlertes(ctx) }
         }
 
         /** The pass notices laid down again (all cleared first: the list may have moved). */

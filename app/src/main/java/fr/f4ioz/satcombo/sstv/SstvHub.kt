@@ -77,6 +77,14 @@ object SstvHub {
     private val _state = MutableStateFlow(SstvState())
     val state: StateFlow<SstvState> = _state
 
+    /** The live reception quality ([QualiteSstv]), twice a second while listening; null when not. */
+    private val _qualite = MutableStateFlow<QualiteSstv.Etat?>(null)
+    val qualite: StateFlow<QualiteSstv.Etat?> = _qualite
+    @Volatile private var liveQualite: QualiteSstv? = null
+    private var qualiteVueMs = 0L
+    /** The pass recording feeding the decoder (its file name), written in each picture's sidecar. */
+    @Volatile private var liveEnregistrement: String = ""
+
     /**
      * Station locator, kept up to date by the ViewModel. The hub lives in a
      * service with no GPS access; without this an archived image would not
@@ -209,6 +217,7 @@ object SstvHub {
             _state.value = _state.value.copy(erreur = it.javaClass.simpleName)
             return false
         }
+        runCatching { liveQualite?.debut(m) }
         _state.value = _state.value.copy(modeName = m.name, progress = 0f, decoding = true)
         return true
     }
@@ -239,14 +248,16 @@ object SstvHub {
 
     /** Hook the engine to a capture running at [sampleRate]. */
     @Synchronized
-    fun startLive(ctx: Context, sampleRate: Int, satName: String, cible: CibleAfc? = null) {
+    fun startLive(ctx: Context, sampleRate: Int, satName: String, cible: CibleAfc? = null, enregistrement: String = "") {
         synchronized(verrouAfc) { lacheAfc(); liveCible = cible; liveRate = sampleRate }
         liveCtx = ctx.applicationContext
         liveSat = satName
         lastPreviewMs = 0L
         pannes = 0
         if (forced == null) loadForced(ctx)
-        live = SstvDecoder(sampleRate, liveListener).also { it.forcedMode = forced; it.continuous = continu }
+        val q = QualiteSstv(sampleRate).also { liveQualite = it }
+        liveEnregistrement = enregistrement
+        live = SstvDecoder(sampleRate, liveListener).also { it.forcedMode = forced; it.continuous = continu; it.mesureLigne = { _, l, t, n, b -> q.ligne(l, t, n, b) } }
         liveSon = SstvSon.Memoire(sampleRate)
         _state.value = _state.value.copy(
             listening = true, modeName = null, progress = 0f,
@@ -263,6 +274,7 @@ object SstvHub {
         val d = live ?: return
         // Kept before decoding: a picture ending in this buffer takes it all.
         runCatching { liveSon?.ajoute(pcm, count) }
+        runCatching { liveQualite?.let { q -> q.son(pcm, count); publieQualite(q) } }
         runCatching {
             if (afc) synchronized(verrouAfc) {
                 val a = liveAfc ?: SstvAfc(liveRate).also { liveAfc = it }
@@ -285,6 +297,13 @@ object SstvHub {
         _state.value = _state.value.copy(afcMesureHz = e.mesureHz, afcTotalHz = e.totalHz, afcApplique = e.applique, afcSens = e.sens)
     }
 
+    private fun publieQualite(q: QualiteSstv) {
+        val now = System.currentTimeMillis()
+        if (now - qualiteVueMs < 500L) return
+        qualiteVueMs = now
+        _qualite.value = q.etat
+    }
+
     /** Decoder failures since listening started. */
     @Volatile private var pannes = 0
 
@@ -297,12 +316,14 @@ object SstvHub {
         synchronized(verrouAfc) { lacheAfc(); liveCible = null }
         live = null
         liveSon = null
+        liveQualite = null; liveEnregistrement = ""; _qualite.value = null
         _state.value = _state.value.copy(
             listening = false, modeName = null, progress = 0f, decoding = false)
     }
 
     private val liveListener = object : SstvDecoder.Listener {
         override fun onVis(mode: SstvMode) {
+            runCatching { liveQualite?.debut(mode) }
             _state.value = _state.value.copy(
                 modeName = mode.name, progress = 0f, decoding = true)
         }
@@ -324,12 +345,13 @@ object SstvHub {
         ) {
             // A picture cut short by the end of the pass is still worth keeping;
             // a couple of lines of noise is not.
+            runCatching { liveQualite?.let { it.fin(); _qualite.value = it.etat } }
             val bmp = toBitmap(mode, finale(mode, pixels, linesDone))
             val ctx = liveCtx
             var saved: String? = _state.value.lastSaved
             var count = _state.value.savedCount
             if (ctx != null && linesDone >= mode.height / 8) {
-                saved = save(ctx, bmp, mode, liveSat, complete, "live", son = sonDe(live, liveSon))
+                saved = save(ctx, bmp, mode, liveSat, complete, "live", recording = liveEnregistrement, son = sonDe(live, liveSon))
                 count++
             }
             _state.value = _state.value.copy(
