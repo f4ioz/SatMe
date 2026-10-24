@@ -188,6 +188,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 - **Carnet** : le satellite noté d'après le poste ; satellite, date et heure modifiables ; indicatifs composés (EA3/M5JFS) et drapeaux.
 - **QO-100** : le calage sur la balise suit un LNB qui dérive ; FT8 tolère la dérive.
 - **SatMe-PC** : nombreuses nouveautés (Montage, IC-9700 par le réseau, télémesure…), voir plus haut.
+- **SSTV** : le décodeur en direct ne se piège plus sur une durée de ligne fausse après un passage bruité ou un saut du son, et chaque image est **re-décodée à la fin** depuis son propre son, en arrière-plan (Options SSTV, cochée d'origine), sa version corrigée gardée si elle est mieux notée — sur 42 images ISS, note moyenne 82,8 → 90,2.
 
 ### Et dans la 20.82
 

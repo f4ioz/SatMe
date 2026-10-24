@@ -188,6 +188,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 - **Log**: the satellite taken from the rig; satellite, date and time editable; compound calls (EA3/M5JFS) and flags.
 - **QO-100**: the beacon calibration follows a drifting LNB; FT8 tolerates drift.
 - **SatMe-PC**: many new features (station layout, IC-9700 over the LAN, telemetry…), see above.
+- **SSTV**: the live decoder no longer gets trapped on a wrong line length after a noisy stretch or a jump in the sound, and each picture is **decoded again at its end** from its own sound, in the background (SSTV options, on by default), its corrected version kept when it marks better — over 42 ISS pictures, mean mark 82.8 → 90.2.
 
 ### And in 20.82
 
