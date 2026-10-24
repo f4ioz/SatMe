@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * received stays as it is.
  *
  * On the owner's 42 ISS pictures of 23–24/10/2026 the best version kept goes
- * from a mean mark of 84.4 (the live decoder alone) to 89.4.
+ * from a mean mark of 84.4 (the live decoder alone) to 90.2.
  *
  * [actif]: the option on (and, on the phone, the battery saver off), asked
  * when a picture is handed over and again when its turn comes. [lance] runs a
