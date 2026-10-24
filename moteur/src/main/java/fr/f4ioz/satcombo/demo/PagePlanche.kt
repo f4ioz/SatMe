@@ -44,7 +44,10 @@ object PagePlanche {
         "relancer", "relancer_aide", "relancer_oublie", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
         "note", "origine_lu", "origine_main", "origine_estime", "rapport", "rapport_titre", "rapport_aide", "rapport_chaine",
         "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees", "marque_traitees",
-        "rapport_format", "rapport_web", "rapport_pdf")
+        "rapport_format", "rapport_web", "rapport_pdf", "version_titre", "version_auto", "version_recue", "version_corrigee",
+        "version_fusion", "version_creer_fusion", "version_fusion_en_cours", "version_fusion_echec", "version_repli", "version_auto_aide",
+        "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
+        "gardes", "version_indic")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -163,6 +166,20 @@ object PagePlanche {
   #depot { position:fixed; inset:12px; border:3px dashed var(--cyan); border-radius:16px; background:rgba(11,16,22,.82);
            display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--cyan);
            pointer-events:none; z-index:30; }
+  /* A box's version: the slide's versions side by side, the one shown framed. */
+  .versions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-top:6px; }
+  .version { position:relative; border:2px solid var(--bord); border-radius:8px; cursor:pointer; background:#0E1720; overflow:hidden; font-size:11px; }
+  .version.choisie { border-color:var(--cyan); background:rgba(63,224,200,.10); }
+  .version img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; pointer-events:none; }
+  .version .lib { padding:2px 5px 0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .version .n { color:#FFD54F; padding:0 5px 3px; }
+  .version .vide { aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; color:var(--gris); font-size:18px; }
+  .copiesCase { display:flex; gap:6px; overflow-x:auto; margin-top:6px; }
+  .copiesCase .version { flex:0 0 74px; }
+  /* In the editor only (never on the sheet): a box whose version was chosen by hand. */
+  .zone .vers { position:absolute; right:2px; bottom:2px; font-size:10px; font-weight:700; padding:0 4px; border-radius:4px;
+                background:rgba(0,0,0,.6); color:var(--cyan); pointer-events:none; }
+  .zone .vers.repli { color:var(--ambre); }
   .cache { display:none !important; }
 </style>
 <body>
@@ -261,7 +278,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {} };
+  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {} };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -279,6 +296,7 @@ function litModele(txt) {
     else if (k === 'diapo') { const j = v.indexOf(';'); if (j > 0) m.diapos[v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'corrigees') m.corrigees = v === '1';
     else if (k === 'marquetraitees') m.marqueTraitees = v === '1';
+    else if (k === 'versioncase') { const p = v.split(';'); if (['auto', 'recue', 'corrigee', 'fusion'].includes(p[1])) m.versions[+p[0]] = { v: p[1], main: p[2] === '1' }; }
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
   });
@@ -297,6 +315,7 @@ function ecrit(m) {
   Object.keys(m.diapos).forEach(f => { if (Object.values(m.images).includes(f)) s += 'diapo=' + f + ';' + m.diapos[f] + '\n'; });
   if (m.corrigees) s += 'corrigees=1\n';
   if (m.marqueTraitees) s += 'marquetraitees=1\n';
+  Object.keys(m.versions).forEach(i => { const c = m.versions[i]; if (c && (c.v !== 'auto' || c.main) && +i < m.cases.length) s += 'versioncase=' + i + ';' + c.v + ';' + (c.main ? 1 : 0) + '\n'; });
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -342,6 +361,7 @@ async function sauve() {
   try {
     const j = await lire('/modele', { id: id });
     defauts.locator = j.locator; defauts.dates = j.dates; defauts.titre = j.titre;
+    const rp = j.replis || []; if (rp.join() !== REPLIS.join()) { REPLIS = rp; dessineCalque(); }
     if (onglet === 'textes' && !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) panneau();
   } catch (e) {}
 }
@@ -361,7 +381,15 @@ function dessineCalque() {
   if (!M) return;
   const n = M.cases.length;
   // The box's number: the slide its picture went in for (« Fill by slide »), else its place.
-  M.cases.forEach((z, i) => c.appendChild(zoneEl(z, 'c', i, (M.images[i] !== undefined && M.diapos[M.images[i]]) || ((i + 1) + '/' + n))));
+  M.cases.forEach((z, i) => {
+    const d = zoneEl(z, 'c', i, (M.images[i] !== undefined && M.diapos[M.images[i]]) || ((i + 1) + '/' + n));
+    // The version chosen by hand, small, in the editor only (« ⚠ » when it is gone: Auto shown).
+    const v = M.versions[i];
+    if (REPLIS.includes(i)) d.appendChild(el('span', { class: 'vers repli', text: '⚠ ' + T.version_auto, title: T.version_repli }));
+    else if (v && v.v !== 'auto') d.appendChild(el('span', { class: 'vers', text: T['version_' + v.v], title: T.version_indic }));
+    else if (v && v.main) d.appendChild(el('span', { class: 'vers', text: '✋', title: T.version_main }));
+    c.appendChild(d);
+  });
   M.textes.forEach((z, i) => c.appendChild(zoneEl(z, 't', i, T['champ_' + z.champ.toLowerCase()] || z.champ)));
   // The patches over all the rest, as on the sheet.
   M.ecussons.forEach((z, i) => c.appendChild(zoneEl(z, 'e', i, T.ecusson + ' ' + (i + 1))));
@@ -389,7 +417,10 @@ function place(d, z) { d.style.left = (z.x * 100) + '%'; d.style.top = (z.y * 10
 let geste = null;
 function debutGeste(ev, k, i, agrandit) {
   ev.preventDefault(); ev.stopPropagation();
-  choix = { k: k, i: i }; if (k === 'e') onglet = 'decor'; dessineCalque(); panneau();
+  choix = { k: k, i: i }; if (k === 'e') onglet = 'decor';
+  // A box: its panel (the picture, its version) — unless its layout is being worked on.
+  if (k === 'c' && onglet !== 'dispo') onglet = 'images';
+  dessineCalque(); panneau();
   const z = zoneDe(choix), r = g('scene').getBoundingClientRect();
   geste = { x0: ev.clientX, y0: ev.clientY, z0: Object.assign({}, z), r: r, agrandit: agrandit, bouge: false };
 }
@@ -417,6 +448,8 @@ function metImage(i, f) {
   if (!f || !M) return;
   for (const k in M.images) if (M.images[k] === f) delete M.images[k];
   M.images[i] = f;
+  // A copy put in by hand: « Fill by slide » keeps it while it is of that box's slide.
+  M.versions[i] = Object.assign({ v: 'auto' }, M.versions[i], { main: true });
   choix = { k: 'c', i: Math.min(i + 1, M.cases.length - 1) };
   change();
 }
@@ -467,15 +500,19 @@ function panneauImages() {
   p.appendChild(el('div', { class: 'rangee' }, [sel,
     el('button', { class: 'discret', text: T.remplir, onclick: async () => { await sauveMaintenant(); await lire('/remplit', Object.assign({ id: id }, filtreParams())); await charge(id); } })]));
   // « Fill by slide »: slide n in box n, the best copy of each; a missing slide's box left empty.
+  // What was chosen by hand (a version, a copy) kept, unless « Tout réinitialiser » is ticked.
+  const reinit = el('input', { type: 'checkbox' });
   p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
     el('button', { class: 'primaire', text: T.remplir_diapos, onclick: async () => {
       await sauveMaintenant();
-      const j = await lire('/remplit-diapos', { id: id, tous: filtre === '@ev' ? 0 : 1 });
+      const j = await lire('/remplit-diapos', { id: id, tous: filtre === '@ev' ? 0 : 1, reinit: reinit.checked ? 1 : 0 });
       await charge(id);
       if (j && j.ok) g('message').textContent = (j.manquantes.length ? tf('rempli_diapos', j.manquantes.join(', ')) : T.rempli_toutes) +
-        (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '');
+        (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '') +
+        (j.gardes ? ' ' + tf('gardes', j.gardes) : '');
     } }),
     el('span', { class: 'aide', text: T.garder_vides })]));
+  p.appendChild(el('label', { class: 'rangee', title: T.tout_reinitialiser_aide }, [reinit, el('span', { class: 'aide', text: T.tout_reinitialiser })]));
   // How many pictures: the template's boxes, or the sheet fitted to fewer.
   const max = M.origine.length || M.cases.length, n = M.origine.length ? M.cases.length : 0;
   const rn = el('div', { class: 'rangee', style: 'margin-top:6px' }, [el('span', { class: 'aide', text: T.nb_images })]);
@@ -484,15 +521,22 @@ function panneauImages() {
       await sauveMaintenant(); await lire('/nombre', Object.assign({ id: id, n: k }, filtreParams())); await charge(id); } }));
   });
   p.appendChild(rn);
+  // The box chosen: which version of its slide it shows, which copy.
+  if (choix && choix.k === 'c') panneauCase(p);
   const r2 = el('div', { class: 'rangee', style: 'margin-top:6px' });
   if (choix && choix.k === 'c' && M.images[choix.i] !== undefined) {
     const i = choix.i, va = j => { const a = M.images[i], b = M.images[j]; delete M.images[i]; delete M.images[j];
-      if (a !== undefined) M.images[j] = a; if (b !== undefined) M.images[i] = b; choix = { k: 'c', i: j }; change(); };
+      if (a !== undefined) M.images[j] = a; if (b !== undefined) M.images[i] = b;
+      // The choices made on them go with them.
+      const va_ = M.versions[i], vb = M.versions[j]; delete M.versions[i]; delete M.versions[j];
+      if (va_) M.versions[j] = va_; if (vb) M.versions[i] = vb;
+      choix = { k: 'c', i: j }; change(); };
     if (i > 0) r2.appendChild(el('button', { class: 'discret', text: T.avant, onclick: () => va(i - 1) }));
     if (i < M.cases.length - 1) r2.appendChild(el('button', { class: 'discret', text: T.apres, onclick: () => va(i + 1) }));
   }
-  if (choix && choix.k === 'c' && !M.origine.length) r2.appendChild(el('button', { class: 'discret', text: T.vider_case, onclick: () => { delete M.images[choix.i]; change(); } }));
-  r2.appendChild(el('button', { class: 'rouge', text: T.tout_vider, onclick: () => { M.images = {}; change(); } }));
+  if (choix && choix.k === 'c' && !M.origine.length) r2.appendChild(el('button', { class: 'discret', text: T.vider_case, onclick: () => {
+    delete M.images[choix.i]; if (M.versions[choix.i]) M.versions[choix.i].main = false; change(); } }));
+  r2.appendChild(el('button', { class: 'rouge', text: T.tout_vider, onclick: () => { M.images = {}; for (const k in M.versions) M.versions[k].main = false; change(); } }));
   p.appendChild(r2);
   // The pictures measured again, their numbers read again (what the hand set kept unless asked).
   const oublie = el('input', { type: 'checkbox' });
@@ -549,6 +593,87 @@ function panneauImages() {
     grille.appendChild(d);
   });
   p.appendChild(grille);
+}
+// ------------------------------------------------------- a box's version
+// What the station knows of the box chosen (its slide's versions, its copies), asked once the sheet is saved.
+let CASE = null, caseCle = '', caseSuit = null, caseV = 0, REPLIS = [];
+function cleCase() { return choix && choix.k === 'c' ? [id, choix.i, M.images[choix.i] || '', (M.versions[choix.i] || {}).v || 'auto', M.corrigees ? 1 : 0].join('|') : ''; }
+async function chargeCase() {
+  const k = cleCase(); if (!k || caseCle === 'attente:' + k) return;
+  caseCle = 'attente:' + k;
+  try {
+    await sauveMaintenant();
+    const j = await lire('/case', { id: id, i: choix.i });
+    if (cleCase() !== k) return;
+    CASE = j; caseCle = k; caseV = Date.now(); if (onglet === 'images') panneau();
+  } catch (e) { caseCle = ''; }
+}
+function choisitVersion(i, v) {
+  const c = Object.assign({ v: 'auto', main: false }, M.versions[i], { v: v });
+  if (c.v === 'auto' && !c.main) delete M.versions[i]; else M.versions[i] = c;
+  REPLIS = REPLIS.filter(x => x !== i); change();
+}
+function carteVersion(lib, note, src, choisie, sur, titre) {
+  const d = el('div', { class: 'version' + (choisie ? ' choisie' : ''), title: titre || lib, onclick: sur },
+    [src ? el('img', { src: src, loading: 'lazy' }) : el('div', { class: 'vide', text: '＋' }), el('div', { class: 'lib', text: lib })]);
+  if (note != null && note >= 0) d.appendChild(el('div', { class: 'n', text: tf('version_note', note) }));
+  return d;
+}
+function vignetteVersion(fichier, f) { return fichier && fichier !== f ? url('/version-vignette', { f: fichier, v: caseV }) : url('/vignette', { f: f, w: 240 }); }
+function panneauCase(p) {
+  const i = choix.i, box = el('div', { class: 'ev' });
+  box.appendChild(el('div', { style: 'font-weight:700', text: tf('version_titre', i + 1) }));
+  p.appendChild(box);
+  if (M.images[i] === undefined) { box.appendChild(el('p', { class: 'aide', text: T.version_vide })); return; }
+  // Asked again when the box, its picture or its version changed; what was known shown meanwhile (same box, same picture).
+  if (caseCle !== cleCase()) chargeCase();
+  if (!CASE || CASE.i !== i || CASE.f !== M.images[i]) { box.appendChild(el('p', { class: 'aide', text: '…' })); return; }
+  const c = CASE, f = c.f, choisie = (M.versions[i] || {}).v || 'auto';
+  if (c.sans) { box.appendChild(el('p', { class: 'aide', text: T.version_sans })); return; }
+  const par = {}; (c.versions || []).forEach(x => par[x.v] = x);
+  const l = el('div', { class: 'versions' });
+  // Auto: the best marked (what it shows now said under it).
+  l.appendChild(carteVersion(T.version_auto, c.autoNote, vignetteVersion(c.autoFichier, f), choisie === 'auto', () => choisitVersion(i, 'auto'),
+    T.version_auto + ' → ' + T['version_' + c.autoMontre] + (c.auto ? '' : ' · ' + T.version_auto_aide)));
+  ['recue', 'corrigee', 'fusion'].forEach(v => {
+    const x = par[v];
+    if (x) l.appendChild(carteVersion(T['version_' + v] + (v === 'fusion' && x.copies ? ' ×' + x.copies : ''), x.note, vignetteVersion(x.fichier, f), choisie === v, () => choisitVersion(i, v)));
+    // No fusion yet: made here, then shown.
+    else if (v === 'fusion' && c.fusionPossible) {
+      const enCours = c.enCours && c.enCours === c.groupe;
+      l.appendChild(carteVersion(enCours ? T.version_fusion_en_cours : T.version_creer_fusion, null, null, false, () => { if (!enCours) creeFusion(i); }));
+    }
+  });
+  box.appendChild(l);
+  if (c.repli && choisie === c.choix) box.appendChild(el('p', { class: 'aide', style: 'color:var(--ambre)', text: T.version_repli }));
+  if (!c.auto && choisie === 'auto') box.appendChild(el('p', { class: 'aide', text: T.version_auto_aide }));
+  if (c.erreur && c.erreurSur === c.groupe) box.appendChild(el('p', { class: 'aide', style: 'color:var(--rose)', text: tf('version_fusion_echec', c.erreur) }));
+  // Which copy received is the box's picture (as dragging one in does).
+  if ((c.copies || []).length > 1) {
+    box.appendChild(el('div', { class: 'aide', style: 'margin-top:8px', text: T.version_copies + ((M.versions[i] || {}).main ? ' · ' + T.version_main : '') }));
+    const cs = el('div', { class: 'copiesCase' });
+    c.copies.forEach(x => cs.appendChild(carteVersion(heure(x.t) + (x.corrigee ? ' ✨' : ''), x.note, url('/vignette', { f: x.f, w: 160 }), x.f === f,
+      () => { if (x.f === f) return; if (M.diapos[f]) M.diapos[x.f] = M.diapos[f]; metImage(i, x.f); choix = { k: 'c', i: i }; change(); })));
+    box.appendChild(cs);
+  }
+}
+// « Créer la fusion »: the gallery's own fusion of the slide's copies, followed until it is made, then chosen.
+async function creeFusion(i) {
+  await sauveMaintenant();
+  let j = null;
+  try { const r = await fetch(url('/fusionner', { id: id, i: i }), { method: 'POST' }); if (r.status === 403) { porte(); return; } j = await r.json(); } catch (e) { g('message').textContent = T.hors_ligne; return; }
+  if (!j || !j.ok) { g('message').textContent = tf('version_fusion_echec', (j && j.erreur) || '?'); return; }
+  if (CASE) CASE.enCours = j.groupe;
+  panneau();
+  clearTimeout(caseSuit);
+  const suit = async () => {
+    let c = null; try { c = await lire('/case', { id: id, i: i }); } catch (e) { return; }
+    if (c.enCours) { caseSuit = setTimeout(suit, 1500); return; }
+    CASE = c; caseCle = cleCase(); caseV = Date.now();
+    if ((c.versions || []).some(x => x.v === 'fusion') && choix && choix.k === 'c' && choix.i === i) choisitVersion(i, 'fusion');
+    else panneau();
+  };
+  caseSuit = setTimeout(suit, 1500);
 }
 // « Relancer l'analyse »: how far it is, every second and a half, then the pictures read again.
 let suivi2 = null;
@@ -609,7 +734,8 @@ function panneauDispo() {
   if (choix && choix.k === 'c') r.appendChild(el('button', { class: 'rouge', text: T.retirer_case, onclick: () => {
     const i = choix.i; M.cases.splice(i, 1);
     const im = {}; for (const k in M.images) { const n = +k; if (n < i) im[n] = M.images[k]; else if (n > i) im[n - 1] = M.images[k]; }
-    M.images = im; choix = null; change(); } }));
+    const vs = {}; for (const k in M.versions) { const n = +k; if (n < i) vs[n] = M.versions[k]; else if (n > i) vs[n - 1] = M.versions[k]; }
+    M.images = im; M.versions = vs; choix = null; change(); } }));
   p.appendChild(r);
   p.appendChild(el('p', { class: 'aide', text: T.aide_dispo }));
   if (choix) positionChoisie(p);
@@ -708,7 +834,7 @@ async function listeModeles() {
 async function charge(i) {
   id = i; g('modeles').value = i;
   const j = await lire('/modele', { id: i });
-  M = litModele(j.texte); ratio = j.ratio || M.ratio; aFond = !!j.fond;
+  M = litModele(j.texte); ratio = j.ratio || M.ratio; aFond = !!j.fond; REPLIS = j.replis || []; caseCle = ''; CASE = null;
   await chargeEvenement(); await chargeGalerie();
   defauts.locator = j.locator; defauts.dates = j.dates; defauts.titre = j.titre;
   g('scene').style.aspectRatio = String(ratio);

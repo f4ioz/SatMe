@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.demo.PagePc
 
 import fr.f4ioz.satcombo.data.SatPass
+import fr.f4ioz.satcombo.demo.ApiCorrectionSstv
 import fr.f4ioz.satcombo.demo.ApiPlancheEvenement
 import fr.f4ioz.satcombo.demo.PagePlanche
 import fr.f4ioz.satcombo.domain.CampagneSstv
@@ -66,6 +67,8 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         override fun vignette(nom: String): ByteArray? =
             galerie().firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(rgb(it), 0.84f) }
         override fun pdf(r: RapportEvenement.Rapport): ByteArray = RapportPdfPc.pdf(r)
+        override fun corrections(): ApiCorrectionSstv? = this@PlancheWebPc.classement?.corrections?.api
+        override fun vignetteFichier(f: File): ByteArray? = PlancheRenduPc.charge(f, 240)?.let { jpeg(rgb(it), 0.84f) }
     }
 
     /** The page, under the PC's header, as the journal's. */
@@ -117,12 +120,11 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
             titre = m.titre.ifBlank { places.values.firstOrNull()?.second?.satName?.let { "$it · SSTV" } ?: "SSTV" })
     }
 
-    private fun places(m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> {
-        val parNom = galerie().associateBy { it.first.name }
-        // The processed versions, when the sheet takes them: marked so.
-        val corr = if (m.corrigees) classement?.corrections?.api else null
-        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to (corr?.pourPlanche(it) ?: it) } }.toMap()
-    }
+    /** Each box's picture as drawn: the version chosen for it, Auto the best marked when the sheet takes them (marked so). */
+    private fun cases(m: Planche.Modele): ApiCorrectionSstv.Cases =
+        ApiPlancheEvenement.cases(m, galerie().associateBy { it.first.name }, classement?.corrections?.api)
+
+    private fun places(m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> = cases(m).places
 
     private fun modele(id: String): Planche.Modele? =
         id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }?.let { i -> rangement.modeles().firstOrNull { it.id == i } }
@@ -159,9 +161,11 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     val ratio = fond?.let { f -> runCatching { ImageIO.read(f) }.getOrNull()?.let { it.width.toFloat() / it.height } } ?: m.ratio
                     val parNom = galerie().map { it.first.name }.toSet()
                     val (recues, manquent) = Planche.suivi(m) { it in parNom }
-                    val v = valeurs(m, places(m)) { "" }
+                    val c = cases(m)
+                    val v = valeurs(m, c.places) { "" }
                     json("{\"texte\":\"${js(Planche.ecrit(m))}\",\"ratio\":$ratio,\"fond\":${fond != null},\"recues\":$recues," +
-                        "\"manquent\":${manquent.joinToString(",", "[", "]")},\"locator\":\"${js(v.locator)}\",\"dates\":\"${js(v.dates)}\",\"titre\":\"${js(v.titre)}\"}")
+                        "\"manquent\":${manquent.joinToString(",", "[", "]")},\"locator\":\"${js(v.locator)}\",\"dates\":\"${js(v.dates)}\",\"titre\":\"${js(v.titre)}\"," +
+                        "\"replis\":${c.replis.joinToString(",", "[", "]")}}")
                 }
 
                 // The template changed on the page, saved as is (its background stays the one it has).

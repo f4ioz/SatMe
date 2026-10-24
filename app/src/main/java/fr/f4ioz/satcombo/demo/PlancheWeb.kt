@@ -104,12 +104,11 @@ object PlancheWeb {
             titre = m.titre.ifBlank { places.values.firstOrNull()?.second?.satName?.let { "$it · SSTV" } ?: "SSTV" })
     }
 
-    private fun places(ctx: Context, m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> {
-        val parNom = galerie(ctx).associateBy { it.first.name }
-        // The processed versions, when the sheet takes them: marked so.
-        val corr = if (m.corrigees) fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx) else null
-        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to (corr?.pourPlanche(it) ?: it) } }.toMap()
-    }
+    /** Each box's picture as drawn: the version chosen for it, Auto the best marked when the sheet takes them (marked so). */
+    private fun cases(ctx: Context, m: Planche.Modele): ApiCorrectionSstv.Cases =
+        ApiPlancheEvenement.cases(m, galerie(ctx).associateBy { it.first.name }, fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx))
+
+    private fun places(ctx: Context, m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> = cases(ctx, m).places
 
     @Volatile private var observateur: Pair<Long, fr.f4ioz.satcombo.data.Observer>? = null
     private fun observateur(ctx: Context): fr.f4ioz.satcombo.data.Observer {
@@ -174,6 +173,8 @@ object PlancheWeb {
         override fun vignette(nom: String): ByteArray? =
             galerie(ctx).firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(it, 84) }
         override fun pdf(r: RapportEvenement.Rapport): ByteArray = fr.f4ioz.satcombo.sstv.RapportPdfTelephone.pdf(r)
+        override fun corrections(): ApiCorrectionSstv = fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx)
+        override fun vignetteFichier(f: File): ByteArray? = PlancheRendu.charge(f, 240)?.let { jpeg(it, 84) }
     }
 
     private fun modele(r: Planche.Rangement, id: String): Planche.Modele? =
@@ -209,10 +210,12 @@ object PlancheWeb {
                     } ?: m.ratio
                     val parNom = galerie(ctx).map { it.first.name }.toSet()
                     val (recues, manquent) = Planche.suivi(m) { it in parNom }
-                    val v = valeurs(ctx, m, places(ctx, m)) { "" }
+                    val c = cases(ctx, m)
+                    val v = valeurs(ctx, m, c.places) { "" }
                     json("{\"texte\":\"${js(Planche.ecrit(m))}\",\"ratio\":$ratio," +
                         "\"fond\":${fond != null},\"recues\":$recues,\"manquent\":${manquent.joinToString(",", "[", "]")}," +
-                        "\"locator\":\"${js(v.locator)}\",\"dates\":\"${js(v.dates)}\",\"titre\":\"${js(v.titre)}\"}")
+                        "\"locator\":\"${js(v.locator)}\",\"dates\":\"${js(v.dates)}\",\"titre\":\"${js(v.titre)}\"," +
+                        "\"replis\":${c.replis.joinToString(",", "[", "]")}}")
                 }
 
                 // The template changed on the PC, saved as is (its background stays the one it has).
