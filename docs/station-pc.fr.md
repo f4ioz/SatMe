@@ -473,7 +473,7 @@ L'onglet **SSTV**, comme sur le téléphone : l'**image en direct** (dessinée �
 - **Mode** : *Auto (VIS)* ou imposé ; le **décodage continu** démarre une image sur ses tops de synchro même sans en-tête (mode reconnu à la durée des lignes) ; **Caler maintenant** accroche l'image sur la prochaine impulsion de synchro.
 - **Calage automatique** (coupé d'origine) : l'écart des tons mesuré sur l'en-tête (lu sur ±1 kHz) et les tops de synchro, et la réception recalée — la clé SDR, ou le poste quand la boucle CAT le pilote — de 20 Hz par seconde au plus, jusqu'à ±2 kHz.
 - Un spectre avec les tons marqués (1200 synchro, 1500 noir, 1900 VIS, 2300 blanc), le niveau, un conseil quand la source se tait.
-- **Images** : chaque image gardée dès un huitième de ses lignes, avec son propre son ; filtrées par satellite, ouvertes dans une visionneuse, redécodées, faites en GIF, supprimées.
+- **Images** : chaque image gardée dès un huitième de ses lignes, avec son propre son ; filtrées par satellite, ouvertes dans une visionneuse, redécodées, faites en GIF, supprimées. Rangées **par diapo** (ou par réception) — voir [Images par diapo, note et horaire de la série](#images-par-diapo-note-et-horaire-de-la-série).
 - **Mire** : la mire SSTV (comme sur le téléphone), jouée sur une sortie au choix ou écrite en WAV.
 - **Campagnes** : une série ARISS, ou un satellite qui envoie des images quelques jours, reçue toute seule passage après passage — voir [Campagnes SSTV : l'auto-pilote](#campagnes-sstv--lauto-pilote) ; les séries annoncées en ligne arrivent dans [Activités à venir](#activités-à-venir--les-sources-en-ligne). La SSTV de l'ISS est sur **437,550 MHz FM en Robot 36** depuis les séries de 2026.
 
@@ -483,6 +483,28 @@ L'onglet **SSTV**, comme sur le téléphone : l'**image en direct** (dessinée �
 - **Modulation** : FM étroite (±2,5 ou ±5 kHz, préaccentuation en option), BLU haute ou basse.
 - **Les règles, dans le code** : **ÉMETTRE** puis une confirmation ; un indicatif ; toute la bande occupée dans une bande amateur (144–146, 430–440, 1240–1300, 2300–2450 MHz) ; les sous-bandes satellites (145,8–146, 435–438, 1260–1270 MHz) seulement en cochant *Vers un satellite* ; **jamais 145,800 MHz** (ISS) ; la bande étroite de QO-100 en BLU haute seulement, dans son segment numérique (2,7 kHz) ou mixte — jamais l'urgence ni les balises, et jamais plus fort que la balise (une boucle fermée sur la balise quand SatMe entend sa propre descente). 15 min au plus ; arrêt tout seul une fois l'image partie, ou quand la page se tait. *Test sur charge* et *Essai en intérieur* comme pour la DATV (−40 dB, 5 min en intérieur).
 - **Régler la réception** met le récepteur de l'onglet SDR sur notre propre émission (fréquence, NFM ou BLU) pour la voir revenir.
+
+### Images par diapo, note et horaire de la série
+
+Une série ARISS envoie ses 12 diapos en boucle pendant des jours : une semaine de passages donne des dizaines de copies de chacune. Le sous-onglet **Images** les range (**par diapo**, ou **par réception** comme avant ; aussi sur le téléphone et sur la page qu'il sert) :
+
+- **Les copies d'une même diapo ensemble** : « Diapo 7/12 · 5 réceptions », la meilleure en tête, un clic déplie le groupe. Les images sont comparées en petit (32×48 cases de luminosité et de couleur), sur les lignes saines des deux, le ciel sombre commun à toutes les diapos d'une série laissé de côté, avec un léger décalage sur le côté et n'importe quel décalage vertical (une image commencée en retard, sans son en-tête, est le bas de la diapo en haut) ; une image coupée tôt est comparée sur ce qu'elle a. Sur les 43 images de la série 34 (23–24 octobre 2026) : aucune diapo mêlée à une autre ; seules quatre images presque entièrement détruites restent seules.
+- **Une note de 0 à 100** sur chaque image (pastille, étoiles dans l'en-tête) : 100, moins la part de lignes manquantes (image arrêtée tôt), moins 1,1 × la part de lignes abîmées (points qui ne ressemblent pas à leurs voisins — le moucheté vert d'un signal FM faible en Robot 36 —, bandes vertes, lignes sans rapport avec leurs voisines, traînées horizontales), moins 4 par glissement de synchro (20 au plus) ; dans un groupe, une image commencée en retard perd en plus la part du haut qui lui manque. Un fond étoilé (points d'un pixel) coûte quelques points à une image propre.
+- **Le numéro de la diapo** : lu au bas des diapos ARISS (« SLIDE n/12 » de la série 34, par comparaison avec les chiffres vus sur ses vraies images — pas d'OCR, les lettres font 9 pixels de haut) ; 34 images lues justes sur 43, aucune fausse, les plus abîmées non lues ; les numéros 5 et 6 n'ont pas encore de modèle (pas reçus) et ne sont jamais lus, comme un numéro qui ne ressemble clairement à aucun : la main ou l'horaire le donnent. Une autre série (autre bas de diapo) : rien n'est lu. Le numéro donné à la main (visionneuse : *Diapo*, ou la carte de la série) vaut pour tout le groupe.
+- **À la main** : la visionneuse range l'image *avec* un autre groupe, *à part*, ou la rend au *tri automatique* ; ce choix et le numéro sont gardés dans le fichier compagnon de l'image (lignes `slide=` et `group=`, que les versions plus anciennes ignorent).
+
+**La carte « Diapos de la série »** (pendant une série annoncée dans [Activités à venir](#activités-à-venir--les-sources-en-ligne), ou une campagne de l'Agenda, et trois jours après) :
+
+- les diapos reçues (vert, ≈ quand le numéro est estimé) et celles qui manquent (rouge) ;
+- **l'horaire** : les diapos passent dans l'ordre, une toutes les 36 s + 2 min (156 s annoncées) ; chaque image numérotée est un repère (son heure de réception moins la durée de l'image), la période ajustée par moindres carrés, l'écart moyen affiché. Un repère loin de la droite (plus de 40 s) est une relance de la boucle à bord : l'horaire repart de là (la période reste ajustée sur tout), un repère isolé faux est écarté. Série 34 : **158,97 s ± 0,03**, 35 repères, écart moyen 7,4 s, deux relances vues (23/10 vers 07:45 UTC et 24/10 vers 00:36 UTC) ;
+- **numéroter une image** choisie dans la liste (heure, passage de l'ISS et sa place dans le passage) : c'est le repère quand rien n'est lu ;
+- **le tableau des passages à venir** jusqu'à la fin de la série : pour chacun, les diapos attendues — en entier quand elles sont envoyées pendant que l'ISS est au-dessus de 5° (ou de l'élévation minimale des réglages, si plus haute), entre parenthèses celles coupées par l'AOS ou le LOS —, celles qui manquent en rouge, et l'incertitude (±), qui grandit avec le temps ; puis, pour chaque diapo manquante, ses prochains bons passages.
+
+C'est **une estimation** : ARISS fait des pauses, relance la boucle ou change l'ordre sans prévenir. Une nouvelle image numérotée (lue ou à la main) remet l'horaire à jour.
+
+**La planche** : *Remplir* et le choix du nombre d'images prennent une image par groupe, la mieux notée.
+
+<p align="center"><img src="images/pc-sstv-diapos.webp" width="100%" alt="SSTV, sous-onglet Images : la carte Diapos de la série (ARISS série 34, diapos reçues, horaire ajusté, passages à venir et diapos attendues) et la galerie rangée par diapo, chaque image notée"></p>
 
 ## FT8 / FT4
 

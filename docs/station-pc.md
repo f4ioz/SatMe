@@ -472,7 +472,7 @@ The **SSTV** tab, as on the phone: the **live picture** (drawn at its true size 
 - **Mode**: *Auto (VIS)* or forced; **continuous decoding** starts a picture on its sync pulses even without a header (mode found from the line length); **Caler maintenant** hooks the picture on the next sync pulse.
 - **Automatic tuning** (off by default): the tones' offset measured on the header (read over ±1 kHz) and the sync pulses, and the receiver nudged — the SDR, or the rig while the CAT loop drives it — by 20 Hz a second at most, up to ±2 kHz.
 - A spectrum with the tones marked (1200 sync, 1500 black, 1900 VIS, 2300 white), the level, a hint when the source is silent.
-- **Images**: every picture kept from an eighth of its lines, with its own sound; filtered by satellite, opened in a viewer, decoded again, made into a GIF, deleted.
+- **Images**: every picture kept from an eighth of its lines, with its own sound; filtered by satellite, opened in a viewer, decoded again, made into a GIF, deleted. Sorted **by slide** (or by reception) — see [Pictures by slide, marks and the series' timetable](#pictures-by-slide-marks-and-the-series-timetable).
 - **Mire**: the SSTV test card (as on the phone), played on a chosen output or written to WAV.
 - **Campaigns**: an ARISS series, or a satellite sending pictures for a few days, received by itself pass after pass — see [SSTV campaigns: the auto-pilot](#sstv-campaigns-the-auto-pilot); the series announced online show up in [Upcoming activities](#upcoming-activities-the-online-sources). ISS SSTV is on **437.550 MHz FM in Robot 36** since the 2026 series.
 
@@ -482,6 +482,28 @@ The **SSTV** tab, as on the phone: the **live picture** (drawn at its true size 
 - **Modulation**: narrow FM (±2.5 or ±5 kHz, pre-emphasis optional), USB or LSB.
 - **Rules, built in**: **ÉMETTRE** then a confirmation; a callsign; the whole occupied band inside an amateur band (144–146, 430–440, 1240–1300, 2300–2450 MHz); the satellite sub-bands (145.8–146, 435–438, 1260–1270 MHz) only with *Vers un satellite* ticked; **never 145.800 MHz** (ISS); QO-100's narrow band in USB only, inside its digital (2.7 kHz) or mixed segment — never the emergency or the beacons, and never louder than the beacon (a closed loop on the beacon when SatMe hears its own downlink). 15 min at most; it stops by itself once the picture is sent, or when the page goes silent. *Test sur charge* and *Essai en intérieur* as for DATV (−40 dB, 5 min indoors).
 - **Régler la réception** sets the SDR tab's receiver on our own transmission (frequency, NFM or USB / LSB) to watch it come back.
+
+### Pictures by slide, marks and the series' timetable
+
+An ARISS series sends its 12 slides round and round for days: a week of passes gives dozens of copies of each. The **Images** sub-tab sorts them (**par diapo**, or **par réception** as before; on the phone and the page it serves too):
+
+- **Copies of one slide together**: « Diapo 7/12 · 5 réceptions », the best first, a click unfolds the group. Pictures are compared small (32×48 cells of brightness and colour), on the rows sound in both, the dark sky every slide of a series shares left aside, with a slight shift sideways and any shift up or down (a picture begun late, without its header, is the lower part of the slide at the top); a picture cut short is compared on what it has. On the 43 pictures of series 34 (23–24 October 2026): no slide mixed with another; only four pictures almost wholly destroyed stay alone.
+- **A mark from 0 to 100** on each picture (badge, stars in the heading): 100, less the share of rows missing (picture stopped early), less 1.1 × the share of rows spoilt (pixels unlike their neighbours — the green speckle of a weak FM signal in Robot 36 —, green bands, rows unrelated to their neighbours, horizontal streaks), less 4 per sync slip (20 at most); in a group, a picture begun late also loses the share of its top it lacks. A starry background (one-pixel dots) costs a clean picture a few points.
+- **The slide's number**: read at the bottom of ARISS slides (« SLIDE n/12 » of series 34, compared with the digits seen on its real pictures — no OCR, the letters are 9 pixels high); 34 pictures read right out of 43, none wrong, the most spoilt not read; numbers 5 and 6 have no pattern yet (not received) and are never read, like a number clearly like none: the hand or the timetable gives it. Another series (another footer): nothing is read. A number set by hand (viewer: *Diapo*, or the series' card) holds for the whole group.
+- **By hand**: the viewer puts the picture *with* another group, *on its own*, or back to the *automatic sorting*; this and the number are kept in the picture's sidecar (`slide=` and `group=` lines, which older versions ignore).
+
+**The « Diapos de la série » card** (during a series announced in [Upcoming activities](#upcoming-activities-the-online-sources), or an Agenda campaign, and three days after):
+
+- the slides received (green, ≈ when the number is estimated) and those missing (red);
+- **the timetable**: the slides go round in order, one every 36 s + 2 min (156 s announced); each numbered picture is an anchor (its reception time less the picture's length), the period fitted by least squares, the mean error shown. An anchor far off the line (over 40 s) is a restart of the loop on board: the timetable starts again from there (the period still fitted on all), a lone wrong anchor is left out. Series 34: **158.97 s ± 0.03**, 35 anchors, mean error 7.4 s, two restarts seen (23/10 about 07:45 UTC and 24/10 about 00:36 UTC);
+- **number a picture** chosen in the list (time, ISS pass and its place in the pass): the anchor when nothing is read;
+- **the table of passes to come** until the series ends: for each, the slides expected — whole when sent while the ISS is above 5° (or the settings' minimum elevation, if higher), in brackets those cut by AOS or LOS —, those missing in red, and the uncertainty (±), which grows with time; then, for each missing slide, its next good passes.
+
+It is **an estimate**: ARISS pauses, restarts the loop or changes the order without notice. A new numbered picture (read or by hand) brings the timetable up to date.
+
+**The sheet**: *Remplir* and the number of pictures take one picture per group, the best marked.
+
+<p align="center"><img src="images/pc-sstv-diapos.webp" width="100%" alt="SSTV, Images sub-tab: the « Diapos de la série » card (ARISS series 34, slides received, fitted timetable, passes to come and slides expected) and the gallery sorted by slide, each picture marked"></p>
 
 ## FT8 / FT4
 

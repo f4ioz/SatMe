@@ -274,6 +274,13 @@ object PagesPcTelephone {
                 }))
                 "/api/son" -> json(son(vm))
                 "/api/veille" -> json(veille(vm))
+                // The gallery sorted by slide, the series' timetable (as SatMe-PC's).
+                "/api/sstv/classement" -> {
+                    val ctx = vm.getApplication<android.app.Application>()
+                    val e = fr.f4ioz.satcombo.sstv.ClassementTelephone.etat(ctx)
+                    val prev = runCatching { kotlinx.coroutines.runBlocking { fr.f4ioz.satcombo.sstv.ClassementTelephone.prevision(ctx, e) } }.getOrNull()
+                    json(ApiClassementSstv.json(e, prev, System.currentTimeMillis()))
+                }
                 "/api/sstv/encours.png" -> {
                     val b = fr.f4ioz.satcombo.sstv.SstvHub.state.value.preview ?: return NON
                     val o = java.io.ByteArrayOutputStream()
@@ -837,6 +844,11 @@ object PagesPcTelephone {
                 val ctx = vm.getApplication<android.app.Application>()
                 val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
                 fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
+            }
+            "/api/sstv/diapo", "/api/sstv/groupe" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                ApiClassementSstv.action(route, p, fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie,
+                    fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx)) ?: JSONObject().put("ok", false)
             }
             "/api/sstv/satellite" -> {
                 val ctx = vm.getApplication<android.app.Application>()

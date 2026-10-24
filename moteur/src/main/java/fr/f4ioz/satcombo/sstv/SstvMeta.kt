@@ -55,7 +55,13 @@ object SstvMeta {
         /** Free note for the operator. */
         val note: String = "",
         /** The sound that fed the decoder: "sdr" (the dongle) or "carte" (the rig's card); "" not said. */
-        val entree: String = ""
+        val entree: String = "",
+        /** Slide number set by hand (the « 7 » of « SLIDE 7/12 »), 0 not set. */
+        val diapo: Int = 0,
+        /** Slides in its series (the « 12 »), 0 not set. */
+        val diapos: Int = 0,
+        /** Group set by hand ([ClassementSstv]), "" sorted by itself. */
+        val groupe: String = ""
     )
 
     /**
@@ -70,6 +76,25 @@ object SstvMeta {
         val side = java.io.File(png.parentFile, sidecarName(png.name))
         val avant = decode(png.name, runCatching { side.readText(Charsets.UTF_8) }.getOrNull())
         return runCatching { side.writeText(encode(avant.copy(satName = s)), Charsets.UTF_8) }.isSuccess
+    }
+
+    /** The sidecar of [png] changed by [f] (written when it had none); false when it could not be. */
+    fun change(png: java.io.File, f: (SstvShot) -> SstvShot): Boolean {
+        if (!png.isFile) return false
+        val side = java.io.File(png.parentFile, sidecarName(png.name))
+        val avant = decode(png.name, runCatching { side.readText(Charsets.UTF_8) }.getOrNull())
+        return runCatching { side.writeText(encode(f(avant)), Charsets.UTF_8) }.isSuccess
+    }
+
+    /** A picture's slide set by hand: [n] of [total]; 0 takes it off. */
+    fun changeDiapo(png: java.io.File, n: Int, total: Int = 12): Boolean =
+        n in 0..99 && total in 1..99 && change(png) { it.copy(diapo = n, diapos = if (n > 0) total else 0) }
+
+    /** A picture put in group [g] by hand ("" back to sorting by itself). */
+    fun changeGroupe(png: java.io.File, g: String): Boolean {
+        val v = g.trim()
+        if (v.length > 120 || v.any { it < ' ' }) return false
+        return change(png) { it.copy(groupe = v) }
     }
 
     /**
@@ -193,6 +218,9 @@ object SstvMeta {
         put("recording", shot.recording)
         put("note", shot.note)
         put("input", shot.entree)
+        // Older versions ignore these lines (and drop them when they write the sidecar again).
+        if (shot.diapo > 0) put("slide", shot.diapo.toString() + if (shot.diapos > 0) "/" + shot.diapos else "")
+        put("group", shot.groupe)
         return sb.toString()
     }
 
@@ -223,6 +251,12 @@ object SstvMeta {
                 "recording" -> shot.copy(recording = v)
                 "note" -> shot.copy(note = v)
                 "input" -> shot.copy(entree = v)
+                "slide" -> {
+                    val n = v.substringBefore('/').trim().toIntOrNull()?.takeIf { it in 1..99 } ?: 0
+                    val t = v.substringAfter('/', "").trim().toIntOrNull()?.takeIf { it in 1..99 } ?: 0
+                    if (n > 0) shot.copy(diapo = n, diapos = t) else shot
+                }
+                "group" -> shot.copy(groupe = v.trim().take(120))
                 else -> shot
             }
         }

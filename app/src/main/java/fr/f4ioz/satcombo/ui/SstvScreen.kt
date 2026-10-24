@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image as ImageIcon
 import androidx.compose.material.icons.filled.PlayArrow
@@ -129,6 +130,23 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
     // Four tabs, as on the APRS page: live reception, automatic SSTV, decoding
     // a recording again, the pictures received.
     var onglet by rememberSaveable { mutableStateOf("DIRECT") }
+    // The gallery by slide: copies of one slide together, the best marked first; the series' timetable.
+    var parDiapo by rememberSaveable { mutableStateOf(true) }
+    var classement by remember { mutableStateOf<fr.f4ioz.satcombo.sstv.ClassementGalerie.Etat?>(null) }
+    var prevision by remember { mutableStateOf<fr.f4ioz.satcombo.sstv.SerieSstv.Prevision?>(null) }
+    var versionClassement by remember { mutableIntStateOf(0) }
+    val ouverts = remember { mutableStateListOf<String>() }
+    var aClasser by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(gallery, versionClassement, onglet) {
+        if (onglet != "IMAGES") return@LaunchedEffect
+        while (true) {
+            val e = withContext(Dispatchers.IO) { fr.f4ioz.satcombo.sstv.ClassementTelephone.etat(ctx) }
+            classement = e
+            prevision = withContext(Dispatchers.IO) { runCatching { fr.f4ioz.satcombo.sstv.ClassementTelephone.prevision(ctx, e) }.getOrNull() }
+            if (e.restent == 0) break
+            delay(1500)
+        }
+    }
     Column(Modifier.fillMaxSize()) {
     androidx.compose.material3.TabRow(selectedTabIndex = ONGLETS_SSTV.indexOf(onglet).coerceAtLeast(0),
         containerColor = SpaceBg, contentColor = Cyan) {
@@ -338,6 +356,33 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
+        if (onglet == "IMAGES") item {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf(true to t("sstv_cl_par_diapo"), false to t("sstv_cl_par_reception")).forEach { (v, nom) ->
+                    FilterChip(selected = parDiapo == v, onClick = { parDiapo = v },
+                        label = { Text(nom, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.22f),
+                            selectedLabelColor = Cyan, labelColor = TextLo))
+                }
+                classement?.restent?.takeIf { it > 0 }?.let { Text(tf("sstv_cl_mesure", it), color = TextLo, fontSize = 11.sp) }
+            }
+        }
+
+        if (onglet == "IMAGES") prevision?.let { p ->
+            item {
+                CarteSerieSstv(p, ui.useUtc, onVoir = { nom -> viewing = gallery.firstOrNull { it.first.name == nom }?.first },
+                    onNumerote = { nom, n ->
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie.numerote(SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx), nom, n, p.serie.nb)
+                            }
+                            gallery = SstvHub.shots(ctx); versionClassement++
+                        }
+                    })
+            }
+        }
+
         if (onglet == "IMAGES" && shown.isEmpty()) {
             item {
                 Text(t("sstv_gallery_empty"), color = TextLo, fontSize = 12.sp,
@@ -345,11 +390,27 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        if (onglet == "IMAGES") items(shown, key = { it.first.absolutePath }) { (f, shot) ->
+        val cl = classement
+        if (onglet == "IMAGES" && parDiapo && cl != null) {
+            val parFichier = gallery.associateBy { it.first.name }
+            for ((g, _) in groupesAffiches(cl, prevision, satFilter)) {
+                val ouvert = g.id in ouverts
+                item(key = "g:" + g.id) {
+                    EnteteGroupeSstv(g, ouvert) { if (ouvert) ouverts.remove(g.id) else ouverts.add(g.id) }
+                }
+                val vues = if (ouvert) g.images else g.images.take(1)
+                items(vues.mapNotNull { parFichier[it.fileName] }, key = { "i:" + it.first.absolutePath }) { (f, shot) ->
+                    SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
+                        SstvHub.delete(f)
+                        gallery = SstvHub.shots(ctx)
+                    }, note = g.notes[f.name] ?: -1, onClasse = { aClasser = f.name })
+                }
+            }
+        } else if (onglet == "IMAGES") items(shown, key = { it.first.absolutePath }) { (f, shot) ->
             SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
                 SstvHub.delete(f)
                 gallery = SstvHub.shots(ctx)
-            })
+            }, note = classement?.groupes?.firstNotNullOfOrNull { it.notes[f.name] } ?: -1, onClasse = { aClasser = f.name })
         }
 
         item { Spacer(Modifier.height(24.dp)) }
@@ -368,6 +429,30 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             })
     }
 
+    aClasser?.let { nom ->
+        val e = classement
+        if (e == null) aClasser = null
+        else DialogueClasseSstv(nom, e, prevision, ui.useUtc,
+            onDiapo = { n ->
+                aClasser = null
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie.numerote(SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx), nom, n, prevision?.serie?.nb ?: 12)
+                    }
+                    gallery = SstvHub.shots(ctx); versionClassement++
+                }
+            },
+            onGroupe = { v ->
+                aClasser = null
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie.deplace(SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx), nom, v)
+                    }
+                    gallery = SstvHub.shots(ctx); versionClassement++
+                }
+            },
+            onFerme = { aClasser = null })
+    }
     if (planche) PlancheScreen { planche = false }
     viewing?.let { f ->
         SstvViewer(f, gallery.firstOrNull { it.first == f }?.second ?: SstvMeta.parseName(f.name),
@@ -378,7 +463,9 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
 /** One saved picture: thumbnail, what is known about it, share and delete. */
 @Composable
 private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
-                      onOpen: () -> Unit, onDeleted: () -> Unit) {
+                      onOpen: () -> Unit, onDeleted: () -> Unit,
+                      /** Its mark (0–100) in the gallery sorted, -1 none. */
+                      note: Int = -1, onClasse: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val bmp = remember(file.absolutePath) {
         runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath) }
@@ -387,13 +474,18 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
     Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp)) {
         Row(Modifier.fillMaxWidth().clickable { onOpen() }.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (bmp != null) {
-                Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(width = 76.dp, height = 58.dp)
+            Box {
+                if (bmp != null) {
+                    Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(width = 76.dp, height = 58.dp)
+                            .clip(RoundedCornerShape(8.dp)).background(SpaceSurface))
+                } else {
+                    Box(Modifier.size(width = 76.dp, height = 58.dp)
                         .clip(RoundedCornerShape(8.dp)).background(SpaceSurface))
-            } else {
-                Box(Modifier.size(width = 76.dp, height = 58.dp)
-                    .clip(RoundedCornerShape(8.dp)).background(SpaceSurface))
+                }
+                if (note >= 0) Text(note.toString(), color = if (note < 40) Magenta else if (note < 70) Amber else Color(0xFFFFD54F),
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(3.dp).background(Color(0xB8000000), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp))
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
@@ -461,6 +553,9 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                 exporte = "save"
             }) { Icon(Icons.Default.SaveAlt, t("export_save"), tint = Cyan,
                     modifier = Modifier.size(20.dp)) }
+            if (onClasse != null) IconButton(onClick = onClasse) {
+                Icon(Icons.Default.Edit, t("sstv_cl_classer"), tint = Cyan, modifier = Modifier.size(20.dp))
+            }
             IconButton(onClick = onDeleted) {
                 Icon(Icons.Default.Delete, t("delete"), tint = Magenta,
                     modifier = Modifier.size(20.dp))

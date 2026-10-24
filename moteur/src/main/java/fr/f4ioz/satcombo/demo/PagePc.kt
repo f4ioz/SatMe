@@ -1161,6 +1161,24 @@ ${STYLE_JETONS}
   #v-sstv button.emettre, #v-sstv button.arret-tx { font-size:14px; padding:6px 16px; }
   #v-sstv .sx-tx button.emettre, #v-sstv .sx-tx button.arret-tx { font-size:13px; padding:5px 12px; }
   #i-galerie .petit { font-size:11px; line-height:1.3; }
+  #i-groupes .cl-gr { border:1px solid var(--bord); border-radius:8px; padding:6px 8px; margin-top:8px; }
+  #i-groupes .cl-tete { cursor:pointer; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:13px; }
+  #i-groupes .cl-tete .petit { font-size:11px; }
+  #i-groupes .cl-imgs { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:6px; margin-top:6px; }
+  #i-groupes .cl-imgs a { position:relative; display:block; text-decoration:none; color:inherit; }
+  #i-groupes .cl-imgs img { width:100%; border-radius:6px; display:block; }
+  #i-groupes .cl-imgs .petit { font-size:11px; line-height:1.3; }
+  .cl-note { position:absolute; top:4px; left:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; font-weight:700; }
+  .cl-note.bof { color:#FFB74D; } .cl-note.mal { color:#EF9A9A; }
+  .cl-puces { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .cl-puces span { min-width:26px; text-align:center; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; border:1px solid var(--bord); cursor:default; }
+  .cl-puces span.ok { background:rgba(76,175,80,.18); color:var(--vert); cursor:pointer; }
+  .cl-puces span.manque { background:rgba(239,83,80,.15); color:var(--rose); }
+  .cl-table { border-collapse:collapse; margin-top:6px; font-size:12px; }
+  .cl-table td, .cl-table th { padding:3px 8px; border-bottom:1px solid var(--bord); text-align:left; white-space:nowrap; }
+  .cl-table .d { display:inline-block; min-width:22px; text-align:center; border-radius:5px; padding:0 4px; margin-right:2px; }
+  .cl-table .d.manque { background:rgba(239,83,80,.22); color:var(--rose); font-weight:700; }
+  .cl-table .d.part { color:var(--gris); }
   #v-qo100 .tq { padding:10px 14px 0; }
   #v-qo100 .tq-grille { gap:10px; }
   #v-qo100 .tq-go { font-size:14px; padding:7px 14px; }
@@ -2393,11 +2411,28 @@ ${rail()}
     </div>
     </div>
     <div class="st-pan" id="sx-p-img">
+    <div class="carte" id="cl-serie" hidden>
+      <div class="t">Diapos de la série <span class="petit" id="cl-nom"></span></div>
+      <div class="petit" id="cl-fenetre"></div>
+      <div class="cl-puces" id="cl-recues"></div>
+      <div class="petit" id="cl-horaire" style="margin-top:6px;line-height:1.5"></div>
+      <div class="ligne" style="margin-top:6px"><span class="petit">Numéroter une image</span>
+        <select id="cl-img" style="flex:1;min-width:220px" title="Une image de la série (heure de réception, passage de l’ISS) : son numéro sert de repère à l’horaire, et vaut pour toutes ses copies"></select>
+        <select id="cl-num" title="Le numéro imprimé « SLIDE n/12 »"></select>
+        <button onclick="clNumerote()">Numéroter</button></div>
+      <div id="cl-manque" class="petit" style="margin-top:6px;line-height:1.5"></div>
+      <div style="overflow-x:auto"><table class="cl-table" id="cl-table"></table></div>
+      <div class="petit aide" style="margin-top:6px">Estimation : les diapos passent dans l’ordre, une toutes les 36 s + 2 min, d’après les images numérotées (à la main ou lues au bas de la diapo) et ajustée sur elles. ARISS fait des pauses, relance la boucle ou change l’ordre sans prévenir : l’écart (±) grandit avec le temps, une nouvelle image numérotée le remet à jour. Comptées : les diapos envoyées en entier pendant que l’ISS est au-dessus de <span id="cl-elmin">5</span>° ; entre parenthèses, celles coupées par l’AOS ou le LOS.</div>
+    </div>
     <div class="carte">
       <div class="t">Images reçues <span class="petit" id="i-nombre"></span></div>
-      <div class="ligne" style="margin-top:0"><select id="i-filtre" style="flex:none" onchange="imagesVus = ''; rendSon()"><option value="">tous les satellites</option></select>
+      <div class="ligne" style="margin-top:0"><select id="i-filtre" style="flex:none" onchange="imagesVus = ''; clVu = ''; rendSon()"><option value="">tous les satellites</option></select>
+        <select id="i-vue" style="flex:none" onchange="imagesVus = ''; clVu = ''; try { localStorage.setItem('satme-sstv-vue', this.value) } catch (x) {} rendSon()" title="Par diapo : les copies d’une même diapo ensemble, la mieux notée d’abord (note 0–100 : bruit, lignes abîmées, image incomplète, glissements)">
+          <option value="diapo">par diapo</option><option value="">par réception</option></select>
+        <span class="petit" id="cl-calcul"></span>
         <a class="bouton" id="i-planche" href="planche" style="margin-left:auto" title="La planche SSTV : les images reçues posées sur un modèle, à télécharger (Carnet › Planche SSTV)">${IconesPc.svg("view_quilt", "mt-ico")} Planche SSTV ›</a></div>
       <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px"></div>
+      <div id="i-groupes" hidden></div>
     </div>
     </div>
     <div class="st-pan" id="sx-p-reg">
@@ -4440,6 +4475,9 @@ ${rail()}
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
+  <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
+    <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
+    <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
@@ -8451,6 +8489,10 @@ function rendSon() {
   const filtre = g('i-filtre').value;
   imagesMontrees = S.images.filter(i => !filtre || i.sat === filtre);
   txt('i-nombre', String(imagesMontrees.length));
+  const parDiapo = g('i-vue').value === 'diapo' && CL && CL.groupes;
+  g('i-galerie').hidden = !!parDiapo; g('i-groupes').hidden = !parDiapo;
+  if (ouverte('sstv')) clTic();
+  if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
   const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '')));
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
@@ -8464,6 +8506,149 @@ function rendSon() {
   hsRend();
 }
 let satsVus = '', imagesMontrees = [], modesSstvVus = '';
+// ---- the gallery sorted by slide, the series' timetable (api/sstv/classement)
+let CL = null, clVu = '', clMs = 0, clCle = '', clEnCours = false;
+const clOuverts = new Set();
+try { const vu = localStorage.getItem('satme-sstv-vue'); if (vu !== null) g('i-vue').value = vu; } catch (x) {}
+function clJour(ms) {
+  const d = new Date(ms), u = utc();
+  return String(u ? d.getUTCDate() : d.getDate()).padStart(2, '0') + '/' + String((u ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
+}
+const clZ = () => utc() ? ' UTC' : '';
+// Asked again every 15 s while the SSTV tab is open, at once when the gallery changed (or still measuring).
+async function clTic(force) {
+  const cle = S && S.images ? S.images.map(i => i.nom).join('|') : '';
+  if (clEnCours || (!force && cle === clCle && Date.now() - clMs < (CL && CL.restent ? 3000 : 15000))) return;
+  clEnCours = true;
+  try { const j = await (await fetch('api/sstv/classement')).json(); if (!j.absent) { CL = j; clCle = cle; clMs = Date.now(); clVu = ''; rendSon(); clSerie(); } }
+  catch (x) {} finally { clEnCours = false; }
+}
+function clEtoiles(n) { return n < 0 ? '' : '★'.repeat(Math.round(n / 20 + 0.0001)) + '☆'.repeat(5 - Math.round(n / 20 + 0.0001)); }
+function clNomDiapo(gr) {
+  if (!gr.diapo) return 'Diapo ?';
+  const o = gr.origine === 'estime' ? ' (estimée)' : gr.origine === 'lu' ? ' (lue)' : gr.origine === 'main' ? '' : '';
+  return 'Diapo ' + (gr.origine === 'estime' ? '≈' : '') + gr.diapo + '/' + gr.total + o;
+}
+function clGroupesMontres(filtre) {
+  const l = CL.groupes.filter(gr => !filtre || gr.sat === filtre);
+  const der = gr => Math.max(...gr.images.map(i => i.t));
+  return l.slice().sort((a, b) => (b.serie - a.serie) || (a.serie && b.serie ? ((a.diapo || 99) - (b.diapo || 99)) || (der(b) - der(a)) : der(b) - der(a)));
+}
+function clGalerie(filtre) {
+  const gs = clGroupesMontres(filtre);
+  const parNom = new Map(S.images.map(i => [i.nom, i]));
+  // The viewer's arrows go through the groups in this order.
+  imagesMontrees = gs.flatMap(gr => gr.images.map(i => parNom.get(i.nom)).filter(x => x));
+  txt('cl-calcul', CL.restent ? 'tri : ' + CL.restent + ' image' + (CL.restent > 1 ? 's' : '') + ' à mesurer…' : '');
+  const cle = JSON.stringify([filtre, gs.map(gr => [gr.id, gr.diapo, gr.origine, gr.images.map(i => i.nom + i.note)]), [...clOuverts], utc()]);
+  if (cle === clVu || !ouverte('sstv')) return;
+  clVu = cle;
+  let n = 0; const index = new Map(imagesMontrees.map((i, k) => [i.nom, k]));
+  g('i-groupes').innerHTML = gs.map(gr => {
+    const ouvert = clOuverts.has(gr.id) || gr.images.length === 1;
+    const best = gr.images[0];
+    const vues = ouvert ? gr.images : gr.images.slice(0, 1);
+    const id = escA(gr.id);
+    return '<div class="cl-gr"><div class="cl-tete" onclick="clBascule(\'' + id.replace(/'/g, "\\'") + '\')"><b>' + esc(clNomDiapo(gr)) + '</b>' +
+      '<span class="petit">' + esc(gr.sat || '') + ' · ' + gr.images.length + ' réception' + (gr.images.length > 1 ? 's' : '') +
+      (best.note >= 0 ? ' · meilleure ' + clEtoiles(best.note) + ' ' + best.note : '') + '</span>' +
+      (gr.images.length > 1 ? '<span class="petit" style="margin-left:auto">' + (ouvert ? '▾ replier' : '▸ voir les ' + gr.images.length) + '</span>' : '') + '</div>' +
+      '<div class="cl-imgs">' + vues.map(i => {
+        const k = index.get(i.nom), im = parNom.get(i.nom) || {};
+        const cl = i.note < 40 ? ' mal' : i.note < 70 ? ' bof' : '';
+        return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + k + '); return false" title="Note ' + i.note + '/100' + (i.manque ? ' · ' + i.manque + ' % manquant' : '') +
+          (i.abimees ? ' · ' + i.abimees + ' % de lignes abîmées' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : '') + '">' +
+          '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') +
+          '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') + '</div></a>';
+      }).join('') + '</div></div>';
+  }).join('') || '<div class="petit">aucune image</div>';
+}
+function clBascule(id) { if (clOuverts.has(id)) clOuverts.delete(id); else clOuverts.add(id); clVu = ''; rendSon(); }
+function clGroupeDe(nom) { return CL && CL.groupes ? CL.groupes.find(gr => gr.images.some(i => i.nom === nom)) : null; }
+// The series card: slides received, the timetable, the passes to come.
+function clSerie() {
+  const c = CL, s = c && c.serie;
+  g('cl-serie').hidden = !s;
+  if (!s) return;
+  txt('cl-nom', s.nom);
+  txt('cl-fenetre', s.sat + ' · ' + clJour(s.de) + ' ' + hm(s.de) + ' → ' + clJour(s.a) + ' ' + hm(s.a) + clZ() + (s.enCours ? ' · en cours' : ' · terminée'));
+  txt('cl-elmin', String(c.elMin));
+  const par = new Map((c.diapos || []).map(d => [d.n, d]));
+  g('cl-recues').innerHTML = Array.from({ length: s.nb }, (_, k) => k + 1).map(n => {
+    const d = par.get(n);
+    return d ? '<span class="ok" onclick="clVoir(\'' + escA(d.meilleure) + '\')" title="' + d.copies + ' copie' + (d.copies > 1 ? 's' : '') + (d.note >= 0 ? ', la meilleure ' + d.note + '/100' : '') +
+      (d.origine === 'estime' ? ' · numéro estimé d’après l’horaire' : d.origine === 'lu' ? ' · numéro lu sur la diapo' : ' · numéro donné à la main') + '">' + (d.origine === 'estime' ? '≈' : '') + n + '</span>'
+      : '<span class="manque" title="Pas encore reçue">' + n + '</span>';
+  }).join('');
+  const h = c.horaire;
+  const f = v => String(v).replace('.', ',');
+  g('cl-horaire').innerHTML = h ? 'Une diapo toutes les <b>' + f(h.periodeS) + ' s</b>' + (h.ajustee ? ' (± ' + f(h.sigmaS) + ', ajustée ; annoncée ' + f(s.periodeAnnonceeS) + ' s)' : ' (annoncée : un seul repère)') +
+      ' · ' + h.reperes + ' repère' + (h.reperes > 1 ? 's' : '') + ', écart moyen ' + f(h.residuS) + ' s' +
+      (h.ruptures.length ? ' · boucle relancée ' + h.ruptures.length + ' fois (' + h.ruptures.map(t => clJour(t) + ' ' + hm(t)).join(', ') + clZ() + ') : l’horaire part de la dernière' : '') +
+      (s.enCours ? ' · en ce moment : diapo ' + h.maintenant : '')
+    : 'Pas encore de repère : numérotez une image (ci-dessous, ou dans la visionneuse), ou attendez qu’un numéro soit lu au bas d’une diapo.';
+  // The pictures of the series, to number one.
+  const cle = JSON.stringify([c.images.map(i => i.nom + i.diapo + i.origine), utc()]);
+  if (g('cl-img').dataset.vu !== cle) {
+    g('cl-img').dataset.vu = cle;
+    const avant = g('cl-img').value;
+    const parPassage = new Map();
+    c.images.forEach(i => { const l = parPassage.get(i.passage) || []; l.push(i); parPassage.set(i.passage, l); });
+    g('cl-img').innerHTML = c.images.slice().reverse().map(i => {
+      const l = parPassage.get(i.passage) || [i];
+      return '<option value="' + escA(i.nom) + '">' + esc(clJour(i.t) + ' ' + hm(i.t, true) + clZ() + (i.passage ? ' · passage de ' + hm(i.passage) + ' (' + (l.indexOf(i) + 1) + '/' + l.length + ')' : '') +
+        (i.diapo ? ' · ' + (i.origine === 'estime' ? '≈' : '') + i.diapo + '/' + s.nb + (i.origine === 'lu' ? ' lue' : i.origine === 'main' ? ' à la main' : '') : ' · ?') + (i.note >= 0 ? ' · ' + i.note : '') + (i.complete ? '' : ' · partielle')) + '</option>';
+    }).join('');
+    if (avant && c.images.some(i => i.nom === avant)) g('cl-img').value = avant;
+    g('cl-num').innerHTML = '<option value="0">—</option>' + Array.from({ length: s.nb }, (_, k) => '<option>' + (k + 1) + '</option>').join('');
+  }
+  // The passes to come and their slides.
+  const ps = c.passages || [];
+  g('cl-table').innerHTML = ps.length ? '<tr><th>Passage</th><th>Élév.</th><th>Diapos attendues</th><th>±</th></tr>' + ps.map(p =>
+    '<tr><td>' + clJour(p.aos) + ' ' + hm(p.aos) + '–' + hm(p.los) + clZ() + '</td><td>' + p.el + '°</td><td>' + p.diapos.map(d =>
+      '<span class="d' + (d.manque ? ' manque' : '') + (d.entiere ? '' : ' part') + '" title="' + hm(d.debut, true) + '–' + hm(d.fin, true) + clZ() + (d.entiere ? '' : ' · coupée (AOS/LOS ou sous ' + c.elMin + '°)') + (d.manque ? ' · vous ne l’avez pas' : '') + '">' +
+      (d.entiere ? d.n : '(' + d.n + ')') + '</span>').join('') + '</td><td class="petit">' + p.incertitudeS + ' s</td></tr>').join('')
+    : '<tr><td class="petit">' + (h ? (s.enCours ? 'Plus de passage d’ici la fin de la série.' : 'Série terminée.') : '') + '</td></tr>';
+  const m = c.manquantes || [];
+  g('cl-manque').innerHTML = !m.length ? '<b style="color:var(--vert)">Toutes les diapos sont là.</b>' : 'Manquent : <b>' + m.join(', ') + '</b>' + (h ? ' — ' + m.map(n => {
+    const l = (c.prochaines || {})[n] || [];
+    return n + ' : ' + (l.length ? l.map(x => clJour(x.debut) + ' ' + hm(x.debut) + clZ() + ' (' + x.el + '°)').join(', ') : 'aucun passage ne l’envoie en entier d’ici la fin');
+  }).join(' ; ') : '');
+}
+function clVoir(nom) { const k = imagesMontrees.findIndex(i => i.nom === nom); if (k >= 0) voisImage(k); else { const j = (S.images || []).findIndex(i => i.nom === nom); if (j >= 0) { imagesMontrees = S.images; voisImage(j); } } }
+async function clNumerote() {
+  const nom = g('cl-img').value; if (!nom) return;
+  const j = await post('api/sstv/diapo?nom=' + enc(nom) + '&n=' + enc(g('cl-num').value) + '&sur=' + ((CL && CL.serie && CL.serie.nb) || 12));
+  if (j && j.ok !== false) clTic(true);
+}
+async function viDiapo(n) {
+  if (!viNom) return;
+  const j = await post('api/sstv/diapo?nom=' + enc(viNom) + '&n=' + enc(n) + '&sur=12');
+  if (j && j.ok !== false) clTic(true);
+}
+async function viGroupe(v) {
+  if (!viNom) return;
+  const j = await post('api/sstv/groupe?nom=' + enc(viNom) + '&vers=' + enc(v));
+  if (j && j.ok !== false) clTic(true);
+}
+// The viewer's line on the sorting: the mark, the slide, the group.
+function viClasse() {
+  const gr = clGroupeDe(viNom);
+  g('vi-classe').hidden = !gr;
+  if (!gr) return;
+  const i = gr.images.find(x => x.nom === viNom);
+  txt('vi-note', 'Note ' + i.note + '/100 ' + clEtoiles(i.note) + (i.manque ? ' · ' + i.manque + ' % manquant' : '') + (i.abimees ? ' · ' + i.abimees + ' % abîmé' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : ''));
+  const cle = viNom + JSON.stringify(CL.groupes.map(x => [x.id, x.diapo, x.origine, x.images.length]));
+  if (g('vi-classe').dataset.vu === cle) return;
+  g('vi-classe').dataset.vu = cle;
+  g('vi-diapo').innerHTML = '<option value="0">' + (gr.diapo && gr.origine !== 'main' ? (gr.origine === 'estime' ? '≈' : 'lue ') + gr.diapo + '/' + gr.total : '—') + '</option>' +
+    Array.from({ length: 12 }, (_, k) => '<option value="' + (k + 1) + '">' + (k + 1) + '/12</option>').join('');
+  g('vi-diapo').value = gr.origine === 'main' ? String(gr.diapo) : '0';
+  const autres = CL.groupes.filter(x => x !== gr && x.sat === gr.sat);
+  g('vi-groupe').innerHTML = '<option value="">' + (i.groupeMain ? 'tri automatique' : 'celui-ci (' + gr.images.length + ')') + '</option><option value="seule">à part</option>' +
+    autres.map(x => '<option value="' + escA(x.id) + '">avec ' + esc(clNomDiapo(x)) + ' · ' + x.images.length + ' · ' + clJour(x.images[0].t) + ' ' + hm(x.images[0].t) + '</option>').join('');
+  g('vi-groupe').value = '';
+}
 // A card as the operator knows it (« IC-9700 (USB Audio CODEC) »); its own name stays the setting.
 function nomCarte(nom) {
   const c = S && S.cartes ? S.cartes.find(x => x.nom === nom) : null;
@@ -8585,6 +8770,7 @@ function voisImage(n) {
 let viNom = '', viSonVu = '';
 // The picture's own sound, its GIF, deleting it: as the phone's viewer.
 function voisOutils() {
+  viClasse();
   const i = ((S && S.images) || []).find(x => x.nom === viNom);
   const D = S && S.sstvDetail;
   g('vi-outils').hidden = !i || !D;

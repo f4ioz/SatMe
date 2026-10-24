@@ -470,7 +470,9 @@ private fun OngletImages(
 ) {
     val sats = galerie.map { it.second.satName }.filter { it.isNotBlank() }.distinct()
     val liste = galerie.filter { filtreSat.isBlank() || it.second.satName == filtreSat }
-    fun signatures() = PlancheRendu.signatures(liste.map { it.first })
+    val ctxSig = androidx.compose.ui.platform.LocalContext.current
+    // The gallery sorted: one copy of each slide, the best marked (worked out off the screen's thread, in onCalcule).
+    fun signatures() = fr.f4ioz.satcombo.sstv.ClassementTelephone.signatures(ctxSig, PlancheRendu.signatures(liste.map { it.first }))
     // How many pictures: the template's boxes, or the sheet fitted to fewer (the largest they can be).
     val max = Planche.nombreMax(m); val n = if (m.ajustee) m.cases.size else 0
     Text(t("planche_nb_images"), color = TextLo, fontSize = 11.sp)
