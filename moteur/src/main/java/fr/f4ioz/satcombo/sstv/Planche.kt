@@ -344,9 +344,13 @@ object Planche {
      * What a picture looks like, small: to tell two copies of one slide of
      * a series (received on two passes, decoded twice) from two slides.
      * [gris]: 16×12 grey; [bruit]: the share of it the
-     * decoder's green noise covers.
+     * decoder's green noise covers. With the gallery sorted
+     * ([ClassementSstv]): [groupe], the slide's group (copies are those of
+     * one group), and [note], its mark (0–100, -1 not marked).
      */
-    class Signature(val gris: IntArray, val bruit: Float)
+    class Signature(val gris: IntArray, val bruit: Float, val groupe: String = "", val note: Int = -1) {
+        fun avec(groupe: String, note: Int) = Signature(gris, bruit, groupe, note)
+    }
 
     /** The [Signature] of a picture, from its pixels (any size, a small copy is enough). */
     fun signature(px: IntArray, w: Int, h: Int): Signature {
@@ -373,6 +377,7 @@ object Planche {
      * noise of a pass spoils a few rows, another slide most of them.
      */
     fun memeImage(a: Signature, b: Signature): Boolean {
+        if (a.groupe.isNotEmpty() && b.groupe.isNotEmpty()) return a.groupe == b.groupe
         val lignes = FloatArray(12) { y -> (0 until 16).sumOf { x -> abs(a.gris[y * 16 + x] - b.gris[y * 16 + x]) } / 16f }
         lignes.sort()
         return (lignes[5] + lignes[6]) / 2 < SEUIL_MEME
@@ -385,19 +390,25 @@ object Planche {
 
     /**
      * One copy of each picture, the best first: complete before partial,
-     * clean before spoilt by noise, then the earliest; of copies, the cleanest. [deja]: pictures already chosen,
-     * whose copies are left out.
+     * clean before spoilt by noise, then the earliest; of copies, the best
+     * marked (else the cleanest). [deja]: pictures already chosen, whose
+     * copies are left out.
      */
     private fun distinctes(images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature>,
                            deja: List<Signature> = emptyList()): List<SstvMeta.SstvShot> {
         val gardees = ArrayList<SstvMeta.SstvShot>(); val vues = ArrayList(deja)
-        for (s in images.sortedWith(compareBy({ !it.complete }, { signatures[it.fileName]?.bruit ?: 0f }, { it.timeMs }))) {
+        fun note(s: SstvMeta.SstvShot) = signatures[s.fileName]?.note ?: -1
+        for (s in images.sortedWith(compareBy<SstvMeta.SstvShot>({ !it.complete }, { -note(it) }, { signatures[it.fileName]?.bruit ?: 0f }, { it.timeMs }))) {
             val sig = signatures[s.fileName]
             if (sig != null && vues.any { memeImage(it, sig) }) continue
             gardees += s; if (sig != null) vues += sig
         }
-        return gardees.sortedWith(compareBy({ !it.complete }, { (signatures[it.fileName]?.bruit ?: 0f) > SALE }, { it.timeMs }))
+        fun sale(s: SstvMeta.SstvShot): Boolean = signatures[s.fileName]?.let { if (it.note >= 0) it.note < NOTE_SALE else it.bruit > SALE } ?: false
+        return gardees.sortedWith(compareBy({ !it.complete }, { sale(it) }, { it.timeMs }))
     }
+
+    /** Below this mark a picture is kept for last. */
+    private const val NOTE_SALE = 60
 
     // ------------------------------------------------------------ texts
 
