@@ -23,7 +23,8 @@ import java.util.IdentityHashMap
 /**
  * The event's report as a PDF on the phone: [RapportPdf]'s pages drawn on
  * the platform's own PdfDocument (no library, no WebView), in the phone's
- * font (its fallbacks give ✓ ✗ ◷ ≈ ✎). The charts stay lines; the pictures
+ * font (its fallbacks give ✓ ✗ ◷ ≈ ✎). The charts stay lines (the colours'
+ * alpha kept, the curves drawn as curves); the pictures
  * are drawn as bitmaps (Android keeps them lossless: a bigger file than
  * SatMe-PC's).
  */
@@ -111,6 +112,20 @@ object RapportPdfTelephone {
                 if (r <= 0f) return
                 fond?.let { c.drawCircle(x, y, r, remplit(it)) }
                 trait?.let { c.drawCircle(x, y, r, trace(it, epaisseur, null, false)) }
+            }
+
+            override fun chemin(ops: CharArray, xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, fond: Int?) {
+                if (ops.isEmpty()) return
+                val p = Path()
+                var i = 0
+                for (o in ops) when (o) {
+                    'M' -> { p.moveTo(xy[i], xy[i + 1]); i += 2 }
+                    'L' -> { p.lineTo(xy[i], xy[i + 1]); i += 2 }
+                    'C' -> { p.cubicTo(xy[i], xy[i + 1], xy[i + 2], xy[i + 3], xy[i + 4], xy[i + 5]); i += 6 }
+                    'Z' -> p.close()
+                }
+                fond?.let { c.drawPath(p, remplit(it)) }
+                couleur?.let { c.drawPath(p, trace(it, epaisseur, pointilles, rond)) }
             }
 
             override fun image(octets: ByteArray, x: Float, y: Float, w: Float, h: Float) {
