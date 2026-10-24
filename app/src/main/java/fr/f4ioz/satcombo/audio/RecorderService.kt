@@ -328,7 +328,7 @@ class RecorderService : Service() {
                         st.aprsEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
                             fr.f4ioz.satcombo.data.Extensions.APRS, st.callsign, st.extensionsCode)
                     }.getOrDefault(false)
-                    if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.startLive(this, rate, sat)
+                    if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.startLive(this, rate, sat, enregistrement = file.name)
                     if (aprs) fr.f4ioz.satcombo.aprs.AprsHub.startLive(this, rate, sat)
                     if (apt) fr.f4ioz.satcombo.apt.AptHub.startLive(this, rate, sat)
                     // Monitor (spectrum + speaker playback). Opened even with

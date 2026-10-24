@@ -81,6 +81,13 @@ class CorrectionsGalerie(
         /** The fused picture's PNG name of the group [id] (its id is a picture's name, or the hand's key). */
         fun nomFusion(id: String) = id.removeSuffix(".png").replace(Regex("[^A-Za-z0-9_.-]"), "-").take(120) + SUFFIXE_FUSION + ".png"
 
+        /**
+         * A processed picture (corrected, fused), never a reception: what must
+         * not go where the picture as received is required (the ARISS award
+         * pack asks for unmodified pictures).
+         */
+        fun estTraitee(f: File) = f.parentFile?.name == DOSSIER || nomValide(f.name)
+
         /** A name of the folder, safe to serve: a plain PNG name made here. */
         fun nomValide(n: String) = File(n).name == n && !n.startsWith('.') && n.endsWith(".png") &&
             (n.endsWith(SUFFIXE + ".png") || n.endsWith(SUFFIXE_FUSION + ".png"))

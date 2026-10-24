@@ -137,6 +137,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var activites: ActivitesPc? = null
     /** The SSTV gallery sorted by slide, the series' timetable (set before [demarre]). */
     @Volatile var classement: ClassementSstvPc? = null
+    /** The SSTV options (missing slide's notice, retention, QSL, ARISS pack). */
+    @Volatile var optionsSstv: OptionsSstvPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -726,6 +728,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // « Agenda › SSTV »: the campaigns, their auto-pilot, a flyer read (its picture in a POST's body).
         if (chemin == "/api/autopilote" || chemin.startsWith("/api/autopilote/")) {
             val rep = autopilote?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // The SSTV options: the settings, the live quality, a picture's QSL, the ARISS award pack (downloads only).
+        if (chemin == "/api/sstv-options" || chemin.startsWith("/api/sstv-options/")) {
+            val rep = optionsSstv?.sert(chemin, r.methode) { q[it].orEmpty() }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
@@ -1962,7 +1970,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
             }
-            "/api/sstv/diapo", "/api/sstv/groupe" ->
+            "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
             "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
                 return classement?.corrections?.api?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")

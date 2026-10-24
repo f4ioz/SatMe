@@ -95,6 +95,9 @@ class ActivitesPc(
         if (m != memoire) { memoire = m; runCatching { fichierMemoire.parentFile?.mkdirs(); fichierMemoire.writeText(ActivitesAVenir.ecrit(m).toString()) } }
     }
 
+    /** A notice from elsewhere (« diapo manquante attendue »), shown as the activities' own. */
+    @Synchronized fun signale(sorte: String, texte: String, id: String) = annonce(sorte, texte, id)
+
     private fun annonce(sorte: String, texte: String, id: String) {
         annonces += Annonce(++numero, horloge(), sorte, texte, id)
         while (annonces.size > 30) annonces.removeAt(0)

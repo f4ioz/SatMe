@@ -38,7 +38,12 @@ object PagePlanche {
         "pleine", "decor", "fond_planche", "fond_choisir", "fond_aide", "fond_modele", "fond_perso", "ecussons", "ecusson",
         "ecusson_ajouter", "ecusson_aide", "ecusson_contour", "ecusson_contour_aide", "ecusson_supprimer", "ecusson_plein",
         "envoi", "image_illisible", "exporter", "exporter_titre", "exporter_aide", "exporter_indicatif", "exporter_ok",
-        "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer", "corrigees")
+        "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer",
+        "renommer", "renommer_q", "evenement", "ev_auto", "ev_main", "ev_auto_revenir", "ev_aucun", "ev_campagne", "ev_activite",
+        "ev_images", "filtre_ev", "remplir_diapos", "garder_vides", "rempli_diapos", "rempli_toutes", "sans_numero", "hors_cases",
+        "relancer", "relancer_aide", "relancer_oublie", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
+        "note", "origine_lu", "origine_main", "origine_estime", "rapport", "rapport_titre", "rapport_aide", "rapport_chaine",
+        "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -126,6 +131,18 @@ object PagePlanche {
   .img .l2 { color:var(--gris); font-size:11px; padding:0 6px 4px; }
   .img .num { position:absolute; left:4px; top:4px; background:var(--cyan); color:#06131A; font-weight:800;
               font-size:12px; padding:0 6px; border-radius:5px; }
+  /* The slide a picture is (read, by hand, estimated) and its mark. */
+  .img .diapo { position:absolute; left:4px; top:4px; background:rgba(0,0,0,.72); color:#fff; font-weight:800;
+              font-size:12px; padding:0 6px; border-radius:5px; }
+  .img .diapo.o-main { box-shadow:inset 0 -2px 0 var(--ambre); }
+  .img .diapo.o-estime { font-style:italic; color:#cfd8e0; background:rgba(60,70,80,.8); }
+  .img .note { position:absolute; right:4px; top:4px; background:rgba(0,0,0,.72); color:#FFD54F; font-weight:700; font-size:11px; padding:0 5px; border-radius:5px; }
+  .img .note.bof { color:var(--ambre); } .img .note.mal { color:var(--rose); }
+  .img .copies { color:var(--cyan); font-size:11px; padding:0 6px 4px; cursor:pointer; }
+  .img.copie { opacity:.85; border-style:dashed; border-color:var(--bord); }
+  .img.placee .num { left:auto; right:4px; top:auto; bottom:44px; }
+  .ev { background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:8px; margin-bottom:8px; }
+  .ev select { max-width:100%; }
   .champ { display:flex; flex-direction:column; gap:3px; margin:8px 0; }
   .champ label { color:var(--gris); font-size:12px; }
   .rangee { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
@@ -139,6 +156,8 @@ object PagePlanche {
   #porte input { font-size:28px; letter-spacing:6px; width:100%; text-align:center; }
   /* Exporting the template: what goes in the file, said before it is made. */
   #dlgExport { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:20; }
+  #dlgRapport { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:20; }
+  #dlgRapport > div { max-width:540px; background:var(--carte); border:1px solid var(--bord); border-radius:14px; padding:18px; }
   #dlgExport > div { max-width:520px; background:var(--carte); border:1px solid var(--bord); border-radius:14px; padding:18px; }
   #depot { position:fixed; inset:12px; border:3px dashed var(--cyan); border-radius:16px; background:rgba(11,16,22,.82);
            display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--cyan);
@@ -158,11 +177,13 @@ object PagePlanche {
   <a id="pupitre" href="./" style="color:var(--cyan)"></a>
   <a id="journal" href="journal" style="color:var(--cyan)"></a>
   <label id="tModele"></label><select id="modeles"></select>
+  <button class="discret" id="renommer"></button>
   <button class="discret" id="grille"></button>
   <button class="discret" id="tour"></button>
   <button class="discret" id="importer"></button>
   <input type="file" id="fichier" accept="image/*,.satme-planche,.zip,application/zip" class="cache">
   <button class="discret" id="exporter"></button>
+  <button class="discret" id="rapport"></button>
   <button class="primaire" id="telecharger"></button>
   <span id="message"></span>
 </header>
@@ -189,6 +210,14 @@ object PagePlanche {
   <p class="aide" id="tExportAide"></p>
   <label class="rangee" id="lExportInd" style="margin:10px 0"><input type="checkbox" id="exportInd"><span id="tExportInd"></span></label>
   <div class="actions"><button class="primaire" id="exportOk"></button><button class="discret" id="exportNon"></button></div>
+</div></div>
+<div id="dlgRapport" class="cache dlg"><div>
+  <h3 id="tRapport" style="margin-top:0"></h3>
+  <p class="aide" id="tRapportAide"></p>
+  <p id="rapportEv" style="font-weight:700"></p>
+  <label class="rangee" style="margin:10px 0"><input type="checkbox" id="rapportChaine"><span id="tRapportChaine"></span></label>
+  <div class="rangee" id="lRapportPlan"><span class="aide" id="tRapportPlan"></span><select id="rapportPlan"></select></div>
+  <div class="actions"><button class="primaire" id="rapportOuvrir"></button><button class="discret" id="rapportDl"></button><button class="discret" id="rapportNon"></button></div>
 </div></div>
 <div id="depot" class="cache"></div>
 <script>
@@ -228,7 +257,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [] };
+  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {} };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -242,6 +271,8 @@ function litModele(txt) {
     else if (k === 'origine') { const p = v.split(';').map(Number); m.origine.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
     else if (k === 'decor') m.decor = unesc(v);
     else if (k === 'ecusson') { const p = v.split(';'); m.ecussons.push({ fichier: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], sans: p[5] === '1' }); }
+    else if (k === 'vides') m.vides = v === '1';
+    else if (k === 'diapo') { const j = v.indexOf(';'); if (j > 0) m.diapos[v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'corrigees') m.corrigees = v === '1';
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
@@ -257,6 +288,8 @@ function ecrit(m) {
   m.origine.forEach(z => s += 'origine=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
   if (m.decor) s += 'decor=' + esc(m.decor) + '\n';
   m.ecussons.forEach(e => s += 'ecusson=' + [e.fichier, r5(e.x), r5(e.y), r5(e.w), r5(e.h), e.sans ? 1 : 0].join(';') + '\n');
+  if (m.vides) s += 'vides=1\n';
+  Object.keys(m.diapos).forEach(f => { if (Object.values(m.images).includes(f)) s += 'diapo=' + f + ';' + m.diapos[f] + '\n'; });
   if (m.corrigees) s += 'corrigees=1\n';
   m.autres.forEach(l => s += l + '\n');
   return s;
@@ -266,7 +299,11 @@ function ecrit(m) {
 const COULEURS = [0xFFFFFFFF | 0, 0xFF000000 | 0, 0xFF0B2D5B | 0, 0xFFFFC21A | 0, 0xFF00E5FF | 0, 0xFFE5484D | 0];
 const FONDS = [0, 0xE6F2F4F8 | 0, 0x99000000 | 0];
 const CHAMPS = ['INDICATIF', 'NOM_LOCATOR', 'DATES', 'TITRE', 'LIBRE'];
-let id = '', M = null, ratio = 1.414, galerie = [], choix = null, onglet = 'images', filtre = '', aFond = false, decors = [];
+let id = '', M = null, ratio = 1.414, galerie = [], choix = null, onglet = 'images', filtre = '@ev', aFond = false, decors = [];
+// The sheet's event, the events to choose from; copies grouped (one per slide), the groups opened.
+let EV = { evenement: null, main: false, liste: [] }, grouper = true, analyse = '';
+const ouverts = new Set();
+try { grouper = localStorage.getItem('satme-planche-grouper') !== '0'; } catch (e) {}
 let defauts = { indicatif: '', nom: '', locator: '', dates: '' };
 const saisie = { ind: '', nom: '', loc: '', dates: '' };
 function css(v) { const u = v >>> 0; return 'rgba(' + ((u >>> 16) & 255) + ',' + ((u >>> 8) & 255) + ',' + (u & 255) + ',' + (((u >>> 24) & 255) / 255).toFixed(3) + ')'; }
@@ -317,7 +354,8 @@ function dessineCalque() {
   const c = g('calque'); c.innerHTML = '';
   if (!M) return;
   const n = M.cases.length;
-  M.cases.forEach((z, i) => c.appendChild(zoneEl(z, 'c', i, (i + 1) + '/' + n)));
+  // The box's number: the slide its picture went in for (« Fill by slide »), else its place.
+  M.cases.forEach((z, i) => c.appendChild(zoneEl(z, 'c', i, (M.images[i] !== undefined && M.diapos[M.images[i]]) || ((i + 1) + '/' + n))));
   M.textes.forEach((z, i) => c.appendChild(zoneEl(z, 't', i, T['champ_' + z.champ.toLowerCase()] || z.champ)));
   // The patches over all the rest, as on the sheet.
   M.ecussons.forEach((z, i) => c.appendChild(zoneEl(z, 'e', i, T.ecusson + ' ' + (i + 1))));
@@ -397,19 +435,49 @@ function panneau() {
   if (!M) { g('pImages').innerHTML = ''; g('pImages').appendChild(el('p', { class: 'aide', text: T.aucun_modele })); return; }
   if (onglet === 'images') panneauImages(); else if (onglet === 'dispo') panneauDispo(); else if (onglet === 'decor') panneauDecor(); else panneauTextes();
 }
+function evNom(e) { return e ? e.nom + ' · ' + ({ campagne: T.ev_campagne, activite: T.ev_activite, images: T.ev_images }[e.genre] || '') : T.ev_aucun; }
+// What « Fill » takes: the event's pictures, all of them, or one satellite's.
+function filtreParams() { return filtre === '@ev' ? { sat: '', tous: 0 } : filtre === '' ? { sat: '', tous: 1 } : { sat: filtre, tous: 0 }; }
+function classeNote(n) { return n < 40 ? ' mal' : n < 70 ? ' bof' : ''; }
+function titreDiapo(x) { return x.o === 'lu' ? T.origine_lu : x.o === 'main' ? T.origine_main : x.o === 'estime' ? T.origine_estime : ''; }
 function panneauImages() {
   const p = g('pImages'); p.innerHTML = '';
+  // The sheet's event: chosen from its pictures, or by hand.
+  const ev = el('div', { class: 'ev' });
+  const sev = el('select', { onchange: async e => { await sauveMaintenant(); await lire('/evenement', { id: id, ev: e.target.value }); await chargeEvenement(); await chargeGalerie(); panneau(); } });
+  sev.appendChild(el('option', { value: '', text: T.ev_auto_revenir + (EV.evenement && !EV.main ? ' : ' + evNom(EV.evenement) : '') }));
+  EV.liste.forEach(e => sev.appendChild(el('option', { value: e.id, text: evNom(e) + (e.images ? ' (' + e.images + ')' : '') })));
+  sev.appendChild(el('option', { value: 'aucun', text: T.ev_aucun }));
+  sev.value = EV.main ? (EV.evenement ? EV.evenement.id : 'aucun') : '';
+  ev.appendChild(el('div', { class: 'aide', text: T.evenement + ' — ' + (EV.main ? T.ev_main : T.ev_auto) }));
+  ev.appendChild(sev);
+  if (EV.evenement) ev.appendChild(el('div', { class: 'aide', text: heure(EV.evenement.de) + ' → ' + heure(EV.evenement.a) + ' · ' + EV.evenement.sat }));
+  p.appendChild(ev);
   const sats = [...new Set(galerie.map(x => x.s).filter(s => s))];
-  const sel = el('select', { onchange: ev => { filtre = ev.target.value; panneau(); } }, [el('option', { value: '', text: T.tous })].concat(sats.map(s => el('option', { value: s, text: s }))));
+  if (filtre === '@ev' && !EV.evenement) filtre = '';
+  const opts = (EV.evenement ? [el('option', { value: '@ev', text: T.filtre_ev })] : []).concat([el('option', { value: '', text: T.tous })]).concat(sats.map(s => el('option', { value: s, text: s })));
+  const sel = el('select', { onchange: ev => { filtre = ev.target.value; panneau(); } }, opts);
   sel.value = filtre;
   p.appendChild(el('div', { class: 'rangee' }, [sel,
-    el('button', { class: 'discret', text: T.remplir, onclick: async () => { await sauveMaintenant(); await lire('/remplit', { id: id, sat: filtre }); await charge(id); } })]));
+    el('button', { class: 'discret', text: T.remplir, onclick: async () => { await sauveMaintenant(); await lire('/remplit', Object.assign({ id: id }, filtreParams())); await charge(id); } })]));
+  // « Fill by slide »: the best copy of each slide in slide order.
+  const vides = el('input', { type: 'checkbox' }); vides.checked = !!M.vides;
+  vides.addEventListener('change', () => { M.vides = vides.checked; change(); });
+  p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
+    el('button', { class: 'primaire', text: T.remplir_diapos, onclick: async () => {
+      await sauveMaintenant();
+      const j = await lire('/remplit-diapos', { id: id, vides: vides.checked ? 1 : 0, tous: filtre === '@ev' ? 0 : 1 });
+      await charge(id);
+      if (j && j.ok) g('message').textContent = (j.manquantes.length ? tf('rempli_diapos', j.manquantes.join(', ')) : T.rempli_toutes) +
+        (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '');
+    } }),
+    el('label', { class: 'rangee' }, [vides, el('span', { class: 'aide', text: T.garder_vides })])]));
   // How many pictures: the template's boxes, or the sheet fitted to fewer.
   const max = M.origine.length || M.cases.length, n = M.origine.length ? M.cases.length : 0;
   const rn = el('div', { class: 'rangee', style: 'margin-top:6px' }, [el('span', { class: 'aide', text: T.nb_images })]);
   [...new Set([0, 1, 2, 3, 4, 6, 8, 9, 12, 16, n])].filter(k => k <= max).sort((a, b) => a - b).forEach(k => {
     rn.appendChild(el('button', { class: k === n ? 'primaire' : 'discret', text: k ? String(k) : tf('nb_modele', max), onclick: async () => {
-      await sauveMaintenant(); await lire('/nombre', { id: id, n: k, sat: filtre }); await charge(id); } }));
+      await sauveMaintenant(); await lire('/nombre', Object.assign({ id: id, n: k }, filtreParams())); await charge(id); } }));
   });
   p.appendChild(rn);
   const r2 = el('div', { class: 'rangee', style: 'margin-top:6px' });
@@ -422,18 +490,47 @@ function panneauImages() {
   if (choix && choix.k === 'c' && !M.origine.length) r2.appendChild(el('button', { class: 'discret', text: T.vider_case, onclick: () => { delete M.images[choix.i]; change(); } }));
   r2.appendChild(el('button', { class: 'rouge', text: T.tout_vider, onclick: () => { M.images = {}; change(); } }));
   p.appendChild(r2);
+  // The pictures measured again, their numbers read again (what the hand set kept unless asked).
+  const oublie = el('input', { type: 'checkbox' });
+  p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
+    el('button', { class: 'discret', text: T.relancer, title: T.relancer_aide, onclick: async () => {
+      if (oublie.checked && !confirm(T.relancer_confirme)) return;
+      await lire('/relance', { oublie: oublie.checked ? 1 : 0 }); suitAnalyse();
+    } }),
+    el('label', { class: 'rangee' }, [oublie, el('span', { class: 'aide', text: T.relancer_oublie })])]));
+  if (analyse) p.appendChild(el('p', { class: 'aide', text: analyse }));
+  const gr = el('input', { type: 'checkbox' }); gr.checked = grouper;
+  gr.addEventListener('change', () => { grouper = gr.checked; try { localStorage.setItem('satme-planche-grouper', grouper ? '1' : '0'); } catch (e) {} panneau(); });
+  p.appendChild(el('label', { class: 'rangee', style: 'margin:6px 0' }, [gr, el('span', { text: T.grouper })]));
   p.appendChild(el('p', { class: 'aide', text: M.origine.length ? T.aide_ajustee : choix && choix.k === 'c' ? tf('choisir_case', choix.i + 1) : T.aide_images }));
-  const liste = galerie.filter(x => !filtre || x.s === filtre);
+  let liste = galerie.filter(x => filtre === '@ev' ? x.ev : !filtre || x.s === filtre);
   if (!liste.length) { p.appendChild(el('p', { class: 'aide', text: T.aucune_image })); return; }
+  // Copies grouped: each slide's best, by slide number; its copies when its group is opened.
+  if (grouper) {
+    const parGroupe = {}; liste.forEach(x => (parGroupe[x.g] = parGroupe[x.g] || []).push(x));
+    const tetes = liste.filter(x => x.best || !parGroupe[x.g].some(y => y.best));
+    const vus = new Set(); const t2 = [];
+    tetes.forEach(x => { if (!vus.has(x.g)) { vus.add(x.g); t2.push(x); } });
+    t2.sort((a, b) => ((a.di || 99) - (b.di || 99)) || (b.t - a.t));
+    liste = [];
+    t2.forEach(x => { liste.push(x); if (ouverts.has(x.g)) parGroupe[x.g].filter(y => y !== x).sort((a, b) => b.n - a.n).forEach(y => liste.push(Object.assign({ copie: true }, y))); });
+  }
   const ou = {}; for (const k in M.images) ou[M.images[k]] = +k;
   const grille = el('div', { class: 'galerie' });
   liste.forEach(x => {
     const placee = ou[x.f] !== undefined;
-    const d = el('div', { class: 'img' + (placee ? ' placee' : ''), draggable: 'true' }, [
+    const d = el('div', { class: 'img' + (placee ? ' placee' : '') + (x.copie ? ' copie' : ''), draggable: 'true' }, [
       el('img', { src: url('/vignette', { f: x.f, w: 320 }), loading: 'lazy' }),
       el('div', { class: 'l1', text: (x.s || 'SSTV') + ' · ' + x.m }),
       el('div', { class: 'l2', text: heure(x.t) + ' · ' + (x.d ? T.direct : T.redecodee) + (x.c ? '' : ' · ' + T.partielle) })]);
+    if (x.b) d.appendChild(el('span', { class: 'diapo o-' + x.o, text: x.b, title: titreDiapo(x) }));
+    if (x.n >= 0) d.appendChild(el('span', { class: 'note' + classeNote(x.n), text: String(x.n), title: tf('note', x.n) }));
     if (placee) d.appendChild(el('span', { class: 'num', text: (ou[x.f] + 1) + '/' + M.cases.length }));
+    if (grouper && !x.copie && x.copies > 1) {
+      const c = el('div', { class: 'copies', text: (ouverts.has(x.g) ? '▾ ' : '▸ ') + tf('copies', x.copies - 1) });
+      c.addEventListener('click', ev => { ev.stopPropagation(); if (ouverts.has(x.g)) ouverts.delete(x.g); else ouverts.add(x.g); panneau(); });
+      d.appendChild(c);
+    }
     d.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', x.f));
     d.addEventListener('click', async () => {
       // A fitted sheet: the picture goes on it or comes off, the sheet fitted again.
@@ -449,6 +546,20 @@ function panneauImages() {
   });
   p.appendChild(grille);
 }
+// « Relancer l'analyse »: how far it is, every second and a half, then the pictures read again.
+let suivi2 = null;
+async function suitAnalyse() {
+  clearTimeout(suivi2);
+  try {
+    const j = await lire('/analyse');
+    analyse = j.restent ? tf('analyse_en_cours', j.restent) : tf('analyse_finie', j.groupes, j.lues);
+    if (onglet === 'images') panneau();
+    if (j.restent) { suivi2 = setTimeout(suitAnalyse, 1500); return; }
+    await chargeGalerie(); panneau();
+  } catch (e) {}
+}
+async function chargeEvenement() { try { EV = await lire('/evenements', { id: id }); } catch (e) { EV = { evenement: null, main: false, liste: [] }; } }
+async function chargeGalerie() { try { galerie = await lire('/galerie', { id: id }); } catch (e) {} }
 function caseACocher(lib, val, sur) {
   const c = el('input', { type: 'checkbox' }); c.checked = val; c.addEventListener('change', () => sur(c.checked));
   return el('label', { class: 'rangee', style: 'margin:6px 0' }, [c, el('span', { text: lib })]);
@@ -584,7 +695,8 @@ async function listeModeles() {
   const l = await lire('/liste');
   defauts.indicatif = l.indicatif; defauts.nom = l.nom;
   const s = g('modeles'); s.innerHTML = '';
-  l.modeles.forEach(m => s.appendChild(el('option', { value: m.id, text: m.nom })));
+  // Each sheet by its name, its event and how many pictures it holds.
+  l.modeles.forEach(m => s.appendChild(el('option', { value: m.id, text: m.nom + (m.ev ? ' · ' + m.ev : '') + (m.n ? ' (' + m.n + ')' : '') })));
   if (id) s.value = id;
   return l.modeles;
 }
@@ -592,6 +704,7 @@ async function charge(i) {
   id = i; g('modeles').value = i;
   const j = await lire('/modele', { id: i });
   M = litModele(j.texte); ratio = j.ratio || M.ratio; aFond = !!j.fond;
+  await chargeEvenement(); await chargeGalerie();
   defauts.locator = j.locator; defauts.dates = j.dates; defauts.titre = j.titre;
   g('scene').style.aspectRatio = String(ratio);
   g('scene').style.setProperty('--ratio', String(ratio));
@@ -600,7 +713,6 @@ async function charge(i) {
 async function demarre() {
   g('porte').classList.add('cache'); g('editeur').classList.remove('cache');
   const l = await listeModeles();
-  galerie = await lire('/galerie');
   try { decors = await lire('/decors'); } catch (e) { decors = []; }
   if (l.length) await charge(l[l.length - 1].id); else panneau();
 }
@@ -624,6 +736,43 @@ g('entrer').onclick = entrer;
 g('code').addEventListener('keydown', ev => { if (ev.key === 'Enter') entrer(); });
 g('modeles').onchange = async ev => { await sauveMaintenant(); await charge(ev.target.value); };
 g('grille').onclick = () => nouveau('grille');
+g('renommer').textContent = T.renommer;
+g('renommer').onclick = async () => {
+  if (!M) return;
+  const n = prompt(T.renommer_q, M.nom); if (n === null || !n.trim()) return;
+  M.nom = n.trim().slice(0, 60); clearTimeout(minuteur); minuteur = null; await sauve(); await listeModeles(); panneau();
+};
+// The event's report: opened in a tab of its own (to print to PDF), or downloaded.
+g('rapport').textContent = T.rapport; g('tRapport').textContent = T.rapport_titre; g('tRapportAide').textContent = T.rapport_aide;
+g('tRapportChaine').textContent = T.rapport_chaine; g('tRapportPlan').textContent = T.rapport_plan;
+g('rapportOuvrir').textContent = T.rapport_ouvrir; g('rapportDl').textContent = T.rapport_telecharger; g('rapportNon').textContent = T.annuler;
+g('rapport').onclick = async () => {
+  if (!M) return;
+  await sauveMaintenant(); await chargeEvenement();
+  g('rapportEv').textContent = EV.evenement ? evNom(EV.evenement) : T.rapport_sans_ev;
+  g('rapportOuvrir').disabled = g('rapportDl').disabled = !EV.evenement;
+  let plans = []; try { plans = await lire('/plans'); } catch (e) {}
+  g('rapportPlan').innerHTML = ''; plans.forEach(x => g('rapportPlan').appendChild(el('option', { value: x.id, text: x.nom })));
+  g('lRapportPlan').classList.toggle('cache', !plans.length || !g('rapportChaine').checked);
+  g('dlgRapport').classList.remove('cache');
+};
+g('rapportChaine').onchange = () => g('lRapportPlan').classList.toggle('cache', !g('rapportPlan').options.length || !g('rapportChaine').checked);
+function rapportParams(dl) { return { id: id, chaine: g('rapportChaine').checked ? 1 : 0, plan: g('rapportPlan').value || '', dl: dl ? 1 : 0 }; }
+g('rapportOuvrir').onclick = () => { g('dlgRapport').classList.add('cache'); window.open(url('/rapport', rapportParams(false)), '_blank'); };
+g('rapportDl').onclick = async () => {
+  g('dlgRapport').classList.add('cache');
+  g('message').textContent = T.fabrication;
+  try {
+    const r = await fetch(url('/rapport', rapportParams(true)));
+    if (r.status === 403) { porte(); return; }
+    const nom = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'SatMe_Rapport.html';
+    const b = await r.blob();
+    const a = el('a', { href: URL.createObjectURL(b), download: nom }); document.body.appendChild(a); a.click(); a.remove();
+    g('message').textContent = nom;
+  } catch (e) { g('message').textContent = T.hors_ligne; }
+};
+g('rapportNon').onclick = () => g('dlgRapport').classList.add('cache');
+g('dlgRapport').addEventListener('pointerdown', ev => { if (ev.target.id === 'dlgRapport') g('dlgRapport').classList.add('cache'); });
 g('tour').onclick = () => nouveau('tour');
 g('importer').onclick = () => g('fichier').click();
 g('importer').title = T.importer_aide;

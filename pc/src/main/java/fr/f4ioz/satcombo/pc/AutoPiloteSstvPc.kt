@@ -72,6 +72,8 @@ class AutoPiloteSstvPc(
 
     val maitre: Boolean get() = donnees.maitre
     val campagnes: List<Campagne> get() = donnees.campagnes
+    /** What became of the passes (done, set aside…), for the event's report. */
+    val historique: List<CampagneSstv.Trace> get() = donnees.historique
 
     // ------------------------------------------------------------------ passes
 

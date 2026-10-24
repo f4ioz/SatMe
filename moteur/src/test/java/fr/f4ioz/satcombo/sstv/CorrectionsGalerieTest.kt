@@ -114,5 +114,9 @@ class CorrectionsGalerieTest {
         assertNull(CorrectionsGalerie.decode("x.png", "rien=1"))
         assertFalse(CorrectionsGalerie.nomValide("SatMe_SSTV_ISS_20261023_074848Z_Robot36.png"))
         assertTrue(CorrectionsGalerie.nomValide(CorrectionsGalerie.nomFusion("seule-x/../y")))
+        // Never taken for a reception (the ARISS pack).
+        assertTrue(CorrectionsGalerie.estTraitee(File(File("sstv", "corrigees"), "a.png")))
+        assertTrue(CorrectionsGalerie.estTraitee(File("sstv", "a_corrigee.png")))
+        assertFalse(CorrectionsGalerie.estTraitee(File("sstv", "SatMe_SSTV_ISS_20261023_074848Z_Robot36.png")))
     }
 }

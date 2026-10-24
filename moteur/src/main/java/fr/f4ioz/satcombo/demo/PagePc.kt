@@ -1170,15 +1170,20 @@ ${STYLE_JETONS}
   #i-groupes .cl-imgs .petit { font-size:11px; line-height:1.3; }
   .cl-note { position:absolute; top:4px; left:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; font-weight:700; }
   .cl-note.bof { color:#FFB74D; } .cl-note.mal { color:#EF9A9A; }
+  /* The slide a picture is, where its number comes from: read (plain), by hand (✎, amber line), estimated (≈, grey italic). */
+  .cl-badge { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.78); color:#fff; border-radius:6px; padding:0 6px; font-size:12px; font-weight:800; }
+  .cl-badge.o-main { box-shadow:inset 0 -2px 0 #FFB454; } .cl-badge.o-estime { font-style:italic; color:#cfd8e0; background:rgba(60,70,80,.85); }
+  .cl-badge.grand { top:8px; right:8px; font-size:16px; padding:2px 9px; }
+  #i-galerie a { position:relative; }
   /* Corrected pictures (kept apart from those received): the viewer's comparison, the gallery's marks. */
   #vi-cadre { position:relative; display:inline-block; max-width:100%; }
   #vi-img2 { position:absolute; left:0; top:0; width:100%; border-radius:6px; pointer-events:none; }
   #vi-trait { position:absolute; top:0; bottom:0; width:2px; background:#FFD54F; pointer-events:none; box-shadow:0 0 3px #000; }
-  .vi-etiq { position:absolute; top:6px; background:rgba(0,0,0,.72); color:#fff; border-radius:6px; padding:1px 6px; font-size:11px; pointer-events:none; }
+  .vi-etiq { position:absolute; bottom:6px; background:rgba(0,0,0,.72); color:#fff; border-radius:6px; padding:1px 6px; font-size:11px; pointer-events:none; }
   #vi-corr .seg button { border-radius:0; margin:0; } #vi-corr .seg button:first-child { border-radius:6px 0 0 6px; } #vi-corr .seg button:last-child { border-radius:0 6px 6px 0; }
   #vi-corr .seg button.actif { background:var(--accent, #4FC3F7); color:#000; }
   .vi-traitee { color:#FFD54F; font-weight:700; }
-  .cl-corr { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; }
+  .cl-corr { position:absolute; top:4px; left:40px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; }
   .cl-puces { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
   .cl-puces span { min-width:26px; text-align:center; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; border:1px solid var(--bord); cursor:default; }
   .cl-puces span.ok { background:rgba(76,175,80,.18); color:var(--vert); cursor:pointer; }
@@ -2332,6 +2337,14 @@ ${rail()}
         <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
         <span class="petit" id="sstv-source-active" style="min-width:120px;text-align:right"></span></div>
       <div class="etat" id="sstv-etat"></div>
+      <div id="sq" hidden title="Qualité de réception : mesurée sur le son reçu, sans rien changer à l’image décodée">
+        <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Son</span>
+          <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden;position:relative"><div id="sq-vu" style="height:100%;width:0;background:var(--vert)"></div><div id="sq-crete" style="position:absolute;top:0;width:2px;height:100%;background:#E8EEF3;left:0"></div></div>
+          <span class="petit" id="sq-db" style="min-width:120px;text-align:right"></span></div>
+        <div class="petit" id="sq-avis"></div>
+        <canvas id="sq-lignes" width="600" height="26" style="width:100%;height:26px;background:#0E1720;border-radius:6px;margin-top:4px" title="Chaque ligne de l’image en cours : vert nette, ambre bruitée, rouge synchro perdue"></canvas>
+        <div class="ligne" style="margin-top:2px"><span class="petit" id="sq-snr" style="flex:1"></span><span class="val" id="sq-note" title="La note que l’image aura dans le classement, estimée sur ses lignes reçues (à 4 points près d’habitude)"></span></div>
+      </div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()" title="Le son du passage, en WAV (touche E)">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span></div>
       <div class="ligne sx-tx" id="sx-tx" hidden><span class="petit">Émission</span><span id="sx-tx-pastille" class="pastille" style="color:var(--gris)">arrêtée</span><span class="petit" id="sx-tx-pc"></span>
         <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
@@ -2439,6 +2452,7 @@ ${rail()}
         <select id="i-vue" style="flex:none" onchange="imagesVus = ''; clVu = ''; try { localStorage.setItem('satme-sstv-vue', this.value) } catch (x) {} rendSon()" title="Par diapo : les copies d’une même diapo ensemble, la mieux notée d’abord (note 0–100 : bruit, lignes abîmées, image incomplète, glissements)">
           <option value="diapo">par diapo</option><option value="">par réception</option></select>
         <span class="petit" id="cl-calcul"></span>
+        <button id="cl-relance" onclick="clRelance(event)" title="Mesurer à nouveau chaque image, relire le numéro au bas des diapos et refaire les groupes. Les numéros et groupes donnés à la main sont gardés (Maj+clic : les oublier aussi).">⟳ Relancer l’analyse</button>
         <a class="bouton" id="i-planche" href="planche" style="margin-left:auto" title="La planche SSTV : les images reçues posées sur un modèle, à télécharger (Carnet › Planche SSTV)">${IconesPc.svg("view_quilt", "mt-ico")} Planche SSTV ›</a></div>
       <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px"></div>
       <div id="i-groupes" hidden></div>
@@ -2449,6 +2463,24 @@ ${rail()}
       <div class="t">Décodage</div>
       <label class="petit" style="display:block;margin-top:0" title="Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+    </div>
+    <div class="carte" id="so-carte">
+      <div class="t">Options SSTV</div>
+      <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="so-alerte" onchange="soReglage('alerte', this.checked ? 1 : 0)"> Prévenir quand une diapo manquante est attendue</label>
+      <div class="ligne" style="margin-top:2px"><span class="petit"><input id="so-avant" type="number" min="1" max="120" style="max-width:56px" onchange="soReglage('avant', +this.value || 15)"> min avant la diapo · aussi une diapo reçue avec une note sous <input id="so-note" type="number" min="0" max="100" style="max-width:56px" onchange="soReglage('note', +this.value || 0)"> (0 : seulement les manquantes)</span></div>
+      <div class="petit aide">D’après l’horaire des diapos de la série (Images › par diapo). Une seule alerte par passage, dans les alertes d’« Activités à venir » (coupées là : aucune) et dite à voix haute quand les annonces parlent.</div>
+      <div class="petit" id="so-prochaines"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="so-enreg" onchange="soReglage('enreg', this.checked ? 1 : 0)"> Enregistrer le son de chaque passage SSTV <span class="petit" id="so-enreg-etat"></span></label>
+      <div class="petit aide">Chaque passage du satellite de la série en cours, quand il est suivi et la SSTV décodée (de l’AOS à 30 s après le LOS). Les campagnes de l’auto-pilote ont leur case « Enregistrer », cochée par défaut. Chaque image note son enregistrement (pour la redécoder).</div>
+      <div class="ligne" style="margin-top:8px"><span class="petit">Garder les enregistrements SSTV : <input id="so-jours" type="number" min="0" max="3650" style="max-width:64px" onchange="soReglage('jours', +this.value || 0)"> jours (0 : toujours) · <input id="so-mo" type="number" min="0" style="max-width:76px" onchange="soReglage('mo', +this.value || 0)"> Mo au plus (0 : sans limite)</span></div>
+      <label class="petit" style="display:block;margin-top:2px"><input type="checkbox" id="so-journal" onchange="soReglage('journal', this.checked ? 1 : 0)"> Garder aussi ceux du journal des passages</label>
+      <div class="petit aide">Seuls les enregistrements de passages SSTV sont concernés. Jamais supprimés : ceux d’une image utilisée dans une planche ou marquée « à garder », ceux de moins d’un jour. Chaque suppression est notée dans enregistrements/retention-sons.log.</div>
+      <div class="ligne"><span class="petit" id="so-bilan" style="flex:1"></span><button id="so-appliquer" onclick="soRetention()">Appliquer maintenant</button></div>
+      <div class="ligne" style="margin-top:8px"><span class="petit">Image QSL</span><select id="so-dispo" style="flex:none" onchange="soReglage('dispo', this.value)"><option value="BANDEAU">bandeau dessous</option><option value="INCRUSTE">incrusté</option></select>
+        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> signer « SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
+      <div class="petit" id="so-station"></div>
+      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
+      <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
       <div class="t">Décoder un enregistrement</div>
@@ -4475,7 +4507,7 @@ ${rail()}
   <div class="ligne"><button onclick="g('fd-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="visionneuse" onclick="if (event.target === this) this.close()">
-  <div id="vi-cadre"><img id="vi-img" alt="" onclick="if (viVue !== 'cmp') g('visionneuse').close()"><img id="vi-img2" alt="" hidden><div id="vi-trait" hidden></div>
+  <div id="vi-cadre"><img id="vi-img" alt="" onclick="if (viVue !== 'cmp') g('visionneuse').close()"><img id="vi-img2" alt="" hidden><div id="vi-trait" hidden></div><span id="vi-badge" class="cl-badge grand" hidden></span>
     <span class="vi-etiq" id="vi-etiq-g" style="left:6px" hidden>Brute</span><span class="vi-etiq" id="vi-etiq-d" style="right:6px" hidden>Corrigée</span></div>
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
@@ -4488,6 +4520,10 @@ ${rail()}
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
     <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
     <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
+  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (Images › Réglages › Options SSTV)">🪪 QSL</button></a>
+    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer"><button>Voir la QSL</button></a>
+    <a id="vi-ariss" download><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
+    <button id="vi-garde" onclick="viGarde()" title="Jamais supprimée par la rétention des enregistrements (ni le son de son passage)">☆ À garder</button></div>
   <div class="ligne" id="vi-corr" style="margin-top:6px" hidden>
     <span class="seg"><button id="vi-v-brute" onclick="viMontre('brute')" title="L’image telle que reçue">Brute</button><button id="vi-v-corr" onclick="viMontre('corr')" title="Sa version corrigée (un fichier à part : la réception n’est jamais modifiée)">Corrigée</button><button id="vi-v-fus" onclick="viMontre('fus')" title="Les copies de cette diapo mises ensemble">Fusion</button><button id="vi-v-cmp" onclick="viMontre('cmp')" title="Brute à gauche, traitée à droite : glisser sur l’image">Brute | Corrigée</button></span>
     <input type="range" id="vi-curseur" min="0" max="100" value="50" style="width:110px" hidden oninput="viCurseur()">
@@ -8510,11 +8546,12 @@ function rendSon() {
   g('i-galerie').hidden = !!parDiapo; g('i-groupes').hidden = !parDiapo;
   if (ouverte('sstv')) clTic();
   if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '')));
+  // The sorting's numbers too: each picture's slide badge.
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
-      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
+      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
       (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
@@ -8546,6 +8583,20 @@ function clNomDiapo(gr) {
   const o = gr.origine === 'estime' ? ' (estimée)' : gr.origine === 'lu' ? ' (lue)' : gr.origine === 'main' ? '' : '';
   return 'Diapo ' + (gr.origine === 'estime' ? '≈' : '') + gr.diapo + '/' + gr.total + o;
 }
+// The slide's badge: « 2/12 » read, « 2/12✎ » by hand, « ≈2/12 » estimated from the timetable.
+function clBadge(gr) {
+  if (!gr || !gr.diapo || !gr.origine) return '';
+  const t = gr.origine === 'estime' ? '≈' + gr.diapo + '/' + gr.total : gr.diapo + '/' + gr.total + (gr.origine === 'main' ? '✎' : '');
+  const q = gr.origine === 'estime' ? 'numéro estimé d’après l’horaire' : gr.origine === 'lu' ? 'numéro lu au bas de la diapo' : 'numéro donné à la main';
+  return '<span class="cl-badge o-' + gr.origine + '" title="' + q + '">' + esc(t) + '</span>';
+}
+// « Relancer l'analyse »: every picture measured again (Shift: the hand's numbers and groups forgotten too).
+async function clRelance(ev) {
+  const oublie = ev && ev.shiftKey;
+  if (oublie && !confirm('Oublier aussi tous les numéros et groupes donnés à la main ?')) return;
+  const j = await post('api/sstv/relance?oublie=' + (oublie ? 1 : 0));
+  if (j && j.ok !== false) { txt('cl-calcul', 'tri : ' + j.n + ' images à mesurer…'); clMs = 0; clTic(true); }
+}
 function clGroupesMontres(filtre) {
   const l = CL.groupes.filter(gr => !filtre || gr.sat === filtre);
   const der = gr => Math.max(...gr.images.map(i => i.t));
@@ -8575,7 +8626,7 @@ function clGalerie(filtre) {
         const cl = i.note < 40 ? ' mal' : i.note < 70 ? ' bof' : '';
         return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + k + '); return false" title="Note ' + i.note + '/100' + (i.manque ? ' · ' + i.manque + ' % manquant' : '') +
           (i.abimees ? ' · ' + i.abimees + ' % de lignes abîmées' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : '') + '">' +
-          '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') +
+          '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') + clBadge(gr) +
           (gr.traite && gr.traite.corrigees.includes(i.nom) ? '<span class="cl-corr" title="Une version corrigée existe (à part ; celle-ci est la réception brute)">✨</span>' : '') +
           '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') + '</div></a>';
       }).join('') + '</div></div>';
@@ -8664,6 +8715,9 @@ async function viGroupe(v) {
 // The viewer's line on the sorting: the mark, the slide, the group.
 function viClasse() {
   const gr = clGroupeDe(viNom);
+  const b = clBadge(gr);
+  g('vi-badge').hidden = !b;
+  if (b) { const d = document.createElement('div'); d.innerHTML = b; const x = d.firstChild; g('vi-badge').textContent = x.textContent; g('vi-badge').title = x.title; g('vi-badge').className = x.className + ' grand'; }
   g('vi-classe').hidden = !gr;
   if (!gr) return;
   const i = gr.images.find(x => x.nom === viNom);
@@ -8802,6 +8856,7 @@ let viNom = '', viSonVu = '';
 // The picture's own sound, its GIF, deleting it: as the phone's viewer.
 function voisOutils() {
   viClasse();
+  viQslMaj();
   const i = ((S && S.images) || []).find(x => x.nom === viNom);
   const D = S && S.sstvDetail;
   g('vi-outils').hidden = !i || !D;
@@ -8928,6 +8983,70 @@ async function viSupprime() {
 g('visionneuse').addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { e.preventDefault(); voisImage(viN - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); voisImage(viN + 1); }
 });
+// ------------------------------------------------------------------ SSTV options: live quality, alerts, retention, QSL, ARISS pack
+let SO = null, soVu = '';
+async function soCharge() {
+  try { SO = await (await fetch('api/sstv-options')).json(); } catch (x) { SO = null; }
+  if (!SO || !SO.ok) { g('so-carte').hidden = true; return; }
+  g('so-carte').hidden = false;
+  const r = SO.reglages;
+  [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
+  [['so-avant', r.avant], ['so-note', r.note], ['so-jours', r.jours], ['so-mo', r.mo], ['so-dispo', r.dispo]].forEach(([i, v]) => { if (document.activeElement !== g(i)) g(i).value = v; });
+  txt('so-enreg-etat', SO.enregistreMaintenant ? '— en cours pour ce passage' : '');
+  g('so-prochaines').innerHTML = !r.activites ? '<span class="ambre">« Activités à venir » est coupé : aucune alerte.</span>' :
+    SO.prochaines.length ? 'Prochaines alertes : ' + SO.prochaines.map(a => esc(acJourLoc(a.quand)) + ' ' + esc(acHmLoc(a.quand)) + ' — ' + esc(a.texte)).join('<br>') : 'Aucune diapo voulue attendue sur les prochains passages.';
+  const R = SO.retention, mo = o => (o / 1048576).toFixed(0) + ' Mo';
+  txt('so-bilan', R ? R.sstv + ' enregistrement(s) SSTV (' + mo(R.octets) + ') ; ' + (r.jours || r.mo ? R.supprimer.length + ' à supprimer (' + mo(R.octetsLiberes) + '), ' + R.proteges + ' protégé(s)' : 'rétention coupée : rien n’est supprimé') : '');
+  g('so-appliquer').disabled = !R || !R.supprimer.length;
+  txt('so-station', 'Indicatif et locator de la QSL : ceux de l’image, sinon Réglages › Ma station (' + (r.indicatif || '—') + ', ' + (r.locator || '—') + ').');
+  viQslMaj();
+}
+async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); }
+async function soRetention() {
+  const R = SO && SO.retention; if (!R || !R.supprimer.length) return;
+  if (!confirm('Supprimer ' + R.supprimer.length + ' enregistrement(s) SSTV ?\n\n' + R.supprimer.slice(0, 12).join('\n') + (R.supprimer.length > 12 ? '\n…' : ''))) return;
+  const j = await post('api/sstv-options/retention'); toast((j && j.supprimes || 0) + ' enregistrement(s) supprimé(s)'); soCharge();
+}
+function viQslMaj() {
+  if (!viNom) return;
+  const r = SO && SO.reglages;
+  g('vi-qsl-lien').href = 'api/sstv-options/qsl?nom=' + enc(viNom);
+  g('vi-qsl-voir').href = 'api/sstv-options/qsl?voir=1&nom=' + enc(viNom);
+  g('vi-ariss').href = 'api/sstv-options/ariss.zip?noms=' + enc(viNom);
+  const garde = !!(SO && SO.gardes.indexOf(viNom) >= 0);
+  txt('vi-garde', garde ? '★ Gardée' : '☆ À garder'); g('vi-garde').setAttribute('aria-pressed', garde ? 'true' : 'false');
+  g('vi-qsl').hidden = !r;
+}
+async function viGarde() {
+  if (!viNom || !SO) return;
+  const on = SO.gardes.indexOf(viNom) < 0;
+  const j = await post('api/sstv-options/garde?nom=' + enc(viNom) + '&on=' + (on ? 1 : 0));
+  if (j && j.ok) { SO.gardes = j.gardes; viQslMaj(); }
+}
+let sqDernier = 0;
+async function sqCharge() {
+  if (!ouverte('sstv') && !(g('visionneuse') && g('visionneuse').open)) return;
+  let Q = null; try { Q = await (await fetch('api/sstv-options/qualite')).json(); } catch (x) {}
+  g('sq').hidden = !Q || !Q.son;
+  if (!Q || !Q.son) return;
+  const db = Q.niveauDb, pc = d => Math.max(0, Math.min(100, (d + 60) / 60 * 100));
+  g('sq-vu').style.width = (db == null ? 0 : pc(db)) + '%';
+  g('sq-vu').style.background = Q.niveau === 'SATURE' ? 'var(--danger)' : Q.niveau === 'FORT' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : Q.niveau === 'SILENCE' ? 'var(--gris)' : 'var(--vert)';
+  g('sq-crete').style.left = (Q.creteDb == null ? 0 : pc(Q.creteDb)) + '%';
+  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS (crête ' + Q.creteDb.toFixed(0) + ')');
+  const avis = { SATURE: '⚠ Le son sature : baisser le volume ou le gain.', FORT: 'Son fort, près de saturer.', FAIBLE: '⚠ Son trop faible : monter le volume.', SILENCE: 'Aucun son.', BON: '' }[Q.niveau] || '';
+  txt('sq-avis', avis); g('sq-avis').style.color = Q.niveau === 'SATURE' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : '';
+  const c = g('sq-lignes'), x = c.getContext('2d'), w = c.width, h = c.height, n = Math.max(Q.hauteur || 0, Q.qualites.length, 1);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  Q.qualites.forEach((v, i) => { x.fillStyle = v >= 80 ? '#3FE0C8' : v >= 35 ? '#FFB454' : '#E5484D'; const bw = Math.max(1, w / n); x.fillRect(i * w / n, h - Math.max(3, v / 100 * h), bw, Math.max(3, v / 100 * h)); });
+  const snr = Q.snrSous ? 'S/B < 10 dB : synchros noyées dans le bruit' : Q.snr != null ? 'S/B ≈ ' + Math.round(Q.snr) + ' dB (3 kHz)' : '';
+  txt('sq-snr', [snr, Q.lignes ? 'synchros ' + Q.trouvees + '/' + Q.lignes + ', ' + Q.nettes + ' nettes' : Q.image ? '' : 'en attente d’une image…'].filter(s => s).join(' · '));
+  txt('sq-note', Q.image && Q.note != null ? 'note ≈ ' + Q.note : !Q.image && Q.noteFinale != null ? 'dernière ≈ ' + Q.noteFinale : '');
+  g('sq-note').style.color = (Q.image ? Q.note : Q.noteFinale) >= 80 ? 'var(--vert)' : (Q.image ? Q.note : Q.noteFinale) >= 50 ? 'var(--ambre)' : 'var(--danger)';
+}
+soCharge();
+setInterval(soCharge, 15000);
+setInterval(sqCharge, 1000);
 g('i-encours').style.cursor = 'zoom-in';
 g('i-encours').onclick = () => {
   if (!S || S.sstvMode || !S.sstvDerniere) return;

@@ -77,6 +77,21 @@ object Planche {
         val decor: String = "",
         /** Patches laid over the sheet, at most [ECUSSONS_MAX], the last on top. */
         val ecussons: List<Ecusson> = emptyList(),
+        /**
+         * The event the sheet is about ([EvenementSstv]): its pictures are
+         * offered first, its report made. Null: none found yet.
+         */
+        val evenement: EvenementSstv.Evenement? = null,
+        /** [evenement] chosen by hand (else chosen again from the pictures as they change). */
+        val evenementMain: Boolean = false,
+        /**
+         * The slide each picture was put in for (« 2/12 », « ≈5/12 » when
+         * estimated from the timetable), by picture name: the box's number
+         * shown follows the picture when boxes are swapped.
+         */
+        val diapos: Map<String, String> = emptyMap(),
+        /** « Fill by slide » leaves a box empty for a slide not received (else the next one moves up). */
+        val vides: Boolean = false,
         /** Each picture shown as its fused or corrected version when there is one ([CorrectionsGalerie.pourPlanche]), marked so. */
         val corrigees: Boolean = false
     ) {
@@ -239,9 +254,16 @@ object Planche {
      * when the pictures gain much by it. The template's boxes are kept
      * ([Modele.origine]) to go back to ([duModele]). None = the template's layout.
      */
-    fun ajuste(m: Modele, fichiers: List<String>): Modele {
-        val l = fichiers.distinct()
-        if (l.isEmpty()) return duModele(m).copy(images = emptyMap())
+    fun ajuste(m: Modele, fichiers: List<String>): Modele = ajusteA(m, fichiers.distinct())
+
+    /**
+     * [ajuste] with boxes left empty: [ordre] one box each, null an empty
+     * one (a slide not received, « Fill by slide » keeping its place).
+     */
+    fun ajusteA(m: Modele, ordre: List<String?>): Modele {
+        val vus = HashSet<String>()
+        val l = ordre.map { f -> f?.takeIf { vus.add(it) } }.dropLastWhile { it == null }
+        if (l.all { it == null }) return duModele(m).copy(images = emptyMap())
         val origine = m.origine.ifEmpty { m.cases }
         val textes = textesDuModele(m)
         val r = m.ratio; val a = aspectCase(m.legende); val n = l.size; val ecart = 0.06f
@@ -281,12 +303,12 @@ object Planche {
         if (essais.isEmpty()) essais += Triple(zone, textes, 1f)
         val (z, tx, _) = essais.maxByOrNull { (z, _, gain) -> meilleure(n, z, r, a, ecart).second / gain }!!
         val bouges = tx !== textes
-        return m.copy(cases = grilleOptimale(n, z, r, a, ecart), images = l.withIndex().associate { it.index to it.value },
+        return m.copy(cases = grilleOptimale(n, z, r, a, ecart), images = l.withIndex().filter { it.value != null }.associate { it.index to it.value!! },
             origine = origine, textes = tx, textesOrigine = if (bouges) textes else emptyList())
     }
 
     /** Fitted again to the same pictures (after the line under them was switched, say). */
-    fun reajuste(m: Modele): Modele = if (m.ajustee) ajuste(m, choisies(m)) else m
+    fun reajuste(m: Modele): Modele = if (m.ajustee) ajusteA(m, m.cases.indices.map { m.images[it] }) else m
 
     /** Back to the template's boxes and texts, the pictures chosen in its first boxes. */
     fun duModele(m: Modele): Modele {
@@ -456,6 +478,68 @@ object Planche {
         return pleines.size to m.cases.indices.filter { it !in pleines }.map { it + 1 }
     }
 
+    // ------------------------------------------------------- by slide
+
+    /** A picture chosen for a slide: its group's best, the number it was put in for and where it comes from. */
+    data class PourDiapo(val fichier: String, val diapo: Int, val total: Int, val origine: ClassementSstv.Origine, val note: Int)
+
+    /** What « Fill by slide » did: the sheet, the slides missing, the pictures with no number, those left out (no box). */
+    data class ParDiapo(val modele: Modele, val manquantes: List<Int>, val sansNumero: Int, val horsCases: Int)
+
+    /**
+     * The best picture of each slide in slide order (1/12, 2/12…): of the
+     * groups said to be slide n, the surest (by hand, read, estimated), its
+     * best marked picture; with [vides] a slide not received keeps its place
+     * (null), else the next one moves up. Then the groups with no number,
+     * the earliest first. [total]: the series' slides (12).
+     */
+    fun ordreParDiapo(groupes: List<ClassementSstv.Groupe>, total: Int, vides: Boolean): List<PourDiapo?> {
+        val numerotes = groupes.filter { it.diapo > 0 && it.origine != ClassementSstv.Origine.AUCUNE && it.images.isNotEmpty() }
+        val parDiapo = numerotes.groupBy { it.diapo }
+        val dernier = maxOf(total, parDiapo.keys.maxOrNull() ?: 0)
+        val out = ArrayList<PourDiapo?>()
+        for (n in 1..dernier) {
+            val l = parDiapo[n]
+            if (l == null) { if (vides && n <= total) out += null; continue }
+            val o = l.minOf { it.origine.ordinal }
+            val (g, s) = l.filter { it.origine.ordinal == o }.flatMap { g -> g.images.map { g to it } }
+                .maxWith(compareBy<Pair<ClassementSstv.Groupe, SstvMeta.SstvShot>> { (g, s) -> g.notes[s.fileName] ?: -1 }.thenBy { (_, s) -> -s.timeMs })
+            out += PourDiapo(s.fileName, n, g.total.takeIf { it > 0 } ?: total, g.origine, g.notes[s.fileName] ?: -1)
+        }
+        groupes.filter { it !in numerotes && it.images.isNotEmpty() }.sortedBy { g -> g.images.minOf { it.timeMs } }.forEach { g ->
+            out += PourDiapo(g.meilleure.fileName, 0, total, ClassementSstv.Origine.AUCUNE, g.notes[g.meilleure.fileName] ?: -1)
+        }
+        return out
+    }
+
+    /** The number shown for a slide: « 2/12 », « ≈2/12 » when estimated from the timetable; "" none. */
+    fun numeroDiapo(diapo: Int, total: Int, origine: ClassementSstv.Origine): String = when {
+        diapo <= 0 || origine == ClassementSstv.Origine.AUCUNE -> ""
+        origine == ClassementSstv.Origine.ESTIME -> "≈$diapo/$total"
+        else -> "$diapo/$total"
+    }
+
+    /**
+     * « Fill by slide »: the boxes take [groupes]' best pictures in slide
+     * order ([ordreParDiapo]); a fitted sheet is fitted to them (as many as
+     * its template has boxes). Each picture keeps the slide it went in for.
+     */
+    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12, vides: Boolean = m.vides): ParDiapo {
+        val ordre = ordreParDiapo(groupes, total, vides)
+        val place = if (m.ajustee) nombreMax(m) else m.cases.size
+        val pris = ordre.take(place)
+        val etiquettes = pris.filterNotNull().filter { it.diapo > 0 }.associate { it.fichier to numeroDiapo(it.diapo, it.total, it.origine) }
+        val base = m.copy(diapos = etiquettes, vides = vides)
+        val n = if (m.ajustee) ajusteA(base, pris.map { it?.fichier })
+            else base.copy(images = pris.withIndex().filter { it.value != null }.associate { it.index to it.value!!.fichier })
+        val recues = ordre.filterNotNull().filter { it.diapo > 0 }.map { it.diapo }.toSet()
+        return ParDiapo(n, (1..total).filter { it !in recues }, ordre.count { it != null && it.diapo == 0 },
+            ordre.drop(place).count { it != null })
+    }
+
+    /** The number on box [i]: the slide its picture went in for, else its place (« 3/12 »). */
+    fun etiquette(m: Modele, i: Int): String = m.images[i]?.let { m.diapos[it] }?.takeIf { it.isNotBlank() } ?: "${i + 1}/${m.cases.size}"
+
     // ------------------------------------------------------- finding boxes
 
     /**
@@ -609,6 +693,12 @@ object Planche {
         if (m.decor.isNotBlank()) append("decor=").append(esc(m.decor)).append('\n')
         m.ecussons.forEach { append("ecusson=").append(it.fichier).append(';').append(z(it.zone)).append(';')
             .append(if (it.sansContour) 1 else 0).append('\n') }
+        // The event, the slides the pictures went in for (read by older versions as nothing).
+        m.evenement?.let { append("evenement=").append(EvenementSstv.ecrit(it)).append('\n') }
+        if (m.evenementMain) append("evenementmain=1\n")
+        if (m.vides) append("vides=1\n")
+        val placees = m.images.values.toSet()
+        m.diapos.filterKeys { it in placees }.toSortedMap().forEach { (f, d) -> append("diapo=").append(f).append(';').append(d.replace(";", "")).append('\n') }
         if (m.corrigees) append("corrigees=1\n")
     }
 
@@ -616,6 +706,7 @@ object Planche {
         var m = Modele(id = id, nom = id)
         val cases = ArrayList<Zone>(); val textes = ArrayList<Texte>(); val images = HashMap<Int, String>()
         val origine = ArrayList<Zone>(); val textesOrigine = ArrayList<Texte>(); val ecussons = ArrayList<Ecusson>()
+        val diapos = HashMap<String, String>()
         fun texte(v: String): Texte {
             val p = v.split(';')
             return Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
@@ -636,11 +727,15 @@ object Planche {
                 "texteorigine" -> runCatching { textesOrigine += texte(v) }
                 "decor" -> m = m.copy(decor = unesc(v))
                 "ecusson" -> runCatching { val p = v.split(';'); ecussons += Ecusson(p[0], zone(p, 1), p.getOrNull(5) == "1") }
+                "evenement" -> m = m.copy(evenement = EvenementSstv.lit(v))
+                "evenementmain" -> m = m.copy(evenementMain = v == "1")
+                "vides" -> m = m.copy(vides = v == "1")
+                "diapo" -> if (v.contains(';') && diapos.size < 200) diapos[v.substringBefore(';')] = v.substringAfter(';').take(12)
                 "corrigees" -> m = m.copy(corrigees = v == "1")
             }
         }
         m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine,
-            ecussons = ecussons)
+            ecussons = ecussons, diapos = diapos)
     }.getOrNull()
 
     /** The sheets folder: templates ("*.planche"), their backgrounds and patches. */

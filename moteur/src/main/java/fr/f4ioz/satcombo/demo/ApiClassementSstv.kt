@@ -24,7 +24,8 @@ import java.io.File
  * the slides expected on the passes to come; `POST /api/sstv/diapo?nom=&n=&sur=`
  * (a picture's slide, set on its group; n=0 takes it off),
  * `POST /api/sstv/groupe?nom=&vers=` (into a group by its id, « seule »,
- * or "" back to sorting by itself).
+ * or "" back to sorting by itself), `POST /api/sstv/relance?oublie=` (every
+ * picture measured again; the hand's numbers and groups kept unless ?oublie=1).
  */
 object ApiClassementSstv {
 
@@ -109,6 +110,8 @@ object ApiClassementSstv {
             if (galerie.numerote(dossier, shots, p("nom"), n, sur)) JSONObject().put("ok", true)
             else JSONObject().put("ok", false).put("erreur", if (n !in 0..99) "numéro refusé" else "image introuvable")
         }
+        // « Relancer l'analyse »: every picture measured again; ?oublie=1 forgets the hand's numbers and groups too.
+        "/api/sstv/relance" -> JSONObject().put("ok", true).put("n", galerie.relance(dossier, shots, p("oublie") == "1"))
         "/api/sstv/groupe" -> {
             if (galerie.deplace(dossier, shots, p("nom"), p("vers"))) JSONObject().put("ok", true)
             else JSONObject().put("ok", false).put("erreur", "image ou groupe introuvable")

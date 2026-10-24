@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sstv.CibleAfc
 import fr.f4ioz.satcombo.sstv.SstvAccord
+import fr.f4ioz.satcombo.sstv.QualiteSstv
 import fr.f4ioz.satcombo.sstv.SstvAfc
 import fr.f4ioz.satcombo.sstv.SstvDecoder
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -142,6 +143,8 @@ class SstvPc(
     @Volatile private var memoire: SstvSon.Memoire? = null
     @Volatile private var accord: SstvAccord? = null
     @Volatile private var calage: SstvAfc? = null
+    /** The live reception quality ([QualiteSstv]): measured beside the decoder, never in its way. */
+    @Volatile private var qualite: QualiteSstv? = null
     /** The source feeding the decoder now ("carte", "sdr", "" before any sound). */
     @Volatile var sourceActive = ""; private set
     @Volatile var rateActif = 0; private set
@@ -178,6 +181,7 @@ class SstvPc(
         // Kept before decoding: a picture ending in this block takes it all.
         runCatching { memoire?.ajoute(pcm, n) }
         runCatching { accord?.ajoute(pcm, n) }
+        runCatching { qualite?.son(pcm, n) }
         val a = if (afc) calage ?: SstvAfc(rate).also { calage = it } else null
         runCatching { if (a != null) a.nourrit(d, pcm, n, runCatching { cibleAfc(src) }.getOrNull()) else d.feed(pcm, n) }.onFailure { e ->
             val k = ++pannes
@@ -194,21 +198,23 @@ class SstvPc(
         enCours = null; pannes = 0
         memoire = SstvSon.Memoire(rate)
         accord = SstvAccord(rate)
+        val q = QualiteSstv(rate, horloge).also { qualite = it }
         _etat.update { it.copy(mode = "", lignes = 0, hauteur = 0, erreur = "") }
-        return SstvDecoder(rate, ecouteur).also { it.forcedMode = force; it.continuous = continu; decodeur = it }
+        return SstvDecoder(rate, ecouteur).also { it.forcedMode = force; it.continuous = continu; it.mesureLigne = { _, l, t, n, b -> q.ligne(l, t, n, b) }; decodeur = it }
     }
 
     /** Settings changed so that the decoder must start over (source, off). */
     @Synchronized private fun oublie() {
         calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
         calage = null
-        decodeur = null; memoire = null; accord = null; enCours = null
+        decodeur = null; memoire = null; accord = null; enCours = null; qualite = null
         sourceActive = ""; rateActif = 0; derniereMs = 0L
         _etat.update { it.copy(mode = "", lignes = 0, hauteur = 0) }
     }
 
     private val ecouteur = object : SstvDecoder.Listener {
         override fun onVis(mode: SstvMode) {
+            runCatching { qualite?.debut(mode) }
             _etat.update { it.copy(mode = mode.name, lignes = 0, hauteur = mode.height, erreur = "") }
         }
         override fun onProgress(mode: SstvMode, pixels: IntArray, linesDone: Int) {
@@ -218,6 +224,7 @@ class SstvPc(
         override fun onImage(mode: SstvMode, pixels: IntArray, linesDone: Int, complete: Boolean) {
             val c = runCatching { contexte() }.getOrDefault(Contexte())
             val h = runCatching { horsAntenne(sourceActive) }.getOrNull()
+            runCatching { qualite?.fin() }
             enCours = null
             // The test generator's pictures: seen while they come, never in the gallery (nor anything fed from it).
             if (h?.genre == ESSAI) { _etat.update { it.copy(mode = "", lignes = 0, essais = it.essais + 1, version = it.version + 1) }; return }
@@ -239,6 +246,7 @@ class SstvPc(
         val m = mode ?: force ?: return "choisir un mode d'abord"
         val d = decodeur?.takeIf { horloge() - derniereMs < SON_VU_MS } ?: return "aucun son n'arrive au décodeur SSTV"
         runCatching { d.forceStart(m) }.onFailure { return it.javaClass.simpleName }
+        runCatching { qualite?.debut(m) }
         return null
     }
 
@@ -272,6 +280,9 @@ class SstvPc(
         enCours = null
         _etat.update { it.copy(mode = "", lignes = 0) }
     }
+
+    /** The live reception quality while the sound arrives; null when none comes. */
+    fun qualite(): QualiteSstv.Etat? = qualite?.etat?.takeIf { derniereMs > 0 && horloge() - derniereMs < SON_VU_MS }
 
     /** The decoder's state for the page. */
     class Ecoute(val decodage: Boolean, val mode: String, val progres: Float, val niveau: Float, val ecartHz: Int?,

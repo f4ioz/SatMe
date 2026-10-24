@@ -10,7 +10,14 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.PagePc
 
+import fr.f4ioz.satcombo.data.SatPass
+import fr.f4ioz.satcombo.demo.ApiPlancheEvenement
 import fr.f4ioz.satcombo.demo.PagePlanche
+import fr.f4ioz.satcombo.domain.CampagneSstv
+import fr.f4ioz.satcombo.sstv.ClassementGalerie
+import fr.f4ioz.satcombo.sstv.EvenementSstv
+import fr.f4ioz.satcombo.sstv.RapportEvenement
+import fr.f4ioz.satcombo.sstv.SerieSstv
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
@@ -31,7 +38,34 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     /** The gallery sorted: « Remplir » takes the best copy of each slide (set by Main). */
     @Volatile var classement: ClassementSstvPc? = null
 
+    /** The station's plans, for the report's receive chain (set by Main). */
+    @Volatile var montage: MontagePc? = null
+
     private val rangement = Planche.Rangement(File(dossier, "planches").apply { mkdirs() })
+
+    /** What the sheet's event, its picker and its report read on the PC. */
+    private val source = object : ApiPlancheEvenement.Source {
+        override val dossier: File get() = son.sstv.dossier
+        override val classement: ClassementGalerie get() = this@PlancheWebPc.classement?.galerie ?: secours
+        private val secours = ClassementGalerie { null }
+        override fun images(): List<SstvMeta.SstvShot> = galerie().map { it.second }
+        override fun evenements(): List<EvenementSstv.Evenement> = this@PlancheWebPc.classement?.evenements().orEmpty()
+        override fun catnumDe(sat: String): Int = station.catnumDe(sat)
+        override fun passes(catnum: Int, deMs: Long, aMs: Long): List<SatPass> = station.passagesDe(catnum, deMs, aMs)
+        override fun positions(catnum: Int, ts: List<Long>): List<Pair<Double, Double>>? = station.positionsDe(catnum, ts)
+        override fun epoqueElements(catnum: Int): Long? = station.epoqueElements(catnum)
+        override fun traces(): List<CampagneSstv.Trace> = this@PlancheWebPc.classement?.traces().orEmpty()
+        override fun campagne(id: String): CampagneSstv.Campagne? = this@PlancheWebPc.classement?.campagne(id)
+        override fun elMin(): Double = SerieSstv.elMin(station.settings.minElevDeg.toDouble())
+        override fun station(): RapportEvenement.Station =
+            RapportEvenement.Station(station.settings.callsign, station.etat.value.locator, station.settings.plancheNom)
+        override fun plans(): List<Pair<String, String>> = montage?.listePlans().orEmpty()
+        override fun chaine(plan: String): Pair<String, List<List<RapportEvenement.Etape>>>? =
+            montage?.chaineDe(plan)?.let { (nom, c) -> nom to RapportEvenement.etapes(c) }
+        override fun planche(m: Planche.Modele): ByteArray? = image(m.id, 1600)?.let { jpeg(rgb(it), 0.86f) }
+        override fun vignette(nom: String): ByteArray? =
+            galerie().firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(rgb(it), 0.84f) }
+    }
 
     /** The page, under the PC's header, as the journal's. */
     fun page(): String = PagePlanche.html()
@@ -113,12 +147,13 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         val r = rangement
         val chemin = route.substringBefore('?')
         return runCatching {
+            ApiPlancheEvenement.sert(chemin, p, source, r, this, ::modele)?.let { return it }
             when (chemin) {
-                "/liste" -> json("{\"modeles\":" + r.modeles().joinToString(",", "[", "]") { "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(it.nom)}\"}" } +
+                "/liste" -> json("{\"modeles\":" + r.modeles().joinToString(",", "[", "]") { "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(it.nom)}\",\"ev\":\"${js(it.evenement?.nom.orEmpty())}\",\"n\":${it.images.size}}" } +
                     ",\"indicatif\":\"${js(station.settings.callsign)}\",\"nom\":\"${js(station.settings.plancheNom)}\"}")
 
                 "/modele" -> {
-                    val m = modele(p("id")) ?: return NON
+                    val m = modele(p("id"))?.let { ApiPlancheEvenement.assure(it, source, r, this) } ?: return NON
                     val fond = r.fond(m)
                     val ratio = fond?.let { f -> runCatching { ImageIO.read(f) }.getOrNull()?.let { it.width.toFloat() / it.height } } ?: m.ratio
                     val parNom = galerie().map { it.first.name }.toSet()
@@ -189,8 +224,9 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                 // [n]: the sheet fitted to that many pictures (0: the template's boxes); one copy of each slide.
                 "/remplit", "/nombre" -> {
                     val m = modele(p("id")) ?: return NON
-                    val sat = p("sat")
-                    val l = galerie().filter { sat.isBlank() || it.second.satName == sat }
+                    // The pictures shown: the sheet's event's (unless « all »), or one satellite's.
+                    val noms = ApiPlancheEvenement.images(m, source, p("sat"), p("tous") == "1").map { it.fileName }.toHashSet()
+                    val l = galerie().filter { it.second.fileName in noms }
                     val sig = PlancheRenduPc.signatures(l.map { it.first }).let { b ->
                         classement?.let { c -> runCatching { c.galerie.signatures(b, c.etat(attendre = true)) }.getOrNull() } ?: b }
                     val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
@@ -254,10 +290,6 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     synchronized(this) { r.enregistre(n) }
                     json("{\"ok\":true,\"n\":${n.ecussons.size}}")
                 }
-
-                "/galerie" -> json(galerie().joinToString(",", "[", "]") { (f, s) ->
-                    "{\"f\":\"${js(f.name)}\",\"s\":\"${js(s.satName)}\",\"m\":\"${js(s.mode)}\",\"t\":${s.timeMs},\"c\":${s.complete},\"d\":${s.source == "live"}}"
-                })
 
                 // A picture of the gallery, small (only one of the gallery: never another file).
                 "/vignette" -> {

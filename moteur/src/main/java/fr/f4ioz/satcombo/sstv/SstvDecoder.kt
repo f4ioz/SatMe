@@ -230,6 +230,16 @@ class SstvDecoder(
     @Volatile var mesureSync: ((ecartHz: Double, bruitHz: Double) -> Unit)? = null
 
     /**
+     * Each line block decoded: its index, its lines, whether its sync pulse
+     * was found, clean, and the noise inside it (Hz, -1 not measured). For
+     * the live reception quality ([QualiteSstv]): read only, the picture is
+     * the same with or without it; null (the default) costs nothing.
+     */
+    @Volatile var mesureLigne: ((bloc: Int, lignes: Int, trouve: Boolean, nette: Boolean, bruitHz: Double) -> Unit)? = null
+    /** The last sync pulse's noise ([followTuning]), for [mesureLigne]. */
+    private var etaleBloc = -1.0
+
+    /**
      * The receiver was moved: from the next sample fed on, every tone arrives
      * [deltaHz] lower. The correction follows, so the picture under way sees
      * no jump. Called between two blocks, by whoever moved the receiver.
@@ -605,6 +615,7 @@ class SstvDecoder(
             val bruit = maxOf(mad, sqrt(maxOf(0.0, s2 / n - mean * mean)))
             f(med + correction - SstvTone.SYNC, if (abs(med - mean) > ACCORD_LECTURES_HZ) 999.0 else bruit) } } }
         val etale = noiseSpread(i0, i1, mean)
+        etaleBloc = etale
         syncSpread = if (syncSpread < 0) etale else syncSpread + (etale - syncSpread) * 0.2
         val nette = etale < PULSE_NETTE_HZ && abs(mean - SstvTone.SYNC) < PULSE_NETTE_HZ
         // Only a clean pulse is a reference. Receiver noise sits mostly above
@@ -1015,6 +1026,8 @@ class SstvDecoder(
                 if (hit >= 0 && !wide && abs(hit - expected) > LOCKED_MAX_ERR_MS * spms) hit = -1L
             }
             if (blockIndex == 0) lastSync = expected
+            var netteBloc = false
+            etaleBloc = -1.0
             if (hit >= 0) {
                 val err = hit - expected
                 // Track the period only while locked: a relock jump is not clock drift.
@@ -1031,7 +1044,7 @@ class SstvDecoder(
                 if (wide) histLen = 0          // relocked: the old line is history
                 remember(blockIndex, hit.toDouble())
                 missedRun = 0
-                if (followTuning(m, hit, lastRunEnd)) { sansNette = 0; enLigneSansNette = 0; derniereNette = blockIndex; nettes++ }
+                if (followTuning(m, hit, lastRunEnd).also { netteBloc = it }) { sansNette = 0; enLigneSansNette = 0; derniereNette = blockIndex; nettes++ }
                 else if (blockIndex > 0) { sansNette++; if (!wide) enLigneSansNette++ }
             } else if (blockIndex > 0) { missedRun++; sansNette++ }
             // **The line, fitted on recent pulses.** One pulse, one correction
@@ -1045,6 +1058,7 @@ class SstvDecoder(
             }
 
             decodeOneBlock(m)
+            mesureLigne?.let { f -> runCatching { f(blockIndex, m.linesPerBlock, hit >= 0, netteBloc, etaleBloc) } }
             blockIndex++
             blockStart += blockPeriod
 

@@ -10,7 +10,9 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.demo.ApiClassementSstv
+import fr.f4ioz.satcombo.domain.CampagneSstv
 import fr.f4ioz.satcombo.sstv.ClassementGalerie
+import fr.f4ioz.satcombo.sstv.EvenementSstv
 import fr.f4ioz.satcombo.sstv.SerieSstv
 import org.json.JSONObject
 import java.io.File
@@ -60,16 +62,25 @@ class ClassementSstvPc(
     fun serie(t: Long = horloge()): SerieSstv.Serie? = SerieSstv.choisit(
         runCatching { activites()?.liste() }.getOrNull().orEmpty(), autopilote()?.campagnes.orEmpty(), t)
 
+    /** The events a sheet may be about: the autopilot's campaigns, the SSTV activities announced. */
+    fun evenements(): List<EvenementSstv.Evenement> = EvenementSstv.liste(
+        runCatching { activites()?.liste() }.getOrNull().orEmpty(), autopilote()?.campagnes.orEmpty())
+
+    /** The autopilot's history, its campaigns. */
+    fun traces(): List<CampagneSstv.Trace> = autopilote()?.historique.orEmpty()
+    fun campagne(id: String): CampagneSstv.Campagne? = autopilote()?.campagnes?.firstOrNull { it.id == id }
+
     /** `GET /api/sstv/classement`. */
     fun json(): JSONObject {
         val t = horloge()
         val e = etat()
-        val s = serie(t)
-        val p = s?.let {
-            val (avenir, faits) = passes(it, t)
-            SerieSstv.prevision(it, e, avenir, faits, SerieSstv.elMin(station.settings.minElevDeg.toDouble()), t)
-        }
-        return ApiClassementSstv.json(e, p, t) { g -> corrections.api.pourGroupe(g) }
+        return ApiClassementSstv.json(e, prevision(e, t), t) { g -> corrections.api.pourGroupe(g) }
+    }
+
+    /** The series under way as the page sees it (its slides, the passes to come); null none. */
+    fun prevision(e: ClassementGalerie.Etat = etat(), t: Long = horloge()): SerieSstv.Prevision? = serie(t)?.let {
+        val (avenir, faits) = passes(it, t)
+        SerieSstv.prevision(it, e, avenir, faits, SerieSstv.elMin(station.settings.minElevDeg.toDouble()), t)
     }
 
     /** `POST /api/sstv/diapo`, `/api/sstv/groupe`; null when not one of them. */

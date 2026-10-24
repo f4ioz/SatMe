@@ -849,7 +849,7 @@ object PagesPcTelephone {
             }
             "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
                 fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(vm.getApplication<android.app.Application>()).action(route, p) ?: JSONObject().put("ok", false)
-            "/api/sstv/diapo", "/api/sstv/groupe" -> {
+            "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 ApiClassementSstv.action(route, p, fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie,
                     fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx)) ?: JSONObject().put("ok", false)

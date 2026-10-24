@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import fr.f4ioz.satcombo.data.SettingsStore
+import fr.f4ioz.satcombo.demo.ApiPlancheEvenement
+import fr.f4ioz.satcombo.sstv.EvenementSstv
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.sstv.Planche
@@ -87,7 +89,8 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
     var choix by remember { mutableStateOf<Int?>(null) }
     // Opens on the pictures: choosing them is what a sheet is made of.
     var onglet by remember { mutableStateOf(0) }
-    var filtreSat by remember { mutableStateOf("") }
+    // The pictures shown: the sheet's event's (« @ev »), all (""), or one satellite's.
+    var filtreSat by remember { mutableStateOf("@ev") }
     var indicatif by remember { mutableStateOf(reglages.callsign) }
     var nom by remember { mutableStateOf(reglages.plancheNom) }
     var locatorSaisi by remember { mutableStateOf<String?>(null) }
@@ -117,6 +120,62 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
     LaunchedEffect(m) {
         val x = m ?: return@LaunchedEffect; delay(600)
         withContext(Dispatchers.IO) { rangement.enregistre(x); runCatching { rangement.nettoie() } }
+    }
+
+    // The sheet's event and what each picture is (its mark, its slide, its group), as the page has them.
+    val src = remember { fr.f4ioz.satcombo.demo.PlancheWeb.source(ctx) }
+    val verrou = remember { Any() }
+    var evenements by remember { mutableStateOf<List<EvenementSstv.Evenement>>(emptyList()) }
+    var infos by remember { mutableStateOf<Map<String, InfoImage>>(emptyMap()) }
+    var versionInfos by remember { mutableIntStateOf(0) }
+    var analyse by remember { mutableStateOf<String?>(null) }
+    var renommer by remember { mutableStateOf(false) }
+    var rapport by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { evenements = withContext(Dispatchers.IO) { runCatching { ApiPlancheEvenement.tous(src) }.getOrDefault(emptyList()) } }
+    // Chosen from the sheet's pictures (an older sheet finds its event the first time), unless chosen by hand.
+    LaunchedEffect(m?.id, m?.images, m?.evenementMain) {
+        val x = m ?: return@LaunchedEffect
+        if (x.evenementMain) return@LaunchedEffect
+        delay(700)
+        val n = withContext(Dispatchers.IO) { runCatching { ApiPlancheEvenement.assure(x, src, rangement, verrou) }.getOrNull() } ?: return@LaunchedEffect
+        m?.let { y -> if (y.id == n.id && !y.evenementMain && y.evenement != n.evenement) change(y.copy(evenement = n.evenement)) }
+    }
+    LaunchedEffect(m?.evenement, versionInfos) {
+        while (true) {
+            val x = m
+            withContext(Dispatchers.IO) { runCatching { ApiPlancheEvenement.galerie(x, src) }.getOrNull() }?.let { infos = infosImages(it) }
+            val e = withContext(Dispatchers.IO) { fr.f4ioz.satcombo.sstv.ClassementTelephone.etat(ctx) }
+            if (e.restent == 0) { if (analyse != null) analyse = tf("planche_analyse_finie", e.groupes.size, e.analyses.values.count { it.lu > 0 }); break }
+            analyse = tf("planche_analyse_en_cours", e.restent)
+            delay(1500)
+        }
+    }
+    fun choisitEvenement(v: String) {
+        val x = m ?: return
+        when (v) {
+            "" -> change(x.copy(evenementMain = false))
+            "aucun" -> change(x.copy(evenement = null, evenementMain = true))
+            else -> evenements.firstOrNull { it.id == v }?.let { change(x.copy(evenement = it, evenementMain = true)) }
+        }
+    }
+    // « Fill by slide »: the best copy of each slide in slide order; what is missing said.
+    fun parDiapo(tous: Boolean) {
+        val x = m ?: return
+        occupe = true
+        scope.launch {
+            val r = withContext(Dispatchers.Default) { runCatching { ApiPlancheEvenement.remplitParDiapo(x, src, x.vides, tous) }.getOrNull() }
+            occupe = false
+            if (r == null) return@launch
+            change(r.modele); choix = null
+            message = (if (r.manquantes.isEmpty()) t("planche_rempli_toutes") else tf("planche_rempli_diapos", r.manquantes.joinToString(", "))) +
+                (if (r.sansNumero > 0) " " + tf("planche_sans_numero", r.sansNumero) else "")
+        }
+    }
+    fun relance(oublie: Boolean) {
+        scope.launch {
+            withContext(Dispatchers.IO) { fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie.relance(SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx), oublie) }
+            analyse = ""; versionInfos++
+        }
     }
 
     // The processed versions (fused, corrected) in place of those received when the sheet takes them, marked so.
@@ -192,6 +251,29 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         }
     }
     val enregistre = rememberEnregistrer()
+
+    // The event's report: one HTML file, shared or saved.
+    fun faitRapport(chaine: Boolean, partager: Boolean) {
+        val x = m ?: return
+        val ev = x.evenement ?: run { message = t("planche_rapport_sans_ev"); return }
+        occupe = true
+        scope.launch {
+            val f = withContext(Dispatchers.IO) { runCatching {
+                val r = ApiPlancheEvenement.rapport(ev, x, src, chaine, "")
+                File(File(ctx.cacheDir, "export").apply { mkdirs() }, fr.f4ioz.satcombo.sstv.RapportEvenement.nomFichier(r))
+                    .apply { writeText(fr.f4ioz.satcombo.sstv.RapportEvenement.html(r), Charsets.UTF_8) }
+            }.getOrNull() }
+            occupe = false
+            if (f == null) { message = t("planche_rapport_echec"); return@launch }
+            if (partager) runCatching {
+                val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+                ctx.startActivity(android.content.Intent.createChooser(
+                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/html")
+                        .putExtra(android.content.Intent.EXTRA_STREAM, u)
+                        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
+            } else enregistre(f.name, "text/html", depuisFichier(f))
+        }
+    }
 
     fun exporte(partager: Boolean) {
         val x = m ?: return
@@ -299,7 +381,10 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                         label = { Text("＋ " + t("planche_grille"), fontSize = 12.sp, color = Cyan) })
                     AssistChip(onClick = { change(Planche.genereTour(rangement.nouvelId(), tf("planche_nom_modele", modeles.size + 1))); choix = null },
                         label = { Text("＋ " + t("planche_tour"), fontSize = 12.sp, color = Cyan) })
+                    if (m != null) AssistChip(onClick = { renommer = true }, label = { Text("✎ " + t("planche_renommer"), fontSize = 12.sp, color = Cyan) })
                 }
+                if (renommer) m?.let { y -> DialogueRenommer(y.nom, onNom = { n -> m?.let { change(it.copy(nom = n)) } }, onFerme = { renommer = false }) }
+                if (rapport) DialogueRapport(m?.evenement, onRapport = { c, pa -> faitRapport(c, pa) }, onFerme = { rapport = false })
                 message?.let { Text(it, color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)) }
                 if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
 
@@ -328,6 +413,9 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                     OutlinedButton(onClick = { exporte(false) }, enabled = !occupe, modifier = Modifier.weight(1f)) {
                         Text(t("export_save"), color = Cyan)
                     }
+                    OutlinedButton(onClick = { rapport = true }, enabled = !occupe, modifier = Modifier.weight(1f)) {
+                        Text(t("planche_rapport"), color = Cyan)
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("planche_images", "planche_disposition", "planche_textes", "planche_decor").forEachIndexed { i, cle ->
@@ -336,9 +424,13 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(6.dp))
                 when (onglet) {
-                    0 -> OngletImages(x, galerie, places, choix, filtreSat, vignettes,
-                        onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) },
-                        onCalcule = { calcule(it) }, onMessage = { message = it })
+                    0 -> {
+                        LigneEvenement(x.evenement, x.evenementMain, evenements) { choisitEvenement(it) }
+                        OngletImages(x, galerie, places, choix, filtreSat, vignettes, infos, analyse,
+                            onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) },
+                            onCalcule = { calcule(it) }, onMessage = { message = it },
+                            onParDiapo = { parDiapo(it) }, onRelance = { relance(it) })
+                    }
                     1 -> OngletDisposition(x, choix, fondApercu, onChoix = { choix = it }, onChange = { change(it) })
                     3 -> OngletDecor(x, choix, rangement, onChoix = { choix = it }, onChange = { change(it) },
                         onFond = { choisitDecor.launch("image/*") },
@@ -472,11 +564,23 @@ private fun OngletImages(
     m: Planche.Modele, galerie: List<Pair<File, SstvMeta.SstvShot>>,
     places: Map<Int, Pair<File, SstvMeta.SstvShot>>, choix: Int?, filtreSat: String,
     vignettes: MutableMap<String, Bitmap>,
+    /** What each picture is (mark, slide, group, in the event), by name. */
+    infos: Map<String, InfoImage>, analyse: String?,
     onFiltre: (String) -> Unit, onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit,
-    onCalcule: (() -> Planche.Modele) -> Unit, onMessage: (String) -> Unit
+    onCalcule: (() -> Planche.Modele) -> Unit, onMessage: (String) -> Unit,
+    onParDiapo: (tous: Boolean) -> Unit, onRelance: (oublie: Boolean) -> Unit,
 ) {
     val sats = galerie.map { it.second.satName }.filter { it.isNotBlank() }.distinct()
-    val liste = galerie.filter { filtreSat.isBlank() || it.second.satName == filtreSat }
+    // No event: « the event's pictures » is all of them.
+    val filtre = if (filtreSat == "@ev" && m.evenement == null) "" else filtreSat
+    val liste = galerie.filter { (f, s) -> when (filtre) { "@ev" -> infos[f.name]?.dansEvenement == true; "" -> true; else -> s.satName == filtre } }
+    // Copies grouped: each slide's best, by slide number; a group's copies when it is opened.
+    var grouper by remember { mutableStateOf(true) }
+    val ouverts = remember { mutableStateListOf<String>() }
+    val montrees = if (!grouper) liste else liste.groupBy { infos[it.first.name]?.groupe ?: it.first.name }.values
+        .map { l -> l.sortedByDescending { infos[it.first.name]?.note ?: -1 } }
+        .sortedWith(compareBy<List<Pair<File, SstvMeta.SstvShot>>> { l -> infos[l.first().first.name]?.diapo?.takeIf { it > 0 } ?: 99 }.thenByDescending { it.first().second.timeMs })
+        .flatMap { l -> if ((infos[l.first().first.name]?.groupe ?: "") in ouverts) l else l.take(1) }
     val ctxSig = androidx.compose.ui.platform.LocalContext.current
     // The gallery sorted: one copy of each slide, the best marked (worked out off the screen's thread, in onCalcule).
     fun signatures() = fr.f4ioz.satcombo.sstv.ClassementTelephone.signatures(ctxSig, PlancheRendu.signatures(liste.map { it.first }))
@@ -493,13 +597,23 @@ private fun OngletImages(
     Text(if (choix != null && choix >= 0) tf("planche_choisir_image", choix + 1, m.cases.size) else t("planche_toucher_case"),
         color = TextHi, fontSize = 12.sp)
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(selected = filtreSat.isBlank(), onClick = { onFiltre("") }, label = { Text(t("sstv_filter_all"), fontSize = 11.sp) })
-        sats.forEach { s -> FilterChip(selected = filtreSat == s, onClick = { onFiltre(s) }, label = { Text(s, fontSize = 11.sp) }) }
+        if (m.evenement != null) FilterChip(selected = filtre == "@ev", onClick = { onFiltre("@ev") }, label = { Text(t("planche_filtre_ev"), fontSize = 11.sp) })
+        FilterChip(selected = filtre.isBlank(), onClick = { onFiltre("") }, label = { Text(t("sstv_filter_all"), fontSize = 11.sp) })
+        sats.forEach { s -> FilterChip(selected = filtre == s, onClick = { onFiltre(s) }, label = { Text(s, fontSize = 11.sp) }) }
+    }
+    // « Fill by slide »: 1/12, 2/12… the best copy of each; a missing slide's box empty or not.
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(onClick = { onParDiapo(filtre != "@ev") }) { Text(t("planche_remplir_diapos"), fontSize = 11.sp) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onChange(m.copy(vides = !m.vides)) }) {
+            Checkbox(checked = m.vides, onCheckedChange = { onChange(m.copy(vides = it)) })
+            Text(t("planche_garder_vides"), color = TextLo, fontSize = 11.sp)
+        }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(onClick = {
             onCalcule { Planche.remplit(m, liste.map { it.second }, signatures()) }
         }) { Text(t("planche_remplir"), color = Cyan, fontSize = 11.sp) }
+        FilterChip(selected = grouper, onClick = { grouper = !grouper }, label = { Text(t("pw_grouper"), fontSize = 11.sp) })
         if (choix != null && choix >= 0 && !m.ajustee) OutlinedButton(onClick = { onChange(m.copy(images = m.images - choix)) }) {
             Text(t("planche_vider_case"), color = Cyan, fontSize = 11.sp)
         }
@@ -514,12 +628,20 @@ private fun OngletImages(
             Text(t("planche_apres"), color = Cyan, fontSize = 11.sp)
         }
     }
+    // The pictures measured again, their numbers read again (what the hand set kept unless asked).
+    var oublie by remember { mutableStateOf(false) }
+    Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = { onRelance(oublie) }) { Text(t("planche_relancer"), color = Cyan, fontSize = 11.sp) }
+        Checkbox(checked = oublie, onCheckedChange = { oublie = it })
+        Text(t("planche_relancer_oublie"), color = TextLo, fontSize = 10.sp)
+    }
+    Text(analyse?.takeIf { it.isNotBlank() } ?: t("planche_relancer_aide"), color = TextLo, fontSize = 10.sp)
     Text(t(if (m.ajustee) "planche_aide_ajustee" else "planche_ordre_aide"), color = TextLo, fontSize = 10.sp,
         modifier = Modifier.padding(vertical = 4.dp))
     val utilise = m.images.entries.associate { it.value to it.key }
     // Large, two a row: here a picture is only chosen, so it gets the room to be seen.
     val heure = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.getDefault()) }
-    liste.chunked(2).forEach { rang ->
+    montrees.chunked(2).forEach { rang ->
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             rang.forEach { (f, s) ->
                 // Read off the screen's thread: a week of ISS passes is many pictures.
@@ -550,6 +672,10 @@ private fun OngletImages(
                             ?: Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f))
                         if (place != null) Text("${place + 1}/${m.cases.size}", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(4.dp).background(Cyan, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
+                        infos[f.name]?.let { i ->
+                            BadgeDiapo(i.badge, i.origine, Modifier.align(Alignment.TopEnd))
+                            NoteImage(i.note, Modifier.align(Alignment.BottomEnd))
+                        }
                     }
                     Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                         Text(s.satName.ifBlank { "SSTV" } + " · " + s.mode, color = TextHi, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -558,6 +684,9 @@ private fun OngletImages(
                             if (s.source == "live") t("planche_en_direct") else t("planche_redecodee"),
                             if (!s.complete) t("sstv_partial") else null)
                         Text(marques.joinToString(" · "), color = if (s.complete) TextLo else Amber, fontSize = 10.sp)
+                        val i = infos[f.name]
+                        if (grouper && i != null && i.copies > 1 && i.meilleure) Text((if (i.groupe in ouverts) "▾ " else "▸ ") + tf("pw_copies", i.copies - 1),
+                            color = Cyan, fontSize = 11.sp, modifier = Modifier.clickable { if (i.groupe in ouverts) ouverts.remove(i.groupe) else ouverts.add(i.groupe) })
                     }
                 }
             }

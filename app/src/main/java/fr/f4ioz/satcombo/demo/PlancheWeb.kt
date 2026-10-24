@@ -10,7 +10,14 @@ package fr.f4ioz.satcombo.demo
 
 import android.content.Context
 import android.graphics.Bitmap
+import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.data.SettingsStore
+import fr.f4ioz.satcombo.domain.PassPredictor
+import fr.f4ioz.satcombo.sstv.ClassementGalerie
+import fr.f4ioz.satcombo.sstv.ClassementTelephone
+import fr.f4ioz.satcombo.sstv.EvenementSstv
+import fr.f4ioz.satcombo.sstv.RapportEvenement
+import fr.f4ioz.satcombo.sstv.SerieSstv
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.PlancheFichier
@@ -55,7 +62,7 @@ object PlancheWeb {
         }
     }
 
-    private fun rangement(ctx: Context) = Planche.Rangement(File(ctx.filesDir, "planches"))
+    fun rangement(ctx: Context) = Planche.Rangement(File(ctx.filesDir, "planches"))
 
     // The gallery is files on disk: read again at most every few seconds.
     @Volatile private var galerie: List<Pair<File, SstvMeta.SstvShot>> = emptyList()
@@ -104,6 +111,70 @@ object PlancheWeb {
         return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to (corr?.pourPlanche(it) ?: it) } }.toMap()
     }
 
+    @Volatile private var observateur: Pair<Long, fr.f4ioz.satcombo.data.Observer>? = null
+    private fun observateur(ctx: Context): fr.f4ioz.satcombo.data.Observer {
+        observateur?.let { (t, o) -> if (System.currentTimeMillis() - t < 60_000L) return o }
+        val o = kotlinx.coroutines.runBlocking { fr.f4ioz.satcombo.data.ActivitesTelephone.observateur(ctx) }
+        observateur = System.currentTimeMillis() to o
+        return o
+    }
+
+    /** The sheet [m] drawn as the preview is, [largeur] wide. */
+    fun dessine(ctx: Context, r: Planche.Rangement, m: Planche.Modele, largeur: Int): Bitmap {
+        val places = places(ctx, m)
+        val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
+        val logo = runCatching { ctx.packageManager.getApplicationIcon(ctx.applicationInfo) }.getOrNull()
+        return PlancheRendu.dessine(m, fondApercu(r, m), largeur, imgs, valeurs(ctx, m, places) { "" }, logo,
+            PlancheRendu.chargeDecor(r, m, 1800), PlancheRendu.chargeEcussons(r, m, 800))
+    }
+
+    /**
+     * What the sheet's event, its picker and its report read on the phone
+     * (the page served to the PC and the phone's own screen): no autopilot,
+     * no station plan — the chain is what the pictures say of their input.
+     */
+    fun source(ctx: Context): ApiPlancheEvenement.Source = object : ApiPlancheEvenement.Source {
+        private val reglages = SettingsStore(ctx)
+        override val dossier: File get() = SstvHub.dir(ctx)
+        override val classement: ClassementGalerie get() = ClassementTelephone.galerie
+        override fun images(): List<SstvMeta.SstvShot> = galerie(ctx).map { it.second }
+        override fun evenements(): List<EvenementSstv.Evenement> = EvenementSstv.liste(
+            runCatching { fr.f4ioz.satcombo.data.ActivitesTelephone.enLigne(ctx).liste(reglages.reglagesActivites) }.getOrDefault(emptyList()), emptyList())
+        private val sats by lazy { fr.f4ioz.satcombo.data.ActivitesTelephone.satellites(ctx) }
+        private fun sat(catnum: Int) = sats.firstOrNull { it.catalogNumber == catnum }
+        override fun catnumDe(sat: String): Int {
+            fun n(s: String) = s.uppercase().replace(Regex("\\(.*?\\)"), "").replace(Regex("[^A-Z0-9]"), "")
+            val k = n(sat)
+            if (k.isEmpty()) return 0
+            if (k == "ISS") return fr.f4ioz.satcombo.domain.ActivitesAVenir.ISS
+            return sats.firstOrNull { n(it.name) == k }?.catalogNumber ?: 0
+        }
+        override fun passes(catnum: Int, deMs: Long, aMs: Long): List<SatPass> {
+            val e = sat(catnum)?.takeIf { PassPredictor.elementsUtilisables(it) } ?: return emptyList()
+            return runCatching { PassPredictor().upcomingPasses(e, observateur(ctx), deMs, ((aMs - deMs) / 3_600_000L + 1).toInt().coerceIn(1, 24 * 15), 0.0) }
+                .getOrDefault(emptyList()).filter { it.aosEpochMs < aMs }
+        }
+        override fun positions(catnum: Int, ts: List<Long>): List<Pair<Double, Double>>? {
+            val e = sat(catnum)?.takeIf { PassPredictor.elementsUtilisables(it) } ?: return null
+            return runCatching { PassPredictor().samplePositions(e, observateur(ctx), ts).map { it.azimuthDeg to it.elevationDeg } }.getOrNull()
+        }
+        override fun epoqueElements(catnum: Int): Long? = sat(catnum)?.epochMs
+        override fun elMin(): Double = SerieSstv.elMin(reglages.minElevDeg.toDouble())
+        override fun station(): RapportEvenement.Station = RapportEvenement.Station(reglages.callsign, SstvHub.qthLocator, reglages.plancheNom)
+        override fun chaine(plan: String): Pair<String, List<List<RapportEvenement.Etape>>> {
+            val entrees = images().map { it.entree }.filter { it.isNotBlank() }.distinct()
+            val rx = entrees.map { if (it == "sdr") fr.f4ioz.satcombo.i18n.t("rev_entree_sdr") else fr.f4ioz.satcombo.i18n.t("rev_entree_carte") }
+                .ifEmpty { listOf(fr.f4ioz.satcombo.i18n.t("rev_entree_inconnue")) }
+            return fr.f4ioz.satcombo.i18n.t("rev_chaine_telephone") to listOf(
+                listOf(RapportEvenement.Etape(fr.f4ioz.satcombo.i18n.t("rev_antenne"), "—")),
+                rx.map { RapportEvenement.Etape(fr.f4ioz.satcombo.i18n.t("rev_entree_inconnue"), it) },
+                listOf(RapportEvenement.Etape(fr.f4ioz.satcombo.i18n.t("rev_chaine_telephone"), android.os.Build.MODEL.take(40))))
+        }
+        override fun planche(m: Planche.Modele): ByteArray? = jpeg(dessine(ctx, rangement(ctx), m, 1600), 86)
+        override fun vignette(nom: String): ByteArray? =
+            galerie(ctx).firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(it, 84) }
+    }
+
     private fun modele(r: Planche.Rangement, id: String): Planche.Modele? =
         id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }?.let { i -> r.modeles().firstOrNull { it.id == i } }
 
@@ -115,18 +186,20 @@ object PlancheWeb {
         val ctx = app ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val r = rangement(ctx)
         val chemin = route.substringBefore('?')
+        val src = source(ctx)
         return runCatching {
+            ApiPlancheEvenement.sert(chemin, p, src, r, this, { modele(r, it) })?.let { return it }
             when (chemin) {
                 // The templates, and what the texts say by default.
                 "/liste" -> {
                     val reglages = SettingsStore(ctx)
-                    json("{\"modeles\":" + r.modeles().joinToString(",", "[", "]") { "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(it.nom)}\"}" } +
+                    json("{\"modeles\":" + r.modeles().joinToString(",", "[", "]") { "{\"id\":\"${js(it.id)}\",\"nom\":\"${js(it.nom)}\",\"ev\":\"${js(it.evenement?.nom.orEmpty())}\",\"n\":${it.images.size}}" } +
                         ",\"indicatif\":\"${js(reglages.callsign)}\",\"nom\":\"${js(reglages.plancheNom)}\"}")
                 }
 
                 // A template in its text form, with the size of its background and where the series stands.
                 "/modele" -> {
-                    val m = modele(r, p("id")) ?: return NON
+                    val m = modele(r, p("id"))?.let { ApiPlancheEvenement.assure(it, src, r, this) } ?: return NON
                     val fond = r.fond(m)
                     val ratio = fond?.let { f ->
                         val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -206,8 +279,9 @@ object PlancheWeb {
                 // one copy of each slide; [n]: the sheet fitted to that many pictures (0: the template's boxes).
                 "/remplit", "/nombre" -> {
                     val m = modele(r, p("id")) ?: return NON
-                    val sat = p("sat")
-                    val l = galerie(ctx).filter { sat.isBlank() || it.second.satName == sat }
+                    // The pictures shown: the sheet's event's (unless « all »), or one satellite's.
+                    val noms = ApiPlancheEvenement.images(m, src, p("sat"), p("tous") == "1").map { it.fileName }.toHashSet()
+                    val l = galerie(ctx).filter { it.second.fileName in noms }
                     // The gallery sorted: one copy of each slide, the best marked.
                     val sig = fr.f4ioz.satcombo.sstv.ClassementTelephone.signatures(ctx, PlancheRendu.signatures(l.map { it.first }))
                     val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
@@ -262,12 +336,6 @@ object PlancheWeb {
                     synchronized(this) { r.enregistre(n) }
                     json("{\"ok\":true,\"n\":${n.ecussons.size}}")
                 }
-
-                // The SSTV pictures received, newest first.
-                "/galerie" -> json(galerie(ctx).joinToString(",", "[", "]") { (f, s) ->
-                    "{\"f\":\"${js(f.name)}\",\"s\":\"${js(s.satName)}\",\"m\":\"${js(s.mode)}\",\"t\":${s.timeMs}," +
-                        "\"c\":${s.complete},\"d\":${s.source == "live"}}"
-                })
 
                 // A picture of the gallery, small (only one of the gallery: never another file).
                 "/vignette" -> {

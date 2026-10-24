@@ -60,7 +60,7 @@ fun ditCorrection(f: CorrectionsGalerie.Fiche): String {
  * fuse its slide's copies. The received picture is never changed.
  */
 @Composable
-fun SstvImageCorrigee(file: File, shot: SstvMeta.SstvShot, brute: Bitmap?) {
+fun SstvImageCorrigee(file: File, shot: SstvMeta.SstvShot, brute: Bitmap?, surImage: @Composable BoxScope.() -> Unit = {}) {
     val ctx = LocalContext.current
     val api = remember { CorrectionsTelephone.api(ctx) }
     val dossier = file.parentFile ?: return
@@ -131,12 +131,16 @@ fun SstvImageCorrigee(file: File, shot: SstvMeta.SstvShot, brute: Bitmap?) {
             Image(brute.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
             Image(traitee.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth()
                 .drawWithContent { clipRect(left = size.width * curseur) { this@drawWithContent.drawContent() } })
+            surImage()
         }
         Slider(curseur, { curseur = it })
         Text(t("sstv_corr_glisser"), color = TextLo, fontSize = 10.sp)
     } else {
         val b = if (montre == "brute") brute else traitee ?: brute
-        if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = forme)
+        if (b != null) Box(forme) {
+            Image(b.asImageBitmap(), null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
+            surImage()
+        }
     }
     if (fiche != null) {
         Text(t("sstv_corr_traitee"), color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
