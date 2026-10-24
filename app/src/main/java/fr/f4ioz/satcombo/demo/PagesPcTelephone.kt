@@ -111,6 +111,8 @@ object PagesPcTelephone {
                 // QRZ, as the phone looks it up (its credentials, its session); the card shown, as on the phone.
                 "/api/qrz" -> json(ApiStation.qrz(kotlinx.coroutines.runBlocking { vm.ficheQrz(p("c")) }, u.observer, true))
                 // The mast's plan for the pass, and a contact's pass as the mast went (the phone's journal).
+                // The rotor calibration assistant: the phone's own mast, the same routes as SatMe-PC's.
+                ApiEtalonnageRotor.CHEMIN -> json(ApiEtalonnageRotor.etat(vm.rotorPourPage()))
                 "/api/rotor/plan" -> json(fr.f4ioz.satcombo.demo.ApiRotorPlan.plan(vm.rotorPourPage().apercuPlan(), u.rotor.mat))
                 "/api/carnet/rotor" -> json(fr.f4ioz.satcombo.demo.ApiRotorPlan.journal(vm.journal.passages(),
                     p("t").toLongOrNull() ?: 0L, p("sat"), fr.f4ioz.satcombo.demo.ApiRotorPlan.limites(u.rotor.mat),
@@ -370,6 +372,7 @@ object PagesPcTelephone {
     /** What the page asks the phone to do: the gestures of the tabs served, nothing else. */
     private fun action(vm: MainViewModel, route: String, p: (String) -> String): JSONObject {
         val u = vm.ui.value
+        if (ApiEtalonnageRotor.pourMoi(route)) return ApiEtalonnageRotor.action(vm.rotorPourPage(), route, p)
         return when (route) {
             "/api/suivre" -> {
                 val t = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() } ?: return JSONObject().put("ok", false)
