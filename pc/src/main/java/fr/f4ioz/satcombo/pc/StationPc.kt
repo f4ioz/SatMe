@@ -902,6 +902,17 @@ class StationPc(
         return true
     }
 
+    /** The exact point (degrees, from « Configuration rapide »): its 6-character locator, the passes computed from the point itself. Null when out of range. */
+    fun posePosition(lat: Double, lon: Double): String? {
+        if (lat.isNaN() || lon.isNaN() || lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+        val l = Maidenhead.fromLatLon(lat, lon)
+        settings.manualLocator = l
+        settings.manualLat = lat; settings.manualLon = lon
+        change { copy(locator = l, observateur = observateur(), passage = null) }
+        portee.launch { recalcule() }
+        return l
+    }
+
     fun poseIndicatif(c: String) {
         settings.callsign = c.trim().uppercase()
         change { copy(indicatif = settings.callsign) }

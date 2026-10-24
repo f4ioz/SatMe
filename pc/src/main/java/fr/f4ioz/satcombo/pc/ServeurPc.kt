@@ -192,6 +192,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** This PC asking (free, as before the password); another machine needs a session. */
     @Volatile internal var estLocal: (InetAddress) -> Boolean = { it.isLoopbackAddress }
 
+    /** « Configuration rapide », « Quoi de neuf », Réglages › Démarrage, the update check, « Déploiement » (set before [demarre]). */
+    @Volatile var demarrage: DemarragePc? = null
+
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
@@ -507,6 +510,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 RequeteHttp.corps(c.getInputStream(), r, PlancheWebPc.IMPORT_MAX)
             }
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // Start-up options, update check, deployment: their own guard (this PC or a session) and their own origin check.
+        demarrage?.let { d ->
+            val rep = d.sert(chemin, r.methode, q, local, acces?.session(r.cookie(AccesDistantPc.COOKIE)) == true,
+                r.entetes["origin"], r.entetes["host"]) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+            if (rep != null) { envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return }
         }
         if (r.methode == "POST" && chemin == "/api/sauvegarde/restaure") {
             // A backup, read as it comes (it may hold the recordings): laid aside for the next start.

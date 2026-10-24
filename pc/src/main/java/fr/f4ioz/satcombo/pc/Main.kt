@@ -21,36 +21,43 @@ import java.io.File
  *
  * `--reseau` opens the page to the other machines of the network (a station
  * at the foot of the mast, driven from the house); without it, this PC only.
+ * The same three options can be kept in the launcher file (Réglages ›
+ * Démarrage, [FichierLanceur]): the command line wins over it, it wins over
+ * the defaults.
  */
 fun main(args: Array<String>) {
-    var port = 8090
-    var reseau = false
-    var noeud = false
+    val a = ArgumentsPc.lit(args)
+    if (a.version) { println("SatMe-PC " + versionPc()); return }
+    if (a.aide) {
+        println("SatMe-PC " + versionPc())
+        println("satme [--port 8090] [--reseau|--local] [--noeud] [--dossier DIR] [--bureau|--console] [--version]")
+        println("  --port     port de la page (8090)")
+        println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement) ; --local : ce PC seulement")
+        println("  --noeud    SatMe-Node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
+        println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
+        println("  --bureau   ouvrir la page dans le navigateur, icône près de l'horloge (d'origine sous Windows)")
+        println("  options de démarrage aussi dans ${FichierLanceur.emplacement()} (Réglages › Démarrage) ;")
+        println("  la ligne de commande passe avant ce fichier")
+        return
+    }
+    // Started again by « Redémarrer SatMe-PC »: the previous one gone first (its port, its files).
+    a.apres?.let { RedemarragePc.attend(it) }
+    val fichierLanceur = FichierLanceur(FichierLanceur.emplacement())
+    val optionsLanceur = fichierLanceur.lit()
+    val lanceur = LanceurPc.resout(a, optionsLanceur, fichierLanceur.fichier, dossierParDefaut())
+    val port = lanceur.port
+    val reseau = lanceur.reseau
+    val noeud = a.noeud
     // Started from the desktop (Windows): the browser opened, an icon by the clock.
-    var bureau = OutilsPc.windows
-    var dossier = dossierParDefaut()
-    var i = 0
-    while (i < args.size) {
-        when (args[i]) {
-            "--port" -> port = args.getOrNull(++i)?.toIntOrNull() ?: port
-            "--reseau" -> reseau = true
-            "--noeud" -> noeud = true
-            "--bureau" -> bureau = true
-            "--console" -> bureau = false
-            "--dossier" -> dossier = args.getOrNull(++i)?.let(::File) ?: dossier
-            "-v", "--version" -> { println("SatMe-PC " + versionPc()); return }
-            "-h", "--help", "--aide" -> {
-                println("SatMe-PC " + versionPc())
-                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR] [--bureau|--console] [--version]")
-                println("  --port     port de la page (8090)")
-                println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement)")
-                println("  --noeud    SatMe-Node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
-                println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
-                println("  --bureau   ouvrir la page dans le navigateur, icône près de l'horloge (d'origine sous Windows)")
-                return
-            }
+    val bureau = a.bureau ?: OutilsPc.windows
+    val dossier = lanceur.dossier
+    // « Copier mes données » chosen with a new data folder: copied now, before anything opens; the old folder kept as it is.
+    optionsLanceur.copieDepuis?.let { depuis ->
+        if (lanceur.sourceDossier == LanceurPc.Source.FICHIER) {
+            val fait = runCatching { LanceurPc.copieDonnees(java.io.File(depuis), dossier) }.getOrDefault(false)
+            println(if (fait) "  données copiées de $depuis vers $dossier (l'ancien dossier est gardé)" else "  données non copiées vers $dossier (dossier déjà rempli ou source absente)")
         }
-        i++
+        runCatching { fichierLanceur.ecrit(fichierLanceur.lit().copy(copieDepuis = null)) }
     }
     dossier.mkdirs()
     // No console on Windows's desktop: what SatMe-PC says goes to a file, read when something goes wrong.
@@ -64,8 +71,13 @@ fun main(args: Array<String>) {
     // A backup received last time: put back now, before anything reads the settings.
     val sauvegarde = SauvegardePc(dossier)
     if (runCatching { sauvegarde.appliqueSiPrete() }.getOrDefault(false)) println("  sauvegarde restaurée (les réglages remplacés sont dans avant-restauration-…)")
+    // The settings of a deployment file imported: put in now too (those replaced kept in avant-deploiement-…).
+    if (runCatching { DeploiementPc.appliqueSiPret(dossier) }.getOrDefault(false)) println("  réglages du fichier de déploiement repris (les réglages remplacés sont dans avant-deploiement-…)")
+    // No settings yet: a new install, « Configuration rapide » offered on the page.
+    val neuf = !File(dossier, "reglages.properties").exists()
     val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
+    val reglages = StockageFichier(File(dossier, "reglages.properties"))
+    val station = StationPc(reglages,
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
         stockageSat = StockageFichier(File(dossier, "satellites.properties")),
         stockageAgenda = StockageFichier(File(dossier, "agenda.properties")))
@@ -444,6 +456,23 @@ fun main(args: Array<String>) {
         kotlinx.coroutines.delay(20_000)
         while (true) { runCatching { activites.tic() }; repeat(60) { if (!activites.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }
     }
+    // Start-up: « Configuration rapide » on a new install, « Quoi de neuf » after an update, Réglages › Démarrage,
+    // the check for a new version (GitHub, once a day, off in Réglages), « Déploiement ».
+    val demarrage = DemarragePc(station, lanceur, fichierLanceur,
+        MiseAJourPc(station.stockage, File(dossier, "mise-a-jour.json"), versionPc(),
+            api = System.getProperty("satme.maj.api")?.takeIf { it.startsWith("http") } ?: MiseAJourPc.API),
+        NouveautesPc.duJar(),
+        DeploiementPc(dossier, lanceur, { reglages.brutes() }),
+        RedemarragePc(args),
+        occupe = {
+            if (emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet)
+                "une émission est en cours : l'arrêter d'abord" else null
+        },
+        motDePasse = { acces.defini },
+        exeWindows = ProcessHandle.current().info().command().orElse(null)?.takeIf { it.lowercase().endsWith(".exe") && !it.lowercase().endsWith("java.exe") && !it.lowercase().endsWith("javaw.exe") })
+    demarrage.auDemarrage(neuf)
+    serveur.demarrage = demarrage
+    portee.launch(kotlinx.coroutines.Dispatchers.IO) { while (true) { runCatching { demarrage.maj.tic() }; kotlinx.coroutines.delay(10_000) } }
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
@@ -454,8 +483,10 @@ fun main(args: Array<String>) {
     if (reseau) println(ligneAcces ?: if (acces.defini) "  accès à distance : mot de passe demandé aux autres machines"
         else "  accès à distance : aucun mot de passe, les autres machines n'ont rien (Réglages › Accès à distance)")
     println("  réglages  : ${dossier.absolutePath}")
+    if (fichierLanceur.fichier.isFile) println("  démarrage : ${fichierLanceur.fichier.path}")
     println("  Ctrl+C pour arrêter")
-    if (bureau) {
+    // Started again by « Redémarrer SatMe-PC »: the page already open comes back by itself, no new tab.
+    if (bureau && a.apres == null) {
         val url = "http://localhost:${serveur.portReel}/"
         BureauPc.icone(url, dossier)
         BureauPc.ouvre(url)
