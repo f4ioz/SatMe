@@ -853,7 +853,7 @@ object PagesPcTelephone {
                 OK
             }
             "/api/montage", "/api/montage/photo", "/api/montage/action", "/api/montage/profils", "/api/montage/edition", "/api/montage/annule",
-            "/api/montage/refait", "/api/montage/fusion" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
+            "/api/montage/refait", "/api/montage/fusion", "/api/montage/plans" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
             "/api/memoires-sdr", "/api/memoires-sdr/import" -> JSONObject().put("ok", false).put("erreur", "les mémoires du récepteur se gardent sur SatMe-PC")
             "/api/molette" -> JSONObject().put("ok", false).put("erreur", "absent")
             "/api/annonces", "/api/annonces/essai" -> JSONObject().put("ok", false).put("erreur", "absent")
