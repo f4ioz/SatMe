@@ -37,6 +37,10 @@ class ComparaisonSstvReelTest {
 
     private val dir: File? = System.getenv("SATME_CMP")?.let(::File)?.takeIf { it.isDirectory }
     private val r36 = SstvMode.byName("Robot 36")!!
+    /** Where SatMe's own outputs go (SATME_CMP_OUT, « out » by default); the other decoders' are always read from « out ». */
+    private val sortie = System.getenv("SATME_CMP_OUT")?.takeIf { it.isNotBlank() } ?: "out"
+    /** SatMe's outputs of a run before (SATME_CMP_V1, « out » when the outputs go elsewhere): compared as *_v1. */
+    private val v1 = System.getenv("SATME_CMP_V1")?.takeIf { it.isNotBlank() } ?: if (sortie != "out") "out" else null
 
     private fun png(f: File, px: IntArray, w: Int, h: Int) {
         val hh = h.coerceIn(1, px.size / w)
@@ -68,7 +72,7 @@ class ComparaisonSstvReelTest {
     @Test fun decode() {
         assumeTrue(dir != null)
         val d = dir!!
-        val out = File(d, "out"); out.mkdirs()
+        val out = File(d, sortie); out.mkdirs()
         val js = StringBuilder()
         for (wav in File(d, "wav-images").listFiles { f -> f.name.endsWith(".wav") }!!.sortedBy { it.name }) {
             val stem = wav.name.removeSuffix(".wav")
@@ -176,15 +180,17 @@ class ComparaisonSstvReelTest {
     private fun cle(n: String) = Regex("_(\\d{8}_\\d{6})Z").find(n)?.groupValues?.get(1)
 
     @Test fun mesure() {
-        assumeTrue(dir != null && File(dir, "out/satme-images.jsonl").isFile)
+        assumeTrue(dir != null && File(dir, "$sortie/satme-images.jsonl").isFile)
         val d = dir!!
-        val out = File(d, "out")
+        val out = File(d, sortie)
+        val base = File(d, "out")
         val sat = jsonl(File(out, "satme-images.jsonl")).associateBy { it.getString("stem") }
+        val sat1 = v1?.let { jsonl(File(d, "$it/satme-images.jsonl")).associateBy { o -> o.getString("stem") } } ?: emptyMap()
         // OscarWatch: the longest picture it handed over for each sound (a sound split in two keeps the longer part).
-        val owAll = jsonl(File(out, "ow-images/oscarwatch.jsonl")).filter { !it.optBoolean("summary") }
+        val owAll = jsonl(File(base, "ow-images/oscarwatch.jsonl")).filter { !it.optBoolean("summary") }
         val ow = owAll.groupBy { it.getString("wav").removeSuffix(".wav") }.mapValues { (_, l) -> l.maxByOrNull { it.getInt("decodedLines") }!! }
         val owN = owAll.groupBy { it.getString("wav").removeSuffix(".wav") }.mapValues { it.value.size }
-        val qsAll = jsonl(File(out, "qsstv-images/qsstv.jsonl"))
+        val qsAll = jsonl(File(base, "qsstv-images/qsstv.jsonl"))
         val qs = qsAll.groupBy { it.getString("stem") }.mapValues { (_, l) -> l.maxWithOrNull(compareBy({ it.getString("mode") == "R36" }, { it.getLong("size") }))!! }
         val qsN = qsAll.groupBy { it.getString("stem") }.mapValues { it.value.size }
         val stems = sat.keys.sorted()
@@ -199,12 +205,24 @@ class ComparaisonSstvReelTest {
             v["live_saved"] = lit(File(d, "wav-images/$stem.png"), complete = complet)
             v["satme_live"] = if (s.has("live_lignes")) lit(File(out, "satme-live/$stem.png"), s.getInt("live_lignes"), s.getBoolean("live_complete")) else null
             v["satme_redec"] = if (s.has("redec_lignes")) lit(File(out, "satme-redec/$stem.png"), s.getInt("redec_lignes"), s.getBoolean("redec_complete")) else null
-            v["ow"] = o?.let { lit(File(out, "ow-images/" + it.getString("png")), it.getInt("decodedLines"), it.getBoolean("complete")) }
+            if (v1 != null) {
+                val s1 = sat1[stem]
+                v["satme_live_v1"] = if (s1 != null && s1.has("live_lignes")) lit(File(d, "$v1/satme-live/$stem.png"), s1.getInt("live_lignes"), s1.getBoolean("live_complete")) else null
+                v["satme_redec_v1"] = if (s1 != null && s1.has("redec_lignes")) lit(File(d, "$v1/satme-redec/$stem.png"), s1.getInt("redec_lignes"), s1.getBoolean("redec_complete")) else null
+            }
+            // What the gallery keeps as the picture's best version once it is re-decoded at its end: the corrected one when it marks better.
+            run {
+                val l = v["satme_live"]; val r = v["satme_redec"]
+                fun nt(i: Img?) = i?.let { analyse(it).note } ?: -1
+                v["satme_auto"] = if (r != null && nt(r) > nt(l)) r else l
+            }
+            v["ow"] = o?.let { lit(File(base, "ow-images/" + it.getString("png")), it.getInt("decodedLines"), it.getBoolean("complete")) }
             v["ow_post"] = v["ow"]?.let { Img(CorrectionSstv.corrige(SstvNettoyage.nettoie(it.px, 320, 240, it.lignes), 320, 240, it.lignes), 320, 240, it.lignes, it.complete) }
-            v["qsstv"] = qs[stem]?.let { lit(File(out, "qsstv-images/" + it.getString("png")), complete = it.optBoolean("complete", false))?.let(::sansFond) }
+            v["qsstv"] = qs[stem]?.let { lit(File(base, "qsstv-images/" + it.getString("png")), complete = it.optBoolean("complete", false))?.let(::sansFond) }
             P(stem, cle(stem)!!, stem.endsWith("_r2"), v)
         }
-        val methodes = listOf("live_saved", "satme_live", "satme_redec", "ow", "ow_post", "qsstv")
+        val methodes = listOf("live_saved", "satme_live", "satme_redec", "ow", "ow_post", "qsstv") +
+            (if (v1 != null) listOf("satme_live_v1", "satme_redec_v1", "satme_auto") else listOf("satme_auto"))
         val an = ps.associate { p -> p.stem to p.v.mapValues { (_, i) -> i?.let(::analyse) } }
 
         // Slides: by eye where known (ClassementSstvReelTest.VU), else from the gallery's own grouping of the saved pictures.
@@ -222,7 +240,9 @@ class ComparaisonSstvReelTest {
 
         // References: for each picture, the fusion of the other transmissions of its slide (its twins left out),
         // from a pool of decoders; the pool is each main decoder's copies together (neutral), or one decoder's alone.
-        val pools = mapOf("neutre" to listOf("live_saved", "satme_redec", "ow"), "live" to listOf("live_saved"), "redec" to listOf("satme_redec"), "owp" to listOf("ow"))
+        // The neutral pool keeps the earlier re-decode when there is one: old and new are measured against the same references.
+        val redecRef = if (v1 != null) "satme_redec_v1" else "satme_redec"
+        val pools = mapOf("neutre" to listOf("live_saved", redecRef, "ow"), "live" to listOf("live_saved"), "redec" to listOf(redecRef), "owp" to listOf("ow"))
         val refs = HashMap<Pair<String, String>, Img?>()
         for (p in ps) for ((pk, pool) in pools) {
             val autres = ps.filter { it.cle != p.cle && diapo[it.stem] == diapo[p.stem] && !it.jumeau }
@@ -253,11 +273,12 @@ class ComparaisonSstvReelTest {
             }
             csv.append(row.joinToString(",")).append('\n')
         }
-        File(d, "resultats.csv").writeText(csv.toString())
+        File(if (sortie == "out") d else out, "resultats.csv").writeText(csv.toString())
 
         // Side-by-side sheets: saved live | re-decode + correction | OscarWatch | QSSTV | the reference (other copies fused).
-        val planches = File(d, "planches"); planches.mkdirs()
-        val cols = listOf("live_saved" to "SatMe live (saved)", "satme_redec" to "SatMe re-decode+corr.", "ow" to "OscarWatch 1.1.4") +
+        val planches = File(if (sortie == "out") d else out, "planches"); planches.mkdirs()
+        val cols = (if (v1 != null) listOf("satme_live_v1" to "SatMe live (before)", "satme_live" to "SatMe live (new)", "satme_redec_v1" to "re-decode (before)", "satme_redec" to "re-decode (new)")
+            else listOf("live_saved" to "SatMe live (saved)", "satme_redec" to "SatMe re-decode+corr.")) + listOf("ow" to "OscarWatch 1.1.4") +
             (if (qs.isNotEmpty()) listOf("qsstv" to "QSSTV 9.5.8") else emptyList())
         for (p in ps) {
             val n = cols.size + 1
@@ -324,8 +345,9 @@ class ComparaisonSstvReelTest {
 
     /** Every picture each decoder found in the whole-pass recordings, marked the same way (for matching by time afterwards). */
     @Test fun passes() {
-        assumeTrue(dir != null && File(dir, "out/satme-passes.jsonl").isFile)
-        val out = File(dir!!, "out")
+        assumeTrue(dir != null && File(dir, "$sortie/satme-passes.jsonl").isFile)
+        val out = File(dir!!, sortie)
+        val base = File(dir, "out")
         val csv = StringBuilder("decoder,wav,index,mode,vis,startS,endS,lines,complete,mark,slips,spoilt,missing,png\n")
         fun ligne(dec: String, o: JSONObject, png: File, lignes: Int?, complete: Boolean, startS: Double, endS: Double, vis: String) {
             val i = lit(png, lignes, complete) ?: return
@@ -343,10 +365,14 @@ class ComparaisonSstvReelTest {
             val l = o.getInt("lignes"); val st = o.getDouble("startS")
             ligne("satme_live", o, File(out, "satme-passes/" + o.getString("png")), l, o.getBoolean("complete"), st, st + l * 0.150 + 0.3, o.getBoolean("vis").toString())
         }
-        for (o in jsonl(File(out, "ow-passes/oscarwatch.jsonl")).filter { !it.optBoolean("summary") })
-            ligne("ow", o, File(out, "ow-passes/" + o.getString("png")), o.getInt("decodedLines"), o.getBoolean("complete"), o.getDouble("startS"), o.getDouble("endS"), o.getBoolean("fromVis").toString())
-        for (o in jsonl(File(out, "qsstv-passes/qsstv.jsonl")))
-            ligneQ("qsstv", o, File(out, "qsstv-passes/" + o.getString("png")), o.optBoolean("complete", false), o.optDouble("startS", Double.NaN), o.getDouble("endS"), "")
+        if (v1 != null) for (o in jsonl(File(dir, "$v1/satme-passes.jsonl"))) {
+            val l = o.getInt("lignes"); val st = o.getDouble("startS")
+            ligne("satme_live_v1", o, File(dir, "$v1/satme-passes/" + o.getString("png")), l, o.getBoolean("complete"), st, st + l * 0.150 + 0.3, o.getBoolean("vis").toString())
+        }
+        for (o in jsonl(File(base, "ow-passes/oscarwatch.jsonl")).filter { !it.optBoolean("summary") })
+            ligne("ow", o, File(base, "ow-passes/" + o.getString("png")), o.getInt("decodedLines"), o.getBoolean("complete"), o.getDouble("startS"), o.getDouble("endS"), o.getBoolean("fromVis").toString())
+        for (o in jsonl(File(base, "qsstv-passes/qsstv.jsonl")))
+            ligneQ("qsstv", o, File(base, "qsstv-passes/" + o.getString("png")), o.optBoolean("complete", false), o.optDouble("startS", Double.NaN), o.getDouble("endS"), "")
         File(out, "passes-images.csv").writeText(csv.toString())
         println("passes ok")
     }
