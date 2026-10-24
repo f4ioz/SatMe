@@ -91,10 +91,11 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
     var onglet by remember { mutableStateOf(0) }
     // The pictures shown: the sheet's event's (« @ev »), all (""), or one satellite's.
     var filtreSat by remember { mutableStateOf("@ev") }
-    var indicatif by remember { mutableStateOf(reglages.callsign) }
+    // The callsign, locator and dates typed are the sheet's (kept with it); the name is the station's.
+    val indicatif = m?.indicatif?.ifBlank { null } ?: reglages.callsign
     var nom by remember { mutableStateOf(reglages.plancheNom) }
-    var locatorSaisi by remember { mutableStateOf<String?>(null) }
-    var datesSaisies by remember { mutableStateOf<String?>(null) }
+    val locatorSaisi = m?.locator?.ifBlank { null }
+    val datesSaisies = m?.dates?.ifBlank { null }
     var apercu by remember { mutableStateOf<Bitmap?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf(false) }
@@ -337,6 +338,20 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
             } else enregistre(f.name, "application/octet-stream", depuisFichier(f))
         }
     }
+    // A sheet deleted, asked first: its SSTV pictures stay in the gallery.
+    var supprimeModele by remember { mutableStateOf<Planche.Modele?>(null) }
+    supprimeModele?.let { x -> AlertDialog(
+        onDismissRequest = { supprimeModele = null },
+        containerColor = SpaceSurface,
+        text = { Text(tf("pw_supprimer_q", x.nom), color = TextHi) },
+        confirmButton = {
+            TextButton(onClick = {
+                supprimeModele = null
+                rangement.supprime(x); modeles = rangement.modeles(); m = modeles.lastOrNull(); choix = null
+            }) { Text(t("planche_supprimer_modele"), color = Magenta) }
+        },
+        dismissButton = { TextButton(onClick = { supprimeModele = null }) { Text(t("cancel"), color = TextLo) } })
+    }
     if (exportModele) AlertDialog(
         onDismissRequest = { exportModele = false },
         containerColor = SpaceSurface,
@@ -441,9 +456,9 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                         onFond = { choisitDecor.launch("image/*") },
                         onEcusson = { if (x.ecussons.size >= Planche.ECUSSONS_MAX) message = t("planche_ecusson_plein") else choisitEcusson.launch("image/*") })
                     else -> OngletTextes(x, choix, indicatif, nom, valeurs,
-                        onIndicatif = { indicatif = it },
+                        onIndicatif = { change(x.copy(indicatif = it.take(Planche.SAISIE_MAX))) },
                         onNom = { nom = it; reglages.plancheNom = it },
-                        onLocator = { locatorSaisi = it }, onDates = { datesSaisies = it },
+                        onLocator = { change(x.copy(locator = it.take(Planche.SAISIE_MAX))) }, onDates = { change(x.copy(dates = it.take(Planche.SAISIE_MAX))) },
                         onChoix = { choix = it }, onChange = { change(it) })
                 }
 
@@ -452,9 +467,7 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                     TextButton(onClick = { garderIndicatif = false; exportModele = true }, enabled = !occupe) {
                         Text(t("planche_exporter"), color = Cyan, fontSize = 12.sp)
                     }
-                    TextButton(onClick = {
-                        rangement.supprime(x); modeles = rangement.modeles(); m = modeles.lastOrNull(); choix = null
-                    }) { Text(t("planche_supprimer_modele"), color = Magenta, fontSize = 12.sp) }
+                    TextButton(onClick = { supprimeModele = x }) { Text(t("planche_supprimer_modele"), color = Magenta, fontSize = 12.sp) }
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -735,7 +748,7 @@ private fun OngletDisposition(
         OutlinedButton(onClick = {
             val z = Planche.Zone(0.4f, 0.4f, 0.16f, 0.16f * m.ratio * 0.75f).bornee()
             onChange(m.copy(cases = m.cases + z)); onChoix(m.cases.size)
-        }) { Text("＋ " + t("planche_case"), color = Cyan, fontSize = 11.sp) }
+        }, enabled = m.cases.size < Planche.CASES_MAX) { Text("＋ " + t("planche_case"), color = Cyan, fontSize = 11.sp) }
         if (choix != null && choix >= 0) OutlinedButton(onClick = {
             // The pictures after it move up one box.
             val im = m.images.filterKeys { it != choix }.mapKeys { (k, _) -> if (k > choix) k - 1 else k }

@@ -47,7 +47,7 @@ object PagePlanche {
         "rapport_format", "rapport_web", "rapport_pdf", "version_titre", "version_auto", "version_recue", "version_corrigee",
         "version_fusion", "version_creer_fusion", "version_fusion_en_cours", "version_fusion_echec", "version_repli", "version_auto_aide",
         "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
-        "gardes", "version_indic", "refus_depot")
+        "gardes", "version_indic", "refus_depot", "supprimer", "supprimer_q", "supprimee", "cases_max")
 
     /** The keys whose words depend on who serves the page: SatMe-PC has its own (`pw_…_pc`), the phone the plain ones. */
     private val CLES_HOTE = setOf("sous", "code", "import_en_cours", "fabrication", "enregistre", "hors_ligne", "aucune_image")
@@ -202,6 +202,7 @@ object PagePlanche {
   <a id="journal" href="journal" style="color:var(--cyan)"></a>
   <label id="tModele"></label><select id="modeles"></select>
   <button class="discret" id="renommer"></button>
+  <button class="discret rouge" id="supprimer"></button>
   <button class="discret" id="grille"></button>
   <button class="discret" id="tour"></button>
   <button class="discret" id="importer"></button>
@@ -249,6 +250,7 @@ object PagePlanche {
 <div id="depot" class="cache"></div>
 <script>
 const T = {/*T*/};
+const CASES_MAX = ${fr.f4ioz.satcombo.sstv.Planche.CASES_MAX};
 function tf(k) { let s = T[k] || k; for (let i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(arguments[i]); return s; }
 function g(id) { return document.getElementById(id); }
 function el(tag, attrs, kids) {
@@ -284,7 +286,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {} };
+  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {}, indicatif: '', locator: '', dates: '' };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -302,6 +304,8 @@ function litModele(txt) {
     else if (k === 'diapo') { const j = v.indexOf(';'); if (j > 0) m.diapos[v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'corrigees') m.corrigees = v === '1';
     else if (k === 'marquetraitees') m.marqueTraitees = v === '1';
+    // The callsign, locator and dates typed in « Textes »: kept with the sheet.
+    else if (k === 'indicatif') m.indicatif = unesc(v); else if (k === 'locator') m.locator = unesc(v); else if (k === 'dates') m.dates = unesc(v);
     else if (k === 'versioncase') { const p = v.split(';'); if (['auto', 'recue', 'corrigee', 'fusion'].includes(p[1])) m.versions[+p[0]] = { v: p[1], main: p[2] === '1' }; }
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
@@ -322,6 +326,7 @@ function ecrit(m) {
   if (m.corrigees) s += 'corrigees=1\n';
   if (m.marqueTraitees) s += 'marquetraitees=1\n';
   Object.keys(m.versions).forEach(i => { const c = m.versions[i]; if (c && (c.v !== 'auto' || c.main) && +i < m.cases.length) s += 'versioncase=' + i + ';' + c.v + ';' + (c.main ? 1 : 0) + '\n'; });
+  ['indicatif', 'locator', 'dates'].forEach(k => { if ((m[k] || '').trim()) s += k + '=' + esc(m[k]) + '\n'; });
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -336,7 +341,8 @@ let EV = { evenement: null, main: false, liste: [] }, grouper = true, analyse = 
 const ouverts = new Set();
 try { grouper = localStorage.getItem('satme-planche-grouper') !== '0'; } catch (e) {}
 let defauts = { indicatif: '', nom: '', locator: '', dates: '' };
-const saisie = { ind: '', nom: '', loc: '', dates: '' };
+// The name is the station's (its settings); the callsign, locator and dates typed are the sheet's (M).
+const saisie = { nom: '' };
 function css(v) { const u = v >>> 0; return 'rgba(' + ((u >>> 16) & 255) + ',' + ((u >>> 8) & 255) + ',' + (u & 255) + ',' + (((u >>> 24) & 255) / 255).toFixed(3) + ')'; }
 function zoneDe(c) { return c == null ? null : (c.k === 'c' ? M.cases[c.i] : c.k === 'e' ? M.ecussons[c.i] : M.textes[c.i]); }
 // A patch keeps its picture's shape: within the sheet, never larger.
@@ -371,6 +377,8 @@ async function sauve() {
     if (onglet === 'textes' && !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) panneau();
   } catch (e) {}
 }
+// A field typed in: saved (then the preview drawn again) a moment after, the panel left as it is (the cursor stays in the field).
+function sauveBientot() { clearTimeout(minuteur); minuteur = setTimeout(sauve, 600); }
 function apercuBientot() { clearTimeout(apercuMinuteur); apercuMinuteur = setTimeout(apercu, 400); }
 function valeurs() { const p = {}; for (const k in saisie) if (saisie[k]) p[k] = saisie[k]; return p; }
 function apercu() {
@@ -734,6 +742,8 @@ function panneauDispo() {
   if (M.corrigees) p.appendChild(caseACocher(T.marque_traitees, !!M.marqueTraitees, v => { M.marqueTraitees = v; change(); }));
   const r = el('div', { class: 'rangee' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_case, onclick: () => {
+    // The station keeps CASES_MAX boxes of a sheet (Planche.CASES_MAX): said here, never one silently lost.
+    if (M.cases.length >= CASES_MAX) { g('message').textContent = tf('cases_max', CASES_MAX); return; }
     const der = M.cases[M.cases.length - 1] || { x: 0.4, y: 0.4, w: 0.2, h: 0.2 * ratio * 0.75 };
     const z = { x: der.x + 0.03, y: der.y + 0.03, w: der.w, h: der.h }; borne(z);
     M.cases.push(z); choix = { k: 'c', i: M.cases.length - 1 }; change(); } }));
@@ -748,13 +758,13 @@ function panneauDispo() {
 }
 function panneauTextes() {
   const p = g('pTextes'); p.innerHTML = '';
-  const valeur = (cle, lib, defaut) => champ(lib, saisie[cle], v => { saisie[cle] = v; if (cle === 'nom') change(); else apercuBientot(); },
+  const valeur = (cle, lib, defaut) => champ(lib, cle === 'nom' ? saisie.nom : M[cle], v => { if (cle === 'nom') saisie.nom = v; else M[cle] = v; sauveBientot(); },
     { placeholder: defaut ? tf('par_defaut', defaut) : '' });
-  p.appendChild(valeur('ind', T.indicatif, defauts.indicatif));
+  p.appendChild(valeur('indicatif', T.indicatif, defauts.indicatif));
   p.appendChild(valeur('nom', T.nom, defauts.nom));
-  p.appendChild(valeur('loc', T.locator, defauts.locator));
+  p.appendChild(valeur('locator', T.locator, defauts.locator));
   p.appendChild(valeur('dates', T.dates, defauts.dates));
-  p.appendChild(champ(T.titre_planche, M.titre, v => { M.titre = v; change(); }, { placeholder: defauts.titre ? tf('par_defaut', defauts.titre) : '' }));
+  p.appendChild(champ(T.titre_planche, M.titre, v => { M.titre = v; sauveBientot(); }, { placeholder: defauts.titre ? tf('par_defaut', defauts.titre) : '' }));
   const r = el('div', { class: 'rangee', style: 'margin:8px 0' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_texte, onclick: () => {
     M.textes.push({ champ: 'LIBRE', x: 0.35, y: 0.45, w: 0.3, h: 0.07, couleur: COULEURS[0], fond: FONDS[2], libre: T.libre });
@@ -878,6 +888,22 @@ g('renommer').onclick = async () => {
   if (!M) return;
   const n = prompt(T.renommer_q, M.nom); if (n === null || !n.trim()) return;
   M.nom = n.trim().slice(0, 60); clearTimeout(minuteur); minuteur = null; await sauve(); await listeModeles(); panneau();
+};
+// A sheet deleted, asked first: its pictures stay in the gallery (the station never deletes one for it).
+g('supprimer').textContent = T.supprimer;
+g('supprimer').onclick = async () => {
+  if (!M || !confirm(tf('supprimer_q', M.nom))) return;
+  clearTimeout(minuteur); minuteur = null;
+  const nom = M.nom;
+  try {
+    const r = await fetch(url('/supprime', { id: id }), { method: 'POST' });
+    if (r.status === 403) { porte(); return; }
+    const j = await r.json(); if (!j.ok) { g('message').textContent = T.hors_ligne; return; }
+  } catch (e) { g('message').textContent = T.hors_ligne; return; }
+  id = ''; M = null; choix = null;
+  const l = await listeModeles();
+  if (l.length) await charge(l[l.length - 1].id); else { g('apercu').removeAttribute('src'); dessineCalque(); suivi(); panneau(); }
+  g('message').textContent = tf('supprimee', nom);
 };
 // The event's report: opened in a tab of its own, or downloaded; the page (to print to PDF) or the PDF made here.
 g('rapport').textContent = T.rapport; g('tRapport').textContent = T.rapport_titre; g('tRapportAide').textContent = T.rapport_aide;

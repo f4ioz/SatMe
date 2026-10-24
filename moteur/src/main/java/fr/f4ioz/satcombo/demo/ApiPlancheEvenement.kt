@@ -192,7 +192,7 @@ object ApiPlancheEvenement {
         val ch = if (avecChaine) runCatching { src.chaine(plan) }.getOrNull() else null
         val campagne = if (ev.genre == EvenementSstv.Genre.CAMPAGNE) src.campagne(ev.id.removePrefix("c:")) else null
         return RapportEvenement.construit(
-            evenement = ev, p = p, passes = passes, station = src.station(), elMin = src.elMin(), maintenant = now,
+            evenement = ev, p = p, passes = passes, station = station(src.station(), m), elMin = src.elMin(), maintenant = now,
             positions = positions,
             geometrie = RapportEvenement.Geometrie(passes.isNotEmpty(), if (ev.catnum > 0) src.epoqueElements(ev.catnum) else null),
             traces = src.traces().filter { campagne == null || it.campagne == campagne.id },
@@ -201,6 +201,10 @@ object ApiPlancheEvenement {
             planche = m?.let { runCatching { src.planche(it) }.getOrNull() }, nomPlanche = m?.nom.orEmpty(),
             vignette = { runCatching { src.vignette(it) }.getOrNull() }, analyses = e.analyses)
     }
+
+    /** The station the report names: the callsign and locator typed on the sheet (« Textes »), else the station's. */
+    fun station(s: RapportEvenement.Station, m: Planche.Modele?): RapportEvenement.Station =
+        if (m == null) s else s.copy(indicatif = m.indicatif.trim().ifBlank { s.indicatif }, locator = m.locator.trim().ifBlank { s.locator })
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
 

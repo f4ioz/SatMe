@@ -260,4 +260,28 @@ class PlancheTest {
         assertTrue(!m.ajustee); assertEquals(1, m.cases.size); assertEquals(mapOf(0 to "a.png"), m.images)
         assertEquals(m, Planche.duModele(m)); assertEquals(m, Planche.reajuste(m))
     }
+
+    @Test
+    fun les_textes_saisis_restent_avec_la_planche_et_une_vieille_planche_se_lit() {
+        val m = Planche.genereGrille("p1", "Série 34").copy(indicatif = "F4IOZ/P", locator = "JN18", dates = "23/10/2026")
+        val lu = Planche.lit("p1", Planche.ecrit(m))!!
+        assertEquals("F4IOZ/P", lu.indicatif); assertEquals("JN18", lu.locator); assertEquals("23/10/2026", lu.dates)
+        // Written only when typed: an older sheet (none of these lines) reads with SatMe's own.
+        val vieille = Planche.ecrit(Planche.genereGrille("p2", "x"))
+        assertTrue(!vieille.contains("indicatif=") && !vieille.contains("dates="))
+        assertEquals("", Planche.lit("p2", vieille)!!.indicatif)
+        // A template given to another operator never carries them.
+        val x = PlancheFichier.sansPersonnel(m)
+        assertEquals("", x.indicatif); assertEquals("", x.locator); assertEquals("", x.dates)
+        // The report names the station typed on the sheet.
+        val st = fr.f4ioz.satcombo.demo.ApiPlancheEvenement.station(RapportEvenement.Station("F4IOZ", "JN18FS", "Olivier"), m)
+        assertEquals("F4IOZ/P", st.indicatif); assertEquals("JN18", st.locator); assertEquals("Olivier", st.nom)
+    }
+
+    @Test
+    fun le_nom_du_fichier_de_la_planche_n_a_jamais_de_barre() {
+        assertEquals("20261023", Planche.jourFichier("2026-10-23 – 2026-10-24"))
+        assertEquals("23102026", Planche.jourFichier("23/10/2026"))
+        assertEquals("planche", Planche.jourFichier(" / "))
+    }
 }
