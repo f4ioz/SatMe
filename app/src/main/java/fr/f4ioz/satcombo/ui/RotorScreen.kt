@@ -365,7 +365,54 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                 Text(t("rotor_pre_aos_hint"), color = TextLo, fontSize = 11.sp)
             }
         }
+
+        // ---- software correction --------------------------------------------
+        // The full assistant (O2/F2/O/F, verification table) is on SatMe-PC's
+        // page — also served by this phone; here the correction itself.
+        CorrectionRotorCarte(ui, vm)
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+/** The software correction, axis by axis: typed, applied, reset; the real range it leaves. */
+@Composable
+private fun CorrectionRotorCarte(ui: UiState, vm: MainViewModel) {
+    val m = ui.rotor.mat
+    var az by remember(m.rotorCorrAz) { mutableStateOf(m.rotorCorrAz) }
+    var el by remember(m.rotorCorrEl) { mutableStateOf(m.rotorCorrEl) }
+    var erreur by remember { mutableStateOf("") }
+    Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Text(t("rotor_corr_titre"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(t("rotor_corr_hint"), color = TextLo, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = az, onValueChange = { az = it },
+                label = { Text(t("rotor_corr_az"), fontSize = 12.sp) },
+                placeholder = { Text(t("rotor_corr_aucune"), fontSize = 12.sp) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(value = el, onValueChange = { el = it },
+                label = { Text(t("rotor_corr_el"), fontSize = 12.sp) },
+                placeholder = { Text("0:0;180:160", fontSize = 12.sp) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    erreur = if (vm.setRotorCorrection("AZ", az) && vm.setRotorCorrection("EL", el)) "" else t("rotor_corr_refusee")
+                }) { Text(t("rotor_corr_appliquer")) }
+                OutlinedButton(onClick = {
+                    vm.setRotorCorrection("AZ", ""); vm.setRotorCorrection("EL", ""); az = ""; el = ""; erreur = ""
+                }) { Text(t("rotor_corr_raz")) }
+            }
+            if (erreur.isNotEmpty()) Text(erreur, color = Color(0xFFFF8A65), fontSize = 12.sp)
+            if (m.rotorCorrAz.isNotEmpty() || m.rotorCorrEl.isNotEmpty()) {
+                val (pa, pe) = vm.rotorPorteeReelle()
+                fun r(d: Double) = String.format(Locale.US, "%.0f", d)
+                Text(tf("rotor_corr_portee", r(pa.start), r(pa.endInclusive), r(pe.start), r(pe.endInclusive)),
+                    color = TextLo, fontSize = 11.sp)
+            }
+        }
     }
 }
 

@@ -94,6 +94,45 @@ object Gs232Codec {
         return null
     }
 
+    /**
+     * The controller's own calibration, GS-232A style, as the K3NG Arduino
+     * firmware implements it (`process_yaesu_command`, rotator_settings.h):
+     *
+     * - `O`  — azimuth **full CCW**: the pot reading now becomes the start of
+     *   the azimuth range (`analog_az_full_ccw`).
+     * - `F`  — azimuth **full CW**: the reading now becomes the end of the
+     *   range (`analog_az_full_cw`).
+     * - `O2` — elevation **0°** (`analog_el_0_degrees`).
+     * - `F2` — elevation **top**: the reading now becomes the firmware's
+     *   `ELEVATION_MAXIMUM_DEGREES` (180 by default) — not "the angle you
+     *   are at": F2 at a real 160° makes 160 read as 180.
+     *
+     * Between the two the firmware maps linearly (`float_map`). Each one
+     * prompts ("Elevate to 0 degrees and send keystroke..."), **blocks until
+     * any byte comes**, then writes the EEPROM at once and answers
+     * "Wrote to memory". Only built with a pot sensor
+     * (FEATURE_AZ_POSITION_POTENTIOMETER); otherwise, as for anything it
+     * does not know, `?>`. Ignored altogether in the first 5 s after boot
+     * (ROTATIONAL_AND_CONFIGURATION_CMD_IGNORE_TIME_MS) — and opening the port
+     * reboots an Arduino.
+     */
+    enum class Etalonnage(val commande: String) {
+        AZ_ZERO("O"), AZ_PLEIN("F"), EL_ZERO("O2"), EL_PLEIN("F2");
+
+        companion object {
+            fun de(s: String?): Etalonnage? = entries.firstOrNull { it.commande.equals(s?.trim(), ignoreCase = true) }
+        }
+    }
+
+    /** The firmware asks for a keystroke before reading the pot. */
+    fun estInvite(ligne: String): Boolean = ligne.contains("keystroke", ignoreCase = true)
+
+    /** The calibration is in the EEPROM. */
+    fun estEcrit(ligne: String): Boolean = ligne.contains("wrote to memory", ignoreCase = true)
+
+    /** "Not understood": GS-232 and K3NG answer `?>`. */
+    fun estInconnu(ligne: String): Boolean = ligne.trim().startsWith("?>")
+
     /** The same frame in plain French, for the log. */
     fun describe(text: String, out: Boolean): String {
         val t = text.trim()
@@ -101,6 +140,13 @@ object Gs232Codec {
             val m = Regex("""^W\s*(\d{3})\s+(\d{3})$""", RegexOption.IGNORE_CASE).find(t)
             if (m != null) return "consigne → azimut " + m.groupValues[1].toInt() +
                 "°, élévation " + m.groupValues[2].toInt() + "°"
+            Etalonnage.de(t)?.let { e -> return when (e) {
+                Etalonnage.AZ_ZERO -> "étalonnage : azimut en butée gauche (CCW)"
+                Etalonnage.AZ_PLEIN -> "étalonnage : azimut en butée droite (CW)"
+                Etalonnage.EL_ZERO -> "étalonnage : élévation à 0°"
+                Etalonnage.EL_PLEIN -> "étalonnage : élévation en haut"
+            } }
+            if (t.isEmpty()) return "touche (suite de l'étalonnage)"
             if (t.startsWith("C")) return "demande de position"
             if (t.startsWith("S")) return "arrêt immédiat"
             return "→ $t"
@@ -208,6 +254,7 @@ class Gs232Rotor(private val ports: PortsSerie? = null) : RotorDriver {
         }
         link = l
         cleUsb = p.cle
+        ouvertMs = System.currentTimeMillis()
         lastError = ""
         return true
     }
@@ -368,6 +415,104 @@ class Gs232Rotor(private val ports: PortsSerie? = null) : RotorDriver {
         val l = link ?: return@withContext false
         send(l, Gs232Codec.STOP)
     }
+
+    /** When the port was opened (ms), 0 for a link attached (a simulator). */
+    private var ouvertMs = 0L
+
+    /**
+     * How long after opening a calibration may go out. K3NG ignores them for
+     * 5 s after boot, and opening the port has just rebooted it: sent too
+     * early, `O2` is lost without a word and the operator believes it done.
+     */
+    var demarrageMs: Long = 5_500L
+
+    /** What a calibration command gave. */
+    enum class Issue {
+        /** "Wrote to memory": in the EEPROM. */
+        ECRIT,
+        /** `?>`: this controller has no such command (another firmware, no pot sensor). */
+        INCONNU,
+        /** Not a byte back. */
+        MUET,
+        /** Something came back, but not the confirmation. */
+        SANS_CONFIRMATION
+    }
+
+    /** The outcome and every line heard, raw, for the operator. */
+    data class ReponseEtalonnage(val issue: Issue, val lignes: List<String>)
+
+    /**
+     * Sends one of the controller's own calibrations ([Gs232Codec.Etalonnage])
+     * and carries out its handshake: the prompt, the keystroke it waits for
+     * (a lone CR: the firmware takes any byte, and a CR alone is no command
+     * should it not be waiting), the confirmation.
+     *
+     * The caller must hold the line: a position query slipped in between
+     * would be read as the keystroke, the pot read wherever the mast is.
+     */
+    suspend fun etalonne(e: Gs232Codec.Etalonnage): ReponseEtalonnage = withContext(Dispatchers.IO) {
+        val l = link ?: return@withContext ReponseEtalonnage(Issue.MUET, emptyList())
+        if (settleMs > 0L && ouvertMs > 0L) {
+            val reste = ouvertMs + demarrageMs - System.currentTimeMillis()
+            if (reste > 0L) delay(reste)
+        }
+        vide(l)
+        val lignes = ArrayList<String>()
+        send(l, e.commande + "\r")
+        // The firmware first waits 200 ms (clear_serial_buffer), then prompts.
+        lignes += litLignes(l, if (pacingMs == 0L) 50L else 1_500L) {
+            Gs232Codec.estInvite(it) || Gs232Codec.estInconnu(it)
+        }
+        if (lignes.any { Gs232Codec.estInconnu(it) }) {
+            lastReply = lignes.joinToString(" | ")
+            return@withContext ReponseEtalonnage(Issue.INCONNU, lignes)
+        }
+        // The keystroke, prompt or not: a firmware that did not prompt on this
+        // port still waits for it (and blocks the controller meanwhile).
+        if (pacingMs > 0L) delay(100L)
+        send(l, "\r")
+        lignes += litLignes(l, if (pacingMs == 0L) 50L else 2_000L) {
+            Gs232Codec.estEcrit(it) || Gs232Codec.estInconnu(it)
+        }
+        lastReply = lignes.joinToString(" | ")
+        lignes.forEach { CatJournal.log(false, it.toByteArray(Charsets.US_ASCII), "réponse : $it") }
+        val issue = when {
+            lignes.any { Gs232Codec.estEcrit(it) } -> Issue.ECRIT
+            lignes.any { Gs232Codec.estInconnu(it) } -> Issue.INCONNU
+            lignes.none { it.isNotBlank() } -> Issue.MUET
+            else -> Issue.SANS_CONFIRMATION
+        }
+        ReponseEtalonnage(issue, lignes)
+    }
+
+    /**
+     * Every line heard within [timeoutMs], until one satisfies [fin]. Unlike
+     * [readLine] nothing is filtered: a calibration's replies are prose.
+     */
+    private fun litLignes(l: SerialLink, timeoutMs: Long, fin: (String) -> Boolean): List<String> {
+        val out = ArrayList<String>()
+        val sb = StringBuilder()
+        val scratch = ByteArray(64)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var silences = 0
+        while (System.currentTimeMillis() < deadline) {
+            val n = runCatching { l.read(scratch, 100) }.getOrDefault(0)
+            if (n > 0) {
+                silences = 0
+                for (i in 0 until n) {
+                    val c = scratch[i].toInt().toChar()
+                    if (c == '\r' || c == '\n') {
+                        if (sb.isNotEmpty()) {
+                            val ligne = sb.toString().trim(); sb.setLength(0)
+                            if (ligne.isNotEmpty()) { out += ligne; if (fin(ligne)) return out }
+                        }
+                    } else sb.append(c)
+                }
+            } else if (pacingMs == 0L && ++silences >= 2) break
+        }
+        if (sb.isNotBlank()) out += sb.toString().trim()
+        return out
+    }
 }
 
 /**
@@ -388,11 +533,66 @@ class Gs232Simulator(
     /** Degrees per second, azimuth and elevation alike. */
     val speedDegPerSec: Double = 6.0,
     /** Where the mast stands at start: a south-stop ring starts at 180, not 0. */
-    azInitDeg: Double = 0.0
+    azInitDeg: Double = 0.0,
+    /**
+     * Behave as the K3NG Arduino firmware: its calibrations (`O`, `F`, `O2`,
+     * `F2`, with their keystroke handshake and "Wrote to memory") and `?>` to
+     * what it does not know. Off: a plain GS-232 box that ignores them.
+     */
+    val k3ng: Boolean = false
 ) : SerialLink {
 
+    /** Where the mast **really** is (its pots); the controller reports it through its calibration. */
     var azDeg: Double = azInitDeg; private set
     var elDeg: Double = 0.0; private set
+
+    // The controller's calibration, K3NG's way: the pot readings it takes for
+    // the two ends of each range, mapped linearly between. As shipped, exact.
+    private val azBas = azInitDeg
+    /** Pot reading taken as full CCW / full CW (here pots read in real degrees). */
+    var azCal0: Double = azInitDeg; private set
+    var azCal1: Double = azMaxDeg; private set
+    /** Pot reading taken as 0° / as the firmware's maximum ([elMaxDeg]). */
+    var elCal0: Double = 0.0; private set
+    var elCal1: Double = elMaxDeg; private set
+
+    /** EEPROM writes, as a power cycle would find them. */
+    var ecrituresEeprom: Int = 0; private set
+
+    /** The real top of the mast, mechanically: the motor stalls there whatever it is told. */
+    var elButeeReelleDeg: Double = elMaxDeg
+
+    /** A calibration waiting for its keystroke, or null. */
+    private var attenteTouche: String? = null
+
+    /**
+     * Throws the elevation calibration off as a worn pot does: the real
+     * angle [reelLuEnHaut] now reads as the top ([elMaxDeg]).
+     */
+    fun deregleElevation(reelLuEnHaut: Double, reelLuAZero: Double = 0.0) { elCal0 = reelLuAZero; elCal1 = reelLuEnHaut }
+
+    /**
+     * The control box's own buttons: the mast taken straight to a real
+     * position, whatever the controller believes — how an operator gets to a
+     * stop the controller would not command.
+     */
+    fun auBoitier(azReel: Double = azDeg, elReel: Double = elDeg) {
+        azDeg = azReel; elDeg = elReel.coerceIn(0.0, elButeeReelleDeg); azTarget = azDeg; elTarget = elDeg
+    }
+
+    /** Same for azimuth: the real angles read as the two ends of the range. */
+    fun deregleAzimut(reelCcw: Double, reelCw: Double) { azCal0 = reelCcw; azCal1 = reelCw }
+
+    // Exact as shipped: then not even a rounding, the numbers pass through.
+    private val azExact get() = azCal0 == azBas && azCal1 == azMaxDeg
+    private val elExact get() = elCal0 == 0.0 && elCal1 == elMaxDeg
+
+    /** What the controller reports for the real position. */
+    fun azLu(): Double = if (azExact) azDeg else azBas + (azDeg - azCal0) / (azCal1 - azCal0) * (azMaxDeg - azBas)
+    fun elLu(): Double = if (elExact) elDeg else (elDeg - elCal0) / (elCal1 - elCal0) * elMaxDeg
+
+    private fun azReelDe(lu: Double) = if (azExact) lu else azCal0 + (lu - azBas) / (azMaxDeg - azBas) * (azCal1 - azCal0)
+    private fun elReelDe(lu: Double) = if (elExact) lu else elCal0 + lu / elMaxDeg * (elCal1 - elCal0)
     private var azTarget: Double = azInitDeg
     private var elTarget: Double = 0.0
 
@@ -438,6 +638,8 @@ class Gs232Simulator(
 
     override fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
         if (closed) return false
+        // The firmware blocked in get_keystroke(): whatever comes is the key, all of it swallowed.
+        attenteTouche?.let { c -> attenteTouche = null; received += "(touche)"; termineEtalonnage(c); return true }
         for (b in bytes) {
             val c = b.toInt().toChar()
             if (c == '\r' || c == '\n') { handle(inbox.toString()); inbox.setLength(0) }
@@ -469,13 +671,37 @@ class Gs232Simulator(
                 if (m == null) { refusals++; return }
                 val az = m.groupValues[1].toDouble()
                 val el = m.groupValues[2].toDouble()
-                if (az > azMaxDeg || el > elMaxDeg) { refusals++; return }
-                azTarget = az; elTarget = el
+                if (az > azMaxDeg || el > elMaxDeg) { refusals++; if (k3ng) emit("?>\r\n"); return }
+                // Told in the controller's numbers; the pots go where those numbers point.
+                azTarget = azReelDe(az); elTarget = elReelDe(el).coerceIn(0.0, elButeeReelleDeg)
             }
             'C' -> emit(String.format(Locale.US, "AZ=%03d EL=%03d\r",
-                azDeg.roundToInt(), elDeg.roundToInt()))
+                azLu().roundToInt(), elLu().roundToInt()))
             'S' -> { azTarget = azDeg; elTarget = elDeg }
-            else -> refusals++
+            'O', 'F' -> {
+                if (!k3ng) { refusals++; return }
+                val c = line.uppercase()
+                if (c != "O" && c != "F" && c != "O2" && c != "F2") { emit("?>\r\n"); refusals++; return }
+                attenteTouche = c
+                emit(when (c) {
+                    "O2" -> "Elevate to 0 degrees and send keystroke...\r\n"
+                    "F2" -> "Elevate to 180 (or max elevation) and send keystroke...\r\n"
+                    "O" -> "Rotate to full CCW and send keystroke...\r\n"
+                    else -> "Rotate to full CW and send keystroke...\r\n"
+                })
+            }
+            else -> { refusals++; if (k3ng) emit("?>\r\n") }
         }
+    }
+
+    private fun termineEtalonnage(c: String) {
+        when (c) {
+            "O2" -> elCal0 = elDeg
+            "F2" -> elCal1 = elDeg
+            "O" -> azCal0 = azDeg
+            else -> azCal1 = azDeg
+        }
+        ecrituresEeprom++
+        emit("Wrote to memory\r\n")
     }
 }

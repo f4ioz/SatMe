@@ -221,7 +221,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 ### Pointage
 - Boussole du téléphone avec calibrage guidé, ou module Bluetooth WitMotion fixé sur la flèche d'antenne.
-- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Un passage par la butée planifié avant lui (autre côté du zénith, par-dessus, un tour seulement s'il vaut la peine), le trajet montré sur la boussole. Retournement au zénith, rangement après le passage, et des antennes simulées pour regarder le suivi avant de faire tourner les vraies.
+- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Un passage par la butée planifié avant lui (autre côté du zénith, par-dessus, un tour seulement s'il vaut la peine), le trajet montré sur la boussole. Retournement au zénith, rangement après le passage, un assistant de calibration (O2/F2/O/F du contrôleur, tableau de vérification, correction logicielle par axe), et des antennes simulées pour regarder le suivi avant de faire tourner les vraies.
 
 ### Poste et Doppler
 - Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.

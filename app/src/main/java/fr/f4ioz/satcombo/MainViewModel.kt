@@ -9706,6 +9706,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setRotorAzFromStop(v: Boolean) = stationRotor.setRotorAzFromStop(v)
     fun setRotorAzOnly(v: Boolean) = stationRotor.setRotorAzOnly(v)
     fun setRotorMaxError(v: Int) = stationRotor.setRotorMaxError(v)
+    /** The software correction of one axis ("AZ"/"EL") as `read:real;…`; false when it cannot be one. */
+    fun setRotorCorrection(axe: String, texte: String): Boolean = stationRotor.setRotorCorrection(axe, texte)
+    /** The real range the controller can be sent to, through the correction. */
+    fun rotorPorteeReelle() = stationRotor.porteeReelle()
     fun setRotorMaxEl(v: Int) = stationRotor.setRotorMaxEl(v)
     fun setRotorDeadband(v: Int) = stationRotor.setRotorDeadband(v)
     fun setRotorFlip(v: Boolean) = stationRotor.setRotorFlip(v)

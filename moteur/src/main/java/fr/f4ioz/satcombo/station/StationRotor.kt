@@ -13,10 +13,15 @@ import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.rotor.BornesControleur
+import fr.f4ioz.satcombo.rotor.CorrectionAxe
+import fr.f4ioz.satcombo.rotor.CorrectionRotor
+import fr.f4ioz.satcombo.rotor.Gs232Codec
 import fr.f4ioz.satcombo.rotor.Gs232Rotor
 import fr.f4ioz.satcombo.rotor.Gs232Simulator
 import fr.f4ioz.satcombo.rotor.RotctldRotor
 import fr.f4ioz.satcombo.rotor.RotorChemin
+import fr.f4ioz.satcombo.rotor.RotorCorrige
 import fr.f4ioz.satcombo.rotor.RotorDeroule
 import fr.f4ioz.satcombo.rotor.RotorDriver
 import fr.f4ioz.satcombo.rotor.RotorMath
@@ -32,6 +37,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * What the mast needs to know of the rest of the station: the satellite
@@ -97,12 +104,32 @@ class StationRotor(
         rotorAzStop = settings.rotorAzStop,
         rotorAzFromStop = settings.rotorAzFromStop,
         rotorMaxError = settings.rotorMaxError,
-        rotorZones = settings.rotorZones))
+        rotorZones = settings.rotorZones,
+        rotorCorrAz = settings.rotorCorrAz,
+        rotorCorrEl = settings.rotorCorrEl))
     val etat: StateFlow<EtatRotor> = _etat.asStateFlow()
 
     private fun change(f: EtatRotor.() -> EtatRotor) = _etat.update { it.f() }
 
     private var rotorDriver: RotorDriver? = null
+
+    /** The same driver, through the software correction: what reads and sends in real degrees. */
+    private var rotorCorrige: RotorCorrige? = null
+
+    /** The software correction now (identity unless calibrated). */
+    @Volatile var correction: CorrectionRotor = CorrectionRotor(
+        CorrectionAxe.lit(settings.rotorCorrAz), CorrectionAxe.lit(settings.rotorCorrEl))
+        private set
+
+    /**
+     * The serial line, one talker at a time: the loop's `C2` slipped into a
+     * calibration's handshake would be taken as its keystroke, and the pot
+     * read wherever the mast happens to be.
+     */
+    private val liaison = Mutex()
+
+    /** Tracking as it was when the calibration assistant opened, given back when it closes. */
+    private var suiviAvantEtalonnage = false
 
     /**
      * The mast's mechanical state as the app believes it. Not the command:
@@ -215,14 +242,28 @@ class StationRotor(
             rotorFlip = settings.rotorFlip,
             rotorAzOnly = settings.rotorAzOnly,
             rotorParkAz = settings.rotorParkAz,
-            rotorParkEl = settings.rotorParkEl) }
+            rotorParkEl = settings.rotorParkEl,
+            rotorCorrAz = settings.rotorCorrAz,
+            rotorCorrEl = settings.rotorCorrEl) }
+        correction = CorrectionRotor(CorrectionAxe.lit(settings.rotorCorrAz), CorrectionAxe.lit(settings.rotorCorrEl))
         return _etat.value
     }
 
     /** A line on the rotor's status (a cable just plugged in…). */
     fun annonce(statut: String) = change { copy(rotorStatus = statut) }
 
+    /**
+     * Tracking on or off. While the calibration assistant is open it stays
+     * off: an order to follow is kept for when the assistant closes — a mast
+     * set off after a satellite mid-calibration would turn under the
+     * operator's inclinometer.
+     */
     fun setRotorEnabled(v: Boolean) {
+        if (v && _etat.value.rotorEtalonnage) {
+            suiviAvantEtalonnage = true
+            change { copy(rotorStatus = t("rotor_etal_suivi_attend")) }
+            return
+        }
         settings.rotorEnabled = v
         change { copy(rotorEnabled = v) }
     }
@@ -367,15 +408,17 @@ class StationRotor(
             // A mast that does not exist: everything shows, nothing moves.
             // Its frames are the ring's own numbers: a south-stop mast is sent 180 to 540.
             val l = rotorLimits(u)
+            // It answers the calibrations as K3NG does: the assistant can be tried without a roof.
             val sim = Gs232Simulator(
                 azMaxDeg = l.azMaxReach,
                 elMaxDeg = l.elMaxDeg,
-                azInitDeg = l.azMinReach)
+                azInitDeg = l.azMinReach,
+                k3ng = true)
             val d = Gs232Rotor(ports)
             d.pacingMs = 0L
             d.attach(sim)
             rotorSimLink = sim
-            rotorDriver = d
+            rotorDriver = corrige(d)
             rotorSerial = d
             rotorAt = RotorPos(l.azMinReach, 0.0)
             rotorWasFlipped = false
@@ -386,7 +429,7 @@ class StationRotor(
         if (u.rotorLink == "ROTCTLD") {
             val d = RotctldRotor()
             val ok = d.open(u.rotorHost, u.rotorPort)
-            rotorDriver = if (ok) d else null
+            rotorDriver = if (ok) corrige(d) else null
             change { copy(rotorConnected = ok,
                 rotorStatus = if (ok) tf("rotor_connected", u.rotorHost + ":" + u.rotorPort)
                 else tf("rotor_error", u.rotorHost + ":" + u.rotorPort)) }
@@ -451,7 +494,7 @@ class StationRotor(
             settings.rotorUsbIndex = gagnant
         }
         if (ok) d.identitePort(gagnant)?.first?.let { settings.rotorUsbCle = it }
-        rotorDriver = if (ok) d else null
+        rotorDriver = if (ok) corrige(d) else null
         rotorSerial = if (ok) d else null
         change { copy(rotorConnected = ok,
             rotorDevices = refs.map { it.label }, rotorDiag = trace,
@@ -483,6 +526,10 @@ class StationRotor(
                 val aim = RotorMath.manual(u.rotorManualAz.toDouble(), u.rotorManualEl.toDouble(), limits)
                 if (aim == null) {
                     change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_manual_refused")) }
+                    return@rotorGuard
+                }
+                if (!atteignable(aim, limits, u)) {
+                    change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_corr_hors_portee")) }
                     return@rotorGuard
                 }
                 launch {
@@ -518,6 +565,7 @@ class StationRotor(
         if (!u.rotorConnected || u.rotorAzOnly || elDeg < u.rotorMinEl) return false
         val limits = rotorLimits(u)
         val aim = RotorMath.manual(azDeg, elDeg, limits) ?: return false
+        if (!atteignable(aim, limits, u)) return false
         if (u.rotorEnabled) setRotorEnabled(false)
         val cmdAz = RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
         val parti = runCatching { d.moveTo(cmdAz, aim.elDeg) }.getOrDefault(false)
@@ -573,6 +621,7 @@ class StationRotor(
         rotorLoopJob?.cancel(); rotorLoopJob = null
         runCatching { rotorDriver?.close() }
         rotorDriver = null
+        rotorCorrige = null
         rotorSimLink = null
         rotorSerial = null
         // A disconnected mast has no position to hold: forget the last read,
@@ -582,7 +631,25 @@ class StationRotor(
         change { copy(rotorConnected = false, rotorStatus = t("rotor_offline"),
             rotorTargetAz = null, rotorTargetEl = null,
             rotorActualAz = null, rotorActualEl = null, rotorOutOfRange = false,
-            rotorAimAz = null, rotorAimEl = null) }
+            rotorAimAz = null, rotorAimEl = null, rotorBrutAz = null, rotorBrutEl = null) }
+    }
+
+    /** [d] seen through the software correction, in real degrees. */
+    private fun corrige(d: RotorDriver): RotorCorrige =
+        RotorCorrige(d, { correction }, { bornesControleur(_etat.value) }).also { rotorCorrige = it }
+
+    /** The controller's range on the wire, for the mast's settings. */
+    private fun bornesControleur(u: EtatRotor) = BornesControleur.de(rotorLimits(u), u.rotorAzFromStop)
+
+    /**
+     * Can the real direction [aim] be sent without the controller being told
+     * more than its range? Always with no correction. The angle goes through
+     * the controller's origin first ([RotorMath.commandAz]), as on the wire.
+     */
+    private fun atteignable(aim: RotorMath.Aim, limits: RotorMath.Limits, u: EtatRotor): Boolean {
+        if (correction.estIdentite) return true
+        val c = rotorCorrige ?: return true
+        return c.atteignable(RotorPos(RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop), aim.elDeg))
     }
 
     /**
@@ -604,6 +671,7 @@ class StationRotor(
                 setRotorEnabled(false)
                 val u = _etat.value
                 val aim = RotorMath.park(u.rotorParkAz.toDouble(), u.rotorParkEl.toDouble(), rotorLimits(u))
+                    ?.takeIf { atteignable(it, rotorLimits(u), u) }
                 if (aim == null) {
                     change { copy(rotorOutOfRange = true) }
                 } else {
@@ -620,6 +688,160 @@ class StationRotor(
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Calibration: the controller's own (O, F, O2, F2) and SatMe's correction.
+    // ------------------------------------------------------------------
+
+    /** What a calibration command gave: its outcome (an [Gs232Rotor.Issue] name, or "") and a sentence. */
+    data class ResultatEtalonnage(val ok: Boolean, val issue: String, val message: String)
+
+    /** Adds lines to the calibration log, the last forty kept. */
+    private fun journalEtal(vararg lignes: String) =
+        change { copy(rotorEtalJournal = (rotorEtalJournal + lignes).takeLast(40)) }
+
+    /**
+     * The software correction of one axis ("AZ" or "EL"). Identity clears it.
+     * Stored as typed in the controller's numbers; nothing else changes: the
+     * limits stay real degrees.
+     */
+    fun setRotorCorrection(axe: String, c: CorrectionAxe) {
+        if (axe == "AZ") settings.rotorCorrAz = c.ecrit() else settings.rotorCorrEl = c.ecrit()
+        correction = CorrectionRotor(CorrectionAxe.lit(settings.rotorCorrAz), CorrectionAxe.lit(settings.rotorCorrEl))
+        rotorPlan = null; rotorPlanKey = null
+        change { copy(rotorCorrAz = settings.rotorCorrAz, rotorCorrEl = settings.rotorCorrEl) }
+    }
+
+    /** Same from its written form (`read:real;…`); false, nothing changed, when it cannot be a correction. */
+    fun setRotorCorrection(axe: String, texte: String): Boolean {
+        val c = CorrectionAxe.litOuNull(texte) ?: return false
+        setRotorCorrection(axe, c)
+        return true
+    }
+
+    /**
+     * The correction of [axe] from the verification table: each pair is the
+     * controller's reading (its own numbers) and what was measured on the
+     * mast (compass: true azimuth; inclinometer: 0 to 180, past the zenith
+     * above 90). A compass reads 10 where an overlap mast reads 370: the
+     * measure is written on the turn of the reading, then in the
+     * controller's origin, as on the wire. Null, nothing changed, when the
+     * measures cannot make a correction.
+     */
+    fun ajusteCorrection(axe: String, releves: List<Pair<Double, Double>>, parPoints: Boolean): CorrectionAxe? {
+        val u = _etat.value
+        val limits = rotorLimits(u)
+        val anneau = bornesControleur(u)
+        val pts = if (axe == "AZ") releves.map { (lu0, mesure) ->
+            val lu = anneau.surAnneau(lu0)
+            val pres = RotorMath.trueAz(lu, limits, u.rotorAzFromStop)
+            lu to RotorMath.commandAz(RotorMath.unwrapFree(mesure, pres), limits, u.rotorAzFromStop)
+        } else releves
+        val c = CorrectionAxe.ajuste(pts, parPoints) ?: return null
+        setRotorCorrection(axe, c)
+        return c
+    }
+
+    /**
+     * The assistant opens: tracking stops (and the mast with it), the log
+     * starts afresh. What tracking was is given back by [etalonnageFerme].
+     */
+    fun etalonnageOuvre() {
+        val u = _etat.value
+        if (u.rotorEtalonnage) return
+        suiviAvantEtalonnage = u.rotorEnabled
+        if (u.rotorEnabled) {
+            settings.rotorEnabled = false
+            change { copy(rotorEnabled = false) }
+            portee.launch { runCatching { rotorDriver?.stop() }; rotorDerniereCmd = null }
+        }
+        change { copy(rotorEtalonnage = true, rotorEtalJournal = emptyList(), rotorStatus = t("rotor_etal_ouvert")) }
+    }
+
+    /** The assistant closes: tracking as it was before. */
+    fun etalonnageFerme() {
+        if (!_etat.value.rotorEtalonnage) return
+        change { copy(rotorEtalonnage = false) }
+        val reprendre = suiviAvantEtalonnage
+        suiviAvantEtalonnage = false
+        if (reprendre) setRotorEnabled(true)
+    }
+
+    /**
+     * One of the controller's own calibrations, with its handshake, the line
+     * held. Only with the assistant open (tracking off) and over GS-232: rotctld
+     * has no such command — there only SatMe's correction applies.
+     */
+    suspend fun etalonnageCommande(e: Gs232Codec.Etalonnage): ResultatEtalonnage {
+        val u = _etat.value
+        fun non(m: String) = ResultatEtalonnage(false, "", m).also { journalEtal(m) }
+        if (!u.rotorEtalonnage) return non(t("rotor_etal_ferme_dabord"))
+        if (!u.rotorConnected) return non(t("rotor_etal_non_connecte"))
+        val ser = rotorSerial
+        if (ser == null || (u.rotorLink == "ROTCTLD" && !u.rotorSim)) return non(t("rotor_etal_rotctld"))
+        val r = liaison.withLock { runCatching { ser.etalonne(e) }.getOrNull() }
+            ?: return non(tf("rotor_etal_muet", e.commande))
+        journalEtal("→ " + e.commande, *r.lignes.map { "← $it" }.toTypedArray())
+        val m = when (r.issue) {
+            Gs232Rotor.Issue.ECRIT -> tf("rotor_etal_ecrit", e.commande)
+            Gs232Rotor.Issue.INCONNU -> tf("rotor_etal_inconnu", e.commande)
+            Gs232Rotor.Issue.MUET -> tf("rotor_etal_muet", e.commande)
+            Gs232Rotor.Issue.SANS_CONFIRMATION -> tf("rotor_etal_sans_confirmation", e.commande)
+        }
+        journalEtal(m)
+        change { copy(rotorLastSent = ser.lastSent, rotorLastReply = ser.lastReply, rotorStatus = m) }
+        return ResultatEtalonnage(r.issue == Gs232Rotor.Issue.ECRIT, r.issue.name, m)
+    }
+
+    /**
+     * A test position of the verification, sent only on the operator's
+     * click: [az] / [el] in real degrees (true azimuth), the other axis kept
+     * where the mast is. Through the correction and within the limits —
+     * refused, never clamped. Null when sent, else why not.
+     */
+    suspend fun etalonnageVa(az: Double?, el: Double?): String? {
+        val u = _etat.value
+        if (!u.rotorEtalonnage) return t("rotor_etal_ferme_dabord").also { journalEtal(it) }
+        val d = rotorDriver
+        if (!u.rotorConnected || d == null) return t("rotor_etal_non_connecte").also { journalEtal(it) }
+        val limits = rotorLimits(u)
+        val azV = az ?: u.rotorActualAz ?: rotorAt.azDeg
+        val elV = if (u.rotorAzOnly) 0.0 else el ?: u.rotorActualEl ?: rotorAt.elDeg
+        val aim = RotorMath.manual(azV, elV, limits)
+        if (aim == null || !atteignable(aim, limits, u)) {
+            val m = if (aim == null) t("rotor_manual_refused") else t("rotor_corr_hors_portee")
+            journalEtal(m); change { copy(rotorStatus = m) }
+            return m
+        }
+        val cmdAz = RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
+        val parti = liaison.withLock { runCatching { d.moveTo(cmdAz, aim.elDeg) }.getOrDefault(false) }
+        rotorAt = RotorPos(aim.azDeg, aim.elDeg)
+        rotorDerniereCmd = if (parti) rotorAt else null
+        rotorCmd = rotorAt
+        rotorWasFlipped = false
+        val envoye = rotorSerial?.lastSent ?: ""
+        val m = if (parti) tf("rotor_etal_va", envoye.ifBlank { "→" }) else t("rotor_send_failed")
+        journalEtal(m)
+        change { copy(rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg, rotorOutOfRange = false,
+            rotorLastSent = envoye, rotorStatus = m) }
+        return if (parti) null else m
+    }
+
+    /**
+     * The real range the controller can be sent to, through the correction:
+     * azimuth (true north, unwrapped) and elevation, low and high. A real top
+     * of 160 on a controller that says 180 there shows here.
+     */
+    fun porteeReelle(): Pair<ClosedFloatingPointRange<Double>, ClosedFloatingPointRange<Double>> {
+        val u = _etat.value
+        val limits = rotorLimits(u)
+        val b = bornesControleur(u)
+        val bas = correction.versReel(RotorPos(b.azMin, b.elMin))
+        val haut = correction.versReel(RotorPos(b.azMax, b.elMax))
+        val azBas = maxOf(limits.azMinReach, RotorMath.trueAz(bas.azDeg, limits, u.rotorAzFromStop))
+        val azHaut = minOf(limits.azMaxReach, RotorMath.trueAz(haut.azDeg, limits, u.rotorAzFromStop))
+        return azBas..azHaut to maxOf(0.0, bas.elDeg)..minOf(limits.elMaxDeg, haut.elDeg)
     }
 
     private fun rotorLimits(u: EtatRotor) = RotorMath.Limits(
@@ -704,8 +926,10 @@ class StationRotor(
     /** Two azimuths apart on the sky, whatever turn of the ring each is written on. */
     private fun ecartAz(a: Double, b: Double): Double = kotlin.math.abs(RotorMath.norm360(a - b + 180.0) - 180.0)
 
-    /** One round of the loop (public for the tests, which drive the clock). */
-    suspend fun rotorTick() {
+    /** One round of the loop (public for the tests, which drive the clock): the line held throughout. */
+    suspend fun rotorTick() = liaison.withLock { rotorTickInner() }
+
+    private suspend fun rotorTickInner() {
         val d = rotorDriver ?: return
         // The simulated mast only moves when advanced.
         rotorSimLink?.advance(1000)
@@ -751,7 +975,10 @@ class StationRotor(
         // phone. Only the aim source changes — same colours, trace, error.
         val visee = lu?.let { RotorMath.antennaAim(it) }
         val ser = rotorSerial
+        val brutLu = if (brut != null) rotorCorrige?.dernierBrut else null
         change { copy(rotorActualAz = lu?.azDeg, rotorActualEl = lu?.elDeg,
+            rotorBrutAz = brutLu?.azDeg, rotorBrutEl = brutLu?.elDeg,
+            rotorEcretageDeg = rotorCorrige?.ecretageDeg ?: 0.0,
             rotorAimAz = visee?.azDeg,
             rotorAimEl = if (rotorAzOnly) null else visee?.elDeg,
             rotorLastSent = ser?.lastSent ?: rotorLastSent,

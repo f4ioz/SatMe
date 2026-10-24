@@ -113,7 +113,19 @@ data class EtatRotor(
     /** Obstacle zones, as stored (see SettingsStore.rotorZones). */
     val rotorZones: String = "",
     /** The whole-pass plan in force, for the screens; null when none. */
-    val rotorPlan: ResumePlanRotor? = null
+    val rotorPlan: ResumePlanRotor? = null,
+    /** The software correction of each axis, as stored ("" = none: see CorrectionAxe). */
+    val rotorCorrAz: String = "",
+    val rotorCorrEl: String = "",
+    /** The position as the controller gives it, before the correction (its own numbers); null when silent. */
+    val rotorBrutAz: Double? = null,
+    val rotorBrutEl: Double? = null,
+    /** How far the last command had to be held inside the controller's range (correction beyond its reach). */
+    val rotorEcretageDeg: Double = 0.0,
+    /** The calibration assistant is open: tracking held off. */
+    val rotorEtalonnage: Boolean = false,
+    /** What the calibration said and heard, line by line, last ones last. */
+    val rotorEtalJournal: List<String> = emptyList()
 )
 
 /**
