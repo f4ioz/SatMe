@@ -124,7 +124,10 @@ object ApiStation {
         .put("reglages", JSONObject().put("maxAz", r.rotorMaxAz).put("maxEl", r.rotorMaxEl).put("butee", r.rotorAzStop)
             .put("depuisButee", r.rotorAzFromStop).put("flip", r.rotorFlip).put("azSeul", r.rotorAzOnly)
             .put("parkAz", r.rotorParkAz).put("parkEl", r.rotorParkEl).put("minEl", r.rotorMinEl)
-            .put("ecart", r.rotorDeadband).put("avantAos", r.rotorPreAos).put("zones", r.rotorZones))
+            .put("ecart", r.rotorDeadband).put("avantAos", r.rotorPreAos).put("zones", r.rotorZones)
+            .put("corrAz", r.rotorCorrAz).put("corrEl", r.rotorCorrEl))
+        .put("brutAz", r.rotorBrutAz ?: JSONObject.NULL).put("brutEl", r.rotorBrutEl ?: JSONObject.NULL)
+        .put("etalonnage", r.rotorEtalonnage)
         .put("diag", JSONArray(r.rotorDiag))
 
     /**

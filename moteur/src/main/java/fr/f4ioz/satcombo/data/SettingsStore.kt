@@ -1798,6 +1798,19 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getString("rotor_zones", "") ?: ""
         set(v) { prefs.edit().putString("rotor_zones", v).apply() }
 
+    /**
+     * The software correction of each axis, controller reading ↔ real angle,
+     * as `read:real;…` (see [fr.f4ioz.satcombo.rotor.CorrectionAxe]). Empty:
+     * none, the controller is taken at its word — every station before 10/2026.
+     */
+    var rotorCorrAz: String
+        get() = prefs.getString("rotor_corr_az", "") ?: ""
+        set(v) { prefs.edit().putString("rotor_corr_az", v).apply() }
+
+    var rotorCorrEl: String
+        get() = prefs.getString("rotor_corr_el", "") ?: ""
+        set(v) { prefs.edit().putString("rotor_corr_el", v).apply() }
+
     /** Pointing error tolerated before the banner reports it, in degrees. */
     var rotorMaxError: Int
         get() = prefs.getInt("rotor_max_error", 15)
