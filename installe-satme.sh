@@ -200,12 +200,21 @@ if a QR && [ "$UFW" = 1 ]; then
   $SUDO ufw allow from 192.168.0.0/16 to any port 8091 proto tcp >/dev/null && dit "$(m "port 8091 ouvert au réseau local" "port 8091 open to the local network")"
 fi
 
-OPTS=""; a RESEAU && OPTS="--reseau"
-# A launcher: starts SatMe-PC unless it runs, then opens the page.
+# « Page ouverte au réseau »: written in SatMe-PC's startup file (Réglages › Démarrage changes it later), not on its
+# command line, which would win over the page. Unticked: the file is left as it is.
+OPTS=""
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/satme/satme-pc.properties"
+if a RESEAU; then
+  mkdir -p "$(dirname "$CONF")"
+  { [ -f "$CONF" ] && grep -v '^reseau *=' "$CONF"; echo "reseau=true"; } > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+fi
+# A launcher: starts SatMe-PC unless it runs, then opens the page (its port read from the startup file, 8090 otherwise).
 cat > "$CIBLE/lance-satme.sh" <<EOF
 #!/usr/bin/env bash
-curl -fs -o /dev/null http://localhost:8090/api/etat || { nohup "$CIBLE/bin/satme" $OPTS >"\$HOME/.satme-pc.log" 2>&1 & for i in \$(seq 1 30); do sleep 1; curl -fs -o /dev/null http://localhost:8090/api/etat && break; done; }
-xdg-open http://localhost:8090/ >/dev/null 2>&1 || echo "http://localhost:8090/"
+CONF="\${XDG_CONFIG_HOME:-\$HOME/.config}/satme/satme-pc.properties"
+P=\$(sed -n 's/^port *= *\([0-9][0-9]*\).*/\1/p' "\$CONF" 2>/dev/null | tail -1); P=\${P:-8090}
+curl -fs -o /dev/null http://localhost:\$P/api/etat || { nohup "$CIBLE/bin/satme" $OPTS >"\$HOME/.satme-pc.log" 2>&1 & for i in \$(seq 1 30); do sleep 1; curl -fs -o /dev/null http://localhost:\$P/api/etat && break; done; }
+xdg-open http://localhost:\$P/ >/dev/null 2>&1 || echo "http://localhost:\$P/"
 EOF
 chmod +x "$CIBLE/lance-satme.sh"
 

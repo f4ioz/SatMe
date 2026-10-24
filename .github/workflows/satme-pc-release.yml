@@ -76,10 +76,19 @@ jobs:
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
           sha256sum satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip > SHA256SUMS
+      # The release's text: the downloads (NOTES-RELEASE.md), then this version's section of pc/NOUVEAUTES.md
+      # (its « ### fr » and « ### en »), which SatMe-PC's « Nouvelle version » window shows.
+      - name: Release notes
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          cp pc/NOTES-RELEASE.md notes.md
+          awk -v t="## $V" '$0 == t { p = 1; next } /^## / { p = 0 } p' pc/NOUVEAUTES.md > section.md
+          if [ -s section.md ] && grep -q '[^[:space:]]' section.md; then printf '\n' >> notes.md; cat section.md >> notes.md
+          else echo "::warning::pc/NOUVEAUTES.md has no section « ## $V »: rename « ## Prochaine version » before tagging"; fi
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
           gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip SHA256SUMS \
-            --title "SatMe-PC $V" --notes-file pc/NOTES-RELEASE.md --latest
+            --title "SatMe-PC $V" --notes-file notes.md --latest
