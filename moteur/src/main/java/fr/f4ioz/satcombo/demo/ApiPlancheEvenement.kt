@@ -31,7 +31,8 @@ import java.io.File
  *
  * Routes under `/planche`: `/evenements?id=`, `/evenement?id=&ev=` (""
  * chosen by itself again, « aucun » none), `/galerie?id=`,
- * `/remplit-diapos?id=&tous=`, `/relance?oublie=`, `/analyse`,
+ * `/remplit-diapos?id=&tous=&reinit=`, `/relance?oublie=`, `/analyse`,
+ * `/case?id=&i=` (a box's versions), `/fusionner?id=&i=`, `/version-vignette?f=`,
  * `/plans`, `/rapport?id=&chaine=&plan=&dl=&format=` (`pdf`: the PDF, else the page).
  */
 object ApiPlancheEvenement {
@@ -69,7 +70,20 @@ object ApiPlancheEvenement {
         fun maintenant(): Long = System.currentTimeMillis()
         /** The report as a PDF ([fr.f4ioz.satcombo.sstv.RapportPdf] drawn by the platform); null: none here. */
         fun pdf(r: RapportEvenement.Rapport): ByteArray? = null
+        /** The processed versions (corrected, fused): what a box may show; null none here. */
+        fun corrections(): ApiCorrectionSstv? = null
+        /** A processed picture small (a box's version to choose), JPEG. */
+        fun vignetteFichier(f: File): ByteArray? = null
     }
+
+    /**
+     * The sheet's boxes as drawn, [parNom] the gallery by name: each the
+     * version chosen for it ([ApiCorrectionSstv.pourCases]); without the
+     * processed versions here, the pictures as received.
+     */
+    fun cases(m: Planche.Modele, parNom: Map<String, Pair<File, SstvMeta.SstvShot>>, corrections: ApiCorrectionSstv?): ApiCorrectionSstv.Cases =
+        corrections?.let { c -> runCatching { c.pourCases(m, parNom) }.getOrNull() }
+            ?: ApiCorrectionSstv.Cases(m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap(), emptyList())
 
     /** The events a sheet may be about: the campaigns and activities, the runs of pictures no event holds. */
     fun tous(src: Source): List<EvenementSstv.Evenement> {
@@ -143,12 +157,15 @@ object ApiPlancheEvenement {
         }
     }
 
-    /** « Fill by slide »: the event's groups (or the whole gallery's with [tous]) in slide order. */
-    fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean): Planche.ParDiapo {
+    /**
+     * « Fill by slide »: the event's groups (or the whole gallery's with [tous])
+     * in slide order; the choices made by hand kept unless [reinitialise].
+     */
+    fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean, reinitialise: Boolean = false): Planche.ParDiapo {
         val e = src.classement.etat(src.dossier, src.images(), attendre = true)
         val ev = m.evenement
-        return if (ev != null && !tous) Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb)
-            else Planche.remplitParDiapo(m, e.groupes, 12)
+        return if (ev != null && !tous) Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, reinitialise)
+            else Planche.remplitParDiapo(m, e.groupes, 12, reinitialise)
     }
 
     /** The event's report: its pictures, passes, the sheet [m] (if any), the chain of [plan] when [avecChaine]. */
@@ -205,10 +222,10 @@ object ApiPlancheEvenement {
         "/remplit-diapos" -> {
             val m = modele(p("id"))?.let { assure(it, src, rangement, verrou) }
             if (m == null) null else {
-                val r = remplitParDiapo(m, src, p("tous") == "1")
+                val r = remplitParDiapo(m, src, p("tous") == "1", p("reinit") == "1")
                 synchronized(verrou) { rangement.enregistre(r.modele) }
                 json(JSONObject().put("ok", true).put("cases", r.modele.cases.size).put("manquantes", JSONArray(r.manquantes))
-                    .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases))
+                    .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases).put("gardes", r.gardes))
             }
         }
         "/relance" -> {
@@ -221,6 +238,28 @@ object ApiPlancheEvenement {
             val e = src.classement.etat(src.dossier, shots)
             json(JSONObject().put("restent", e.restent).put("total", shots.size).put("groupes", e.groupes.size)
                 .put("lues", e.analyses.values.count { it.lu > 0 }))
+        }
+        // A box's panel: the versions of its slide to choose from (each its mark and a small picture).
+        "/case" -> {
+            val m = modele(p("id")) ?: return null
+            val i = p("i").toIntOrNull()?.takeIf { it in m.cases.indices } ?: return null
+            json(src.corrections()?.pourCase(m, i) ?: JSONObject().put("i", i).put("choix", Planche.version(m, i).code)
+                .put("f", m.images[i] ?: JSONObject.NULL).put("versions", JSONArray()).put("copies", JSONArray()).put("sans", true))
+        }
+        // « Créer la fusion » from a box: its slide's copies fused (the gallery's own action), in the background.
+        "/fusionner" -> {
+            val m = modele(p("id")) ?: return null
+            val f = p("i").toIntOrNull()?.let { m.images[it] }
+            val c = src.corrections()
+            if (f == null || c == null) json(JSONObject().put("ok", false).put("erreur", "introuvable"))
+            else json(c.action("/api/sstv/fusionner") { k -> if (k == "nom") f else "" } ?: JSONObject().put("ok", false))
+        }
+        // A processed version small (only a file made here: never another one).
+        "/version-vignette" -> {
+            val f = src.corrections()?.fichier(p("f"))
+            val b = f?.let { runCatching { src.vignetteFichier(it) }.getOrNull() }
+            if (b == null) ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
+            else ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: no-store\r\n")
         }
         "/plans" -> json(JSONArray(src.plans().map { (id, nom) -> JSONObject().put("id", id).put("nom", nom) }))
         "/rapport" -> {

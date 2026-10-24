@@ -95,10 +95,82 @@ object Planche {
         /** Each box shows the best marked of its slide's versions — as received, corrected, fused ([CorrectionsGalerie.pourPlanche]). */
         val corrigees: Boolean = false,
         /** Say « corrigée » / « fusion » on the sheet itself (legend or corner); off: a clean sheet, the information kept apart. */
-        val marqueTraitees: Boolean = false
+        val marqueTraitees: Boolean = false,
+        /**
+         * What a box shows of its slide, chosen by hand: box index → its
+         * [ChoixCase] (a version, the copy kept). A box not there: Auto —
+         * as every box of an older sheet.
+         */
+        val versions: Map<Int, ChoixCase> = emptyMap()
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
+    }
+
+    /**
+     * The version of its slide a box shows: [AUTO] the best marked when the
+     * sheet takes processed versions ([Modele.corrigees]; else as received),
+     * [RECUE] the picture as received, [CORRIGEE] its corrected version,
+     * [FUSION] its slide's copies fused ([CorrectionsGalerie]).
+     */
+    enum class Version(val code: String) { AUTO("auto"), RECUE("recue"), CORRIGEE("corrigee"), FUSION("fusion");
+        companion object { fun de(c: String) = values().firstOrNull { it.code == c } } }
+
+    /**
+     * A box's choice by hand: its [version], and [copieMain] when its picture
+     * (which received copy) was chosen by hand — kept by « Fill by slide »
+     * while it is still a copy of that box's slide ([remplitParDiapo]).
+     */
+    data class ChoixCase(val version: Version = Version.AUTO, val copieMain: Boolean = false) {
+        /** Nothing chosen: what the box would show anyway. */
+        val auto: Boolean get() = version == Version.AUTO && !copieMain
+    }
+
+    /** The version box [i] shows ([Version.AUTO] when none was chosen). */
+    fun version(m: Modele, i: Int): Version = m.versions[i]?.version ?: Version.AUTO
+
+    /** Box [i] set to show [v] (its copy chosen by hand kept). */
+    fun avecVersion(m: Modele, i: Int, v: Version): Modele {
+        if (i !in m.cases.indices) return m
+        val c = (m.versions[i] ?: ChoixCase()).copy(version = v)
+        return m.copy(versions = if (c.auto) m.versions - i else m.versions + (i to c))
+    }
+
+    /**
+     * Box [i] showing the received copy [fichier], chosen by hand (its version
+     * kept); [memeDiapo]: another copy of the box's slide, the number it went
+     * in for goes with it.
+     */
+    fun avecCopie(m: Modele, i: Int, fichier: String, memeDiapo: Boolean = true): Modele {
+        if (i !in m.cases.indices) return m
+        val im = m.images.filterValues { it != fichier } + (i to fichier)
+        val d = m.images[i]?.takeIf { memeDiapo }?.let { m.diapos[it] }?.let { m.diapos + (fichier to it) } ?: m.diapos
+        return m.copy(images = im, diapos = d, versions = m.versions + (i to (m.versions[i] ?: ChoixCase()).copy(copieMain = true)))
+    }
+
+    /**
+     * The choices made by hand on [avant]'s boxes carried to [apres]: each
+     * goes with its picture's slide ([diapo]: the slide's key — its number,
+     * its group —, null unknown: the picture itself) to the box that holds
+     * it now; a copy chosen by hand stays so only on its own picture. A box
+     * with no picture keeps its choice where it is (a template's box set to
+     * « Fusion » before its slide is received). The others: Auto.
+     */
+    fun reporteChoix(avant: Modele, apres: Modele, diapo: (String) -> String? = { null }): Modele {
+        if (avant.versions.isEmpty()) return if (apres.versions.isEmpty()) apres else apres.copy(versions = emptyMap())
+        fun cle(f: String) = diapo(f) ?: "f:$f"
+        val ou = HashMap<String, Int>()
+        apres.images.toSortedMap().forEach { (j, f) -> ou.putIfAbsent(cle(f), j) }
+        val out = HashMap<Int, ChoixCase>()
+        avant.versions.toSortedMap().forEach { (i, c) ->
+            val f = avant.images[i] ?: return@forEach
+            val j = ou[cle(f)] ?: return@forEach
+            if (j !in out) out[j] = c.copy(copieMain = c.copieMain && apres.images[j] == f)
+        }
+        avant.versions.forEach { (i, c) ->
+            if (avant.images[i] == null && i in apres.cases.indices && apres.images[i] == null && i !in out) out[i] = c
+        }
+        return apres.copy(versions = out.filterValues { !it.auto })
     }
 
     /**
@@ -265,7 +337,7 @@ object Planche {
     fun ajusteA(m: Modele, ordre: List<String?>): Modele {
         val vus = HashSet<String>()
         val l = ordre.map { f -> f?.takeIf { vus.add(it) } }.dropLastWhile { it == null }
-        if (l.all { it == null }) return duModele(m).copy(images = emptyMap())
+        if (l.all { it == null }) return duModele(m).let { d -> d.copy(images = emptyMap(), versions = d.versions.mapValues { it.value.copy(copieMain = false) }.filterValues { !it.auto }) }
         val origine = m.origine.ifEmpty { m.cases }
         val textes = textesDuModele(m)
         val r = m.ratio; val a = aspectCase(m.legende); val n = l.size; val ecart = 0.06f
@@ -305,8 +377,8 @@ object Planche {
         if (essais.isEmpty()) essais += Triple(zone, textes, 1f)
         val (z, tx, _) = essais.maxByOrNull { (z, _, gain) -> meilleure(n, z, r, a, ecart).second / gain }!!
         val bouges = tx !== textes
-        return m.copy(cases = grilleOptimale(n, z, r, a, ecart), images = l.withIndex().filter { it.value != null }.associate { it.index to it.value!! },
-            origine = origine, textes = tx, textesOrigine = if (bouges) textes else emptyList())
+        return reporteChoix(m, m.copy(cases = grilleOptimale(n, z, r, a, ecart), images = l.withIndex().filter { it.value != null }.associate { it.index to it.value!! },
+            origine = origine, textes = tx, textesOrigine = if (bouges) textes else emptyList()))
     }
 
     /** Fitted again to the same pictures (after the line under them was switched, say). */
@@ -315,8 +387,8 @@ object Planche {
     /** Back to the template's boxes and texts, the pictures chosen in its first boxes. */
     fun duModele(m: Modele): Modele {
         if (!m.ajustee) return m
-        return m.copy(cases = m.origine, origine = emptyList(), textes = textesDuModele(m), textesOrigine = emptyList(),
-            images = choisies(m).take(m.origine.size).withIndex().associate { it.index to it.value })
+        return reporteChoix(m, m.copy(cases = m.origine, origine = emptyList(), textes = textesDuModele(m), textesOrigine = emptyList(),
+            images = choisies(m).take(m.origine.size).withIndex().associate { it.index to it.value }))
     }
 
     /** As many pictures as the template has boxes, at most. */
@@ -342,7 +414,12 @@ object Planche {
         val a = im.remove(i); val b = im.remove(j)
         if (a != null) im[j] = a
         if (b != null) im[i] = b
-        return m.copy(images = im)
+        // The choices made on them go with them.
+        val v = m.versions.toMutableMap()
+        val ca = v.remove(i); val cb = v.remove(j)
+        if (ca != null) v[j] = ca
+        if (cb != null) v[i] = cb
+        return m.copy(images = im, versions = v)
     }
 
     /**
@@ -360,9 +437,12 @@ object Planche {
     }
 
     /** "Fill": the template's boxes, or as many pictures as the fitted sheet holds, the best of [images]. */
-    fun remplit(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele =
-        if (m.ajustee) avecNombre(m.copy(images = emptyMap()), m.cases.size, images, signatures)
-        else m.copy(images = remplitParReception(m.cases.size, images, signatures))
+    fun remplit(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele {
+        val n = if (m.ajustee) avecNombre(m.copy(images = emptyMap()), m.cases.size, images, signatures)
+            else m.copy(images = remplitParReception(m.cases.size, images, signatures))
+        // The versions chosen by hand follow their slide (the group the gallery sorted it in).
+        return reporteChoix(m, n) { f -> signatures[f]?.groupe?.takeIf { it.isNotEmpty() } }
+    }
 
     // ------------------------------------------------------- same picture
 
@@ -485,8 +565,12 @@ object Planche {
     /** A picture chosen for a slide: its group's best, the number it was put in for and where it comes from. */
     data class PourDiapo(val fichier: String, val diapo: Int, val total: Int, val origine: ClassementSstv.Origine, val note: Int)
 
-    /** What « Fill by slide » did: the sheet, the slides missing, the pictures with no number, those left out (no box). */
-    data class ParDiapo(val modele: Modele, val manquantes: List<Int>, val sansNumero: Int, val horsCases: Int)
+    /**
+     * What « Fill by slide » did: the sheet, the slides missing, the pictures
+     * with no number, those left out (no box), the boxes whose choice by hand
+     * (a version, a copy) was kept.
+     */
+    data class ParDiapo(val modele: Modele, val manquantes: List<Int>, val sansNumero: Int, val horsCases: Int, val gardes: Int = 0)
 
     /**
      * The best picture of each slide in slide order (1/12, 2/12…): of the
@@ -530,19 +614,46 @@ object Planche {
      * number are left out. A template with fewer boxes than slides takes
      * slides 1..k; a fitted sheet is fitted to them. Each picture keeps the
      * slide it went in for.
+     *
+     * **What was chosen by hand is kept** ([Modele.versions]), unless
+     * [reinitialise] (« Tout réinitialiser »): a box's version goes with its
+     * slide — to slide n's box, n's own when it was already there —, a copy
+     * chosen by hand stays in its box while it is still a copy of that slide
+     * (else the best marked comes in, the version kept); a box that had no
+     * picture keeps its version; a slide no longer on the sheet takes its
+     * choice with it. So filling again never undoes a choice silently.
      */
-    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12): ParDiapo {
+    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12, reinitialise: Boolean = false): ParDiapo {
         val parN = ordreParDiapo(groupes, total, vides = true).filterNotNull().filter { it.diapo in 1..total }.associateBy { it.diapo }
         val place = if (m.ajustee) nombreMax(m) else m.cases.size
         val k = minOf(place, total)
-        val pris = (1..k).map { parN[it] }
+        // The slide each picture is now (its group's number), else the one it went in for.
+        val numeroDe = HashMap<String, Int>()
+        groupes.filter { it.diapo > 0 && it.origine != ClassementSstv.Origine.AUCUNE }.forEach { g -> g.images.forEach { numeroDe.putIfAbsent(it.fileName, g.diapo) } }
+        fun numero(f: String): Int = numeroDe[f] ?: numeroEtiquette(m.diapos[f].orEmpty())
+        val choix = if (reinitialise) emptyMap() else m.versions.filterValues { !it.auto }
+        // A copy chosen by hand, still of its slide: it stays rather than the best marked.
+        val main = choix.filter { it.value.copieMain }.mapNotNull { (i, _) -> m.images[i]?.let { f -> numeroDe[f]?.takeIf { it in 1..k }?.let { it to f } } }.toMap()
+        val pris = (1..k).map { n -> parN[n]?.let { d -> main[n]?.let { d.copy(fichier = it) } ?: d } }
         val etiquettes = pris.filterNotNull().associate { it.fichier to numeroDiapo(it.diapo, it.total, it.origine) }
-        val base = m.copy(diapos = etiquettes, vides = true)
+        val base = m.copy(diapos = etiquettes, vides = true, versions = emptyMap())
         val n = if (m.ajustee) ajusteA(base, pris.map { it?.fichier })
             else base.copy(images = pris.withIndex().filter { it.value != null }.associate { it.index to it.value!!.fichier })
+        // Slide n's box is box n - 1 now: each choice goes to its slide's box, an empty box's stays.
+        val versions = HashMap<Int, ChoixCase>()
+        choix.toSortedMap().forEach { (i, c) ->
+            val f = m.images[i] ?: return@forEach
+            val j = numero(f).takeIf { it in 1..k }?.minus(1) ?: return@forEach
+            if (j in n.cases.indices && j !in versions) versions[j] = c.copy(copieMain = c.copieMain && n.images[j] == f)
+        }
+        choix.forEach { (i, c) -> if (m.images[i] == null && i in n.cases.indices && i !in versions) versions[i] = c.copy(copieMain = false) }
+        val gardees = versions.filterValues { !it.auto }
         val sansNumero = groupes.count { it.images.isNotEmpty() && (it.diapo <= 0 || it.origine == ClassementSstv.Origine.AUCUNE) }
-        return ParDiapo(n, (1..total).filter { it !in parN }, sansNumero, parN.keys.count { it > k })
+        return ParDiapo(n.copy(versions = gardees), (1..total).filter { it !in parN }, sansNumero, parN.keys.count { it > k }, gardees.size)
     }
+
+    /** The slide number of a box's label (« 2/12 », « ≈5/12 »), 0 none. */
+    fun numeroEtiquette(e: String): Int = e.trimStart('≈').substringBefore('/').trim().toIntOrNull() ?: 0
 
     /** The number on box [i]: the slide its picture went in for, else its place (« 3/12 »). */
     fun etiquette(m: Modele, i: Int): String = m.images[i]?.let { m.diapos[it] }?.takeIf { it.isNotBlank() } ?: "${i + 1}/${m.cases.size}"
@@ -708,13 +819,16 @@ object Planche {
         m.diapos.filterKeys { it in placees }.toSortedMap().forEach { (f, d) -> append("diapo=").append(f).append(';').append(d.replace(";", "")).append('\n') }
         if (m.corrigees) append("corrigees=1\n")
         if (m.marqueTraitees) append("marquetraitees=1\n")
+        // The versions chosen by hand, box by box (read by older versions as nothing: Auto).
+        m.versions.toSortedMap().filter { (i, c) -> !c.auto && i in m.cases.indices }.forEach { (i, c) ->
+            append("versioncase=").append(i).append(';').append(c.version.code).append(';').append(if (c.copieMain) 1 else 0).append('\n') }
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
         var m = Modele(id = id, nom = id)
         val cases = ArrayList<Zone>(); val textes = ArrayList<Texte>(); val images = HashMap<Int, String>()
         val origine = ArrayList<Zone>(); val textesOrigine = ArrayList<Texte>(); val ecussons = ArrayList<Ecusson>()
-        val diapos = HashMap<String, String>()
+        val diapos = HashMap<String, String>(); val versions = HashMap<Int, ChoixCase>()
         fun texte(v: String): Texte {
             val p = v.split(';')
             return Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
@@ -741,10 +855,13 @@ object Planche {
                 "diapo" -> if (v.contains(';') && diapos.size < 200) diapos[v.substringBefore(';')] = v.substringAfter(';').take(12)
                 "corrigees" -> m = m.copy(corrigees = v == "1")
                 "marquetraitees" -> m = m.copy(marqueTraitees = v == "1")
+                "versioncase" -> runCatching { val p = v.split(';')
+                    val c = ChoixCase(Version.de(p[1]) ?: Version.AUTO, p.getOrNull(2) == "1")
+                    if (!c.auto && versions.size < 200) versions[p[0].toInt()] = c }
             }
         }
         m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine,
-            ecussons = ecussons, diapos = diapos)
+            ecussons = ecussons, diapos = diapos, versions = versions.filterKeys { it in cases.indices })
     }.getOrNull()
 
     /** The sheets folder: templates ("*.planche"), their backgrounds and patches. */

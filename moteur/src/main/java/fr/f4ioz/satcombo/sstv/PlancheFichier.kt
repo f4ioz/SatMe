@@ -114,14 +114,17 @@ object PlancheFichier {
     }
 
     /**
-     * What travels of [m]: no picture received; the callsign written as a
+     * What travels of [m]: no picture received (each box's version chosen
+     * kept, not its copy); the callsign written as a
      * free text when [indicatif] is given (the importer sees it as typed).
      */
     fun sansPersonnel(m: Planche.Modele, indicatif: String? = null): Planche.Modele {
         fun dur(l: List<Planche.Texte>) = if (indicatif.isNullOrBlank()) l else l.map {
             if (it.champ == Planche.Champ.INDICATIF) it.copy(champ = Planche.Champ.LIBRE, libre = indicatif.trim().take(40)) else it
         }
-        return m.copy(images = emptyMap(), textes = dur(m.textes), textesOrigine = dur(m.textesOrigine))
+        // The version chosen for each box travels (« Fusion » in box 3), never which picture was in it.
+        return m.copy(images = emptyMap(), textes = dur(m.textes), textesOrigine = dur(m.textesOrigine),
+            versions = m.versions.mapValues { it.value.copy(copieMain = false) }.filterValues { !it.auto })
     }
 
     /**
@@ -235,6 +238,7 @@ object PlancheFichier {
         cases = m.cases.take(60).map { it.bornee() },
         textes = m.textes.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
         images = emptyMap(),
+        versions = m.versions.filterKeys { it in 0 until minOf(60, m.cases.size) }.mapValues { it.value.copy(copieMain = false) }.filterValues { !it.auto },
         origine = m.origine.take(60).map { it.bornee() },
         textesOrigine = m.textesOrigine.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
         ecussons = m.ecussons.take(Planche.ECUSSONS_MAX).map { it.copy(zone = Planche.ecussonBorne(it.zone)) })

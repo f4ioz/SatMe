@@ -146,6 +146,29 @@ class CorrectionsGalerie(
         return File(dossier(galerie), f.fichier) to f
     }
 
+    /** What a box shows: the processed picture and its fiche (null: [png] as received); [repli] when the version chosen is not there (Auto shown). */
+    class PourCase(val fichier: File?, val fiche: Fiche?, val repli: Boolean = false)
+
+    /**
+     * What box of picture [png] shows when [version] was chosen for it:
+     * [Planche.Version.RECUE] the picture as received, [Planche.Version.CORRIGEE]
+     * its corrected version, [Planche.Version.FUSION] its group's fusion;
+     * [Planche.Version.AUTO] — and a version chosen that is not there (deleted,
+     * never made): [pourPlanche] when the sheet takes the best ([auto]), else
+     * as received, [PourCase.repli] then saying so.
+     */
+    fun pourCase(galerie: File, png: String, note: Int, groupe: ClassementSstv.Groupe?, version: Planche.Version, auto: Boolean): PourCase {
+        fun parDefaut(repli: Boolean) = (if (auto) pourPlanche(galerie, png, note, groupe) else null)
+            ?.let { PourCase(it.first, it.second, repli) } ?: PourCase(null, null, repli)
+        fun de(f: Fiche?) = f?.let { PourCase(File(dossier(galerie), it.fichier), it) }
+        return when (version) {
+            Planche.Version.AUTO -> parDefaut(false)
+            Planche.Version.RECUE -> PourCase(null, null)
+            Planche.Version.CORRIGEE -> de(corrigee(galerie, png)) ?: parDefaut(true)
+            Planche.Version.FUSION -> de(groupe?.takeIf { g -> g.images.size > 1 && g.images.any { it.fileName == png } }?.let { fusion(galerie, it.id) }) ?: parDefaut(true)
+        }
+    }
+
     // ------------------------------------------------------------ making
 
     private fun garde(galerie: File, nom: String, px: IntArray, w: Int, h: Int, f: Fiche): Boolean {

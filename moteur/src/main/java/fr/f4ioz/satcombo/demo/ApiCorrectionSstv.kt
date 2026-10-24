@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.demo
 
 import fr.f4ioz.satcombo.sstv.ClassementSstv
 import fr.f4ioz.satcombo.sstv.CorrectionsGalerie
+import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
@@ -79,7 +80,7 @@ class ApiCorrectionSstv(
     }
 
     /**
-     * A sheet's picture [p] (its file, what is known of it) as the sheet shows
+     * A picture [p] (its file, what is known of it) as a sheet's Auto box shows
      * it with [Planche.Modele.corrigees]: the best marked of its slide's
      * versions ([CorrectionsGalerie.pourPlanche]), what it is kept in
      * [SstvMeta.SstvShot.traitement] (shown only with [Planche.Modele.marqueTraitees]); else as it is.
@@ -89,6 +90,64 @@ class ApiCorrectionSstv(
         val note = g?.notes?.get(p.second.fileName) ?: -1
         val (f, fiche) = runCatching { corrections.pourPlanche(dossier(), p.second.fileName, note, g) }.getOrNull() ?: return p
         return f to p.second.copy(traitement = etiquette(fiche))
+    }
+
+    /** The boxes of a sheet as drawn ([places]), and those whose chosen version is gone, shown as Auto ([replis]). */
+    class Cases(val places: Map<Int, Pair<File, SstvMeta.SstvShot>>, val replis: List<Int>)
+
+    /**
+     * Sheet [m]'s boxes as drawn, [parNom] the gallery by picture name: each
+     * the version chosen for it ([Planche.Modele.versions]), Auto the best
+     * marked when the sheet takes them ([Planche.Modele.corrigees]); what it
+     * is kept in [SstvMeta.SstvShot.traitement] (shown only with
+     * [Planche.Modele.marqueTraitees]).
+     */
+    fun pourCases(m: Planche.Modele, parNom: Map<String, Pair<File, SstvMeta.SstvShot>>): Cases {
+        val gs = runCatching { groupes() }.getOrDefault(emptyList())
+        val d = dossier()
+        val replis = ArrayList<Int>()
+        val places = m.images.mapNotNull { (i, f) ->
+            val p = parNom[f] ?: return@mapNotNull null
+            val v = Planche.version(m, i)
+            if (v == Planche.Version.AUTO && !m.corrigees) return@mapNotNull i to p
+            val g = gs.firstOrNull { gr -> gr.images.any { it.fileName == f } }
+            val c = runCatching { corrections.pourCase(d, f, g?.notes?.get(f) ?: -1, g, v, m.corrigees) }.getOrNull() ?: return@mapNotNull i to p
+            if (c.repli) replis += i
+            i to (if (c.fichier != null && c.fiche != null) c.fichier to p.second.copy(traitement = etiquette(c.fiche)) else p)
+        }.toMap()
+        return Cases(places, replis.sorted())
+    }
+
+    /**
+     * Box [i] of sheet [m] for its panel: its picture, the versions of its
+     * slide there are (as received, corrected, fused — each its mark and its
+     * file), whether a fusion could be made, the slide's copies, the version
+     * chosen and the one shown (Auto's own), the work under way.
+     */
+    fun pourCase(m: Planche.Modele, i: Int): JSONObject {
+        val d = dossier()
+        val o = JSONObject().put("i", i).put("choix", Planche.version(m, i).code).put("copieMain", m.versions[i]?.copieMain == true)
+            .put("auto", m.corrigees).put("enCours", enCours).put("erreur", erreur).put("erreurSur", erreurSur)
+        val f = m.images[i] ?: return o.put("f", JSONObject.NULL)
+        val g = groupeDe(f)
+        val note = g?.notes?.get(f) ?: -1
+        o.put("f", f).put("note", note)
+        val versions = JSONArray().put(JSONObject().put("v", Planche.Version.RECUE.code).put("note", note).put("f", f))
+        corrections.corrigee(d, f)?.let { versions.put(JSONObject().put("v", Planche.Version.CORRIGEE.code).put("note", it.noteApres).put("fichier", it.fichier)) }
+        val fusion = g?.takeIf { it.images.size > 1 }?.let { corrections.fusion(d, it.id) }
+        fusion?.let { versions.put(JSONObject().put("v", Planche.Version.FUSION.code).put("note", it.noteApres).put("fichier", it.fichier).put("copies", it.copies.size)) }
+        o.put("versions", versions).put("fusionPossible", g != null && g.images.size > 1 && fusion == null).put("groupe", g?.id ?: JSONObject.NULL)
+        o.put("copies", JSONArray(g?.images.orEmpty().sortedByDescending { g?.notes?.get(it.fileName) ?: -1 }.map { s ->
+            JSONObject().put("f", s.fileName).put("note", g?.notes?.get(s.fileName) ?: -1).put("t", s.timeMs)
+                .put("corrigee", corrections.corrigee(d, s.fileName) != null) }))
+        val c = runCatching { corrections.pourCase(d, f, note, g, Planche.version(m, i), m.corrigees) }.getOrNull()
+        val montre = when (c?.fiche?.methode) { null -> Planche.Version.RECUE; CorrectionsGalerie.Methode.FUSION -> Planche.Version.FUSION; else -> Planche.Version.CORRIGEE }
+        o.put("montre", montre.code).put("montreFichier", c?.fiche?.fichier ?: f).put("repli", c?.repli == true)
+        // What Auto would show: said on its own choice.
+        val a = runCatching { corrections.pourCase(d, f, note, g, Planche.Version.AUTO, m.corrigees) }.getOrNull()
+        o.put("autoMontre", when (a?.fiche?.methode) { null -> Planche.Version.RECUE; CorrectionsGalerie.Methode.FUSION -> Planche.Version.FUSION; else -> Planche.Version.CORRIGEE }.code)
+            .put("autoFichier", a?.fiche?.fichier ?: f).put("autoNote", a?.fiche?.noteApres ?: note)
+        return o
     }
 
     /** A file of `sstv/corrigees/`, or null. */
