@@ -65,9 +65,13 @@ object EvenementSstv {
      * satellite and dates.
      */
     fun liste(activites: List<ActivitesAVenir.Activite>, campagnes: List<CampagneSstv.Campagne>): List<Evenement> {
-        val c = campagnes.filter { it.catnum > 0 && it.finMs > it.debutMs }.map {
-            Evenement("c:" + cle(it.id), Genre.CAMPAGNE, propre(it.nom, 80), propre(it.satNom, 40), it.catnum, it.debutMs, it.finMs,
-                HoraireDiapos.periode(it.horaire))
+        // A campaign entered by whole days starts when the announced activity it covers really starts.
+        val exactes = activites.filter { it.type == ActivitesAVenir.Type.SSTV && it.catnum > 0 && it.precision == ActivitesAVenir.Precision.EXACTE }
+        val c = campagnes.filter { it.catnum > 0 && it.finMs > it.debutMs }.map { k ->
+            val debut = exactes.filter { it.catnum == k.catnum && it.debutMs in (k.debutMs + 1) until k.finMs }
+                .minOfOrNull { it.debutMs } ?: k.debutMs
+            Evenement("c:" + cle(k.id), Genre.CAMPAGNE, propre(k.nom, 80), propre(k.satNom, 40), k.catnum, debut, k.finMs,
+                HoraireDiapos.periode(k.horaire))
         }
         val a = activites.filter { it.type == ActivitesAVenir.Type.SSTV && it.catnum > 0 && it.precision != ActivitesAVenir.Precision.INCONNUE && it.finMs > it.debutMs }
             .map {
