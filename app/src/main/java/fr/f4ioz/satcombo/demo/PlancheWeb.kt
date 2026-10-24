@@ -189,7 +189,8 @@ object PlancheWeb {
                     val m = modele(r, p("id")) ?: return NON
                     val sat = p("sat")
                     val l = galerie(ctx).filter { sat.isBlank() || it.second.satName == sat }
-                    val sig = PlancheRendu.signatures(l.map { it.first })
+                    // The gallery sorted: one copy of each slide, the best marked.
+                    val sig = fr.f4ioz.satcombo.sstv.ClassementTelephone.signatures(ctx, PlancheRendu.signatures(l.map { it.first }))
                     val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
                         else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
                     synchronized(this) { r.enregistre(n) }
