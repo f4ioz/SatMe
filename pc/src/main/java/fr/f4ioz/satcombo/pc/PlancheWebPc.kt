@@ -69,6 +69,21 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         override fun pdf(r: RapportEvenement.Rapport): ByteArray = RapportPdfPc.pdf(r)
         override fun corrections(): ApiCorrectionSstv? = this@PlancheWebPc.classement?.corrections?.api
         override fun vignetteFichier(f: File): ByteArray? = PlancheRenduPc.charge(f, 240)?.let { jpeg(rgb(it), 0.84f) }
+        override fun montage(): ApiPlancheEvenement.Montage? = this@PlancheWebPc.montage?.let { m ->
+            val (plans, choisi) = m.plansRapport()
+            ApiPlancheEvenement.Montage(plans, choisi, { m.photosRapport(it) }, runCatching { m.etatFonctions() }.getOrNull())
+        }
+        override fun frequenceMhz(ev: EvenementSstv.Evenement, campagne: CampagneSstv.Campagne?): Double? {
+            val hz = when {
+                campagne != null && campagne.personnalisee -> campagne.freqHz
+                campagne != null -> station.emetteursDe(campagne.catnum).firstOrNull { it.description == campagne.emetteur }?.downlinkLowHz
+                // An activity: its satellite's SSTV transmitter, when the catalogue names one.
+                ev.catnum > 0 -> station.emetteursDe(ev.catnum).firstOrNull { it.alive && it.description.contains("SSTV", ignoreCase = true) }?.downlinkLowHz
+                else -> null
+            }
+            return hz?.takeIf { it > 1_000_000L }?.let { it / 1e6 }
+        }
+        override fun logo(): ByteArray? = LOGO
     }
 
     /** The page, under the PC's header, as the journal's. */
@@ -342,5 +357,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     companion object {
         /** A template sent from the page: a picture, 25 MB at most. */
         const val IMPORT_MAX = 25L * 1024 * 1024
+        /** The launcher icon, as SatMe-PC's own pictures carry it (taken at build time): the report's logo. */
+        val LOGO: ByteArray? by lazy { runCatching { PlancheWebPc::class.java.getResourceAsStream("/marque/icon.png")?.use { it.readBytes() } }.getOrNull() }
     }
 }

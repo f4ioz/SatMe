@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.station.ActiviteMontage
+import fr.f4ioz.satcombo.station.DessinMontage
 import fr.f4ioz.satcombo.station.DetectionMontage
 import fr.f4ioz.satcombo.station.Detourage
 import fr.f4ioz.satcombo.station.DispositionMontage
@@ -69,6 +70,35 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
 
     /** [plan]'s chain and name (the owner's plan when [plan] names none). */
     fun chaineDe(plan: String): Pair<String, Montage.Chaine> = (plans.plan(plan) ?: plans.choisi).let { PlansMontage.nomVu(it) to it.chaine }
+    /** The plans and the owner's one, for the event's report's drawing. */
+    fun plansRapport(): Pair<List<PlansMontage.Plan>, String> = plans.let { it.plans to it.choisi.id }
+
+    /**
+     * [plan]'s photos the page shows in place of its drawings (the owner's
+     * choice, cut out), made small enough for a report: a PNG of at most
+     * [PHOTO_RAPPORT] pixels a side, its size.
+     */
+    fun photosRapport(plan: String): Map<String, DessinMontage.Photo> {
+        val p = plans.plan(plan) ?: return emptyMap()
+        val out = LinkedHashMap<String, DessinMontage.Photo>()
+        for (e in p.chaine.elements) {
+            if (!e.photo) continue
+            val f = detouree(p.id, e.id) ?: continue
+            val img = runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() ?: continue
+            val k = minOf(1.0, PHOTO_RAPPORT.toDouble() / maxOf(img.width, img.height))
+            val w = maxOf(1, (img.width * k).toInt()); val h = maxOf(1, (img.height * k).toInt())
+            val r = if (k >= 1.0) img else java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB).also { o ->
+                val g = o.createGraphics()
+                g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
+                g.drawImage(img, 0, 0, w, h, null); g.dispose()
+            }
+            val b = java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(r, "png", it) }.toByteArray()
+            out[e.id] = DessinMontage.Photo(b, r.width, r.height)
+        }
+        return out
+    }
+
     /** The plan a request is about: its `?plan=`, else the owner's; null when it names none kept. */
     private fun cible(p: (String) -> String): String? = p("plan").let { if (it.isBlank()) plans.choisi.id else plans.plan(it)?.id }
     /** A plan's photos: the first plan's where they always were, the others' in a folder of their own. */
@@ -463,6 +493,8 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
             return r to sortie.toByteArray()
         }
         const val PHOTO_MAX = 8L * 1024 * 1024
+        /** The longest side of a photo put in a report (twice the drawing's box, for print). */
+        const val PHOTO_RAPPORT = 440
         private val TYPES = mapOf("jpg" to "image/jpeg", "png" to "image/png", "webp" to "image/webp", "gif" to "image/gif")
 
         /** The picture's kind from its first bytes (never from a name sent): null when it is not one. */
