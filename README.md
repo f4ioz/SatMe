@@ -117,7 +117,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🎙 The IC-9700 transmitting** *(upcoming)* — PTT held from the page (one client, 2 s watchdog, time-out), the browser's microphone to the rig through its USB sound card or the network, RF power capped; HTTPS for the page opened from another machine.
 
-**🖼 The SSTV sheet** *(upcoming)* — fewer pictures than the template, laid out as large as can be, one copy of each slide; a background (built in, NASA pictures or your own) and up to three mission patches, their plain surround removed.
+**🖼 The SSTV sheet** *(upcoming)* — fewer pictures than the template, laid out as large as can be, one copy of each slide; a background (built in, NASA pictures or your own) and up to three mission patches, their plain surround removed. A template is exported as one `.satme-planche` file and imported on another phone or PC — without your pictures, the callsign and name filled by the station that imports it.
 
 <p align="center">
 <img src="docs/images/pc-planche-decor.webp" width="58%" alt="The SSTV sheet in SatMe-PC (French page), Décor tab: six ISS pictures fitted large on a twelve-box template, the NASA « Earth's glow » background, the Expedition 75 patch placed on the left, its surround removed">
@@ -200,7 +200,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 ### And in 20.80
 
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
-- **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, a background (stars, gradients, NASA pictures, or your own fitted to the sheet) and up to three mission patches placed and resized with the mouse, their plain surround removed; the sheet downloaded at full resolution.
+- **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, a background (stars, gradients, NASA pictures, or your own fitted to the sheet) and up to three mission patches placed and resized with the mouse, their plain surround removed; the sheet downloaded at full resolution; the template exported as a `.satme-planche` file, another one imported (button or dropped on the page).
 - A tighter control desk page; the three pages linked, under one code.
 
 ## Features

@@ -186,7 +186,21 @@ GET  <base>/planche/decors?cle=…           → [{"id","nom","nasa"}…]   (les
 GET  <base>/planche/decor-vignette?cle=…&d=…&w=240                       → image/jpeg
 POST <base>/planche/decor?cle=…&id=…       (corps : une image)           → {"ok":true,"decor":"decor_….jpg"}
 POST <base>/planche/ecusson?cle=…&id=…     (corps : une image)           → {"ok":true,"n"}   (ok faux, raison « plein » : 3 déjà)
+GET  <base>/planche/modele-exporte?cle=…&id=…[&indicatif=1]              → application/zip (pièce jointe, SatMe_Modele_….satme-planche)
+POST <base>/planche/modele-importe?cle=…   (corps : un .satme-planche, 25 Mo au plus) → {"ok":true,"id","nom","cases"}
+                                           (ok faux, raison : zip, manifeste, version, chemin, image, taille)
 ```
+
+Un fichier de modèle (`.satme-planche`) est un zip : `manifeste.json`
+(`{"format":"satme-planche","version":1,"lisiblePar":1,"nom","fichiers":[…],"planche":"planche=1\n…"}`,
+la forme texte du modèle sans ses lignes `image=`) et ses images sous un nom
+simple — `fond.jpg` (modèle importé), `decor.jpg`, `ecusson1.png`…, les
+écussons déjà détourés. Un lecteur refuse un fichier dont `lisiblePar` dépasse
+sa propre version. `indicatif=1` écrit l'indicatif de la station en texte
+libre ; sinon l'indicatif et le nom @ locator restent des champs. `importe`
+prend aussi un tel fichier (il commence par `PK`). Un import ne remplace jamais
+un modèle : nouvel identifiant, nom rendu unique (« (2) »), images écrites sous
+de nouveaux noms.
 
 Le modèle voyage sous la forme texte où le téléphone le garde (`planche=1`,
 `case=x;y;w;h`, `texte=…`, `image=case;fichier`, positions en fractions de la

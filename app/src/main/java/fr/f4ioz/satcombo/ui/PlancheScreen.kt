@@ -55,6 +55,7 @@ import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
+import fr.f4ioz.satcombo.sstv.PlancheFichier
 import fr.f4ioz.satcombo.sstv.PlancheRendu
 import fr.f4ioz.satcombo.sstv.SstvHub
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -69,9 +70,11 @@ import java.io.File
  * The SSTV sheet: received pictures placed in the order chosen on an
  * imported template (an ARISS series) or a generic one, with the callsign,
  * name @ locator and dates — like the diploma pages operators make by hand.
+ * [aImporter]: a template file (`.satme-planche`) opened from elsewhere, made
+ * a new template as the screen opens.
  */
 @Composable
-fun PlancheScreen(onClose: () -> Unit) {
+fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val rangement = remember { Planche.Rangement(File(ctx.filesDir, "planches")) }
@@ -141,18 +144,20 @@ fun PlancheScreen(onClose: () -> Unit) {
         }
     }
 
-    val importe = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    // A template: an empty picture of an ARISS series, or a SatMe template file.
+    fun importeUri(uri: android.net.Uri) {
         occupe = true
         scope.launch {
-            val n = withContext(Dispatchers.IO) { importeFond(ctx, rangement, uri, tf("planche_nom_modele", modeles.size + 1)) }
+            val (n, dit) = withContext(Dispatchers.IO) { importeFichier(ctx, rangement, uri, tf("planche_nom_modele", modeles.size + 1)) }
             occupe = false
-            if (n == null) message = t("planche_import_echec") else {
-                change(n); choix = null
-                message = tf("planche_cases_trouvees", n.cases.size)
-            }
+            message = dit
+            if (n != null) { change(n); choix = null }
         }
     }
+    val importe = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importeUri(uri)
+    }
+    LaunchedEffect(aImporter) { aImporter?.let { importeUri(it) } }
     // A background of one's own, a patch: kept in the sheets folder, the sheet changed.
     val choisitDecor = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val x = m ?: return@rememberLauncherForActivityResult
@@ -216,6 +221,55 @@ fun PlancheScreen(onClose: () -> Unit) {
         }
     }
 
+    // The template as one file: what goes in it said first; shared or saved.
+    var exportModele by remember { mutableStateOf(false) }
+    var garderIndicatif by remember { mutableStateOf(false) }
+    fun exporteModele(partager: Boolean) {
+        val x = m ?: return
+        val ind = indicatif.takeIf { garderIndicatif && it.isNotBlank() }
+        occupe = true
+        scope.launch {
+            val f = withContext(Dispatchers.IO) { runCatching {
+                val out = File(File(ctx.cacheDir, "export").apply { mkdirs() }, PlancheFichier.nomFichier(x))
+                out.writeBytes(PlancheFichier.exporte(x, rangement, { PlancheRendu.ecussonDetoure(it) }, ind))
+                out
+            }.getOrNull() }
+            occupe = false
+            if (f == null) { message = t("planche_export_echec"); return@launch }
+            // Saved: a generic type, so the file keeps its own name (not « .zip » added).
+            if (partager) runCatching {
+                val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+                ctx.startActivity(android.content.Intent.createChooser(
+                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/zip")
+                        .putExtra(android.content.Intent.EXTRA_STREAM, u)
+                        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
+            } else enregistre(f.name, "application/octet-stream", depuisFichier(f))
+        }
+    }
+    if (exportModele) AlertDialog(
+        onDismissRequest = { exportModele = false },
+        containerColor = SpaceSurface,
+        title = { Text(t("planche_exporter"), color = TextHi) },
+        text = {
+            Column {
+                Text(t("planche_exporter_aide"), color = TextLo, fontSize = 12.sp)
+                if (indicatif.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { garderIndicatif = !garderIndicatif }.padding(top = 8.dp)) {
+                    Checkbox(checked = garderIndicatif, onCheckedChange = { garderIndicatif = it })
+                    Text(tf("planche_exporter_indicatif", indicatif), color = TextHi, fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { exportModele = false; exporteModele(true) }) { Text(t("rec_share"), color = Cyan) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { exportModele = false }) { Text(t("cancel"), color = TextLo) }
+                TextButton(onClick = { exportModele = false; exporteModele(false) }) { Text(t("export_save"), color = Cyan) }
+            }
+        })
+
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = SpaceBg, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
@@ -233,7 +287,7 @@ fun PlancheScreen(onClose: () -> Unit) {
                         FilterChip(selected = x.id == m?.id, onClick = { m = x; choix = null },
                             label = { Text(x.nom, fontSize = 12.sp) })
                     }
-                    AssistChip(onClick = { importe.launch("image/*") }, label = { Text("＋ " + t("planche_importer"), fontSize = 12.sp, color = Cyan) })
+                    AssistChip(onClick = { importe.launch(arrayOf("image/*", "application/zip", "application/octet-stream", PlancheFichier.MIME)) }, label = { Text("＋ " + t("planche_importer"), fontSize = 12.sp, color = Cyan) })
                     AssistChip(onClick = { change(Planche.genereGrille(rangement.nouvelId(), tf("planche_nom_modele", modeles.size + 1))); choix = null },
                         label = { Text("＋ " + t("planche_grille"), fontSize = 12.sp, color = Cyan) })
                     AssistChip(onClick = { change(Planche.genereTour(rangement.nouvelId(), tf("planche_nom_modele", modeles.size + 1))); choix = null },
@@ -290,9 +344,14 @@ fun PlancheScreen(onClose: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(12.dp))
-                TextButton(onClick = {
-                    rangement.supprime(x); modeles = rangement.modeles(); m = modeles.lastOrNull(); choix = null
-                }) { Text(t("planche_supprimer_modele"), color = Magenta, fontSize = 12.sp) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { garderIndicatif = false; exportModele = true }, enabled = !occupe) {
+                        Text(t("planche_exporter"), color = Cyan, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = {
+                        rangement.supprime(x); modeles = rangement.modeles(); m = modeles.lastOrNull(); choix = null
+                    }) { Text(t("planche_supprimer_modele"), color = Magenta, fontSize = 12.sp) }
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -684,3 +743,30 @@ private fun importeFond(ctx: android.content.Context, r: Planche.Rangement, uri:
     val (cases, cadres) = detecte(b)
     Planche.genereImporte(id, nom, nomFond, b.width.toFloat() / b.height, cases, cadres)
 }.getOrNull()
+
+/**
+ * A template chosen or opened: a SatMe template file (a zip) made a new
+ * template, else a picture taken as an ARISS series ([importeFond]). The
+ * template, or null, and what to say.
+ */
+private fun importeFichier(ctx: android.content.Context, r: Planche.Rangement, uri: android.net.Uri, nom: String): Pair<Planche.Modele?, String> {
+    val cr = ctx.contentResolver
+    val tete = runCatching { cr.openInputStream(uri)?.use { i -> ByteArray(4).also { b -> var n = 0; while (n < 4) { val k = i.read(b, n, 4 - n); if (k < 0) break; n += k } } } }.getOrNull()
+        ?: return null to t("planche_import_echec")
+    if (!PlancheFichier.estZip(tete)) {
+        val n = importeFond(ctx, r, uri, nom) ?: return null to t("planche_import_echec")
+        return n to tf("planche_cases_trouvees", n.cases.size)
+    }
+    return try {
+        // Read no further than a template file may be: refused beyond.
+        val octets = cr.openInputStream(uri)?.use { i ->
+            val o = java.io.ByteArrayOutputStream(); val b = ByteArray(64 * 1024); var total = 0L
+            while (true) { val k = i.read(b); if (k < 0) break; total += k; if (total > PlancheFichier.TAILLE_MAX) throw PlancheFichier.Refus("taille"); o.write(b, 0, k) }
+            o.toByteArray()
+        } ?: throw PlancheFichier.Refus("zip")
+        val m = PlancheFichier.importe(octets, r)
+        m to tf("planche_modele_importe", m.nom)
+    } catch (e: PlancheFichier.Refus) {
+        null to t(if (e.raison == "version") "planche_refus_version" else "planche_refus_fichier")
+    } catch (e: Exception) { null to t("planche_refus_fichier") }
+}

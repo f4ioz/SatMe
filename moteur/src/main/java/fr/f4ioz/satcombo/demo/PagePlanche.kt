@@ -14,7 +14,8 @@ import fr.f4ioz.satcombo.i18n.t
 /**
  * The SSTV sheet, on the PC screen: the template large, its boxes and texts
  * moved with the mouse, the pictures dragged in, the texts typed; its
- * background chosen, patches laid on it, moved and resized.
+ * background chosen, patches laid on it, moved and resized; the template
+ * given as one file (`.satme-planche`) and another's taken in.
  *
  * **What is shown is the phone's drawing.** The page lays boxes and frames
  * over the preview the phone draws ([PlancheWeb]); it never draws a sheet of
@@ -36,7 +37,8 @@ object PagePlanche {
         "par_defaut", "pupitre", "journal", "nb_images", "nb_modele", "ajustee", "aide_ajustee", "avant", "apres",
         "pleine", "decor", "fond_planche", "fond_choisir", "fond_aide", "fond_modele", "fond_perso", "ecussons", "ecusson",
         "ecusson_ajouter", "ecusson_aide", "ecusson_contour", "ecusson_contour_aide", "ecusson_supprimer", "ecusson_plein",
-        "envoi", "image_illisible")
+        "envoi", "image_illisible", "exporter", "exporter_titre", "exporter_aide", "exporter_indicatif", "exporter_ok",
+        "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -135,6 +137,12 @@ object PagePlanche {
   #porte { max-width:420px; margin:60px auto; background:var(--carte); border:1px solid var(--bord);
            border-radius:14px; padding:22px; }
   #porte input { font-size:28px; letter-spacing:6px; width:100%; text-align:center; }
+  /* Exporting the template: what goes in the file, said before it is made. */
+  #dlgExport { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:20; }
+  #dlgExport > div { max-width:520px; background:var(--carte); border:1px solid var(--bord); border-radius:14px; padding:18px; }
+  #depot { position:fixed; inset:12px; border:3px dashed var(--cyan); border-radius:16px; background:rgba(11,16,22,.82);
+           display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--cyan);
+           pointer-events:none; z-index:30; }
   .cache { display:none !important; }
 </style>
 <body>
@@ -153,7 +161,8 @@ object PagePlanche {
   <button class="discret" id="grille"></button>
   <button class="discret" id="tour"></button>
   <button class="discret" id="importer"></button>
-  <input type="file" id="fichier" accept="image/*" class="cache">
+  <input type="file" id="fichier" accept="image/*,.satme-planche,.zip,application/zip" class="cache">
+  <button class="discret" id="exporter"></button>
   <button class="primaire" id="telecharger"></button>
   <span id="message"></span>
 </header>
@@ -175,6 +184,13 @@ object PagePlanche {
   </div>
 </div>
 </div>
+<div id="dlgExport" class="cache"><div>
+  <h3 id="tExport" style="margin-top:0"></h3>
+  <p class="aide" id="tExportAide"></p>
+  <label class="rangee" id="lExportInd" style="margin:10px 0"><input type="checkbox" id="exportInd"><span id="tExportInd"></span></label>
+  <div class="actions"><button class="primaire" id="exportOk"></button><button class="discret" id="exportNon"></button></div>
+</div></div>
+<div id="depot" class="cache"></div>
 <script>
 const T = {/*T*/};
 function tf(k) { let s = T[k] || k; for (let i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(arguments[i]); return s; }
@@ -606,8 +622,24 @@ g('modeles').onchange = async ev => { await sauveMaintenant(); await charge(ev.t
 g('grille').onclick = () => nouveau('grille');
 g('tour').onclick = () => nouveau('tour');
 g('importer').onclick = () => g('fichier').click();
+g('importer').title = T.importer_aide;
+// A SatMe template file (a zip), not a picture: by its name, else its type.
+function estModeleSatme(f) { return /\.(satme-planche|zip)$/i.test(f.name) || f.type === 'application/zip'; }
+async function importeModele(f) {
+  await sauveMaintenant();
+  g('message').textContent = T.import_en_cours;
+  try {
+    const r = await fetch(url('/modele-importe'), { method: 'POST', body: f });
+    if (r.status === 403) { porte(); return; }
+    const j = await r.json();
+    if (!j.ok) { g('message').textContent = j.raison === 'version' ? T.refus_version : T.refus_fichier; return; }
+    await listeModeles(); await charge(j.id);
+    g('message').textContent = tf('modele_importe', j.nom);
+  } catch (e) { g('message').textContent = T.refus_fichier; }
+}
 g('fichier').onchange = async () => {
   const f = g('fichier').files[0]; if (!f) return;
+  if (estModeleSatme(f)) { await importeModele(f); g('fichier').value = ''; return; }
   await sauveMaintenant();
   g('message').textContent = T.import_en_cours;
   try {
@@ -630,6 +662,42 @@ g('telecharger').onclick = async () => {
     g('message').textContent = nom;
   } catch (e) { g('message').textContent = T.hors_ligne; }
 };
+// Exporting the template: said first what goes in the file (no picture, the callsign a field unless ticked).
+g('exporter').textContent = T.exporter; g('tExport').textContent = T.exporter_titre; g('tExportAide').textContent = T.exporter_aide;
+g('exportOk').textContent = T.exporter_ok; g('exportNon').textContent = T.annuler;
+g('exporter').onclick = () => {
+  if (!M) return;
+  g('tExportInd').textContent = tf('exporter_indicatif', defauts.indicatif || '');
+  g('lExportInd').classList.toggle('cache', !defauts.indicatif); g('exportInd').checked = false;
+  g('dlgExport').classList.remove('cache');
+};
+g('exportNon').onclick = () => g('dlgExport').classList.add('cache');
+g('dlgExport').addEventListener('pointerdown', ev => { if (ev.target.id === 'dlgExport') g('dlgExport').classList.add('cache'); });
+g('exportOk').onclick = async () => {
+  g('dlgExport').classList.add('cache');
+  await sauveMaintenant();
+  try {
+    const r = await fetch(url('/modele-exporte', { id: id, indicatif: g('exportInd').checked ? 1 : 0 }));
+    if (r.status === 403) { porte(); return; }
+    const nom = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'SatMe_Modele.satme-planche';
+    const b = await r.blob();
+    const a = el('a', { href: URL.createObjectURL(b), download: nom }); document.body.appendChild(a); a.click(); a.remove();
+    g('message').textContent = nom;
+  } catch (e) { g('message').textContent = T.hors_ligne; }
+};
+// A template file dropped anywhere on the page: a new template. (Pictures dragged into boxes are not files.)
+let depots = 0;
+function porteFichiers(ev) { return ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files'); }
+g('depot').textContent = T.deposer;
+window.addEventListener('dragenter', ev => { if (!porteFichiers(ev) || g('editeur').classList.contains('cache')) return; depots++; g('depot').classList.remove('cache'); });
+window.addEventListener('dragleave', ev => { if (!porteFichiers(ev)) return; if (--depots <= 0) { depots = 0; g('depot').classList.add('cache'); } });
+window.addEventListener('dragover', ev => { if (porteFichiers(ev)) ev.preventDefault(); });
+window.addEventListener('drop', ev => {
+  if (!porteFichiers(ev)) return;
+  ev.preventDefault(); depots = 0; g('depot').classList.add('cache');
+  const f = ev.dataTransfer.files[0];
+  if (f && estModeleSatme(f)) importeModele(f); else if (f) g('message').textContent = T.refus_fichier;
+});
 window.addEventListener('resize', apercuBientot);
 if (cle) demarre().catch(() => {}); else porte();
 </script>

@@ -78,7 +78,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 | **Sondes** · **METEOR** | radiosondes; METEOR-M LRPT pictures |
 | **Son** | the sound card, recording |
 | **SSTV** | live decoding, the pictures, the test card, transmission |
-| **Planche** | the SSTV sheet: pictures on a template — all its boxes, or fewer, laid out as large as they can be —, a background (stars, gradients, NASA pictures or your own) and up to three patches dragged with the mouse, their surround removed if need be; downloaded full size |
+| **Planche** | the SSTV sheet: pictures on a template — all its boxes, or fewer, laid out as large as they can be —, a background (stars, gradients, NASA pictures or your own) and up to three patches dragged with the mouse, their surround removed if need be; downloaded full size. **Export the template…** gives it as one `.satme-planche` file (layout, texts, background, patches already cut out — no received picture; the callsign and name stay fields the importer fills, unless « keep my callsign written in » is ticked); **Import a template…** (or the file dropped on the page) takes an ARISS picture or such a file as a new template, never over another one |
 | **APRS** · **FT8** | APRS (KISS radio too) and its game; the FT8 / FT4 board |
 | **Journal** | the passes replayed with their sound, made into a picture, video or GIF |
 | **Réglages** | by category: Ma station, Poste et rotor, Satellites, Interfaces, Annonces, Services en ligne, Phonie → texte, Téléphone, Accord fin, Émission, Accès à distance, Sauvegarde |

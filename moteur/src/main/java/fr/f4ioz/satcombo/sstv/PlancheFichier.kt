@@ -37,6 +37,8 @@ object PlancheFichier {
 
     const val EXTENSION = "satme-planche"
     const val FORMAT = "satme-planche"
+    /** Its own type, for the systems that name one (the file is a zip). */
+    const val MIME = "application/x-satme-planche"
     /** The version written; a file is read when its `lisiblePar` is at most this. */
     const val VERSION = 1
     const val MANIFESTE = "manifeste.json"

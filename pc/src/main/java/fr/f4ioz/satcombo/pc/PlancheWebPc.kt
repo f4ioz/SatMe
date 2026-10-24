@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.demo.PagePlanche
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
+import fr.f4ioz.satcombo.sstv.PlancheFichier
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -149,6 +150,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                 "/importe" -> {
                     if (methode != "POST") return REFUS
                     val octets = corps() ?: return REFUS
+                    if (PlancheFichier.estZip(octets)) return importeModele(octets)
                     val b = ImageIO.read(octets.inputStream()) ?: return REFUS
                     val grand = if (b.width > 4000) PlancheRenduPc.reduit(b, 4000) else b
                     val id = r.nouvelId()
@@ -161,6 +163,21 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                         Planche.detecteCases(px, petit.width, petit.height), Planche.detecteCadresTexte(px, petit.width, petit.height))
                     synchronized(this) { r.enregistre(m) }
                     json("{\"ok\":true,\"id\":\"$id\",\"cases\":${m.cases.size}}")
+                }
+
+                // The template as one file, to give to another station: no picture received, the callsign a field unless [indicatif].
+                "/modele-exporte" -> {
+                    val m = modele(p("id")) ?: return NON
+                    val f = PlancheFichier.exporte(m, r, { PlancheRenduPc.ecussonDetoure(it) },
+                        station.settings.callsign.takeIf { p("indicatif") == "1" })
+                    ReponseWeb("200 OK", "application/zip", f,
+                        "Content-Disposition: attachment; filename=\"${PlancheFichier.nomFichier(m)}\"\r\nCache-Control: no-store\r\n")
+                }
+
+                // A template file (.satme-planche) sent: a new template, never over another one.
+                "/modele-importe" -> {
+                    if (methode != "POST") return REFUS
+                    importeModele(corps() ?: return REFUS)
                 }
 
                 // The boxes filled in order of reception, from the pictures shown (one satellite, or all).
@@ -270,6 +287,12 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
             }
         }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
     }
+
+    /** A template file made a new template: its id, name and boxes; or why it was refused. */
+    private fun importeModele(octets: ByteArray): ReponseWeb = try {
+        val m = synchronized(this) { PlancheFichier.importe(octets, rangement) }
+        json("{\"ok\":true,\"id\":\"${m.id}\",\"nom\":\"${js(m.nom)}\",\"cases\":${m.cases.size}}")
+    } catch (e: PlancheFichier.Refus) { json("{\"ok\":false,\"raison\":\"${e.raison}\"}") }
 
     private fun rgb(b: BufferedImage): BufferedImage = PlancheRenduPc.rgb(b)
 

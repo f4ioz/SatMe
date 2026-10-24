@@ -33,7 +33,7 @@ class PlancheWebPcTest {
     private val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @After fun fin() { portee.cancel(); dossier.deleteRecursively() }
 
-    private fun planche(): PlancheWebPc {
+    private fun planche(dossier: File = this.dossier): PlancheWebPc {
         val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
         st.settings.callsign = "F4IOZ"
         val sstv = File(dossier, "sstv").apply { mkdirs() }
@@ -172,5 +172,72 @@ class PlancheWebPcTest {
         // The nebula is bright where the starry sky was dark.
         fun lum(b: BufferedImage) = (0 until b.width step 7).sumOf { x -> Color(b.getRGB(x, 2)).let { it.red + it.green + it.blue } }
         assertTrue(lum(apres) > lum(avant) * 3)
+    }
+
+    @Test
+    fun un_modele_exporte_puis_importe_ailleurs_rend_la_meme_planche() {
+        val pl = planche()
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "grille")).corps)).getString("id")
+        pl.lit("/decor", mapOf("id" to id), "POST", png(BufferedImage(900, 600, BufferedImage.TYPE_INT_RGB).apply {
+            createGraphics().apply { color = Color(20, 60, 140); fillRect(0, 0, 900, 600); color = Color.ORANGE; fillRect(0, 0, 450, 300); dispose() } }))
+        pl.lit("/ecusson", mapOf("id" to id), "POST", png(ecussonRond()))
+        var texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        texte = texte.lines().joinToString("\n") { if (it.startsWith("ecusson=")) it.dropLast(1) + "1" else it }
+        pl.lit("/enregistre", mapOf("id" to id), "POST", texte.toByteArray())
+        pl.lit("/nombre", mapOf("id" to id, "n" to "2"))
+        // The file: a zip to download, named after the template, no picture received in it.
+        val f = pl.lit("/modele-exporte", mapOf("id" to id))
+        assertEquals("application/zip", f.type)
+        assertTrue(f.entetes, f.entetes.contains("filename=\"SatMe_Modele_Modele-1.satme-planche\"") || f.entetes.contains(".satme-planche\""))
+        val manifeste = JSONObject(String(fr.f4ioz.satcombo.sstv.PlancheFichier.entrees(f.corps).getValue("manifeste.json")))
+        assertTrue(!manifeste.getString("planche").contains("image="))
+        // Another station takes it in: a new template, filled with its own pictures.
+        val ailleurs = File(dossier, "ailleurs").apply { mkdirs() }
+        val pl2 = planche(ailleurs)
+        val r = JSONObject(String(pl2.lit("/modele-importe", emptyMap(), "POST", f.corps).corps))
+        assertTrue(r.toString(), r.getBoolean("ok")); assertEquals(2, r.getInt("cases"))
+        val id2 = r.getString("id")
+        val t2 = JSONObject(String(pl2.lit("/modele", mapOf("id" to id2)).corps)).getString("texte")
+        assertTrue(t2.contains("origine=") && t2.contains(";0\n") && !t2.contains("image="))
+        // Drawn the same: the original without its pictures, and the copy.
+        val t1 = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        pl.lit("/enregistre", mapOf("id" to id), "POST", t1.lines().filterNot { it.startsWith("image=") }.joinToString("\n").toByteArray())
+        val a = ImageIO.read(pl.lit("/exporte", mapOf("id" to id)).corps.inputStream())
+        val b = ImageIO.read(pl2.lit("/exporte", mapOf("id" to id2)).corps.inputStream())
+        assertEquals(a.width, b.width); assertEquals(a.height, b.height)
+        var ecart = 0
+        for (y in 0 until a.height step 3) for (x in 0 until a.width step 3) {
+            val p = a.getRGB(x, y); val q = b.getRGB(x, y)
+            ecart = maxOf(ecart, (0..2).maxOf { k -> kotlin.math.abs(((p shr (8 * k)) and 0xFF) - ((q shr (8 * k)) and 0xFF)) })
+        }
+        assertTrue("écart $ecart", ecart <= 2)
+        // Back to the first station: a second template, never over the first; by the picture route too.
+        val r2 = JSONObject(String(pl.lit("/importe", emptyMap(), "POST", pl2.lit("/modele-exporte", mapOf("id" to id2)).corps).corps))
+        assertTrue(r2.getBoolean("ok")); assertEquals("Modèle 1 (2)", r2.getString("nom"))
+        assertEquals(2, JSONObject(String(pl.lit("/liste").corps)).getJSONArray("modeles").length())
+    }
+
+    @Test
+    fun un_fichier_de_modele_douteux_est_refuse() {
+        val pl = planche()
+        val zip = ByteArrayOutputStream().also { o ->
+            java.util.zip.ZipOutputStream(o).use { z ->
+                z.putNextEntry(java.util.zip.ZipEntry("manifeste.json"))
+                z.write(JSONObject().put("format", "satme-planche").put("version", 1).put("planche", "planche=1\nnom=X\n").toString().toByteArray())
+                z.putNextEntry(java.util.zip.ZipEntry("../../reglages.properties")); z.write("x".toByteArray())
+            }
+        }.toByteArray()
+        val r = JSONObject(String(pl.lit("/modele-importe", emptyMap(), "POST", zip).corps))
+        assertTrue(!r.getBoolean("ok")); assertEquals("chemin", r.getString("raison"))
+        val futur = ByteArrayOutputStream().also { o ->
+            java.util.zip.ZipOutputStream(o).use { z ->
+                z.putNextEntry(java.util.zip.ZipEntry("manifeste.json"))
+                z.write(JSONObject().put("format", "satme-planche").put("version", 2).put("lisiblePar", 2).put("planche", "planche=1\nnom=X\n").toString().toByteArray())
+            }
+        }.toByteArray()
+        assertEquals("version", JSONObject(String(pl.lit("/modele-importe", emptyMap(), "POST", futur).corps)).getString("raison"))
+        assertEquals("400 Bad Request", pl.lit("/modele-importe", emptyMap(), "GET", zip).statut)
+        assertEquals("404 Not Found", pl.lit("/modele-exporte", mapOf("id" to "../x")).statut)
+        assertEquals(0, JSONObject(String(pl.lit("/liste").corps)).getJSONArray("modeles").length())
     }
 }

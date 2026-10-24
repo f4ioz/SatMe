@@ -13,6 +13,7 @@ import android.graphics.Bitmap
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
+import fr.f4ioz.satcombo.sstv.PlancheFichier
 import fr.f4ioz.satcombo.sstv.PlancheRendu
 import fr.f4ioz.satcombo.sstv.SstvHub
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -168,6 +169,7 @@ object PlancheWeb {
                 "/importe" -> {
                     if (methode != "POST") return REFUS
                     val octets = corps() ?: return REFUS
+                    if (PlancheFichier.estZip(octets)) return importeModele(r, octets)
                     val b = android.graphics.BitmapFactory.decodeByteArray(octets, 0, octets.size) ?: return REFUS
                     val grand = if (b.width > 4000) Bitmap.createScaledBitmap(b, 4000, (4000f * b.height / b.width).toInt(), true) else b
                     val id = r.nouvelId()
@@ -181,6 +183,21 @@ object PlancheWeb {
                         Planche.detecteCases(px, w, h), Planche.detecteCadresTexte(px, w, h))
                     synchronized(this) { r.enregistre(m) }
                     json("{\"ok\":true,\"id\":\"$id\",\"cases\":${m.cases.size}}")
+                }
+
+                // The template as one file, to give to another station: no picture received, the callsign a field unless [indicatif].
+                "/modele-exporte" -> {
+                    val m = modele(r, p("id")) ?: return NON
+                    val f = PlancheFichier.exporte(m, r, { PlancheRendu.ecussonDetoure(it) },
+                        SettingsStore(ctx).callsign.takeIf { p("indicatif") == "1" })
+                    ReponseWeb("200 OK", "application/zip", f,
+                        "Content-Disposition: attachment; filename=\"${PlancheFichier.nomFichier(m)}\"\r\nCache-Control: no-store\r\n")
+                }
+
+                // A template file (.satme-planche) sent from the PC: a new template, never over another one.
+                "/modele-importe" -> {
+                    if (methode != "POST") return REFUS
+                    importeModele(r, corps() ?: return REFUS)
                 }
 
                 // The boxes filled in order of reception, from the pictures shown (one satellite, or all),
@@ -284,4 +301,10 @@ object PlancheWeb {
             }
         }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
     }
+
+    /** A template file made a new template: its id, name and boxes; or why it was refused. */
+    private fun importeModele(r: Planche.Rangement, octets: ByteArray): ReponseWeb = try {
+        val m = synchronized(this) { PlancheFichier.importe(octets, r) }
+        json("{\"ok\":true,\"id\":\"${m.id}\",\"nom\":\"${js(m.nom)}\",\"cases\":${m.cases.size}}")
+    } catch (e: PlancheFichier.Refus) { json("{\"ok\":false,\"raison\":\"${e.raison}\"}") }
 }

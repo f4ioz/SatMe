@@ -62,6 +62,33 @@
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
+            <!-- A SatMe sheet template (.satme-planche, a zip) opened from a file
+                 manager or a mail: imported as a new template. By its own type;
+                 else a generic type with the file's name in the path (not every
+                 zip: SatMe is not a zip reader). The Planche's « Importer un
+                 modèle » takes it whatever app holds it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/x-satme-planche" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/zip" />
+                <data android:pathPattern=".*\\.satme-planche" />
+                <data android:pathPattern=".*\\..*\\.satme-planche" />
+                <data android:pathPattern=".*\\..*\\..*\\.satme-planche" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.satme-planche" />
+            </intent-filter>
             <meta-data
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/usb_device_filter" />

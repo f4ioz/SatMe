@@ -191,7 +191,20 @@ GET  <base>/planche/decors?cle=…           → [{"id","nom","nasa"}…]   (the
 GET  <base>/planche/decor-vignette?cle=…&d=…&w=240                      → image/jpeg
 POST <base>/planche/decor?cle=…&id=…       (body: a picture)            → {"ok":true,"decor":"decor_….jpg"}
 POST <base>/planche/ecusson?cle=…&id=…     (body: a picture)            → {"ok":true,"n"}   (ok false, raison "plein": 3 already)
+GET  <base>/planche/modele-exporte?cle=…&id=…[&indicatif=1]             → application/zip (attachment, SatMe_Modele_….satme-planche)
+POST <base>/planche/modele-importe?cle=…   (body: a .satme-planche, 25 MB at most) → {"ok":true,"id","nom","cases"}
+                                           (ok false, raison: zip, manifeste, version, chemin, image, taille)
 ```
+
+A template file (`.satme-planche`) is a zip: `manifeste.json`
+(`{"format":"satme-planche","version":1,"lisiblePar":1,"nom","fichiers":[…],"planche":"planche=1\n…"}`,
+the template's text form without its `image=` lines) and its pictures by plain
+name — `fond.jpg` (an imported template), `decor.jpg`, `ecusson1.png`…, the
+patches already cut out. A reader refuses a file whose `lisiblePar` is above
+its own version. `indicatif=1` writes the station's callsign as a free text;
+otherwise the callsign and name @ locator stay fields. `importe` also takes
+such a file (it starts with `PK`). An import never replaces a template: a new
+id, the name made unique (« (2) »), the pictures written under new names.
 
 The template travels in the text form the phone keeps it in (`planche=1`,
 `case=x;y;w;h`, `texte=…`, `image=box;file`, positions in fractions of the

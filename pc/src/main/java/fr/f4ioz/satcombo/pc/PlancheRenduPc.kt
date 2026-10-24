@@ -166,6 +166,11 @@ object PlancheRenduPc {
         return a
     }
 
+    /** A patch file, its surround taken away, full size, as PNG: what a template file carries ([fr.f4ioz.satcombo.sstv.PlancheFichier]). */
+    fun ecussonDetoure(f: File): ByteArray? = ecusson(f, true, 4000)?.let { b ->
+        java.io.ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()
+    }
+
     /** The patches of [m] by their place in its list, each no wider than [largeurMax]. */
     fun chargeEcussons(r: Planche.Rangement, m: Planche.Modele, largeurMax: Int): Map<Int, BufferedImage> =
         m.ecussons.mapIndexedNotNull { i, e -> r.fichier(e.fichier)?.let { ecusson(it, e.sansContour, largeurMax) }?.let { i to it } }.toMap()

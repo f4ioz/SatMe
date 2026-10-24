@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
 
+    /** A sheet template file (.satme-planche) opened from elsewhere, to import. */
+    private val plancheRecue = androidx.compose.runtime.mutableStateOf<android.net.Uri?>(null)
+
     /**
      * Volume keys hijacked as a VFO control.
      *
@@ -120,6 +123,8 @@ class MainActivity : ComponentActivity() {
                         // the pointing screen, which is left mid-pass to open
                         // the log.
                         fr.f4ioz.satcombo.ble.TenueBoussole(vm)
+                        // A template file opened from a file manager, a mail…: the sheet opens on it, imported.
+                        plancheRecue.value?.let { u -> fr.f4ioz.satcombo.ui.PlancheScreen(aImporter = u) { plancheRecue.value = null } }
                     }
                 }
             }
@@ -146,6 +151,7 @@ class MainActivity : ComponentActivity() {
 
     /** A notification tap carries the satellite to open. */
     private fun handleOpenIntent(intent: android.content.Intent?) {
+        if (intent?.action == android.content.Intent.ACTION_VIEW) intent.data?.let { plancheRecue.value = it; return }
         // Development builds only: open a screen with something to show, for trying it on an emulator
         // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr|saisie|partage|qr|datv [--es loc IN80] [--es reseau 10.0.2.2:1234]).
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {

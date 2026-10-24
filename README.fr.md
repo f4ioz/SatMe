@@ -117,7 +117,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🎙 L'IC-9700 en émission** *(en cours)* — PTT tenu depuis la page (un seul client, 2 s de garde, minuterie), le micro du navigateur vers le poste par sa carte son USB ou par le réseau, puissance plafonnée ; HTTPS pour la page ouverte d'une autre machine.
 
-**🖼 La planche SSTV** *(en cours)* — moins d'images que le modèle, disposées le plus grand possible, une copie de chaque diapo ; un fond (intégré, images NASA ou la vôtre) et jusqu'à trois écussons de mission, leur contour uni enlevé.
+**🖼 La planche SSTV** *(en cours)* — moins d'images que le modèle, disposées le plus grand possible, une copie de chaque diapo ; un fond (intégré, images NASA ou la vôtre) et jusqu'à trois écussons de mission, leur contour uni enlevé. Un modèle s'exporte en un fichier `.satme-planche` et s'importe sur un autre téléphone ou PC — sans vos images, l'indicatif et le nom remplis par la station qui l'importe.
 
 <p align="center">
 <img src="docs/images/pc-planche-decor.webp" width="58%" alt="La planche SSTV dans SatMe-PC, onglet Décor : six images de l'ISS ajustées en grand sur un modèle de douze cases, le fond NASA « Lueur de la Terre », l'écusson de l'Expédition 75 placé à gauche, son contour enlevé">
@@ -200,7 +200,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 ### Et dans la 20.80
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
-- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, un fond (étoiles, dégradés, images NASA, ou la vôtre ajustée à la planche) et jusqu'à trois écussons de mission placés et redimensionnés à la souris, leur contour uni enlevé ; planche téléchargée en pleine résolution.
+- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, un fond (étoiles, dégradés, images NASA, ou la vôtre ajustée à la planche) et jusqu'à trois écussons de mission placés et redimensionnés à la souris, leur contour uni enlevé ; planche téléchargée en pleine résolution ; le modèle exporté en fichier `.satme-planche`, celui d'un autre importé (bouton ou déposé sur la page).
 - Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
 
 ## Fonctions

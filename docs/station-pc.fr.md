@@ -78,7 +78,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | **Sondes** · **METEOR** | radiosondes ; images LRPT de METEOR-M |
 | **Son** | la carte son, l'enregistrement |
 | **SSTV** | le décodage en direct, les images, la mire, l'émission |
-| **Planche** | la planche SSTV : les images sur un modèle — toutes ses cases, ou moins, disposées le plus grand possible —, un fond (étoiles, dégradés, images NASA ou la tienne) et jusqu'à trois écussons glissés à la souris, contour enlevé au besoin ; téléchargée en pleine taille |
+| **Planche** | la planche SSTV : les images sur un modèle — toutes ses cases, ou moins, disposées le plus grand possible —, un fond (étoiles, dégradés, images NASA ou la tienne) et jusqu'à trois écussons glissés à la souris, contour enlevé au besoin ; téléchargée en pleine taille. **Exporter le modèle…** le donne en un fichier `.satme-planche` (disposition, textes, fond, écussons déjà détourés — aucune image reçue ; l'indicatif et le nom restent des champs que remplit qui l'importe, sauf « garder mon indicatif écrit en dur » coché) ; **Importer un modèle…** (ou le fichier déposé sur la page) prend une image ARISS ou un tel fichier comme nouveau modèle, jamais par-dessus un autre |
 | **APRS** · **FT8** | l'APRS (radio KISS comprise) et son jeu ; le tableau FT8 / FT4 |
 | **Journal** | les passages rejoués avec leur son, faits en image, vidéo ou GIF |
 | **Réglages** | par catégorie : Ma station, Poste et rotor, Satellites, Interfaces, Annonces, Services en ligne, Phonie → texte, Téléphone, Accord fin, Émission, Accès à distance, Sauvegarde |
