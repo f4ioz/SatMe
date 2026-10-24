@@ -44,6 +44,8 @@ dependencies {
     implementation("com.fazecast:jSerialComm:2.11.0")
     // The QR code the phone scans to join the PC (Apache 2.0), as the phone draws its own.
     implementation("com.google.zxing:core:3.5.3")
+    // The event's report as a PDF, drawn without a browser (Apache 2.0; its fontbox and commons-logging with it).
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(testFixtures(project(":moteur")))

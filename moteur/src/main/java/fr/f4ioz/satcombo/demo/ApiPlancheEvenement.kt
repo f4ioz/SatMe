@@ -32,7 +32,7 @@ import java.io.File
  * Routes under `/planche`: `/evenements?id=`, `/evenement?id=&ev=` (""
  * chosen by itself again, « aucun » none), `/galerie?id=`,
  * `/remplit-diapos?id=&vides=&tous=`, `/relance?oublie=`, `/analyse`,
- * `/plans`, `/rapport?id=&chaine=&plan=&dl=`.
+ * `/plans`, `/rapport?id=&chaine=&plan=&dl=&format=` (`pdf`: the PDF, else the page).
  */
 object ApiPlancheEvenement {
 
@@ -67,6 +67,8 @@ object ApiPlancheEvenement {
         /** A picture small, JPEG. */
         fun vignette(nom: String): ByteArray?
         fun maintenant(): Long = System.currentTimeMillis()
+        /** The report as a PDF ([fr.f4ioz.satcombo.sstv.RapportPdf] drawn by the platform); null: none here. */
+        fun pdf(r: RapportEvenement.Rapport): ByteArray? = null
     }
 
     /** The events a sheet may be about: the campaigns and activities, the runs of pictures no event holds. */
@@ -227,8 +229,11 @@ object ApiPlancheEvenement {
             if (ev == null) ReponseWeb("404 Not Found", "text/plain; charset=utf-8", "pas d'événement".toByteArray())
             else {
                 val r = rapport(ev, m, src, p("chaine") == "1", p("plan"))
-                val nom = RapportEvenement.nomFichier(r)
-                ReponseWeb("200 OK", "text/html; charset=utf-8", RapportEvenement.html(r).toByteArray(Charsets.UTF_8),
+                val pdf = p("format") == "pdf"
+                val nom = RapportEvenement.nomFichier(r, if (pdf) "pdf" else "html")
+                val corps = if (pdf) runCatching { src.pdf(r) }.getOrNull() else RapportEvenement.html(r).toByteArray(Charsets.UTF_8)
+                if (corps == null) ReponseWeb("501 Not Implemented", "text/plain; charset=utf-8", "pas de PDF".toByteArray())
+                else ReponseWeb("200 OK", if (pdf) "application/pdf" else "text/html; charset=utf-8", corps,
                     (if (p("dl") == "1") "Content-Disposition: attachment; filename=\"$nom\"\r\n" else "Content-Disposition: inline; filename=\"$nom\"\r\n") +
                         "Cache-Control: no-store\r\n")
             }
