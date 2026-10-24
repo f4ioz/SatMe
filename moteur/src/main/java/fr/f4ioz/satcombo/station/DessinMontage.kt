@@ -167,7 +167,9 @@ object DessinMontage {
         else if (empile && !vide) { yLog = pl.hauteur.toDouble(); Ht = hLog; xPc = 4.0; x0 = xPc + W + GX }
         else { yLog = 0.0; Ht = max(if (vide) 0.0 else pl.hauteur.toDouble(), hLog); xPc = if (vide) 4.0 else pl.largeur + 56.0; x0 = if (pcPill) xPc + W + GX else pl.largeur + 56.0 }
         val lLog = if (log == null) 0.0 else x0 + cols.size * (W + GX) - GX + 10
-        val L = max(if (vide) 0.0 else pl.largeur.toDouble(), lLog).coerceAtLeast(120.0)
+        // A little room left of the hardware: the outlines of the pieces on the left edge whole.
+        val gauche = 8.0
+        val L = max(if (vide) 0.0 else pl.largeur.toDouble(), lLog).coerceAtLeast(120.0) + gauche
         val Htot = haut + (if (log != null && empile && !vide) pl.hauteur + Ht else max(pl.hauteur.toDouble(), Ht)) + 6
 
         // The panel's grid, faint.
@@ -177,7 +179,7 @@ object DessinMontage {
             var y = 24.0
             while (y < Htot) { P("M0 ${n(y)} H${n(L)}", "none", "rgba(255,255,255,.025)", 1.0); y += 24 }
         }
-        p.translate(0.0, haut)
+        p.translate(gauche, haut)
         if (!vide) {
             // The cables, the pieces, the labels: in the page's order.
             for (tr in pl.traces) cable(p, c, tr, al.liens[tr.id] ?: Etat.REPOS)
