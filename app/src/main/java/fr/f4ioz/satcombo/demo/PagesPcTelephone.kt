@@ -845,7 +845,7 @@ object PagesPcTelephone {
                 val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
                 fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
             }
-            "/api/sstv/diapo", "/api/sstv/groupe" -> {
+            "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 ApiClassementSstv.action(route, p, fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie,
                     fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx)) ?: JSONObject().put("ok", false)

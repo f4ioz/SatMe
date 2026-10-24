@@ -198,7 +198,8 @@ object RapportEvenement {
                 g?.notes?.get(s.fileName) ?: -1, s.complete, pass?.let { entre(traces2.getValue(it), debut, s.timeMs) }.orEmpty(), pass?.aosEpochMs ?: 0L)
         }
         val passages = ps.map { sp ->
-            val hp = m?.let { HoraireDiapos.passage(it, sp, elMin) }
+            // The timetable as it stood then: the stretch the pass falls in (the loop restarted on board since, maybe).
+            val hp = m?.let { HoraireDiapos.passage(HoraireDiapos.a(it, sp.aosEpochMs), sp, elMin) }
             val im = images.filter { it.passageMs == sp.aosEpochMs }
             val statut = when {
                 im.isNotEmpty() -> if (sp.maxElevationDeg >= elMin) Statut.RECU else Statut.RECU_BAS
@@ -267,6 +268,9 @@ object RapportEvenement {
     private fun jc(t: Long) = fmt("dd/MM", t)
     private fun h(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
     private fun n1(v: Double) = String.format(Locale.US, "%.1f", v)
+    private fun n2(v: Double) = String.format(Locale.US, "%.2f", v)
+    /** An elevation: « 5 », « 7.5 ». */
+    private fun el(v: Double) = if (v == Math.floor(v)) v.toInt().toString() else n1(v)
     private fun b64(o: ByteArray) = Base64.getEncoder().encodeToString(o)
     private fun type(o: ByteArray) = if (PlancheFichier.genre(o) == "png") "image/png" else "image/jpeg"
     private fun deg(v: Double) = ((v % 360 + 360) % 360).roundToInt().let { if (it == 360) 0 else it }
@@ -322,7 +326,7 @@ object RapportEvenement {
         }
         tuile("${s.diapos}/${e.nb}", t("rev_t_diapos"), if (s.diaposEstimees > 0) tf("rev_t_dont_estimees", s.diaposEstimees) else "")
         tuile(s.images.toString(), t("rev_t_images"), tf("rev_t_completes", s.completes))
-        tuile("${s.passagesRecus}/${s.passagesHauts}", tf("rev_t_passages", n1(r.elMin)), if (s.passagesRates > 0) tf("rev_t_rates", s.passagesRates) else "")
+        tuile("${s.passagesRecus}/${s.passagesHauts}", tf("rev_t_passages", el(r.elMin)), if (s.passagesRates > 0) tf("rev_t_rates", s.passagesRates) else "")
         tuile(if (s.noteMax >= 0) "${s.noteMax}" else "—", t("rev_t_meilleure"), if (s.noteMoyenne >= 0) tf("rev_t_moyenne", s.noteMoyenne) else "")
         append("</section>")
 
@@ -362,7 +366,7 @@ object RapportEvenement {
         listOf(Statut.RECU, Statut.RECU_BAS, Statut.ATTENDU_RIEN, Statut.BAS, Statut.A_VENIR).filter { st -> r.passages.any { it.statut == st } }.forEach { st ->
             append("<span><i style=\"background:").append(couleur(st)).append("\"></i>").append(icone(st)).append(" ").append(h(libelle(st))).append("</span>")
         }
-        append("<span><i class=\"seuil\"></i>").append(h(tf("rev_seuil", n1(r.elMin)))).append("</span>")
+        append("<span><i class=\"seuil\"></i>").append(h(tf("rev_seuil", el(r.elMin)))).append("</span>")
         append("</div></section>")
 
         // ---- the table of the passes
@@ -412,7 +416,7 @@ object RapportEvenement {
         val m = r.horaire
         if (m == null) append(h(t("rev_sans_horaire")))
         else {
-            append(h(if (m.ajustee) tf("rev_horaire_ajuste", n1(m.periodeS), n1(m.sigmaPeriodeS), m.reperes, n1(m.residuS))
+            append(h(if (m.ajustee) tf("rev_horaire_ajuste", n2(m.periodeS), n2(m.sigmaPeriodeS), m.reperes, n1(m.residuS))
                 else tf("rev_horaire_annonce", n1(m.periodeS))))
             if (m.ruptures.isNotEmpty()) append(" ").append(h(tf("rev_ruptures", m.ruptures.size, m.ruptures.joinToString(", ") { jc(it) + " " + hm(it) })))
         }

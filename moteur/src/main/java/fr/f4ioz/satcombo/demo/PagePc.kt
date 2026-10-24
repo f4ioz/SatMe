@@ -1170,6 +1170,11 @@ ${STYLE_JETONS}
   #i-groupes .cl-imgs .petit { font-size:11px; line-height:1.3; }
   .cl-note { position:absolute; top:4px; left:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; font-weight:700; }
   .cl-note.bof { color:#FFB74D; } .cl-note.mal { color:#EF9A9A; }
+  /* The slide a picture is, where its number comes from: read (plain), by hand (✎, amber line), estimated (≈, grey italic). */
+  .cl-badge { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.78); color:#fff; border-radius:6px; padding:0 6px; font-size:12px; font-weight:800; }
+  .cl-badge.o-main { box-shadow:inset 0 -2px 0 #FFB454; } .cl-badge.o-estime { font-style:italic; color:#cfd8e0; background:rgba(60,70,80,.85); }
+  .cl-badge.grand { top:8px; right:8px; font-size:16px; padding:2px 9px; }
+  #i-galerie a { position:relative; }
   .cl-puces { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
   .cl-puces span { min-width:26px; text-align:center; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; border:1px solid var(--bord); cursor:default; }
   .cl-puces span.ok { background:rgba(76,175,80,.18); color:var(--vert); cursor:pointer; }
@@ -2430,6 +2435,7 @@ ${rail()}
         <select id="i-vue" style="flex:none" onchange="imagesVus = ''; clVu = ''; try { localStorage.setItem('satme-sstv-vue', this.value) } catch (x) {} rendSon()" title="Par diapo : les copies d’une même diapo ensemble, la mieux notée d’abord (note 0–100 : bruit, lignes abîmées, image incomplète, glissements)">
           <option value="diapo">par diapo</option><option value="">par réception</option></select>
         <span class="petit" id="cl-calcul"></span>
+        <button id="cl-relance" onclick="clRelance(event)" title="Mesurer à nouveau chaque image, relire le numéro au bas des diapos et refaire les groupes. Les numéros et groupes donnés à la main sont gardés (Maj+clic : les oublier aussi).">⟳ Relancer l’analyse</button>
         <a class="bouton" id="i-planche" href="planche" style="margin-left:auto" title="La planche SSTV : les images reçues posées sur un modèle, à télécharger (Carnet › Planche SSTV)">${IconesPc.svg("view_quilt", "mt-ico")} Planche SSTV ›</a></div>
       <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px"></div>
       <div id="i-groupes" hidden></div>
@@ -4466,7 +4472,7 @@ ${rail()}
   <div class="ligne"><button onclick="g('fd-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="visionneuse" onclick="if (event.target === this) this.close()">
-  <img id="vi-img" alt="" onclick="g('visionneuse').close()">
+  <div style="position:relative"><img id="vi-img" alt="" onclick="g('visionneuse').close()"><span id="vi-badge" class="cl-badge grand" hidden></span></div>
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
   <div class="ligne" id="vi-outils" style="margin-top:6px">
@@ -8493,11 +8499,12 @@ function rendSon() {
   g('i-galerie').hidden = !!parDiapo; g('i-groupes').hidden = !parDiapo;
   if (ouverte('sstv')) clTic();
   if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '')));
+  // The sorting's numbers too: each picture's slide badge.
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
-      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
+      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
       (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
@@ -8529,6 +8536,20 @@ function clNomDiapo(gr) {
   const o = gr.origine === 'estime' ? ' (estimée)' : gr.origine === 'lu' ? ' (lue)' : gr.origine === 'main' ? '' : '';
   return 'Diapo ' + (gr.origine === 'estime' ? '≈' : '') + gr.diapo + '/' + gr.total + o;
 }
+// The slide's badge: « 2/12 » read, « 2/12✎ » by hand, « ≈2/12 » estimated from the timetable.
+function clBadge(gr) {
+  if (!gr || !gr.diapo || !gr.origine) return '';
+  const t = gr.origine === 'estime' ? '≈' + gr.diapo + '/' + gr.total : gr.diapo + '/' + gr.total + (gr.origine === 'main' ? '✎' : '');
+  const q = gr.origine === 'estime' ? 'numéro estimé d’après l’horaire' : gr.origine === 'lu' ? 'numéro lu au bas de la diapo' : 'numéro donné à la main';
+  return '<span class="cl-badge o-' + gr.origine + '" title="' + q + '">' + esc(t) + '</span>';
+}
+// « Relancer l'analyse »: every picture measured again (Shift: the hand's numbers and groups forgotten too).
+async function clRelance(ev) {
+  const oublie = ev && ev.shiftKey;
+  if (oublie && !confirm('Oublier aussi tous les numéros et groupes donnés à la main ?')) return;
+  const j = await post('api/sstv/relance?oublie=' + (oublie ? 1 : 0));
+  if (j && j.ok !== false) { txt('cl-calcul', 'tri : ' + j.n + ' images à mesurer…'); clMs = 0; clTic(true); }
+}
 function clGroupesMontres(filtre) {
   const l = CL.groupes.filter(gr => !filtre || gr.sat === filtre);
   const der = gr => Math.max(...gr.images.map(i => i.t));
@@ -8558,7 +8579,7 @@ function clGalerie(filtre) {
         const cl = i.note < 40 ? ' mal' : i.note < 70 ? ' bof' : '';
         return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + k + '); return false" title="Note ' + i.note + '/100' + (i.manque ? ' · ' + i.manque + ' % manquant' : '') +
           (i.abimees ? ' · ' + i.abimees + ' % de lignes abîmées' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : '') + '">' +
-          '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') +
+          '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') + clBadge(gr) +
           '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') + '</div></a>';
       }).join('') + '</div></div>';
   }).join('') || '<div class="petit">aucune image</div>';
@@ -8634,6 +8655,9 @@ async function viGroupe(v) {
 // The viewer's line on the sorting: the mark, the slide, the group.
 function viClasse() {
   const gr = clGroupeDe(viNom);
+  const b = clBadge(gr);
+  g('vi-badge').hidden = !b;
+  if (b) { const d = document.createElement('div'); d.innerHTML = b; const x = d.firstChild; g('vi-badge').textContent = x.textContent; g('vi-badge').title = x.title; g('vi-badge').className = x.className + ' grand'; }
   g('vi-classe').hidden = !gr;
   if (!gr) return;
   const i = gr.images.find(x => x.nom === viNom);

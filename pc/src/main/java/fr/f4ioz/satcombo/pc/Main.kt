@@ -420,6 +420,7 @@ fun main(args: Array<String>) {
     val classement = ClassementSstvPc(son.sstv, station, { activites }, { autopilote })
     serveur.classement = classement
     planche.classement = classement
+    planche.montage = serveur.montage
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(20_000)
         while (true) { runCatching { activites.tic() }; repeat(60) { if (!activites.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }

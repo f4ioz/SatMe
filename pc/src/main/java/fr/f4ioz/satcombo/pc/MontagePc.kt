@@ -63,6 +63,12 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
 
     private fun historique(plan: String) = synchronized(historiques) { historiques.getOrPut(plan) { EditionMontage.Historique() } }
     private fun chaine(plan: String): Montage.Chaine = plans.plan(plan)?.chaine ?: Montage.Chaine()
+
+    /** The plans (id, name), the owner's first: the event's report offers them. */
+    fun listePlans(): List<Pair<String, String>> = plans.let { p -> (listOf(p.choisi) + p.plans).distinct().map { it.id to PlansMontage.nomVu(it) } }
+
+    /** [plan]'s chain and name (the owner's plan when [plan] names none). */
+    fun chaineDe(plan: String): Pair<String, Montage.Chaine> = (plans.plan(plan) ?: plans.choisi).let { PlansMontage.nomVu(it) to it.chaine }
     /** The plan a request is about: its `?plan=`, else the owner's; null when it names none kept. */
     private fun cible(p: (String) -> String): String? = p("plan").let { if (it.isBlank()) plans.choisi.id else plans.plan(it)?.id }
     /** A plan's photos: the first plan's where they always were, the others' in a folder of their own. */

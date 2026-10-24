@@ -300,6 +300,28 @@ class StationPc(
             .filter { it.aosEpochMs < aMs }
     }
 
+    /** Where [catnum] was (az, el) at each of [ts], from the elements loaded; null when it is unknown. */
+    fun positionsDe(catnum: Int, ts: List<Long>): List<Pair<Double, Double>>? {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        val obs = e.observateur ?: return null
+        if (!PassPredictor.elementsUtilisables(sat)) return null
+        return runCatching { predicteur.samplePositions(sat, obs, ts).map { it.azimuthDeg to it.elevationDeg } }.getOrNull()
+    }
+
+    /** The epoch of [catnum]'s elements, null unknown. */
+    fun epoqueElements(catnum: Int): Long? = _etat.value.satellites.firstOrNull { it.catalogNumber == catnum }?.epochMs
+
+    /** A satellite's NORAD number from its name (« ISS » for « ISS (ZARYA) »), 0 unknown. */
+    fun catnumDe(nom: String): Int {
+        fun n(s: String) = s.uppercase().replace(Regex("\\(.*?\\)"), "").replace(Regex("[^A-Z0-9]"), "")
+        val k = n(nom)
+        if (k.isEmpty()) return 0
+        if (k == "ISS") return 25544
+        val l = _etat.value.satellites
+        return (l.firstOrNull { n(it.name) == k } ?: l.firstOrNull { n(it.name).startsWith(k) || k.startsWith(n(it.name)) && n(it.name).length >= 3 })?.catalogNumber ?: 0
+    }
+
     /** The pass of [catnum] under way at [t] (AOS, LOS); null when it is down or unknown. */
     fun passageEnCours(catnum: Int, t: Long): Pair<Long, Long>? {
         val e = _etat.value

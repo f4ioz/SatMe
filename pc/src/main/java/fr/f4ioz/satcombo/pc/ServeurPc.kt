@@ -1958,7 +1958,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
             }
-            "/api/sstv/diapo", "/api/sstv/groupe" ->
+            "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
             "/api/sstv/satellite" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
