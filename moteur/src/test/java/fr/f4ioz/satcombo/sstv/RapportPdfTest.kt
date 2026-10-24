@@ -71,6 +71,23 @@ class RapportPdfTest {
         I18n.apply("fr", "fr")
     }
 
+    @Test fun le_dessin_du_montage_tient_dans_sa_carte() {
+        I18n.apply("fr", "fr")
+        val r = RapportEssai.rapport(montage = true)
+        val d = Releve()
+        val n = RapportPdf.dessine(r, d)
+        val tout = d.textes.flatten().map { it.first }
+        assertTrue(tout.filter { it.contains("SSTV") || it.contains("MHz") || it.contains("Poste") }.toString(),
+            tout.contains("SSTV réception") && tout.contains("25m · 437,396 MHz · N") && tout.contains("▸ Poste (CAT)"))
+        // The logo in the header and on every page's running head, the rig's photo in the drawing.
+        assertEquals(1 + 9 + 1 + n + 1, d.images.size)
+        for (b in d.images + d.boites.flatten()) {
+            assertTrue(b.joinToString(), b[0] >= 33f && b[0] + b[2] <= RapportPdf.LARGEUR - 33f)
+            assertTrue(b.joinToString(), b[1] >= 0f && b[1] + b[3] <= RapportPdf.HAUTEUR - 34f)
+        }
+        assertTrue(d.nombres.all { it.isFinite() })
+    }
+
     @Test fun un_evenement_sans_rien_fait_une_page() {
         val ev = EvenementSstv.Evenement("i:x", EvenementSstv.Genre.IMAGES, "Rien", "ISS", 0, RapportEssai.T0, RapportEssai.T0 + 86_400_000L)
         val vide = RapportEvenement.construit(ev, SerieSstv.Prevision(ev.serie(), emptyList(), null, null, emptySet(), 10.0, emptyList()),

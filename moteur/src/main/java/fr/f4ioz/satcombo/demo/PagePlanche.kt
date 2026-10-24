@@ -47,7 +47,7 @@ object PagePlanche {
         "rapport_format", "rapport_web", "rapport_pdf", "version_titre", "version_auto", "version_recue", "version_corrigee",
         "version_fusion", "version_creer_fusion", "version_fusion_en_cours", "version_fusion_echec", "version_repli", "version_auto_aide",
         "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
-        "gardes", "version_indic")
+        "gardes", "version_indic", "rapport_vue", "rapport_dessin", "rapport_simple")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -238,6 +238,9 @@ object PagePlanche {
     <label class="rangee"><input type="radio" name="rapportFormat" value="" checked><span id="tRapportWeb"></span></label>
     <label class="rangee"><input type="radio" name="rapportFormat" value="pdf"><span id="tRapportPdf"></span></label></div>
   <div class="rangee" id="lRapportPlan"><span class="aide" id="tRapportPlan"></span><select id="rapportPlan"></select></div>
+  <div class="rangee" id="lRapportVue" style="margin:6px 0 0"><span class="aide" id="tRapportVue"></span>
+    <label class="rangee"><input type="radio" name="rapportVue" value="dessin" checked><span id="tRapportDessin"></span></label>
+    <label class="rangee"><input type="radio" name="rapportVue" value="simple"><span id="tRapportSimple"></span></label></div>
   <div class="actions"><button class="primaire" id="rapportOuvrir"></button><button class="discret" id="rapportDl"></button><button class="discret" id="rapportNon"></button></div>
 </div></div>
 <div id="depot" class="cache"></div>
@@ -876,6 +879,7 @@ g('renommer').onclick = async () => {
 // The event's report: opened in a tab of its own, or downloaded; the page (to print to PDF) or the PDF made here.
 g('rapport').textContent = T.rapport; g('tRapport').textContent = T.rapport_titre; g('tRapportAide').textContent = T.rapport_aide;
 g('tRapportChaine').textContent = T.rapport_chaine; g('tRapportPlan').textContent = T.rapport_plan;
+g('tRapportVue').textContent = T.rapport_vue; g('tRapportDessin').textContent = T.rapport_dessin; g('tRapportSimple').textContent = T.rapport_simple;
 g('tRapportFormat').textContent = T.rapport_format; g('tRapportWeb').textContent = T.rapport_web; g('tRapportPdf').textContent = T.rapport_pdf;
 g('rapportOuvrir').textContent = T.rapport_ouvrir; g('rapportDl').textContent = T.rapport_telecharger; g('rapportNon').textContent = T.annuler;
 g('rapport').onclick = async () => {
@@ -883,14 +887,22 @@ g('rapport').onclick = async () => {
   await sauveMaintenant(); await chargeEvenement();
   g('rapportEv').textContent = EV.evenement ? evNom(EV.evenement) : T.rapport_sans_ev;
   g('rapportOuvrir').disabled = g('rapportDl').disabled = !EV.evenement;
-  let plans = []; try { plans = await lire('/plans'); } catch (e) {}
+  let plans = []; try { plans = await lire('/plans', { id: id }); } catch (e) {}
   g('rapportPlan').innerHTML = ''; plans.forEach(x => g('rapportPlan').appendChild(el('option', { value: x.id, text: x.nom })));
-  g('lRapportPlan').classList.toggle('cache', !plans.length || !g('rapportChaine').checked);
+  // « Dessin du montage » (the default) where the station has a montage; the simple chain otherwise (the phone).
+  RAPPORT_DESSIN = plans.some(x => x.dessin);
+  rapportVues();
   g('dlgRapport').classList.remove('cache');
 };
-g('rapportChaine').onchange = () => g('lRapportPlan').classList.toggle('cache', !g('rapportPlan').options.length || !g('rapportChaine').checked);
+let RAPPORT_DESSIN = false;
+function rapportVues() {
+  g('lRapportPlan').classList.toggle('cache', !g('rapportPlan').options.length || !g('rapportChaine').checked);
+  g('lRapportVue').classList.toggle('cache', !RAPPORT_DESSIN || !g('rapportChaine').checked);
+}
+g('rapportChaine').onchange = rapportVues;
 function rapportFormat() { const r = document.querySelector('input[name=rapportFormat]:checked'); return r ? r.value : ''; }
-function rapportParams(dl) { return { id: id, chaine: g('rapportChaine').checked ? 1 : 0, plan: g('rapportPlan').value || '', dl: dl ? 1 : 0, format: rapportFormat() }; }
+function rapportVue() { const r = document.querySelector('input[name=rapportVue]:checked'); return RAPPORT_DESSIN && r ? r.value : 'simple'; }
+function rapportParams(dl) { return { id: id, chaine: g('rapportChaine').checked ? 1 : 0, vue: rapportVue(), plan: g('rapportPlan').value || '', dl: dl ? 1 : 0, format: rapportFormat() }; }
 g('rapportOuvrir').onclick = () => { g('dlgRapport').classList.add('cache'); window.open(url('/rapport', rapportParams(false)), '_blank'); };
 g('rapportDl').onclick = async () => {
   g('dlgRapport').classList.add('cache');

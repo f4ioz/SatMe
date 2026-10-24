@@ -14,7 +14,9 @@ import fr.f4ioz.satcombo.i18n.I18n
 import fr.f4ioz.satcombo.i18n.Lang
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
+import fr.f4ioz.satcombo.station.DessinMontage
 import fr.f4ioz.satcombo.station.Montage
+import fr.f4ioz.satcombo.station.SceneMontage
 import java.text.SimpleDateFormat
 import java.util.Base64
 import java.util.Date
@@ -128,6 +130,10 @@ object RapportEvenement {
         /** Small pictures (JPEG) by name: each slide's best. */
         val vignettes: Map<String, ByteArray> = emptyMap(),
         val logiciel: String = "SatMe",
+        /** The chain drawn as Station › Montage draws it (the plan lit for the event), null: the simple chain ([chaine]) only. */
+        val montage: DessinMontage.Dessin? = null,
+        /** SatMe's logo (PNG), null: none here. */
+        val logo: ByteArray? = null,
     )
 
     // ------------------------------------------------------------ building
@@ -185,6 +191,8 @@ object RapportEvenement {
         nomPlanche: String = "",
         vignette: (String) -> ByteArray? = { null },
         analyses: Map<String, ClassementSstv.Analyse> = emptyMap(),
+        montage: DessinMontage.Dessin? = null,
+        logo: ByteArray? = null,
     ): Rapport {
         val nb = evenement.nb
         val m = p.modele
@@ -238,7 +246,7 @@ object RapportEvenement {
             premiereMs = images.minOfOrNull { it.tMs } ?: 0L, derniereMs = images.maxOfOrNull { it.tMs } ?: 0L)
         val vignettes = diapos.mapNotNull { d -> d.meilleure?.let { n -> runCatching { vignette(n) }.getOrNull()?.let { n to it } } }.toMap()
         return Rapport(evenement, station, maintenant, elMin, diapos, passages, images, stats, m, geometrie, chaine, nomChaine, pilote,
-            planche, nomPlanche, vignettes)
+            planche, nomPlanche, vignettes, montage = montage, logo = logo)
     }
 
     /** The autopilot's word on a pass. */
@@ -313,7 +321,9 @@ object RapportEvenement {
         append("<title>").append(h(tf("rev_titre_page", e.nom))).append("</title><style>").append(STYLE).append("</style></head><body><main>")
 
         // ---- header
-        append("<header class=\"tete\"><div class=\"tete-g\"><div class=\"genre\">").append(h(t("rev_genre_" + EvenementSstv.genreCle(e.genre)))).append("</div>")
+        append("<header class=\"tete\">")
+        r.logo?.let { append("<img class=\"logo\" src=\"data:").append(type(it)).append(";base64,").append(b64(it)).append("\" alt=\"SatMe\" width=\"52\" height=\"52\">") }
+        append("<div class=\"tete-g\"><div class=\"genre\">").append(h(t("rev_genre_" + EvenementSstv.genreCle(e.genre)))).append("</div>")
         append("<h1>").append(h(e.nom)).append("</h1><div class=\"sous\">")
         append(h(e.satNom)).append(if (e.catnum > 0) " · NORAD ${e.catnum}" else "").append(" · ")
         append(h(jour(e.debutMs) + " " + hm(e.debutMs) + " → " + jour(e.finMs) + " " + hm(e.finMs) + " UTC"))
@@ -431,7 +441,20 @@ object RapportEvenement {
         append("</section>")
 
         // ---- the receive chain
-        if (r.chaine != null) {
+        if (r.montage != null) {
+            val d = r.montage
+            append("<section class=\"carte montage-carte\"><h2>").append(h(t("rev_chaine"))).append(" <span class=\"gris\">· ").append(h(d.nom)).append("</span></h2>")
+            // Wide, as Station › Montage draws it; on a narrow screen and on paper, the functions under the hardware.
+            append(SceneMontage.svg(DessinMontage.scene(d), "rm", "montage large", t("rev_chaine") + " · " + d.nom))
+            append(SceneMontage.svg(DessinMontage.scene(d, empile = true), "re", "montage etroit", t("rev_chaine") + " · " + d.nom))
+            append("<p class=\"gris legende-m\">").append(h(tf("rev_montage_legende", d.nom, d.quoi))).append("</p>")
+            if (r.pilote.isNotEmpty()) {
+                append("<h3>").append(h(t("rev_pilote_titre"))).append("</h3><ul>")
+                r.pilote.forEach { append("<li>").append(h(it)).append("</li>") }
+                append("</ul>")
+            }
+            append("</section>")
+        } else if (r.chaine != null) {
             append("<section class=\"carte\"><h2>").append(h(t("rev_chaine"))).append(if (r.nomChaine.isNotBlank()) " <span class=\"gris\">· " + h(r.nomChaine) + "</span>" else "").append("</h2>")
             if (r.chaine.isEmpty()) append("<p class=\"gris\">").append(h(t("rev_chaine_vide"))).append("</p>")
             else {
@@ -588,6 +611,8 @@ body{margin:0;background:var(--fond);color:var(--encre);font:14px/1.45 system-ui
 main{max-width:1040px;margin:0 auto;padding:20px 16px 40px}
 .tete{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end;padding:18px 20px;border-radius:14px;
 background:linear-gradient(135deg,#0b2d5b,#123f7a 60%,#1b5aa5);color:#fff}
+.tete .logo{width:52px;height:52px;border-radius:13px;flex:none;align-self:center;box-shadow:0 0 0 1px #ffffff26}
+.tete-g{flex:1;min-width:220px}
 .tete h1{margin:2px 0 4px;font-size:24px;line-height:1.2}.tete .sous{color:#d6e4f5;font-size:13px}
 .tete .genre{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffc21a;font-weight:700}
 .tete-d{text-align:right}.tete .ind{font-size:22px;font-weight:800;letter-spacing:.04em}
@@ -639,9 +664,13 @@ td.t{white-space:nowrap;font-variant-numeric:tabular-nums}
 .piece{border:1px solid var(--trait);border-radius:8px;padding:6px 10px;min-width:120px;background:var(--fond)}
 .piece span{display:block;font-size:10px;color:var(--gris);text-transform:uppercase;letter-spacing:.04em}.piece.satme{border-color:var(--s1)}
 .fleche{color:var(--gris);font-size:20px}
+svg.montage{display:block;width:100%;height:auto;border-radius:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+svg.montage.etroit{display:none;max-width:760px;margin:0 auto}
+@media (max-width:760px){svg.montage.large{display:none}svg.montage.etroit{display:block}}
+.legende-m{font-size:12px;margin:8px 0 0}
 footer{color:var(--gris);font-size:12px;margin-top:18px}
 @page{size:A4;margin:12mm}
-@media print{body{background:#fff}main{max-width:none;padding:0}.carte,.tuile,.passage,.diapo,tr{break-inside:avoid}
+@media print{body{background:#fff}main{max-width:none;padding:0}svg.montage.large{display:none}svg.montage.etroit{display:block}.montage-carte,.carte,.tuile,.passage,.diapo,tr{break-inside:avoid}
 .tete{-webkit-print-color-adjust:exact;print-color-adjust:exact}.carte{border-color:#ccc}.defile{overflow:visible}}
 """
 }

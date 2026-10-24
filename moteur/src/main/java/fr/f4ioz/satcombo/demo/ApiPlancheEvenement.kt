@@ -17,6 +17,9 @@ import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.RapportEvenement
 import fr.f4ioz.satcombo.sstv.SerieSstv
 import fr.f4ioz.satcombo.sstv.SstvMeta
+import fr.f4ioz.satcombo.station.DessinMontage
+import fr.f4ioz.satcombo.station.FonctionsMontage
+import fr.f4ioz.satcombo.station.PlansMontage
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -33,7 +36,9 @@ import java.io.File
  * chosen by itself again, « aucun » none), `/galerie?id=`,
  * `/remplit-diapos?id=&tous=&reinit=`, `/relance?oublie=`, `/analyse`,
  * `/case?id=&i=` (a box's versions), `/fusionner?id=&i=`, `/version-vignette?f=`,
- * `/plans`, `/rapport?id=&chaine=&plan=&dl=&format=` (`pdf`: the PDF, else the page).
+ * `/plans?id=`, `/rapport?id=&chaine=&vue=&plan=&dl=&format=` (`pdf`: the PDF, else the
+ * page; `vue=simple`: the chain in boxes, else the montage's drawing when
+ * there is one).
  */
 object ApiPlancheEvenement {
 
@@ -74,7 +79,37 @@ object ApiPlancheEvenement {
         fun corrections(): ApiCorrectionSstv? = null
         /** A processed picture small (a box's version to choose), JPEG. */
         fun vignetteFichier(f: File): ByteArray? = null
+        /** The station's montage, for the report's drawing; null: none here (the phone). */
+        fun montage(): Montage? = null
+        /** The frequency (MHz) the event was heard on: its campaign's, else its satellite's SSTV transmitter; null unknown. */
+        fun frequenceMhz(ev: EvenementSstv.Evenement, campagne: CampagneSstv.Campagne?): Double? = null
+        /** SatMe's logo (PNG) for the report's header; null: none. */
+        fun logo(): ByteArray? = null
     }
+
+    /**
+     * The montage as the report draws it: the [plans], the owner's one
+     * ([choisi]), each plan's photos (by element: the cut-out ones the page
+     * shows), SatMe's functions now (their sound cards' names; null unknown).
+     */
+    class Montage(val plans: List<PlansMontage.Plan>, val choisi: String, val photos: (String) -> Map<String, DessinMontage.Photo>,
+                  val instantane: FonctionsMontage.Instantane?)
+
+    /**
+     * The plan the report draws for [ev]: the one asked ([plan]), else the
+     * one that draws its SSTV reception best, else the owner's.
+     */
+    fun planPour(ev: EvenementSstv.Evenement, src: Source, plan: String): PlansMontage.Plan? {
+        val ms = runCatching { src.montage() }.getOrNull() ?: return null
+        ms.plans.firstOrNull { it.id == plan }?.let { return it }
+        val campagne = campagneDe(ev, src)
+        val a = DessinMontage.pourSstv("", fr.f4ioz.satcombo.station.Montage.Chaine(), campagne?.chaine,
+            runCatching { src.frequenceMhz(ev, campagne) }.getOrNull(), ms.instantane).activite
+        return DessinMontage.meilleurPlan(ms.plans, a) ?: ms.plans.firstOrNull { it.id == ms.choisi } ?: ms.plans.firstOrNull()
+    }
+
+    private fun campagneDe(ev: EvenementSstv.Evenement, src: Source) =
+        if (ev.genre == EvenementSstv.Genre.CAMPAGNE) runCatching { src.campagne(ev.id.removePrefix("c:")) }.getOrNull() else null
 
     /**
      * The sheet's boxes as drawn, [parNom] the gallery by name: each the
@@ -168,15 +203,28 @@ object ApiPlancheEvenement {
             else Planche.remplitParDiapo(m, e.groupes, 12, reinitialise)
     }
 
-    /** The event's report: its pictures, passes, the sheet [m] (if any), the chain of [plan] when [avecChaine]. */
-    fun rapport(ev: EvenementSstv.Evenement, m: Planche.Modele?, src: Source, avecChaine: Boolean, plan: String): RapportEvenement.Rapport {
+    /**
+     * The event's report: its pictures, passes, the sheet [m] (if any), the
+     * chain of [plan] when [avecChaine] — drawn as Station › Montage draws
+     * it when [dessin] and the station has a montage, else in boxes.
+     */
+    fun rapport(ev: EvenementSstv.Evenement, m: Planche.Modele?, src: Source, avecChaine: Boolean, plan: String, dessin: Boolean = true): RapportEvenement.Rapport {
         val now = src.maintenant()
         val e = src.classement.etat(src.dossier, src.images(), attendre = true)
         val p = prevision(ev, src, e)
         val passes = if (ev.catnum > 0) runCatching { src.passes(ev.catnum, ev.debutMs - 3_600_000L, ev.finMs + 3_600_000L) }.getOrDefault(emptyList()) else emptyList()
         val positions: ((List<Long>) -> List<Pair<Double, Double>>?)? = if (ev.catnum > 0) { ts -> src.positions(ev.catnum, ts) } else null
-        val ch = if (avecChaine) runCatching { src.chaine(plan) }.getOrNull() else null
-        val campagne = if (ev.genre == EvenementSstv.Genre.CAMPAGNE) src.campagne(ev.id.removePrefix("c:")) else null
+        val campagne = campagneDe(ev, src)
+        // The montage's drawing: the plan lit for what the autopilot set up (the rig's sound by default).
+        val pl = if (avecChaine && dessin) planPour(ev, src, plan) else null
+        val montage = pl?.takeIf { !it.chaine.vide }?.let { p0 ->
+            runCatching {
+                val ms = src.montage()!!
+                DessinMontage.pourSstv(PlansMontage.nomVu(p0), p0.chaine, campagne?.chaine, src.frequenceMhz(ev, campagne), ms.instantane,
+                    runCatching { ms.photos(p0.id) }.getOrDefault(emptyMap()))
+            }.getOrNull()
+        }
+        val ch = if (avecChaine) runCatching { src.chaine(pl?.id ?: plan) }.getOrNull() else null
         return RapportEvenement.construit(
             evenement = ev, p = p, passes = passes, station = src.station(), elMin = src.elMin(), maintenant = now,
             positions = positions,
@@ -185,7 +233,8 @@ object ApiPlancheEvenement {
             chaine = if (avecChaine) ch?.second ?: emptyList() else null, nomChaine = ch?.first.orEmpty(),
             pilote = if (avecChaine && campagne != null) RapportEvenement.pilote(campagne) else emptyList(),
             planche = m?.let { runCatching { src.planche(it) }.getOrNull() }, nomPlanche = m?.nom.orEmpty(),
-            vignette = { runCatching { src.vignette(it) }.getOrNull() }, analyses = e.analyses)
+            vignette = { runCatching { src.vignette(it) }.getOrNull() }, analyses = e.analyses,
+            montage = montage, logo = runCatching { src.logo() }.getOrNull())
     }
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
@@ -261,13 +310,21 @@ object ApiPlancheEvenement {
             if (b == null) ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
             else ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: no-store\r\n")
         }
-        "/plans" -> json(JSONArray(src.plans().map { (id, nom) -> JSONObject().put("id", id).put("nom", nom) }))
+        // The plans, the one drawing the sheet's event best first; whether the montage can be drawn here.
+        "/plans" -> {
+            val l = src.plans()
+            val ev = modele(p("id"))?.evenement
+            val premier = ev?.let { runCatching { planPour(it, src, "") }.getOrNull()?.id }
+            json(JSONArray(l.sortedBy { if (it.first == premier) 0 else 1 }.map { (id, nom) ->
+                JSONObject().put("id", id).put("nom", nom).put("dessin", runCatching { src.montage() }.getOrNull() != null)
+            }))
+        }
         "/rapport" -> {
             val m = modele(p("id"))?.let { assure(it, src, rangement, verrou) }
             val ev = m?.evenement ?: tous(src).firstOrNull { it.id == p("ev") }
             if (ev == null) ReponseWeb("404 Not Found", "text/plain; charset=utf-8", "pas d'événement".toByteArray())
             else {
-                val r = rapport(ev, m, src, p("chaine") == "1", p("plan"))
+                val r = rapport(ev, m, src, p("chaine") == "1", p("plan"), p("vue") != "simple")
                 val pdf = p("format") == "pdf"
                 val nom = RapportEvenement.nomFichier(r, if (pdf) "pdf" else "html")
                 val corps = if (pdf) runCatching { src.pdf(r) }.getOrNull() else RapportEvenement.html(r).toByteArray(Charsets.UTF_8)
