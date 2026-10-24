@@ -129,32 +129,84 @@ class SstvDecoder(
     /** Frequency spread inside recent sync pulses, Hz: the noise, measured. -1 until known. */
     private var syncSpread = -1.0
 
-    // Recent accepted sync pulses (block index, position), for [fitLine].
+    // Recent accepted sync pulses (block index, position, weight), for [fitLine].
     private val histK = DoubleArray(HIST)
     private val histP = DoubleArray(HIST)
+    private val histW = DoubleArray(HIST)
     private var histLen = 0
     private var histNext = 0
 
-    private fun remember(k: Int, pos: Double) {
-        histK[histNext] = k.toDouble(); histP[histNext] = pos
+    private fun remember(k: Int, pos: Double, w: Double = 1.0) {
+        histK[histNext] = k.toDouble(); histP[histNext] = pos; histW[histNext] = w
         histNext = (histNext + 1) % HIST
         if (histLen < HIST) histLen++
     }
 
     /**
-     * Least-squares line through the remembered pulses: position of block 0
-     * and block period, or null with too few points or a slope that is no
-     * line length at all.
+     * **The long-run line period**, samples: what the sound card's and the
+     * transmitter's clocks make of a block, learnt only from fits that span
+     * many lines, and never more than [LONG_PPM] from the nominal (measured on
+     * the owner's ISS pictures: −22 to −109 ppm). A fit over a few pulses
+     * either side of a noisy stretch or a jump in the sound once read the
+     * period 1.5 % off: every following pulse was then missed by more than
+     * the locked tolerance, the wide relock every fourth line threw the fit
+     * away, and the period was never measured again — one pulse in four
+     * for the rest of the picture (20261023_012254, 24 against 85
+     * elsewhere). The fitted period now stays within [FIT_PPM] of this.
+     */
+    private var periodeLongue = 0.0
+
+    private fun bornee(p: Double) =
+        p.coerceIn(periodeLongue * (1 - FIT_PPM * 1e-6), periodeLongue * (1 + FIT_PPM * 1e-6))
+
+    /** Kept points of the last [fitLine] (scratch). */
+    private val garde = BooleanArray(HIST)
+
+    /**
+     * Weighted least-squares line through the remembered pulses, a pulse far
+     * off the first line dropped and the line fitted again (a misread pulse
+     * no longer tilts it): position of block 0 and block period, or null with
+     * too few points. A slope more than [FIT_PPM] from the long-run period is
+     * no clock — a few pulses across a jump or misread —: the line keeps the
+     * long-run period and only its position comes from the pulses. A fit
+     * over many lines teaches the long-run period.
      */
     private fun fitLine(): Pair<Double, Double>? {
         if (histLen < 4) return null
-        var sk = 0.0; var sp = 0.0
-        for (i in 0 until histLen) { sk += histK[i]; sp += histP[i] }
-        val mk = sk / histLen; val mp = sp / histLen
+        java.util.Arrays.fill(garde, 0, histLen, true)
+        var res = ajuste() ?: return null
+        // Outliers: off the first line by more than 3 robust deviations (never under OUTLIER_MS).
+        val ecarts = DoubleArray(histLen) { abs(histP[it] - (res.first + res.second * histK[it])) }
+        val mad = ecarts.sorted()[histLen / 2]
+        val lim = maxOf(OUTLIER_MS * spms, 3 * 1.4826 * mad)
+        var gardes = 0
+        for (i in 0 until histLen) { garde[i] = ecarts[i] <= lim; if (garde[i]) gardes++ }
+        if (gardes < histLen && gardes >= 4) res = ajuste() ?: return null
+        else java.util.Arrays.fill(garde, 0, histLen, true)
+        val (a0, b) = res
+        var kMin = Double.MAX_VALUE; var kMax = -Double.MAX_VALUE; var n = 0
+        for (i in 0 until histLen) if (garde[i]) { n++; kMin = minOf(kMin, histK[i]); kMax = maxOf(kMax, histK[i]) }
+        if (n >= LONG_POINTS && kMax - kMin >= LONG_SPAN && abs(b / nominalPeriod - 1) <= LONG_PPM * 1e-6)
+            periodeLongue += (b - periodeLongue) * LONG_GAIN
+        if (abs(b / periodeLongue - 1) <= FIT_PPM * 1e-6) return a0 to b
+        // Implausible slope: the long-run period, placed on the kept pulses (weighted mean).
+        val p = periodeLongue
+        var sw = 0.0; var sa = 0.0
+        for (i in 0 until histLen) if (garde[i]) { sw += histW[i]; sa += histW[i] * (histP[i] - p * histK[i]) }
+        if (sw <= 0.0) return null
+        return sa / sw to p
+    }
+
+    /** Weighted least squares over the kept points: intercept and slope, or null. */
+    private fun ajuste(): Pair<Double, Double>? {
+        var sw = 0.0; var sk = 0.0; var sp = 0.0
+        for (i in 0 until histLen) if (garde[i]) { val w = histW[i]; sw += w; sk += w * histK[i]; sp += w * histP[i] }
+        if (sw <= 0.0) return null
+        val mk = sk / sw; val mp = sp / sw
         var skk = 0.0; var skp = 0.0
-        for (i in 0 until histLen) {
+        for (i in 0 until histLen) if (garde[i]) {
             val dk = histK[i] - mk
-            skk += dk * dk; skp += dk * (histP[i] - mp)
+            skk += histW[i] * dk * dk; skp += histW[i] * dk * (histP[i] - mp)
         }
         if (skk <= 0.0) return null
         val b = skp / skk
@@ -764,6 +816,7 @@ class SstvDecoder(
         java.util.Arrays.fill(pixels, 0xFF101418.toInt())
         nominalPeriod = m.blockMs * spms
         blockPeriod = nominalPeriod
+        periodeLongue = nominalPeriod
         blockIndex = 0
         lastSync = -1.0
         missedRun = 0
@@ -1023,7 +1076,9 @@ class SstvDecoder(
                 // While locked, a jump no clock could make is a misread pulse,
                 // not a correction. Followed, it shifted whole lines sideways by
                 // 10-20 pixels on a noisy PD 120. It counts as a miss.
-                if (hit >= 0 && !wide && abs(hit - expected) > LOCKED_MAX_ERR_MS * spms) hit = -1L
+                // The tolerance grows a little with each pulse missed in a row (capped): the
+                // prediction's own error grows with the lines it has run without one.
+                if (hit >= 0 && !wide && abs(hit - expected) > toleranceVerrou() * spms) hit = -1L
             }
             if (blockIndex == 0) lastSync = expected
             var netteBloc = false
@@ -1035,25 +1090,29 @@ class SstvDecoder(
                     val measured = hit - lastSync
                     if (measured > nominalPeriod * 0.97 && measured < nominalPeriod * 1.03) {
                         blockPeriod += (measured - blockPeriod) * 0.08
-                        blockPeriod = blockPeriod.coerceIn(
-                            nominalPeriod * 0.985, nominalPeriod * 1.015)
+                        blockPeriod = bornee(blockPeriod)
                     }
                 }
                 lastSync = hit.toDouble()
                 blockStart += if (wide) err.toDouble() else err * 0.6
-                if (wide) histLen = 0          // relocked: the old line is history
-                remember(blockIndex, hit.toDouble())
+                if (wide) {
+                    // Relocked: the old line is history, its period starts again from the long-run one.
+                    histLen = 0; histNext = 0
+                    blockPeriod = periodeLongue
+                }
                 missedRun = 0
                 if (followTuning(m, hit, lastRunEnd).also { netteBloc = it }) { sansNette = 0; enLigneSansNette = 0; derniereNette = blockIndex; nettes++ }
                 else if (blockIndex > 0) { sansNette++; if (!wide) enLigneSansNette++ }
+                // A clean pulse weighs more in the fitted line than one read through noise.
+                remember(blockIndex, hit.toDouble(), if (netteBloc || blockIndex == 0) 1.0 else POIDS_BRUITE)
             } else if (blockIndex > 0) { missedRun++; sansNette++ }
             // **The line, fitted on recent pulses.** One pulse, one correction
             // made every line dance on a noisy signal; a straight line through
-            // the last dozen pulses averages their noise, and its slope is the
+            // the last two dozen pulses averages their noise, and its slope is the
             // line length exactly — sound-card clock error included, which
             // cost PD 120 about 4 dB at ±300 ppm.
             if (!wide) fitLine()?.let { (a, b) ->
-                blockPeriod = b.coerceIn(nominalPeriod * 0.985, nominalPeriod * 1.015)
+                blockPeriod = bornee(b)
                 blockStart = a + blockPeriod * blockIndex - m.syncAtMs * spms
             }
 
@@ -1094,6 +1153,10 @@ class SstvDecoder(
             forcedAnchor = false
         }
     }
+
+    /** Largest sync error believed while locked, ms: [LOCKED_MAX_ERR_MS], a little more per pulse missed in a row. */
+    private fun toleranceVerrou(): Double =
+        minOf(LOCKED_MAX_ERR_MS + TOL_PAR_MANQUE_MS * missedRun, TOL_MAX_MS)
 
     /**
      * Consecutive misses that end the frame: about [ABORT_MS], never fewer
@@ -1269,7 +1332,23 @@ class SstvDecoder(
         /** Regular pulses that make a train (continuous decoding). */
         private const val TRAIN = 4
         /** Sync pulses the line is fitted on. */
-        private const val HIST = 12
+        private const val HIST = 24
+        /** The fitted period stays this close to the long-run one, ppm. */
+        private const val FIT_PPM = 400.0
+        /** The long-run period stays this close to the nominal, ppm (a sound card 1500 ppm off is already a broken one). */
+        private const val LONG_PPM = 2000.0
+        /** A fit teaches the long-run period when it spans this many lines, with this many pulses kept. */
+        private const val LONG_SPAN = 12.0
+        private const val LONG_POINTS = 8
+        /** How much of a long fit's period the long-run one takes, per line. */
+        private const val LONG_GAIN = 0.05
+        /** A pulse this far off the fitted line (at least) is left out of it, ms. */
+        private const val OUTLIER_MS = 0.5
+        /** A pulse read through noise counts this much in the fit (a clean one 1). */
+        private const val POIDS_BRUITE = 0.4
+        /** The locked tolerance grows by this per pulse missed in a row, up to [TOL_MAX_MS], ms. */
+        private const val TOL_PAR_MANQUE_MS = 0.25
+        private const val TOL_MAX_MS = 3.0
         /** Noise spread up to which a matched pulse is refined on its trailing edge, Hz. */
         private const val EDGE_REFINE_HZ = 50.0
         /** Mean frequency above which the best window is no sync pulse, Hz. */
