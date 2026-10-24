@@ -2428,7 +2428,7 @@ val EN: Map<String, String> = mapOf(
     "pj_el_stats" to "SSTV figures",
     "pj_el_planche" to "Event's sheet",
     "pj_el_logo" to "SatMe logo",
-    "jel_t_passage" to "slides this pass (received/expected)",
+    "jel_t_passage" to "slides this pass",
     "jel_t_serie" to "slides of the series",
     "jel_t_images" to "pictures this pass",
     "jel_ce_passage" to "{0} this pass",

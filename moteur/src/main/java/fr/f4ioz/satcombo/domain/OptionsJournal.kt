@@ -38,11 +38,12 @@ data class OptionsJournal(
     /** The report's pieces the journal can show (their words: `pj_el_<code>`). */
     enum class Element(val code: String, /** Where it lands at first, laid over the view: left, top, width (shares). */ val defaut: CadreSstv,
                        /** Its least width (share of the view's). */ val min: Float = CadreSstv.MIN) {
-        MONTAGE("montage", CadreSstv(0.02f, 0.58f, 0.46f)),
-        DIAPOS("diapos", CadreSstv(0.02f, 0.02f, 0.46f)),
-        CIEL("ciel", CadreSstv(0.74f, 0.50f, 0.24f)),
-        PROFIL("profil", CadreSstv(0.02f, 0.72f, 0.34f)),
-        STATS("stats", CadreSstv(0.30f, 0.86f, 0.44f)),
+        // Spread round the view's edges (the SSTV picture takes a top corner): moved with the mouse.
+        MONTAGE("montage", CadreSstv(0.30f, 0.02f, 0.40f)),
+        DIAPOS("diapos", CadreSstv(0.02f, 0.42f, 0.34f)),
+        CIEL("ciel", CadreSstv(0.79f, 0.48f, 0.19f)),
+        PROFIL("profil", CadreSstv(0.02f, 0.74f, 0.26f)),
+        STATS("stats", CadreSstv(0.31f, 0.85f, 0.40f)),
         PLANCHE("planche", CadreSstv(0.62f, 0.02f, 0.36f)),
         LOGO("logo", CadreSstv(0.90f, 0.02f, 0.08f), min = 0.05f);
         companion object { fun de(c: String) = values().firstOrNull { it.code == c } }

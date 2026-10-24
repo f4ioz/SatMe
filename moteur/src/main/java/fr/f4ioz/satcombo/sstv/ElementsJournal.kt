@@ -109,7 +109,7 @@ object ElementsJournal {
     private fun taille(k: Element, d: Donnees, m: RapportPdf.Mesure): Taille = when (k) {
         Element.CIEL -> Taille(220f + 2 * P, 220f + TITRE + P)
         Element.PROFIL -> Taille(220f + 2 * P, 110f + TITRE + P)
-        Element.STATS -> Taille(4 * 92f + 3 * 6f + 2 * P, 56f + 2 * P)
+        Element.STATS -> Taille(4 * 92f + 3 * 6f + 2 * P, 62f + 2 * P)
         Element.DIAPOS -> {
             val n = nbDiapos(d); val c = colonnesDiapos(n); val r = ceil(n / c.toDouble()).toInt()
             Taille(c * 60f + (c - 1) * 5f + 2 * P, TITRE + r * 45f + (r - 1) * 8f + P)
@@ -239,11 +239,21 @@ object ElementsJournal {
             Triple(c.images.toString(), t("jel_t_images"), ""))
         tuiles.forEachIndexed { i, (v, lib, suite) ->
             val x = x0 + (P + i * (92f + 6f)) * e; val y = y0 + P * e
-            tl.rect(x, y, 92f * e, 56f * e, RapportPdf.FOND, RapportPdf.TRAIT, 0.7f * e, 5f * e)
+            tl.rect(x, y, 92f * e, 62f * e, RapportPdf.FOND, RapportPdf.TRAIT, 0.7f * e, 5f * e)
             tl.ecrit(m, v, x + 7f * e, y + 26f * e, 20f * e, if (i == 0 && c.recues > 0) RapportPdf.RECU else RapportPdf.ENCRE, true)
             if (suite.isNotEmpty()) tl.ecrit(m, suite, x + 7f * e + m.largeur(v, 20f * e, true) + 2f * e, y + 26f * e, 9f * e, RapportPdf.GRIS)
-            tl.ecrit(m, RapportPdf.coupe(m, lib, 80f * e, 7.6f * e), x + 7f * e, y + 44f * e, 7.6f * e, RapportPdf.GRIS)
+            // Its words on two lines at most.
+            deuxLignes(m, lib, 80f * e, 7.6f * e).forEachIndexed { j, l -> tl.ecrit(m, l, x + 7f * e, y + (41f + j * 10f) * e, 7.6f * e, RapportPdf.GRIS) }
         }
+    }
+
+    /** [s] in two lines of [w] at most, the second cut with « … ». */
+    private fun deuxLignes(m: RapportPdf.Mesure, s: String, w: Float, taille: Float): List<String> {
+        if (m.largeur(s, taille) <= w) return listOf(s)
+        val mots = s.split(' ')
+        var n = mots.size - 1
+        while (n > 1 && m.largeur(mots.take(n).joinToString(" "), taille) > w) n--
+        return listOf(RapportPdf.coupe(m, mots.take(n).joinToString(" "), w, taille), RapportPdf.coupe(m, mots.drop(n).joinToString(" "), w, taille))
     }
 
     private fun diapos(tl: RapportPdf.Toile, m: RapportPdf.Mesure, d: Donnees, x0: Float, y0: Float, e: Float) {

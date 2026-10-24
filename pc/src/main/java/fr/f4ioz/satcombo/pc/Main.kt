@@ -346,6 +346,8 @@ fun main(args: Array<String>) {
     journalWeb.rapport = RapportPc(journal, station, dossier,
         niveaux = { niveaux.series.getValue(NiveauxPc.CANAL).points(86_400_000L, System.currentTimeMillis()).map { it.t to it.moy } },
         kp = { serveur.espace?.etat()?.kp.orEmpty() }, ft8 = ft8Recents)
+    // Its SSTV pictures as the journal chose them for the pass (as received unless chosen).
+    journalWeb.rapport?.montre = { e -> journalWeb.sstv.montrees(e).mapValues { it.value.fichier } }
     serveur.spectreJournal = spectreJournal
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)
     serveur.iqSdr = iqSdr
@@ -421,6 +423,8 @@ fun main(args: Array<String>) {
     serveur.classement = classement
     planche.classement = classement
     planche.montage = serveur.montage
+    // The journal's SSTV versions and report panels read through the sheet's events, corrections and montage.
+    journalWeb.planche = planche
     // The SSTV options: the missing slide's notice, each pass's sound and how long it is kept, the QSL, the ARISS pack.
     val optionsSstv = OptionsSstvPc(station, son, classement, { activites }, dossier)
     optionsSstv.annonce = { t ->

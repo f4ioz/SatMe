@@ -2452,7 +2452,7 @@ val FR: Map<String, String> = mapOf(
     "pj_el_stats" to "Bilan SSTV",
     "pj_el_planche" to "Planche de l'événement",
     "pj_el_logo" to "Logo SatMe",
-    "jel_t_passage" to "diapos de ce passage (reçues/prévues)",
+    "jel_t_passage" to "diapos de ce passage",
     "jel_t_serie" to "diapos de la série",
     "jel_t_images" to "images de ce passage",
     "jel_ce_passage" to "{0} de ce passage",
