@@ -16,6 +16,7 @@ import fr.f4ioz.satcombo.station.DispositionMontage
 import fr.f4ioz.satcombo.station.EditionMontage
 import fr.f4ioz.satcombo.station.FonctionsMontage
 import fr.f4ioz.satcombo.station.Montage
+import fr.f4ioz.satcombo.station.PlansMontage
 import fr.f4ioz.satcombo.station.ProfilsFonction
 import fr.f4ioz.satcombo.station.VerificationMontage
 import org.json.JSONArray
@@ -37,6 +38,11 @@ import java.io.File
  * again (`/annule`, `/refait`); the proposal from what SatMe knows and what
  * the system lists of its USB devices and sound cards ([systeme]: files
  * read, never a port opened), taken piece by piece (`/fusion`).
+ *
+ * Several plans of the station (`/plans`), each with its photos and its
+ * undo; with `?auto=1` the plan shown follows what works now (see
+ * [PlansMontage.Suivi]), the chain detected live when no plan draws it.
+ * Every edit says its plan (`?plan=`), else the one the owner chose.
  */
 class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectures,
                 private val instantane: ((ActiviteMontage.Lectures) -> FonctionsMontage.Instantane)? = null,
@@ -51,32 +57,44 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
     private val fichierProfils = File(dossier, "montage-profils.json")
     @Volatile private var profils: List<ProfilsFonction.Profil> = runCatching { ProfilsFonction.lit(fichierProfils.readText()) }.getOrDefault(emptyList())
 
-    @Volatile private var chaine: Montage.Chaine = runCatching { Montage.lit(fichier.readText()) }.getOrDefault(Montage.Chaine())
-    private val historique = EditionMontage.Historique()
+    @Volatile private var plans: PlansMontage.Plans = PlansMontage.lit(runCatching { fichier.readText() }.getOrNull())
+    private val historiques = HashMap<String, EditionMontage.Historique>()
+    private val suivi = PlansMontage.Suivi()
+
+    private fun historique(plan: String) = synchronized(historiques) { historiques.getOrPut(plan) { EditionMontage.Historique() } }
+    private fun chaine(plan: String): Montage.Chaine = plans.plan(plan)?.chaine ?: Montage.Chaine()
+    /** The plan a request is about: its `?plan=`, else the owner's; null when it names none kept. */
+    private fun cible(p: (String) -> String): String? = p("plan").let { if (it.isBlank()) plans.choisi.id else plans.plan(it)?.id }
+    /** A plan's photos: the first plan's where they always were, the others' in a folder of their own. */
+    private fun photosDe(plan: String) = if (plan == PlansMontage.PREMIER) photos else File(photos, plan)
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
     private fun refus(t: String) = json(JSONObject().put("ok", false).put("erreur", t))
     private val NON = ReponseWeb("404 Not Found", "text/plain; charset=utf-8", "pas de photo".toByteArray())
 
-    /** The photo of element [id] of the chain, if the owner gave one (tied to its model: another piece under the same id has none). */
-    private fun photo(id: String): File? {
-        val e = chaine.element(id) ?: return null
-        return TYPES.keys.map { File(photos, "${e.id}-${e.modele}.$it") }.firstOrNull { it.isFile }
+    /** The photo of element [id] of [plan]'s chain, if the owner gave one (tied to its model: another piece under the same id has none). */
+    private fun photo(plan: String, id: String): File? {
+        val e = chaine(plan).element(id) ?: return null
+        return TYPES.keys.map { File(photosDe(plan), "${e.id}-${e.modele}.$it") }.firstOrNull { it.isFile }
     }
 
     /** One request: [route] after `/api/montage`, [corps] read on demand (a chain, a picture). */
     fun sert(route: String, methode: String, p: (String) -> String, corps: (Long) -> ByteArray?): ReponseWeb = runCatching {
+        val plan = cible(p) ?: return@runCatching refus("plan inconnu")
         when (route) {
-            "", "/" -> if (methode == "POST") enregistre(corps(MAX_CHAINE)) else etat(p("simple") == "1", p("essai"), p("fonction"))
+            "", "/" -> if (methode == "POST") enregistre(plan, corps(MAX_CHAINE))
+                else etat(p("simple") == "1", p("essai"), p("fonction"), if (p("plan").isBlank() && p("auto") == "1") null else plan)
             "/action" -> if (methode != "POST") refus("POST seulement") else geste(p("cle"), p("valeur"))
-            "/edition" -> if (methode != "POST") refus("POST seulement") else edite(p)
+            "/edition" -> if (methode != "POST") refus("POST seulement") else edite(plan, p)
             "/annule", "/refait" -> if (methode != "POST") refus("POST seulement") else synchronized(this) {
-                val c = if (route == "/annule") historique.annule(chaine) else historique.refait(chaine)
+                val h = historique(plan)
+                val c = if (route == "/annule") h.annule(chaine(plan)) else h.refait(chaine(plan))
                 if (c == null) refus(if (route == "/annule") "rien à annuler" else "rien à rétablir")
-                else { garde(c); json(JSONObject().put("ok", true).put("historique", etatHistorique())) }
+                else { garde(plan, c); json(JSONObject().put("ok", true).put("historique", etatHistorique(plan))) }
             }
-            "/detection" -> json(detection())
-            "/fusion" -> if (methode != "POST") refus("POST seulement") else fusion(corps(MAX_CHAINE))
+            "/detection" -> json(detection(plan))
+            "/fusion" -> if (methode != "POST") refus("POST seulement") else fusion(plan, corps(MAX_CHAINE))
+            "/plans" -> plansRoute(methode, p)
             "/profils" -> profils(methode, p)
             "/catalogue" -> json(Montage.catalogueJson())
             "/suggestion" -> {
@@ -87,25 +105,25 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
             "/photo" -> {
                 val id = p("id").takeIf { Montage.ID.matches(it) } ?: return@runCatching refus("quel appareil ?")
                 if (methode != "POST") {
-                    val f = (if (p("detoure") == "1") detouree(id) else photo(id)) ?: return@runCatching NON
+                    val f = (if (p("detoure") == "1") detouree(plan, id) else photo(plan, id)) ?: return@runCatching NON
                     ReponseWeb("200 OK", TYPES[f.extension] ?: "application/octet-stream", f.readBytes(), "X-Content-Type-Options: nosniff\r\n")
                 } else {
-                    val e = chaine.element(id) ?: return@runCatching refus("appareil inconnu")
-                    photos.mkdirs()
-                    if (p("retire") == "1") { synchronized(this) { photo(id)?.delete(); detoureFichiers(e).forEach { it.delete() } }; return@runCatching json(JSONObject().put("ok", true)) }
+                    val e = chaine(plan).element(id) ?: return@runCatching refus("appareil inconnu")
+                    photosDe(plan).mkdirs()
+                    if (p("retire") == "1") { synchronized(this) { photo(plan, id)?.delete(); detoureFichiers(plan, e).forEach { it.delete() } }; return@runCatching json(JSONObject().put("ok", true)) }
                     if (p("detourage") == "1") {
-                        val f = photo(id) ?: return@runCatching refus("pas de photo")
-                        val r = detoure(e, f.readBytes(), p("tolerance").toIntOrNull()) ?: return@runCatching refus("photo illisible ici (JPEG, PNG ou GIF)")
+                        val f = photo(plan, id) ?: return@runCatching refus("pas de photo")
+                        val r = detoure(plan, e, f.readBytes(), p("tolerance").toIntOrNull()) ?: return@runCatching refus("photo illisible ici (JPEG, PNG ou GIF)")
                         return@runCatching json(JSONObject().put("ok", true).put("uniforme", r.uniforme).put("tolerance", r.tolerance))
                     }
                     val b = corps(PHOTO_MAX) ?: return@runCatching refus("photo trop grosse (8 Mo au plus) ou coupée")
                     val ext = genre(b) ?: return@runCatching refus("seulement une image JPEG, PNG, WebP ou GIF")
                     synchronized(this) {
-                        photo(id)?.delete(); detoureFichiers(e).forEach { it.delete() }
-                        File(photos, "${e.id}-${e.modele}.$ext").writeBytes(b)
+                        photo(plan, id)?.delete(); detoureFichiers(plan, e).forEach { it.delete() }
+                        File(photosDe(plan), "${e.id}-${e.modele}.$ext").writeBytes(b)
                     }
                     // Cut out at once: the owner then chooses to show it in place of the drawing.
-                    val r = runCatching { detoure(e, b, null) }.getOrNull()
+                    val r = runCatching { detoure(plan, e, b, null) }.getOrNull()
                     json(JSONObject().put("ok", true).put("detoure", r != null).put("uniforme", r?.uniforme ?: JSONObject.NULL))
                 }
             }
@@ -113,36 +131,36 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
         }
     }.getOrElse { refus(it.message ?: "erreur") }
 
-    private fun enregistre(b: ByteArray?): ReponseWeb {
+    private fun enregistre(plan: String, b: ByteArray?): ReponseWeb {
         val texte = b?.toString(Charsets.UTF_8) ?: return refus("chaîne trop grosse")
         val c = Montage.lit(texte)
         synchronized(this) {
-            historique.pousse(chaine, c)
-            garde(c)
+            historique(plan).pousse(chaine(plan), c)
+            garde(plan, c)
         }
         return json(JSONObject().put("ok", true).put("chaine", Montage.ecrit(c)))
     }
 
-    private fun etatHistorique() = JSONObject().put("annuler", historique.peutAnnuler).put("refaire", historique.peutRefaire)
+    private fun etatHistorique(plan: String) = historique(plan).let { h -> JSONObject().put("annuler", h.peutAnnuler).put("refaire", h.peutRefaire) }
 
     /** One edit of the drawing (a piece dropped, a cable drawn, a piece moved…), kept for « Annuler ». */
-    private fun edite(p: (String) -> String): ReponseWeb {
+    private fun edite(plan: String, p: (String) -> String): ReponseWeb {
         val op = EditionMontage.lit(p) ?: return refus("geste inconnu")
         synchronized(this) {
-            val avant = chaine
+            val avant = chaine(plan)
             val r = EditionMontage.applique(avant, op)
             if (!r.ok) return refus(r.erreur!!)
-            historique.pousse(avant, r.chaine)
-            if (r.chaine != avant) garde(r.chaine)
-            return json(JSONObject().put("ok", true).put("id", r.id ?: "").put("dit", r.dit).put("historique", etatHistorique()))
+            historique(plan).pousse(avant, r.chaine)
+            if (r.chaine != avant) garde(plan, r.chaine)
+            return json(JSONObject().put("ok", true).put("id", r.id ?: "").put("dit", r.dit).put("historique", etatHistorique(plan)))
         }
     }
 
     /** What SatMe proposes now: its state, the USB devices and sound cards the system lists (read, nothing opened). */
-    private fun detection(): JSONObject {
+    private fun detection(plan: String): JSONObject {
         val (usb, cartes) = systeme()
         val p = DetectionMontage.propose(lectures(), usb, cartes)
-        val actuelle = chaine
+        val actuelle = chaine(plan)
         // Which proposed pieces are already drawn (a model already there): unticked by default on the page.
         val deja = HashMap<String, Int>()
         actuelle.elements.forEach { deja.merge(it.modele, 1, Int::plus) }
@@ -154,30 +172,118 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
     }
 
     /** The pieces the owner kept of a proposal (`{"chaine": …, "garde": [ids]}`) merged into the chain. */
-    private fun fusion(b: ByteArray?): ReponseWeb {
+    private fun fusion(plan: String, b: ByteArray?): ReponseWeb {
         val o = runCatching { JSONObject(b?.toString(Charsets.UTF_8) ?: "") }.getOrNull() ?: return refus("proposition illisible")
         val prop = Montage.lit(o.optJSONObject("chaine") ?: return refus("proposition illisible"))
         val g = o.optJSONArray("garde") ?: JSONArray()
         val gardes = (0 until minOf(g.length(), Montage.ELEMENTS_MAX)).map { g.optString(it) }.toSet()
         synchronized(this) {
-            val avant = chaine
+            val avant = chaine(plan)
             val f = DetectionMontage.fusionne(avant, prop, gardes)
-            historique.pousse(avant, f.chaine)
-            if (f.chaine != avant) garde(f.chaine)
-            return json(JSONObject().put("ok", true).put("ajoutes", f.ajoutes).put("relies", f.relies).put("historique", etatHistorique()))
+            historique(plan).pousse(avant, f.chaine)
+            if (f.chaine != avant) garde(plan, f.chaine)
+            return json(JSONObject().put("ok", true).put("ajoutes", f.ajoutes).put("relies", f.relies).put("historique", etatHistorique(plan)))
         }
     }
 
-    /** [c] kept, in memory and in the data folder; the photos of pieces gone deleted. */
-    private fun garde(c: Montage.Chaine) {
+    /** [c] kept as [plan]'s chain, in memory and in the data folder; the photos of its pieces gone deleted. */
+    private fun garde(plan: String, c: Montage.Chaine) {
         synchronized(this) {
-            chaine = c
-            val tmp = File(fichier.parentFile, fichier.name + ".tmp")
-            tmp.writeText(Montage.ecrit(c).toString(2))
-            if (!tmp.renameTo(fichier)) { fichier.delete(); tmp.renameTo(fichier) }
+            plans = plans.change(plan, c)
+            ecrit()
             // The photos of pieces no longer there go.
             val gardees = c.elements.map { "${it.id}-${it.modele}" }.toSet()
-            photos.listFiles()?.forEach { f -> if (f.nameWithoutExtension.removeSuffix("-detoure") !in gardees) f.delete() }
+            photosDe(plan).listFiles()?.forEach { f -> if (f.isFile && f.nameWithoutExtension.removeSuffix("-detoure") !in gardees) f.delete() }
+        }
+    }
+
+    private fun ecrit() {
+        synchronized(this) {
+            fichier.parentFile?.mkdirs()
+            val tmp = File(fichier.parentFile, fichier.name + ".tmp")
+            tmp.writeText(PlansMontage.ecrit(plans).toString(2))
+            if (!tmp.renameTo(fichier)) { fichier.delete(); tmp.renameTo(fichier) }
+        }
+    }
+
+    /** The chain working now, as detected (SatMe's proposal kept to what is lit); null when nothing works. */
+    private fun chaineVive(l: ActiviteMontage.Lectures, a: ActiviteMontage.Activite): Montage.Chaine? {
+        if (a.vide) return null
+        val (usb, cartes) = systeme()
+        return PlansMontage.chaineVive(DetectionMontage.propose(l, usb, cartes).chaine, a)
+    }
+
+    private fun activite(l: ActiviteMontage.Lectures) = ActiviteMontage.depuis(l, instantane?.let { f -> runCatching { f(l) }.getOrNull() })
+
+    /**
+     * The plans: GET the list; POST ?op= nouveau (?nom=), duplique (?id=,
+     * ?nom=), renomme (?id=, ?nom=), retire (?id=), affiche (?id=: the plan
+     * chosen by hand, held while something works), suivre (?on=1|0), garde
+     * (the chain detected now kept as a plan, ?nom=).
+     */
+    private fun plansRoute(methode: String, p: (String) -> String): ReponseWeb {
+        fun liste() = JSONObject().put("ok", true).put("plans", PlansMontage.json(plans)).put("affiche", plans.choisi.id)
+            .put("suivre", plans.suivre).put("epingle", suivi.epingle ?: "")
+        if (methode != "POST") return json(liste())
+        val nom = Montage.Chaine(nom = p("nom")).let { Montage.nettoie(it).nom }
+        synchronized(this) {
+            val id = p("id")
+            when (p("op")) {
+                "nouveau", "duplique", "garde" -> {
+                    if (plans.plans.size >= PlansMontage.MAX) return refus("${PlansMontage.MAX} plans au plus")
+                    val n = PlansMontage.nouvelId(plans)
+                    val c = when (p("op")) {
+                        "nouveau" -> Montage.Chaine(nom = PlansMontage.nomLibre(plans, nom.ifBlank { "Plan " + n.removePrefix("p") }))
+                        "duplique" -> {
+                            val src = plans.plan(id) ?: return refus("plan inconnu")
+                            src.chaine.copy(nom = PlansMontage.nomLibre(plans, nom.ifBlank { PlansMontage.nomVu(src) + " (copie)" }))
+                        }
+                        else -> {
+                            val l = lectures()
+                            val a = activite(l)
+                            val v = chaineVive(l, a) ?: return refus("rien ne tourne : aucune chaîne détectée à garder")
+                            v.copy(nom = PlansMontage.nomLibre(plans, nom.ifBlank { PlansMontage.nomPropose(v, a) }))
+                        }
+                    }
+                    if (p("op") == "duplique") {
+                        val de = photosDe(id); val vers = photosDe(n)
+                        de.listFiles()?.filter { it.isFile }?.forEach { f -> vers.mkdirs(); f.copyTo(File(vers, f.name), true) }
+                    } else photosDe(n).takeIf { n != PlansMontage.PREMIER }?.deleteRecursively()
+                    plans = plans.copy(plans = plans.plans + PlansMontage.Plan(n, c), affiche = n)
+                    if (p("op") == "garde") suivi.montre(n) else suivi.epingle(n)
+                    ecrit()
+                    return json(liste().put("id", n).put("nom", c.nom))
+                }
+                "renomme" -> {
+                    val pl = plans.plan(id) ?: return refus("plan inconnu")
+                    if (nom.isBlank()) return refus("un nom, par exemple « IC-9700 satellites »")
+                    plans = plans.change(id, pl.chaine.copy(nom = PlansMontage.nomLibre(plans, nom, id)))
+                    ecrit()
+                }
+                "retire" -> {
+                    plans.plan(id) ?: return refus("plan inconnu")
+                    if (plans.plans.size <= 1) return refus("le dernier plan reste (vide-le plutôt)")
+                    val reste = plans.plans.filter { it.id != id }
+                    plans = plans.copy(plans = reste, affiche = if (plans.affiche == id) reste.first().id else plans.affiche)
+                    ecrit()
+                    val d = photosDe(id)
+                    if (id == PlansMontage.PREMIER) d.listFiles()?.filter { it.isFile }?.forEach { it.delete() } else d.deleteRecursively()
+                    synchronized(historiques) { historiques.remove(id) }
+                }
+                "affiche" -> {
+                    plans.plan(id) ?: return refus("plan inconnu")
+                    plans = plans.copy(affiche = id)
+                    suivi.epingle(id)
+                    ecrit()
+                }
+                "suivre" -> {
+                    plans = plans.copy(suivre = p("on") != "0")
+                    suivi.relache()
+                    ecrit()
+                }
+                else -> return refus("geste inconnu")
+            }
+            return json(liste())
         }
     }
 
@@ -188,26 +294,39 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
      * [fonction]: that function's whole chain too. With the functions: who
      * holds what, the conflicts, the software half of the drawing.
      */
-    private fun etat(simple: Boolean, essai: String, fonction: String): ReponseWeb {
-        val c = chaine
+    private fun etat(simple: Boolean, essai: String, fonction: String, demande: String?): ReponseWeb {
         val demo = essai in FonctionsMontage.ESSAIS
         val l = if (demo) null else lectures()
-        val a = if (l == null) ActiviteMontage.essai(essai) else ActiviteMontage.depuis(l)
+        val i = if (l == null) FonctionsMontage.essai(essai) else instantane?.let { f -> runCatching { f(l) }.getOrNull() }
+        val a = if (l == null) ActiviteMontage.essai(essai) else ActiviteMontage.depuis(l, i)
+        // The plan shown: the one asked, else (?auto=1) the one of what works now, else the owner's.
+        val choix = when {
+            demande != null -> PlansMontage.Choix(demande, false, raison = "plan choisi")
+            // The demonstration's pretend activity: chosen afresh, never kept.
+            demo -> PlansMontage.Suivi().choisit(plans, a, horloge())
+            else -> suivi.choisit(plans, a, horloge())
+        }
+        val vive = if (choix.detectee) chaineVive(l ?: lectures(), a) else null
+        val plan = if (choix.detectee && vive != null) "" else choix.plan ?: plans.choisi.id
+        val c = vive ?: chaine(plan)
         val al = ActiviteMontage.allume(c, a)
         // SatMe-PC itself always stays in the simplified drawing.
         val garde = if (simple) al.enOeuvre().takeIf { it.isNotEmpty() }
             ?.plus(c.elements.filter { Montage.modele(it)?.genre == Montage.Genre.ORDINATEUR }.map { it.id }) else null
         val o = JSONObject().put("ok", true).put("chaine", Montage.ecrit(c))
             .put("plan", DispositionMontage.json(DispositionMontage.dispose(c, garde)))
-            .put("ports", Montage.portsJson(c)).put("historique", etatHistorique())
+            .put("ports", Montage.portsJson(c)).put("historique", if (plan == "") JSONObject().put("annuler", false).put("refaire", false) else etatHistorique(plan))
             .put("etat", ActiviteMontage.json(a, al))
             .put("verification", VerificationMontage.json(VerificationMontage.verifie(c)))
             .put("simple", simple).put("simpleVide", simple && garde == null)
             .put("essai", if (demo) essai else "")
-            .put("photos", JSONArray(c.elements.filter { photo(it.id) != null }.map { it.id }))
-            .put("detoures", JSONArray(c.elements.filter { detouree(it.id) != null }.map { it.id }))
-            .put("detourage", JSONObject().also { o -> c.elements.forEach { e -> infoDetoure(e)?.let { o.put(e.id, it) } } })
-        val i = if (l == null) FonctionsMontage.essai(essai) else instantane?.let { f -> runCatching { f(l) }.getOrNull() }
+            .put("photos", JSONArray(c.elements.filter { plan != "" && photo(plan, it.id) != null }.map { it.id }))
+            .put("detoures", JSONArray(c.elements.filter { plan != "" && detouree(plan, it.id) != null }.map { it.id }))
+            .put("detourage", JSONObject().also { o -> if (plan != "") c.elements.forEach { e -> infoDetoure(plan, e)?.let { o.put(e.id, it) } } })
+            .put("planId", plan).put("plans", PlansMontage.json(plans)).put("affiche", plans.choisi.id).put("suivre", plans.suivre)
+            .put("suit", choix.suit && plan != "").put("epingle", choix.epingle).put("detectee", plan == "").put("raison", choix.raison)
+            .put("couvre", JSONArray(choix.roles.toList()))
+        if (plan == "") o.put("nomPropose", PlansMontage.nomPropose(c, a))
         if (i != null) {
             o.put("fonctions", FonctionsMontage.json(i, c))
             if (fonction.isNotBlank()) FonctionsMontage.vue(fonction, c, i)?.let { o.put("vue", it.json().put("id", fonction)) }
@@ -297,14 +416,14 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
     }
 
     /** The cut-out photo of [e] and what was said of it. */
-    private fun detoureFichiers(e: Montage.Element) = listOf(File(photos, "${e.id}-${e.modele}-detoure.png"), File(photos, "${e.id}-${e.modele}-detoure.json"))
-    private fun detouree(id: String): File? = chaine.element(id)?.let { detoureFichiers(it)[0] }?.takeIf { it.isFile && photo(id) != null }
-    private fun infoDetoure(e: Montage.Element): JSONObject? = detoureFichiers(e)[1].takeIf { it.isFile && detouree(e.id) != null }?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
+    private fun detoureFichiers(plan: String, e: Montage.Element) = photosDe(plan).let { d -> listOf(File(d, "${e.id}-${e.modele}-detoure.png"), File(d, "${e.id}-${e.modele}-detoure.json")) }
+    private fun detouree(plan: String, id: String): File? = chaine(plan).element(id)?.let { detoureFichiers(plan, it)[0] }?.takeIf { it.isFile && photo(plan, id) != null }
+    private fun infoDetoure(plan: String, e: Montage.Element): JSONObject? = detoureFichiers(plan, e)[1].takeIf { it.isFile && detouree(plan, e.id) != null }?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
 
     /** [e]'s photo [b] cut out ([tolerance] null: from its border), kept as a PNG beside it; null when it cannot be read. */
-    private fun detoure(e: Montage.Element, b: ByteArray, tolerance: Int?): Detourage.Resultat? {
+    private fun detoure(plan: String, e: Montage.Element, b: ByteArray, tolerance: Int?): Detourage.Resultat? {
         val r = decoupe(b, tolerance) ?: return null
-        val (png, info) = detoureFichiers(e)
+        val (png, info) = detoureFichiers(plan, e)
         synchronized(this) {
             png.writeBytes(r.second)
             info.writeText(JSONObject().put("tolerance", r.first.tolerance).put("uniforme", r.first.uniforme).toString())

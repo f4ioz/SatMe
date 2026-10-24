@@ -1239,6 +1239,10 @@ ${STYLE_JETONS}
   .mt-puce.rxtx { color:#FFD9CF; border-color:var(--tx); }
   .mt-puce.relie { color:var(--ok); border-color:rgba(91,214,138,.45); }
   .mt-puce.err { color:#FF8A8D; border-color:rgba(229,72,77,.6); background:rgba(229,72,77,.12); }
+  .mt-plans select { max-width:240px; }
+  .mt-suivre { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-s); cursor:pointer; }
+  .mt-auto { font-size:var(--fs-s); color:var(--dim, inherit); margin:-2px 0 6px; }
+  .mt-detectee { display:flex; align-items:center; gap:6px 12px; flex-wrap:wrap; padding:6px 10px; border-radius:var(--r1); border:1px dashed var(--cyan, #4dd0e1); background:rgba(77,208,225,.08); font-size:var(--fs-s); margin-bottom:6px; }
   .mt-essai { padding:5px 10px; border-radius:var(--r1); background:rgba(255,180,84,.12); border:1px dashed var(--warn); color:var(--warn); font-size:var(--fs-s); margin-bottom:6px; }
   .mt-zone { position:relative; flex:1; min-height:320px; overflow:auto; display:flex; align-items:center; justify-content:center; border-radius:var(--r2);
     background:radial-gradient(circle at 30% 20%, rgba(63,224,200,.04), transparent 55%), repeating-linear-gradient(0deg, transparent 0 23px, rgba(255,255,255,.018) 23px 24px),
@@ -3202,7 +3206,20 @@ ${rail()}
     <div class="aide">« Proposer d'après SatMe » compose une chaîne à partir des réglages (poste, rotor, clé SDR, récepteur et émetteur DATV, oscillateurs des convertisseurs) : tu l'adoptes ou non.</div>
     <div class="aide">À droite de l'ordinateur, le logiciel : chaque <b>fonction</b> de SatMe (récepteur SDR, DATV, SSTV, FT8, CW, APRS, phonie → texte, METEOR, sondes, émissions) en pastille arrondie, chaque <b>matériel</b> du son (cartes son, haut-parleur) en pastille carrée. Les marques disent qui reçoit (<b class="cyan">RX</b>), qui émet (<b class="tx-mot">TX</b>), qui fait du son (son ▶) et qui en prend (◀ son). Au-dessus d'un appareil, la fonction qui le tient (« ADALM-PLUTO → DATV réception ») ; en rouge, une fonction qui voudrait un appareil ou une entrée son déjà pris, avec la raison et le geste qui libère.</div>
     <div class="aide">« Fonction » ne montre que la chaîne d'une fonction, de l'antenne à son écran, chaque maillon en marche, prêt, manquant ou occupé, et ce qu'il faut pour qu'elle marche. Les boutons des pastilles et des alertes ne font que de la réception (démarrer ou arrêter un récepteur, choisir une source son) ; une émission ne se démarre jamais d'ici, et rien ne touche à l'alimentation du LNB ni aux ports série.</div>
+    <div class="aide">« Plan » : plusieurs dessins de la même station (« SatMe-Node déporté », « IC-9700 satellites »…), chacun avec ses photos et son historique. « Afficher le plan de ce qui tourne » montre le plan qui dessine le mieux ce qui reçoit ou émet ; un plan choisi à la main reste affiché tant que l'activité dure. Quand aucun plan ne la dessine, la <b>chaîne détectée</b> est montrée : « Garder comme plan » l'enregistre.</div>
     <div class="aide">« Profils » garde les réglages de réception actuels sous un nom (« SSTV par IC-9700 », « QO-100 Pluto + FT8 ») : récepteur SDR et sa fréquence, carte son, sources et décodeurs, récepteur DATV. « Appliquer » montre d'abord ce qui changera, puis le fait dans un ordre sûr (arrêts, réglages, récepteurs, carte son, décodeurs) ; refusé pendant une émission.</div>
+    <div class="mt-barre mt-plans" id="mt-plans-barre">
+      <label class="petit" for="mt-plan">Plan</label>
+      <select id="mt-plan" onchange="mtPlanChoisi(this.value)" title="Les plans de ta station : chacun son dessin, ses photos, son historique"></select>
+      <button id="mt-pl-nouveau" onclick="mtPlanNouveau()" title="Un nouveau plan, vide">＋ Nouveau</button>
+      <button id="mt-pl-duplique" onclick="mtPlanDuplique()" title="Une copie de ce plan, avec ses photos">Dupliquer</button>
+      <button id="mt-pl-renomme" onclick="mtPlanRenomme()" title="Renommer ce plan">Renommer</button>
+      <button id="mt-pl-retire" onclick="mtPlanRetire()" title="Supprimer ce plan et ses photos">Supprimer</button>
+      <label class="mt-suivre" title="Le plan montré suit ce qui tourne : celui qui dessine le mieux la réception ou l'émission en cours"><input type="checkbox" id="mt-suivre" onchange="mtSuivre(this.checked)"> Afficher le plan de ce qui tourne</label>
+    </div>
+    <div class="mt-auto" id="mt-auto" aria-live="polite" hidden></div>
+    <div class="mt-detectee" id="mt-detectee" hidden><span><b>Chaîne détectée</b> — aucun plan gardé ne dessine ce qui tourne : voici ce que SatMe voit en marche.</span>
+      <button class="primaire" id="mt-garde-vive" onclick="mtGardeVive()" title="Enregistrer cette chaîne comme un nouveau plan">Garder comme plan</button></div>
     <div class="mt-barre">
       <span class="bascule-c" role="group" aria-label="Vue"><button id="mt-b-complet" onclick="mtVue(false)" title="Tout le montage">Complet</button><button id="mt-b-simple" onclick="mtVue(true)" title="Seulement ce qui reçoit ou émet maintenant">Simplifié</button></span>
       <select id="mt-fonction" onchange="mtFonction(this.value)" aria-label="Fonction montrée" title="Ne montrer que la chaîne d'une fonction, de l'antenne à son écran" hidden><option value="">Toute la station</option></select>
@@ -13340,7 +13357,7 @@ function mtGroupe(c, b, p, compact) {
   const court = nom.length > maxc ? nom.slice(0, maxc - 1) + '…' : nom;
   const photo = MT.d && (MT.d.photos || []).includes(e.id);
   const img = e.ph && MT.d && (MT.d.detoures || []).includes(e.id);
-  const dessin = img ? '<image class="mt-img" href="api/montage/photo?id=' + e.id + '&amp;detoure=1&amp;t=' + (MT.photoV || 0) + '" x="0" y="0" width="' + b.l + '" height="' + dh + '" preserveAspectRatio="xMidYMid meet"/>'
+  const dessin = img ? '<image class="mt-img" href="api/montage/photo?id=' + e.id + '&amp;' + mtPq() + '&amp;detoure=1&amp;t=' + (MT.photoV || 0) + '" x="0" y="0" width="' + b.l + '" height="' + dh + '" preserveAspectRatio="xMidYMid meet"/>'
     : f(b.l, dh, e.m).replace(/url\(#P-/g, 'url(#' + p + '-');
   let ph = '';
   if (MT.edition && !compact && b.ports) {
@@ -13467,7 +13484,9 @@ function mtTaille(svg, zone, max) {
 // ---- the tab
 async function mtOuvre() { try { if (localStorage.getItem('mt-legende') === '0') g('mt-legende-d').open = false; } catch (x) {} await mtCatalogue(); mtPrereglages(); mtTic(true); }
 async function mtLit(simple, fonction) {
-  const r = await fetch('api/montage?simple=' + (simple ? 1 : 0) + (MT.essai ? '&essai=' + MT.essai : '') + (fonction ? '&fonction=' + enc(fonction) : ''));
+  // Being edited: the plan stays; otherwise the server picks the plan of what works now (when the owner wants it).
+  const qp = MT.edition && MT.planId ? '&plan=' + enc(MT.planId) : '&auto=1';
+  const r = await fetch('api/montage?simple=' + (simple ? 1 : 0) + qp + (MT.essai ? '&essai=' + MT.essai : '') + (fonction ? '&fonction=' + enc(fonction) : ''));
   return r.ok ? r.json() : null;
 }
 async function mtTic(force) {
@@ -13480,8 +13499,9 @@ async function mtTic(force) {
     if (!d || d.ok === false) { txt('mt-msg', 'Le montage ne répond pas.'); return; }
     if (MT.glisse) return;
     mtAttachePorts(d);
-    MT.d = d; MT.telephone = !!d.telephone;
-    const cle = JSON.stringify([d.chaine, d.plan, d.photos, d.detoures, MT.edition, MT.photoV, (d.etat || {}).detectes]);
+    MT.d = d; MT.telephone = !!d.telephone; MT.planId = d.planId || '';
+    mtPlans(d);
+    const cle = JSON.stringify([d.planId, d.chaine, d.plan, d.photos, d.detoures, MT.edition, MT.photoV, (d.etat || {}).detectes]);
     const svg = g('mt-svg');
     if (cle !== MT.cle || force) {
       MT.cle = cle; MT.logCle = ''; mtDessine(svg, d, 'mtA', false); mtListes();
@@ -13524,9 +13544,63 @@ function mtResume(d) {
   g('mt-b-simple').classList.toggle('actif', MT.simple); g('mt-b-complet').classList.toggle('actif', !MT.simple);
   g('mt-b-simple').setAttribute('aria-pressed', MT.simple); g('mt-b-complet').setAttribute('aria-pressed', !MT.simple);
 }
+// ---- the plans: several drawings of the station, the one of what works now shown when the owner wants it
+function mtPlans(d) {
+  const tel = !!d.telephone, l = d.plans || [];
+  g('mt-plans-barre').hidden = tel || !l.length;
+  if (tel || !l.length) { g('mt-auto').hidden = true; g('mt-detectee').hidden = true; return; }
+  const s = g('mt-plan'), det = !!d.detectee;
+  const opts = (det ? '<option value="">Chaîne détectée (non gardée)</option>' : '') +
+    l.map(p => '<option value="' + mtEsc(p.id) + '">' + mtEsc(p.nom) + ' (' + p.elements + ')</option>').join('');
+  if (s.dataset.o !== opts) { s.innerHTML = opts; s.dataset.o = opts; }
+  if (document.activeElement !== s) s.value = d.planId || '';
+  g('mt-suivre').checked = !!d.suivre;
+  g('mt-pl-duplique').disabled = det; g('mt-pl-renomme').disabled = det; g('mt-pl-retire').disabled = det || l.length < 2;
+  g('mt-plan').disabled = !!MT.edition;
+  g('mt-detectee').hidden = !det; g('mt-garde-vive').hidden = !!MT.essai;
+  const p = l.find(x => x.id === d.planId), nom = p ? '« ' + p.nom + ' »' : '';
+  const a = !det && d.suivre ? (d.epingle ? 'Plan ' + nom + ' choisi à la main : il reste affiché tant que l’activité dure (ou cocher à nouveau « Afficher le plan de ce qui tourne »).'
+    : d.suit ? 'Plan ' + nom + ' : il dessine ce qui tourne.' : '') : '';
+  txt('mt-auto', a); g('mt-auto').hidden = !a;
+  g('mt-b-edit').disabled = det; g('mt-b-edit').title = det ? 'Garde d’abord la chaîne détectée comme plan' : 'Ajouter, renommer, retirer les appareils et les câbles (E)';
+}
+async function mtPlansOp(q, dit) {
+  let j = null; try { j = await (await fetch('api/montage/plans?' + q, { method: 'POST' })).json(); } catch (x) {}
+  if (!j || j.ok === false) { annonce((j && j.erreur) || 'Refusé'); return null; }
+  if (dit) annonce(typeof dit === 'function' ? dit(j) : dit);
+  MT.cle = ''; await mtTic(true);
+  return j;
+}
+function mtPlanChoisi(id) { if (id) mtPlansOp('op=affiche&id=' + enc(id), 'Plan montré : ' + ((MT.d.plans || []).find(p => p.id === id) || {}).nom); }
+function mtPlanNouveau() {
+  const n = prompt('Nom du nouveau plan :', 'IC-9700 satellites'); if (n === null) return;
+  mtPlansOp('op=nouveau&nom=' + enc(n.trim()), j => 'Plan créé : ' + j.nom);
+}
+function mtPlanDuplique() {
+  const p = (MT.d.plans || []).find(x => x.id === MT.d.planId); if (!p) return;
+  const n = prompt('Nom de la copie :', p.nom + ' (copie)'); if (n === null) return;
+  mtPlansOp('op=duplique&id=' + enc(p.id) + '&nom=' + enc(n.trim()), j => 'Plan copié : ' + j.nom);
+}
+function mtPlanRenomme() {
+  const p = (MT.d.plans || []).find(x => x.id === MT.d.planId); if (!p) return;
+  const n = prompt('Nouveau nom du plan :', p.nom); if (n === null || !n.trim()) return;
+  mtPlansOp('op=renomme&id=' + enc(p.id) + '&nom=' + enc(n.trim()), 'Plan renommé');
+}
+function mtPlanRetire() {
+  const p = (MT.d.plans || []).find(x => x.id === MT.d.planId); if (!p) return;
+  if (!confirm('Supprimer le plan « ' + p.nom + ' » et ses photos ?')) return;
+  mtPlansOp('op=retire&id=' + enc(p.id), 'Plan supprimé : ' + p.nom);
+}
+function mtSuivre(on) { mtPlansOp('op=suivre&on=' + (on ? 1 : 0), on ? 'Le plan montré suit ce qui tourne' : 'Le plan choisi reste montré'); }
+function mtGardeVive() {
+  const n = prompt('Nom du plan :', (MT.d && MT.d.nomPropose) || 'Chaîne détectée'); if (n === null) return;
+  mtPlansOp('op=garde&nom=' + enc(n.trim()), j => 'Plan gardé : ' + j.nom);
+}
 function mtVue(simple) { MT.simple = simple; try { localStorage.setItem('mt-simple', simple ? '1' : '0'); } catch (x) {} mtTic(true); }
 function mtEdition(o) {
-  MT.edition = o === undefined ? !MT.edition : o;
+  const ouvre = o === undefined ? !MT.edition : o;
+  if (ouvre && MT.d && MT.d.detectee) { annonce('Garde d’abord la chaîne détectée comme plan'); return; }
+  MT.edition = ouvre;
   if (MT.edition && MT.pfOuvert) mtProfils(false);
   if (MT.edition && MT.fonction) { MT.fonction = ''; try { localStorage.setItem('mt-fonction', ''); } catch (x) {} }
   if (!MT.edition) { mtCablePopFerme(); mtRelierFin(); }
@@ -13549,7 +13623,7 @@ function mtPrereglages() {
 /** The chain saved as it is now on the page (the server cleans it: what cannot be is dropped). */
 async function mtEnregistre(c, dit) {
   try {
-    const r = await fetch('api/montage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) });
+    const r = await fetch('api/montage?' + mtPq(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) });
     const j = await r.json();
     if (j.ok === false) { annonce(j.erreur || 'Montage non enregistré'); return null; }
     if (dit) annonce(dit);
@@ -13557,6 +13631,8 @@ async function mtEnregistre(c, dit) {
     return j.chaine;
   } catch (x) { annonce('Montage non enregistré'); return null; }
 }
+/** The plan an edit goes to: the one shown (the owner's when the chain detected is shown). */
+const mtPq = () => 'plan=' + enc((MT.d && (MT.d.planId || MT.d.affiche)) || '');
 const mtCopie = () => JSON.parse(JSON.stringify(MT.d ? MT.d.chaine : { elements: [], liens: [] }));
 function mtNouvelId(c, pre) { let i = c.elements.length + c.liens.length + 1; while (c.elements.some(e => e.id === pre + i) || c.liens.some(l => l.id === pre + i)) i++; return pre + i; }
 async function mtPrereglage() {
@@ -13675,8 +13751,8 @@ function mtFiche(id, rafraichit) {
   const remplace = autres.length ? '<div class="mt-f-opt"><span>Remplacer par</span><select onchange="if (this.value) mtOp({ op: \'modele\', id: \'' + id + '\', m: this.value })" aria-label="Remplacer par un autre modèle">' +
     '<option value="">—</option>' + autres.map(x => '<option value="' + x.id + '">' + mtEsc(x.nom) + '</option>').join('') + '</select></div>' : '';
   // The photo cut out: before / after, in place of the drawing or not, done again with another tolerance.
-  const detour = !photo || MT.telephone ? '' : det ? '<div class="mt-dt"><figure><img src="api/montage/photo?id=' + id + '&amp;t=' + (MT.photoV || 0) + '" alt="Photo d’origine"><figcaption>Photo</figcaption></figure>' +
-      '<figure><img class="damier" src="api/montage/photo?id=' + id + '&amp;detoure=1&amp;t=' + (MT.photoV || 0) + '" alt="Photo détourée"><figcaption>Détourée</figcaption></figure></div>' +
+  const detour = !photo || MT.telephone ? '' : det ? '<div class="mt-dt"><figure><img src="api/montage/photo?id=' + id + '&amp;' + mtPq() + '&amp;t=' + (MT.photoV || 0) + '" alt="Photo d’origine"><figcaption>Photo</figcaption></figure>' +
+      '<figure><img class="damier" src="api/montage/photo?id=' + id + '&amp;' + mtPq() + '&amp;detoure=1&amp;t=' + (MT.photoV || 0) + '" alt="Photo détourée"><figcaption>Détourée</figcaption></figure></div>' +
       (di.uniforme === false ? '<div class="mt-f-err">Fond non uniforme : détourage approximatif.</div>' : '') +
       '<label class="petit" style="display:block;margin-top:4px"><input type="checkbox"' + (e.ph ? ' checked' : '') + ' onchange="mtOp({ op: \'photo\', id: \'' + id + '\', on: this.checked ? 1 : 0 })"> Photo à la place du dessin</label>' +
       '<div class="mt-dt-r"><span>Tolérance</span><input type="range" id="mt-dt-tol" min="4" max="120" value="' + (di.tolerance || 30) + '" oninput="MT.glisseTol = 1; txt(\'mt-dt-v\', this.value)" onchange="MT.glisseTol = 0" aria-label="Tolérance du détourage">' +
@@ -13690,7 +13766,7 @@ function mtFiche(id, rafraichit) {
     '<div class="petit">' + mtEsc(m.nom) + (m.note ? ' — ' + mtEsc(m.note) : '') + '</div>' +
     (err ? '<div class="mt-f-err">⚠ ' + mtEsc(err) + '</div>' : '') +
     (bt ? '<div class="petit" style="margin-top:4px">État : <b>' + mtEsc(bt.texte) + '</b> — lu sur ce PC, rien n’est envoyé au service d’ici.</div>' : '') +
-    (photo && !det ? '<img class="mt-f-photo" src="api/montage/photo?id=' + id + '&amp;t=' + (MT.photoV || 0) + '" alt="Photo de ' + mtEsc(mtNom(e)) + '" onclick="mtPhotoVoir(\'' + id + '\')">' : '') +
+    (photo && !det ? '<img class="mt-f-photo" src="api/montage/photo?id=' + id + '&amp;' + mtPq() + '&amp;t=' + (MT.photoV || 0) + '" alt="Photo de ' + mtEsc(mtNom(e)) + '" onclick="mtPhotoVoir(\'' + id + '\')">' : '') +
     detour + opts + remplace +
     '<table class="mt-f-ports"><tbody>' + mtPortsEl(e).map(p => {
       const k = id + '.' + p.id, ls = c.liens.filter(l => l.de === k || l.vers === k);
@@ -13716,25 +13792,25 @@ async function mtPhotoEnvoie(id, f) {
   if (!/^image\/(jpeg|png|webp|gif)$/.test(f.type)) { annonce('Seulement une image JPEG, PNG, WebP ou GIF'); return; }
   if (f.size > 8 * 1024 * 1024) { annonce('Photo trop grosse : 8 Mo au plus'); return; }
   try {
-    const j = await (await fetch('api/montage/photo?id=' + enc(id), { method: 'POST', body: f })).json();
+    const j = await (await fetch('api/montage/photo?id=' + enc(id) + '&' + mtPq(), { method: 'POST', body: f })).json();
     annonce(j.ok ? 'Photo gardée' : (j.erreur || 'Photo refusée')); MT.photoV = Date.now();
   } catch (x) { annonce('Photo non envoyée'); }
   await mtTic(true); mtFiche(id);
 }
 async function mtPhotoRetire(id) {
-  try { await fetch('api/montage/photo?id=' + enc(id) + '&retire=1', { method: 'POST' }); } catch (x) {}
+  try { await fetch('api/montage/photo?id=' + enc(id) + '&retire=1&' + mtPq(), { method: 'POST' }); } catch (x) {}
   MT.photoV = Date.now();
   await mtTic(true); mtFiche(id);
 }
 function mtPhotoVoir(id) {
   const e = MT.d && mtElem(MT.d.chaine, id); if (!e) return;
-  g('mt-ph-img').src = 'api/montage/photo?id=' + enc(id) + '&t=' + Date.now(); txt('mt-ph-nom', mtNom(e));
+  g('mt-ph-img').src = 'api/montage/photo?id=' + enc(id) + '&' + mtPq() + '&t=' + Date.now(); txt('mt-ph-nom', mtNom(e));
   g('mt-ph-dlg').showModal();
 }
 // ---- SatMe's proposal, from what it knows (only shown: taken or not by the owner)
 async function mtSuggere() {
   await mtCatalogue();
-  let j = null; try { j = await (await fetch('api/montage/detection')).json(); } catch (x) {}
+  let j = null; try { j = await (await fetch('api/montage/detection?' + mtPq())).json(); } catch (x) {}
   if (!j || j.ok === false) { annonce((j && j.erreur) || 'Pas de proposition'); return; }
   mtAttachePorts(j);
   MT.sugg = j;
@@ -13763,7 +13839,7 @@ function mtSuggGris() {
 async function mtSuggAjoute() {
   if (!MT.sugg) return;
   let j = null;
-  try { j = await (await fetch('api/montage/fusion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaine: MT.sugg.chaine, garde: [...MT.suggGarde] }) })).json(); } catch (x) {}
+  try { j = await (await fetch('api/montage/fusion?' + mtPq(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chaine: MT.sugg.chaine, garde: [...MT.suggGarde] }) })).json(); } catch (x) {}
   if (!j || j.ok === false) { annonce((j && j.erreur) || 'Non ajouté'); return; }
   g('mt-sg-dlg').close();
   annonce(j.ajoutes + ' appareil' + (j.ajoutes > 1 ? 's' : '') + ' et ' + j.relies + ' câble' + (j.relies > 1 ? 's' : '') + ' ajoutés (Ctrl+Z en modification pour annuler)');
@@ -13985,14 +14061,14 @@ MT.glisse = null; MT.sansClic = false; MT.relierDe = null; MT.relierMenu = null;
 async function mtOp(o, dit) {
   if (MT.telephone) return null;
   const q = Object.keys(o).map(k => k + '=' + enc(o[k])).join('&');
-  let j = null; try { j = await (await fetch('api/montage/edition?' + q, { method: 'POST' })).json(); } catch (x) {}
+  let j = null; try { j = await (await fetch('api/montage/edition?' + q + '&' + mtPq(), { method: 'POST' })).json(); } catch (x) {}
   if (!j || j.ok === false) { annonce((j && j.erreur) || 'Refusé'); await mtTic(true); return null; }
   if (j.dit || dit) annonce(j.dit || dit);
   await mtTic(true);
   return j;
 }
 async function mtHisto(sens) {
-  let j = null; try { j = await (await fetch('api/montage/' + sens, { method: 'POST' })).json(); } catch (x) {}
+  let j = null; try { j = await (await fetch('api/montage/' + sens + '?' + mtPq(), { method: 'POST' })).json(); } catch (x) {}
   if (!j || j.ok === false) { annonce((j && j.erreur) || 'Rien à faire'); return; }
   annonce(sens === 'annule' ? 'Modification annulée' : 'Modification rétablie');
   mtCablePopFerme(); await mtTic(true);
@@ -14173,7 +14249,7 @@ document.addEventListener('keydown', e => {
 // A photo cut out again (its tolerance), or for the first time.
 async function mtDetoure(id, tol) {
   let j = null;
-  try { j = await (await fetch('api/montage/photo?id=' + enc(id) + '&detourage=1' + (tol ? '&tolerance=' + tol : ''), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/montage/photo?id=' + enc(id) + '&detourage=1&' + mtPq() + (tol ? '&tolerance=' + tol : ''), { method: 'POST' })).json(); } catch (x) {}
   annonce(j && j.ok ? ('Photo détourée' + (j.uniforme === false ? ' (fond non uniforme : approximatif)' : '')) : ((j && j.erreur) || 'Détourage impossible'));
   MT.photoV = Date.now(); MT.glisseTol = 0;
   await mtTic(true); mtFiche(id);
