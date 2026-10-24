@@ -505,7 +505,7 @@ function panneauImages() {
   p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
     el('button', { class: 'primaire', text: T.remplir_diapos, onclick: async () => {
       await sauveMaintenant();
-      const j = await lire('/remplit-diapos', { id: id, tous: filtre === '@ev' ? 0 : 1, reinit: reinit.checked ? 1 : 0 });
+      const j = await lire('/remplit-diapos', Object.assign({ id: id, reinit: reinit.checked ? 1 : 0 }, filtreParams()));
       await charge(id);
       if (j && j.ok) g('message').textContent = (j.manquantes.length ? tf('rempli_diapos', j.manquantes.join(', ')) : T.rempli_toutes) +
         (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '') +
