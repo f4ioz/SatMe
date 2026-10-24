@@ -2485,7 +2485,7 @@ ${rail()}
       <div class="petit aide">Seuls les enregistrements de passages SSTV sont concernés. Jamais supprimés : ceux d’une image utilisée dans une planche ou marquée « à garder », ceux de moins d’un jour. Chaque suppression est notée dans enregistrements/retention-sons.log.</div>
       <div class="ligne"><span class="petit" id="so-bilan" style="flex:1"></span><button id="so-appliquer" onclick="soRetention()">Appliquer maintenant</button></div>
       <div class="ligne" style="margin-top:8px"><span class="petit">Image QSL</span><select id="so-dispo" style="flex:none" onchange="soReglage('dispo', this.value)"><option value="BANDEAU">bandeau dessous</option><option value="INCRUSTE">incrusté</option></select>
-        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> signer « SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
+        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> écrire « reçu avec SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
       <div class="petit" id="so-station"></div>
       <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" onclick="viFichier(event, this)" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
       <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
@@ -2636,7 +2636,7 @@ ${rail()}
   <div>
     <div class="carte">
       <div class="t">Auto-pilote</div>
-      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitre(this.checked)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitreCase(this)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
       <div class="petit" id="ap-etat" style="margin-top:4px"></div>
     </div>
     <div class="carte">
@@ -4444,7 +4444,7 @@ ${rail()}
   <div class="petit" id="mt-sg-lu"></div>
   <div id="mt-sg-zone"><svg id="mt-sg-svg" role="img" aria-label="Montage proposé"></svg></div>
   <ul id="mt-sg-pourquoi"></ul>
-  <div class="ligne"><button class="primaire" onclick="mtSuggAjoute()">Ajouter les pièces cochées</button><button onclick="mtSuggAdopte()" title="Remplacer tout le montage par toute la proposition">Tout remplacer</button><button onclick="g('mt-sg-dlg').close()">Fermer</button></div>
+  <div class="ligne"><button class="primaire" onclick="mtSuggAjoute()">Ajouter les pièces cochées</button><button onclick="mtSuggAdopte()" title="Remplacer tout le montage par toute la proposition : ses pièces, ses câbles et leurs photos sont effacés">Tout remplacer</button><button onclick="g('mt-sg-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="mt-ph-dlg" class="dlg-mt" onclick="if (event.target === this) this.close()" aria-labelledby="mt-ph-nom">
   <div class="dlg-tete"><b id="mt-ph-nom"></b><button class="discret" onclick="g('mt-ph-dlg').close()" aria-label="Fermer">✕</button></div>
@@ -5229,7 +5229,7 @@ async function majSauvegarde() {
   if (!SAUV || !SAUV.present) return;
   const m = g('sv-medias').checked;
   g('sv-lien').href = 'sauvegarde.zip' + (m ? '?medias=1' : '');
-  txt('sv-taille', 'environ ' + ((m ? SAUV.tailleMedias : SAUV.taille) / 1048576).toFixed(1) + ' Mo');
+  txt('sv-taille', 'environ ' + mo1(m ? SAUV.tailleMedias : SAUV.taille));
   g('sv-etat').innerHTML = SAUV.attente ? 'Une sauvegarde du ' + new Date(SAUV.attente.date).toLocaleString() + ' sera restaurée au prochain démarrage de SatMe-PC. <button onclick="post(\'api/sauvegarde/annule\').then(majSauvegarde)">Annuler</button>' : '';
 }
 async function restaureSauvegarde(input) {
@@ -5884,7 +5884,8 @@ function etalMontre(e) {
   txt('etal-brut', e.brutAz == null ? 'silencieux' : 'az ' + etalN(e.brutAz) + ' / él ' + etalN(e.brutEl));
   txt('etal-corr', e.az == null ? '—' : 'az ' + etalN(e.az) + ' / él ' + etalN(e.el) + (e.azCible != null ? ' → ' + etalN(e.azCible) + ' / ' + etalN(e.elCible) : ''));
   txt('etal-suivi', !e.connecte ? 'Rotor non connecté : connecte-le d\'abord (Réglages › Poste et rotor).' :
-    'Suivi automatique arrêté pendant la calibration · ' + e.statut);
+    // Said once: the rotor's own line when it says the same (« Assistant de calibration ouvert… ») is not repeated.
+    'Suivi automatique arrêté pendant la calibration (il reprend à la fermeture)' + (e.statut && !/calibr|étalonn/i.test(e.statut) ? ' · ' + e.statut : ''));
   g('etal-rotctld').hidden = !e.connecte || e.commandes;
   txt('etal-journal', (e.journal || []).join('\n'));
   const c = e.correction || {};
@@ -6040,7 +6041,7 @@ async function ecouteIci() {
     const r = await fetch('api/son/flux?source=' + source, { signal: ecArret.signal });
     const lecteur = r.body.getReader();
     let reste = new Uint8Array(0), entete = true;
-    g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+    g('ec-go').hidden = true; g('ec-stop').hidden = false; ecBouton(true);
     txt('ec-etat', 'en écoute : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
     while (true) {
       const { value, done } = await lecteur.read(); if (done) break;
@@ -6066,7 +6067,7 @@ function arreteEcoute() {
   if (ecLecteur) { try { ecLecteur.disconnect(); } catch (x) {} ecLecteur = null; }
   if (ecCtx) { try { ecCtx.close(); } catch (x) {} ecCtx = null; }
   ecEcrit = 0; ecLu = 0; ecAmorce = true; ecMoy = 0;
-  g('ec-go').hidden = false; g('ec-stop').hidden = true; g('ec-btn').textContent = '🔈 Écouter ici';
+  g('ec-go').hidden = false; g('ec-stop').hidden = true; ecBouton(false);
 }
 // Shown where SatMe-PC streams (not on the page served by the phone).
 g('ec-boite').hidden = !!window.SATME_TELEPHONE;
@@ -6204,7 +6205,7 @@ async function ecouteWs() {
       let m = null; try { m = JSON.parse(ev.data); } catch (x) { return; }
       if (m.t === 'bonjour') {
         ouvert = true; clearTimeout(delai);
-        g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+        g('ec-go').hidden = true; g('ec-stop').hidden = false; ecBouton(true);
         txt('ec-etat', 'en écoute, faible latence : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
       } else if (m.t === 'pong') {
         ecRtt.push(performance.now() - m.c); if (ecRtt.length > 15) ecRtt.shift(); ecPerdusSrv = m.perdus || 0;
@@ -6563,6 +6564,8 @@ document.querySelectorAll('.st').forEach(st => {
   stOuvre(st, p);
   st.querySelectorAll('.st-nav button').forEach(b => b.onclick = () => {
     stOuvre(st, b.dataset.p);
+    // « Activités à venir » opened: its count of new notices read.
+    if (b.dataset.p === 'ag-p-act') acLues();
     try { localStorage.setItem('st-' + st.dataset.st, b.dataset.p); } catch (x) {}
   });
 });
@@ -7398,8 +7401,22 @@ async function chargeDoppler() {
 }
 // ------------------------------------------------------------------ horizon mask
 let HZ = [0, 0, 0, 0, 0, 0, 0, 0];
+// Another number of sectors: each new one takes the highest obstacle of the old ones it overlaps (never lower than what was set).
+function hzRedecoupe(l, n) {
+  const m = l.length;
+  return Array.from({ length: n }, (_, i) => {
+    const a = i * 360 / n, b = (i + 1) * 360 / n; let v = 0;
+    for (let k = 0; k < m; k++) if (k * 360 / m < b - 1e-6 && (k + 1) * 360 / m > a + 1e-6) v = Math.max(v, l[k]);
+    return v;
+  });
+}
 function hzSecteurs(n, zero) {
-  if (zero || HZ.length !== n) HZ = Array(n).fill(0);
+  if (zero) HZ = Array(n).fill(0);
+  else if (HZ.length !== n) {
+    const avant = HZ.some(e => e > 0);
+    HZ = hzRedecoupe(HZ, n);
+    if (avant) txt('hz-etat', 'redécoupé en ' + n + ' secteurs : chacun prend l’obstacle le plus haut de ceux qu’il recouvre ; à vérifier puis enregistrer');
+  }
   g('hz-n').value = String(HZ.length);
   const w = 360 / HZ.length;
   g('hz-champs').innerHTML = HZ.map((e, i) => '<span class="petit">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + '°</span>' +
@@ -8521,6 +8538,8 @@ async function eApercu() {
 // The file browser: folders of the PC running SatMe-PC (read only), and files sent from this computer.
 let FD = { type: 'image', chemin: '', parent: null, max: 0 };
 function fdAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+/** A size in megabytes, one decimal, written the French way (« 12,3 Mo »). */
+function mo1(o) { return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo'; }
 function fdTaille(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' ko'; }
 function fdVignette(e) {
   return '<div class="fd-v"><img loading="lazy" src="api/datv/sources/vignette.jpg?p=' + enc(e.chemin) + '" alt="" data-g="' + (e.genre === 'video' ? '🎞' : '🖼') +
@@ -8735,7 +8754,7 @@ function rendSon() {
   if (enregs !== enregsVus && ouverte('son')) {
     enregsVus = enregs;
     g('s-liste').innerHTML = S.enregistrements.map(e => '<tr><td><a href="#" onclick="ecoute(\'' + enc(e.nom) + '\');return false">' + esc(e.nom) +
-      '</a></td><td class="petit">' + (e.taille / 1048576).toFixed(1) + ' Mo</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
+      '</a></td><td class="petit">' + mo1(e.taille) + '</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
       '<tr><td class="petit">aucun enregistrement</td></tr>';
   }
   // SSTV: the picture arriving, reloaded only when it moved.
@@ -9034,7 +9053,7 @@ function rendSstv() {
   if (en !== enregsSstvVus) {
     enregsSstvVus = en;
     const avant = g('sstv-enreg').value;
-    g('sstv-enreg').innerHTML = S.enregistrements.map(x => '<option value="' + esc(x.nom).replace(/"/g, '&quot;') + '">' + esc(x.nom) + ' · ' + (x.taille / 1048576).toFixed(1) + ' Mo</option>').join('') || '<option value="">aucun enregistrement</option>';
+    g('sstv-enreg').innerHTML = S.enregistrements.map(x => '<option value="' + esc(x.nom).replace(/"/g, '&quot;') + '">' + esc(x.nom) + ' · ' + mo1(x.taille) + '</option>').join('') || '<option value="">aucun enregistrement</option>';
     if (avant) g('sstv-enreg').value = avant;
   }
   const enCours = D.redecodeProgres >= 0;
@@ -13504,10 +13523,16 @@ function apOuvre() {
   vue('agenda');
   const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-sstv"]'); if (b) b.click();
 }
+const AP_CONFIRME = 'Activer l’auto-pilote SSTV ?\nChaque passage des campagnes actives sera reçu tout seul : satellite suivi, poste et rotor, son, décodeur, enregistrement. Réception seulement.';
 async function apMaitreBascule() {
   if (!AP) return;
-  if (!AP.maitre && !confirm('Activer l’auto-pilote SSTV ?\nChaque passage des campagnes actives sera reçu tout seul : satellite suivi, poste et rotor, son, décodeur, enregistrement. Réception seulement.')) return;
+  if (!AP.maitre && !confirm(AP_CONFIRME)) return;
   await apMaitre(!AP.maitre);
+}
+// The Agenda's « Actif » box: turned on only once confirmed, as from the header and the palette.
+async function apMaitreCase(c) {
+  if (c.checked && !confirm(AP_CONFIRME)) { c.checked = false; return; }
+  await apMaitre(c.checked);
 }
 async function apMaitre(on) {
   await post('api/autopilote/maitre?on=' + (on ? 1 : 0));
@@ -13701,6 +13726,7 @@ async function acCharge() {
   if (ouverte('agenda')) acDessine();
 }
 let acNonLues = 0;
+function acLues() { acNonLues = 0; g('ac-nb').hidden = true; }
 const acDate = ms => new Date(ms).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 const acHmUtc = ms => new Date(ms).toISOString().slice(11, 16);
 const acHmLoc = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -13724,7 +13750,9 @@ function acReglages() {
     const k = AC_SRC[s.id], premier = !vus[k]; vus[k] = 1;
     const etat = !s.actif ? 'coupée' : s.erreur ? '<span class="err" title="' + escA(s.erreur) + '">⚠ ' + esc(s.erreur.slice(0, 40)) + '</span>' + (s.succes ? ' · lu le ' + jourHeure(s.succes) : '') :
       s.succes ? 'lu le ' + jourHeure(s.succes) : s.id === 'AMSAT' ? 'seulement pendant une SSTV/SSDV annoncée' : 'pas encore lu';
-    return '<span>' + (premier ? '<input type="checkbox" title="Cette source" ' + (r[k] ? 'checked' : '') + (r.actif ? '' : ' disabled') + ' onchange="acReglage(\'' + k + '\', this.checked)">' : '') + '</span>' +
+    // A box for each kind: it turns on or off every source of that kind (AMSAT-UK and AMSAT-F both « rss »; SatNOGS M2-3 and M2-4).
+    const memes = AC.sources.filter(x => AC_SRC[x.id] === k).map(x => x.nom);
+    return '<span>' + (premier ? '<input type="checkbox" title="' + escA(memes.length > 1 ? 'Ces ' + memes.length + ' sources ensemble : ' + memes.join(', ') : 'Cette source') + '" ' + (r[k] ? 'checked' : '') + (r.actif ? '' : ' disabled') + ' onchange="acReglage(\'' + k + '\', this.checked)">' : '') + '</span>' +
       '<span><a href="' + escA(s.lien) + '" target="_blank" rel="noopener noreferrer">' + esc(s.nom) + '</a> <span class="petit">' + etat + '</span></span>';
   }).join('');
 }
@@ -14502,7 +14530,7 @@ async function mtSuggAjoute() {
 }
 async function mtSuggAdopte() {
   if (!MT.sugg) return;
-  if (MT.d && MT.d.chaine.elements.length && !confirm('Remplacer le montage actuel par la proposition ?')) return;
+  if (MT.d && MT.d.chaine.elements.length && !confirm('Remplacer le montage actuel par la proposition ?\nSes pièces et câbles sont effacés, et avec eux les photos ajoutées à ces pièces.')) return;
   g('mt-sg-dlg').close();
   await mtEnregistre(MT.sugg.chaine, 'Montage proposé par SatMe enregistré');
 }
@@ -16038,6 +16066,8 @@ function montreErreurs(b) {
   const l = erreursServeur().concat((window.__err || []).slice(-12).map(x => 'Page : ' + x));
   popMontre(b, l.length ? l.map(x => '<div class="aide-p">' + esc(x) + '</div>').join('') : '<div class="aide-p">Aucune erreur.</div>', true);
 }
+// The header's « Écouter ici »: its words change, its headphones stay.
+function ecBouton(on) { const b = g('ec-btn'), t = b.querySelector('span'); if (t) t.textContent = on ? 'Écoute en cours' : 'Écouter ici'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
 let toastMin = 0;
 function annonce(t, tx) {
   const e = g('toast'); e.textContent = t; e.classList.toggle('tx', !!tx); e.hidden = false;

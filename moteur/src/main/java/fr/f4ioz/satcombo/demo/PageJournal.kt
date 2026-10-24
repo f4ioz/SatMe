@@ -975,6 +975,8 @@ document.addEventListener('keydown', ev => {
 window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); } });
 
 // ------------------------------------------------------------ making on the phone
+// A size in the page's language: « 12,3 Mo », « 12.3 MB ».
+function taille(o) { const en = document.documentElement.lang === 'en'; return (o / 1048576).toFixed(1).replace('.', en ? '.' : ',') + (en ? ' MB' : ' Mo'); }
 async function fabrique(quoi) {
   const b = v => v ? '1' : '0';
   const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
@@ -1003,7 +1005,7 @@ async function fabrique(quoi) {
     zone.innerHTML = '';
     if (!e.ok) { zone.appendChild(el('div', { class: 'aide', text: T.echec })); return; }
     const lien = url('/fichier', { n: j.travail });
-    zone.appendChild(el('div', { class: 'rangee' }, [el('span', { text: tf('pret', e.nom, (e.taille / 1048576).toFixed(1) + ' Mo') }),
+    zone.appendChild(el('div', { class: 'rangee' }, [el('span', { text: tf('pret', e.nom, taille(e.taille)) }),
       el('a', { href: lien, download: e.nom }, [el('button', { class: 'primaire', text: '⤓ ' + T.telecharger })])]));
     if (/\.(png|gif)$/.test(e.nom)) zone.appendChild(el('img', { src: url('/fichier', { n: j.travail, voir: '1' }), style: 'max-width:100%;max-height:50vh;margin-top:6px;border-radius:6px' }));
     else if (/\.mp4$/.test(e.nom)) zone.appendChild(el('video', { src: url('/fichier', { n: j.travail, voir: '1' }), controls: '', style: 'max-width:100%;max-height:50vh;margin-top:6px' }));
