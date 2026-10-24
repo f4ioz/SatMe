@@ -19,6 +19,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
 import org.apache.pdfbox.pdmodel.font.PDType0Font
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject
+import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.Calendar
@@ -30,7 +31,8 @@ import javax.imageio.ImageIO
  * The event's report as a PDF on SatMe-PC: [RapportPdf]'s pages drawn with
  * PDFBox (Apache-2.0), in DejaVu Sans (embedded, only the letters used): the
  * accents, ✓ ✗ ◷ ≈ ✎ ° → all in it. The charts stay lines, the pictures stay
- * the JPEGs they came as. Nothing fetched, no browser.
+ * the JPEGs they came as, the montage's drawing curves and glows (its
+ * transparencies as graphics states). Nothing fetched, no browser.
  */
 object RapportPdfPc {
 
@@ -94,11 +96,25 @@ object RapportPdfPc {
             return Toile(c)
         }
 
+        /** The transparencies used, one graphics state each (the montage's glows). */
+        private val alphas = HashMap<Pair<Int, Boolean>, PDExtendedGraphicsState>()
+
         private inner class Toile(val c: PDPageContentStream) : RapportPdf.Toile {
             private fun y(v: Float) = hauteur - v
+            // The alpha in force on this page, for strokes and for fills.
+            private var aTrait = 255
+            private var aFond = 255
             private fun couleur(argb: Int, fond: Boolean) {
                 val r = (argb shr 16 and 0xFF) / 255f; val g = (argb shr 8 and 0xFF) / 255f; val b = (argb and 0xFF) / 255f
                 if (fond) c.setNonStrokingColor(r, g, b) else c.setStrokingColor(r, g, b)
+                val a = (argb ushr 24) and 0xFF
+                if (a != (if (fond) aFond else aTrait)) {
+                    val gs = alphas.getOrPut(a to fond) {
+                        PDExtendedGraphicsState().apply { if (fond) nonStrokingAlphaConstant = a / 255f else strokingAlphaConstant = a / 255f }
+                    }
+                    c.setGraphicsStateParameters(gs)
+                    if (fond) aFond = a else aTrait = a
+                }
             }
             private fun trait(couleur: Int, epaisseur: Float, pointilles: FloatArray?, rond: Boolean) {
                 couleur(couleur, false)
@@ -167,7 +183,23 @@ object RapportPdfPc {
 
             override fun image(octets: ByteArray, x: Float, y: Float, w: Float, h: Float) {
                 val im = images.getOrPut(octets) { runCatching { PDImageXObject.createFromByteArray(doc, octets, "image") }.getOrNull() } ?: return
+                // A picture drawn whole, whatever transparency the shapes before it left.
+                if (aFond != 255) couleur(0xFF000000.toInt(), true)
                 c.drawImage(im, x, y(y + h), w, h)
+            }
+
+            override fun chemin(ops: CharArray, xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray?, rond: Boolean, fond: Int?) {
+                if (ops.isEmpty() || couleur == null && fond == null) return
+                couleur?.let { trait(it, epaisseur, pointilles, rond) }
+                fond?.let { couleur(it, true) }
+                var i = 0
+                for (o in ops) when (o) {
+                    'M' -> { c.moveTo(xy[i], y(xy[i + 1])); i += 2 }
+                    'L' -> { c.lineTo(xy[i], y(xy[i + 1])); i += 2 }
+                    'C' -> { c.curveTo(xy[i], y(xy[i + 1]), xy[i + 2], y(xy[i + 3]), xy[i + 4], y(xy[i + 5])); i += 6 }
+                    'Z' -> c.closePath()
+                }
+                peint(fond, couleur)
             }
         }
     }

@@ -173,6 +173,13 @@ object PlancheWeb {
         override fun vignette(nom: String): ByteArray? =
             galerie(ctx).firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(it, 84) }
         override fun pdf(r: RapportEvenement.Rapport): ByteArray = fr.f4ioz.satcombo.sstv.RapportPdfTelephone.pdf(r)
+        // The app's own icon, drawn small: the report's logo. (No montage here: the report keeps the simple chain.)
+        override fun logo(): ByteArray? = runCatching {
+            val d = ctx.packageManager.getApplicationIcon(ctx.applicationInfo)
+            val b = android.graphics.Bitmap.createBitmap(192, 192, android.graphics.Bitmap.Config.ARGB_8888)
+            d.setBounds(0, 0, 192, 192); d.draw(android.graphics.Canvas(b))
+            java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it); b.recycle() }.toByteArray()
+        }.getOrNull()
         override fun corrections(): ApiCorrectionSstv = fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx)
         override fun vignetteFichier(f: File): ByteArray? = PlancheRendu.charge(f, 240)?.let { jpeg(it, 84) }
     }

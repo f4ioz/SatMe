@@ -58,6 +58,23 @@ class RapportPdfPcTest {
         }
     }
 
+    @Test fun le_pdf_avec_le_dessin_du_montage_se_relit() {
+        I18n.apply("fr", "fr")
+        val o = RapportPdfPc.pdf(RapportEssai.rapport(montage = true))
+        // To look at it: SATME_RAPPORT_MONTAGE_PDF=/tmp/m.pdf ./gradlew :pc:test --tests '*RapportPdfPcTest*'
+        System.getenv("SATME_RAPPORT_MONTAGE_PDF")?.takeIf { it.isNotBlank() }?.let { java.io.File(it).writeBytes(o) }
+        Loader.loadPDF(o).use { doc ->
+            val texte = PDFTextStripper().getText(doc)
+            assertTrue(texte.contains("SSTV réception") && texte.contains("437,396 MHz") && texte.contains("IC-9700 ISS SSTV"))
+            assertTrue(texte.contains("allumé pour la réception SSTV"))
+            // Its glows as transparencies, its fonts embedded, its photo and the logo as pictures.
+            val page = doc.pages.first { p -> PDFTextStripper().apply { startPage = doc.pages.indexOf(p) + 1; endPage = startPage }.getText(doc).contains("SSTV réception") }
+            assertTrue(page.resources.extGStateNames.count() >= 2)
+            assertTrue(page.resources.xObjectNames.count { page.resources.isImageXObject(it) } >= 2)
+            for (p in doc.pages) for (n in p.resources.fontNames) assertTrue(p.resources.getFont(n).isEmbedded)
+        }
+    }
+
     @Test fun le_pdf_vient_par_la_route_du_rapport() {
         I18n.apply("fr", "fr")
         val r = RapportEssai.rapport(avecChaine = false)

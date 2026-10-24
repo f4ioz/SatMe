@@ -257,6 +257,23 @@ class PlancheEvenementTest {
         assertEquals(2, r.vignettes.size)
     }
 
+    @Test fun le_dessin_du_montage_et_le_logo_dans_la_page() {
+        I18n.apply("fr", "fr")
+        val h = RapportEvenement.html(RapportEssai.rapport(montage = true))
+        // The plan drawn twice (wide; the functions under the hardware for a narrow screen and for paper), the logo in the header.
+        assertTrue(h.contains("<svg class=\"montage large\"") && h.contains("<svg class=\"montage etroit\""))
+        assertTrue(h.contains("<img class=\"logo\" src=\"data:image/png;base64,"))
+        assertTrue(h.contains(">SSTV réception<") && h.contains("437,396 MHz · N") && h.contains("IC-9700 ISS SSTV"))
+        assertTrue(h.contains("allumé pour la réception SSTV"))
+        // The boxes of the simple chain give way to the drawing.
+        assertFalse(h.contains("class=\"piece\""))
+        assertFalse(Regex("(?i)(src|href)\\s*=\\s*\"(?!data:)").containsMatchIn(h))
+        assertFalse(h.contains("http://") || h.contains("https://") || Regex("url\\((?!#)").containsMatchIn(h))
+        assertFalse(h.contains("NaN") || h.contains("Infinity"))
+        // Without the drawing: the boxes, as before.
+        assertTrue(RapportEvenement.html(RapportEssai.rapport()).contains("class=\"piece\""))
+    }
+
     @Test fun le_rapport_html_se_fait_seul_sans_rien_chercher_dehors() {
         for (langue in listOf("fr", "en")) {
             I18n.apply(langue, langue)
@@ -269,7 +286,7 @@ class PlancheEvenementTest {
             // Nothing fetched: every src a picture inside, no link, no stylesheet, no script, no font.
             assertFalse(Regex("(?i)(src|href)\\s*=\\s*\"(?!data:)").containsMatchIn(h))
             assertFalse(h.contains("http://") || h.contains("https://"))
-            assertFalse(h.contains("<script") || h.contains("@import") || h.contains("url("))
+            assertFalse(h.contains("<script") || h.contains("@import") || Regex("url\\((?!#)").containsMatchIn(h))
             // Every number a number (no NaN or infinity in the drawings).
             assertFalse(h.contains("NaN") || h.contains("Infinity"))
         }

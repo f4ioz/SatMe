@@ -10,6 +10,9 @@ package fr.f4ioz.satcombo.sstv
 
 import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.domain.CampagneSstv
+import fr.f4ioz.satcombo.station.DessinMontage
+import fr.f4ioz.satcombo.station.FonctionsMontage
+import fr.f4ioz.satcombo.station.Montage
 import java.awt.Color
 import java.awt.GradientPaint
 import java.awt.RenderingHints
@@ -53,8 +56,43 @@ object RapportEssai {
     private fun shot(nom: String, t: Long, complete: Boolean = true) =
         SstvMeta.SstvShot(fileName = nom, satName = "ISS", timeMs = t, mode = "PD120", complete = complete)
 
-    /** The report, made on day 3 (the last day's passes still to come). */
-    fun rapport(avecChaine: Boolean = true): RapportEvenement.Rapport {
+    /** The owner's plan « IC-9700 ISS SSTV » as he drew it: pieces placed by hand, his photo shown on the rig. */
+    const val PLAN = """{"v":1,"id":"p2","nom":"IC-9700 ISS SSTV","elements":[{"x":0,"y":5,"id":"e1","m":"yagi-2m","nom":""},
+        {"x":0,"y":114,"id":"e2","m":"yagi-70cm","nom":""},{"x":25,"y":237,"id":"e3","m":"rotor-gs232","nom":""},
+        {"x":291,"ph":true,"y":46,"id":"e6","m":"ic9700","nom":""},{"x":564,"y":35,"id":"e9","m":"pc","nom":""}],
+        "liens":[{"de":"e3.moteur","note":"","c":"ROTOR","vers":"e1.mat","id":"l4"},{"de":"e2.mat","note":"","c":"ROTOR","vers":"e3.moteur","id":"l5"},
+        {"de":"e1.ant","note":"25 m","c":"COAX_PL","vers":"e6.ant144","id":"l7"},{"de":"e2.ant","note":"25m","c":"COAX_N","vers":"e6.ant432","id":"l8"},
+        {"de":"e6.usb","note":"","c":"USB","vers":"e9.usb","id":"l10"}]}"""
+
+    /** A cut-out photo (transparent PNG): a dark box with a screen, as a rig's front. */
+    fun photo(): DessinMontage.Photo {
+        val b = BufferedImage(220, 120, BufferedImage.TYPE_INT_ARGB)
+        val g = b.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.color = Color(0x23, 0x28, 0x2E); g.fillRoundRect(4, 10, 212, 100, 14, 14)
+        g.color = Color(0x0F, 0x3A, 0x44); g.fillRect(50, 24, 90, 48)
+        g.color = Color(0x55, 0x5F, 0x6A); g.fillOval(160, 40, 44, 44)
+        g.dispose()
+        return DessinMontage.Photo(ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray(), 220, 120)
+    }
+
+    /** SatMe's logo, as a small PNG would be. */
+    fun logo(): ByteArray {
+        val b = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
+        val g = b.createGraphics()
+        g.color = Color(0x0E, 0x16, 0x26); g.fillRoundRect(0, 0, 64, 64, 18, 18)
+        g.color = Color(0x38, 0xE1, 0xD4); g.fillRect(14, 26, 12, 14); g.fillRect(38, 26, 12, 14)
+        g.color = Color(0xEA, 0xF1, 0xFF); g.fillRect(27, 28, 10, 9)
+        g.dispose()
+        return ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()
+    }
+
+    /** The plan lit for the series: the 70 cm Yagi, the IC-9700 by its USB sound, SSTV decoding. */
+    fun montage(photos: Boolean = true): DessinMontage.Dessin = DessinMontage.pourSstv("IC-9700 ISS SSTV", Montage.lit(PLAN), CampagneSstv.Chaine(), 437.396,
+        FonctionsMontage.essai("sstv-carte"), if (photos) mapOf("e6" to photo()) else emptyMap())
+
+    /** The report, made on day 3 (the last day's passes still to come); with [montage] the chain drawn as Station › Montage draws it, and the logo. */
+    fun rapport(avecChaine: Boolean = true, montage: Boolean = false): RapportEvenement.Rapport {
         val ev = EvenementSstv.Evenement("c:serie-34", EvenementSstv.Genre.CAMPAGNE, "ARISS série 34 — « Les femmes dans l'espace »",
             "ISS", 25544, T0, T0 + 4 * J, 158.97)
         // Five passes a day, every 93 minutes, high and low.
@@ -91,6 +129,7 @@ object RapportEssai {
                 listOf(RapportEvenement.Etape("Postes", "IC-9700")), listOf(RapportEvenement.Etape("Son", "Carte USB du poste"))) else null,
             nomChaine = "IC-9700 satellites", pilote = listOf("poste accordé par CAT (Doppler)", "rotor suivant le satellite", "fréquence : 145.800 MHz FM"),
             planche = jpeg(1600, 1131, 0.6f, "Planche SSTV · série 34"), nomPlanche = "Série 34",
-            vignette = { vignettes[it] })
+            vignette = { vignettes[it] },
+            montage = if (avecChaine && montage) montage() else null, logo = if (montage) logo() else null)
     }
 }

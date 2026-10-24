@@ -13,6 +13,8 @@ import fr.f4ioz.satcombo.i18n.Lang
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.sstv.RapportEvenement.Statut
+import fr.f4ioz.satcombo.station.DessinMontage
+import fr.f4ioz.satcombo.station.SceneMontage
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -54,7 +56,7 @@ object RapportPdf {
         fun taille(image: ByteArray): Pair<Int, Int>?
     }
 
-    /** A page to draw on, in points from its top left corner; colours ARGB, opaque. */
+    /** A page to draw on, in points from its top left corner; colours ARGB (their alpha honoured: the montage's drawing glows). */
     interface Toile {
         /** [s] from [x] on its baseline [y]. */
         fun texte(s: String, x: Float, y: Float, taille: Float, couleur: Int, gras: Boolean = false)
@@ -66,6 +68,33 @@ object RapportPdf {
         fun cercle(x: Float, y: Float, r: Float, fond: Int?, trait: Int? = null, epaisseur: Float = 0.75f)
         /** A picture (JPEG or PNG) stretched to the box; nothing when it cannot be read. */
         fun image(octets: ByteArray, x: Float, y: Float, w: Float, h: Float)
+
+        /**
+         * A path: [ops] 'M' (move), 'L' (line), 'C' (cubic curve), 'Z'
+         * (close), their points in [xy] (two numbers for M and L, six for
+         * C). By default flattened into [ligne]s; a platform draws the
+         * curves itself when it can.
+         */
+        fun chemin(ops: CharArray, xy: FloatArray, couleur: Int?, epaisseur: Float, pointilles: FloatArray? = null, rond: Boolean = false, fond: Int? = null) {
+            val pts = ArrayList<Float>()
+            fun fin(ferme: Boolean) { if (pts.size >= 4) ligne(pts.toFloatArray(), couleur, epaisseur, pointilles, rond, ferme, fond); pts.clear() }
+            var i = 0; var x = 0f; var y = 0f
+            for (o in ops) when (o) {
+                'M' -> { fin(false); x = xy[i]; y = xy[i + 1]; i += 2; pts += x; pts += y }
+                'L' -> { x = xy[i]; y = xy[i + 1]; i += 2; pts += x; pts += y }
+                'C' -> {
+                    val (x1, y1, x2, y2) = listOf(xy[i], xy[i + 1], xy[i + 2], xy[i + 3]); val x3 = xy[i + 4]; val y3 = xy[i + 5]; i += 6
+                    for (k in 1..12) {
+                        val t = k / 12f; val u = 1 - t
+                        pts += u * u * u * x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+                        pts += u * u * u * y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+                    }
+                    x = x3; y = y3
+                }
+                'Z' -> fin(true)
+            }
+            fin(false)
+        }
     }
 
     /** The platform's document: each [page] a new A4 page, the one before finished. */
@@ -241,7 +270,8 @@ object RapportPdf {
             val e = r.evenement
             val droite = tf("rev_pdf_page", n, total)
             ecrit(droite, LARGEUR - MARGE, MARGE + 7f, 7.5f, GRIS, ancre = 2)
-            ecrit(coupe(tf("rev_titre_page", e.nom) + " · " + e.satNom, W - l(droite, 7.5f) - 12f, 7.5f, true), MARGE, MARGE + 7f, 7.5f, GRIS, true)
+            val xl = if (r.logo != null) { image(r.logo, MARGE, MARGE - 2.5f, 11f, 11f); MARGE + 15f } else MARGE
+            ecrit(coupe(tf("rev_titre_page", e.nom) + " · " + e.satNom, W - (xl - MARGE) - l(droite, 7.5f) - 12f, 7.5f, true), xl, MARGE + 7f, 7.5f, GRIS, true)
             ligne(floatArrayOf(MARGE, MARGE + 11f, LARGEUR - MARGE, MARGE + 11f), TRAIT, 0.6f)
             val pied = HAUTEUR - MARGE + 2f
             ligne(floatArrayOf(MARGE, pied - 9f, LARGEUR - MARGE, pied - 9f), TRAIT, 0.6f)
@@ -261,7 +291,7 @@ object RapportPdf {
             out += tableau()
             out += ciels()
             out += horaire()
-            r.chaine?.let { out += chaine(it) }
+            if (r.montage != null) out += montage(r.montage) else r.chaine?.let { out += chaine(it) }
             out += pied()
             return out
         }
@@ -271,7 +301,9 @@ object RapportPdf {
         private fun tete(): Bloc {
             val e = r.evenement
             val wd = 150f
-            val wg = W - 28f - wd
+            // The logo left of the title, when there is one.
+            val xg = MARGE + 14f + if (r.logo != null) 52f else 0f
+            val wg = W - 28f - wd - (xg - MARGE - 14f)
             val titre = lignes(e.nom, wg, 17f, true)
             val sous = lignes(e.satNom + (if (e.catnum > 0) " · NORAD ${e.catnum}" else "") + " · " +
                 RapportEvenement.jour(e.debutMs) + " " + RapportEvenement.hm(e.debutMs) + " → " + RapportEvenement.jour(e.finMs) + " " +
@@ -279,9 +311,10 @@ object RapportPdf {
             val h = 14f + 10f + titre.size * 20f + sous.size * 11f + 8f
             return Bloc(maxOf(h, 66f), 0) { y ->
                 rect(MARGE, y, W, maxOf(h, 66f), TETE, rayon = 9f)
-                ecrit(t("rev_genre_" + EvenementSstv.genreCle(e.genre)).uppercase(), MARGE + 14f, y + 18f, 7.5f, AMBRE, true)
-                titre.forEachIndexed { i, s -> ecrit(s, MARGE + 14f, y + 38f + i * 20f, 17f, BLANC, true) }
-                sous.forEachIndexed { i, s -> ecrit(s, MARGE + 14f, y + 38f + (titre.size - 1) * 20f + 15f + i * 11f, 8.5f, TETE_SOUS) }
+                r.logo?.let { image(it, MARGE + 12f, y + (maxOf(h, 66f) - 42f) / 2, 42f, 42f) }
+                ecrit(t("rev_genre_" + EvenementSstv.genreCle(e.genre)).uppercase(), xg, y + 18f, 7.5f, AMBRE, true)
+                titre.forEachIndexed { i, s -> ecrit(s, xg, y + 38f + i * 20f, 17f, BLANC, true) }
+                sous.forEachIndexed { i, s -> ecrit(s, xg, y + 38f + (titre.size - 1) * 20f + 15f + i * 11f, 8.5f, TETE_SOUS) }
                 val xd = LARGEUR - MARGE - 14f
                 var yd = y + 22f
                 if (r.station.indicatif.isNotBlank()) { ecrit(r.station.indicatif, xd, yd + 4f, 15f, BLANC, true, ancre = 2); yd += 17f }
@@ -695,6 +728,67 @@ object RapportPdf {
                 for (s in r.pilote) out += paragraphe("•  $s", c, 8f, avant = 1f)
             }
             return out
+        }
+
+        /**
+         * The chain as Station › Montage draws it: the plan lit for the
+         * event, as shapes on the page (the same as the web page's SVG),
+         * the functions under the hardware when side by side would be too
+         * small to read.
+         */
+        private fun montage(d: DessinMontage.Dessin): List<Bloc> {
+            val c = carte()
+            val out = arrayListOf(titre(t("rev_chaine"), c, d.nom))
+            val hMax = BAS - HAUT - 2 * P - 17f - 46f
+            fun k(s: SceneMontage.Scene) = minOf(WC / s.l.toFloat(), hMax / s.h.toFloat(), 1f)
+            val cote = DessinMontage.scene(d)
+            val sc = if (k(cote) >= 0.5f) cote else DessinMontage.scene(d, empile = true)
+            val e = k(sc)
+            val hs = sc.h.toFloat() * e
+            out += Bloc(hs + 4f, c) { y -> scene(sc, MARGE + P + (WC - sc.l.toFloat() * e) / 2, y + 2f, e) }
+            out += paragraphe(tf("rev_montage_legende", d.nom, d.quoi), c, 7.2f, GRIS, avant = 4f)
+            if (r.pilote.isNotEmpty()) {
+                out += paragraphe(t("rev_pilote_titre"), c, 8.5f, ENCRE, true, avant = 6f)
+                for (s in r.pilote) out += paragraphe("•  $s", c, 8f, avant = 1f)
+            }
+            return out
+        }
+
+        /** [s] drawn at ([x0], [y0]), [k] points a unit. */
+        private fun Toile.scene(s: SceneMontage.Scene, x0: Float, y0: Float, k: Float) {
+            fun X(v: Double) = x0 + v.toFloat() * k
+            fun Y(v: Double) = y0 + v.toFloat() * k
+            fun f(p: SceneMontage.Peinture?) = when (p) { is SceneMontage.Uni -> p.argb; is SceneMontage.Degrade -> p.moyenne; null -> null }
+            fun ti(t: DoubleArray?) = t?.map { (it * k).toFloat().coerceAtLeast(0.05f) }?.toFloatArray()
+            rect(x0, y0, s.l.toFloat() * k, s.h.toFloat() * k, s.fond, rayon = 10f * k)
+            for (fo in s.formes) when (fo) {
+                is SceneMontage.Rect -> rect(X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k, fo.r.toFloat() * k, ti(fo.tirets))
+                is SceneMontage.Cercle -> cercle(X(fo.x), Y(fo.y), fo.r.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k)
+                is SceneMontage.Chemin -> {
+                    val ops = CharArray(fo.ops.size); val xy = ArrayList<Float>()
+                    fo.ops.forEachIndexed { i, o ->
+                        when (o) {
+                            is SceneMontage.M -> { ops[i] = 'M'; xy += X(o.x); xy += Y(o.y) }
+                            is SceneMontage.L -> { ops[i] = 'L'; xy += X(o.x); xy += Y(o.y) }
+                            is SceneMontage.Cu -> { ops[i] = 'C'; xy += X(o.x1); xy += Y(o.y1); xy += X(o.x2); xy += Y(o.y2); xy += X(o.x); xy += Y(o.y) }
+                            else -> ops[i] = 'Z'
+                        }
+                    }
+                    chemin(ops, xy.toFloatArray(), fo.trait, fo.ep.toFloat() * k, ti(fo.tirets), fo.rond, f(fo.fond))
+                }
+                is SceneMontage.Texte -> {
+                    val tt = fo.taille.toFloat() * k
+                    ecrit(if (fo.max > 0) coupe(fo.s, fo.max.toFloat() * k, tt, fo.gras) else fo.s, X(fo.x), Y(fo.y), tt, fo.couleur, fo.gras, fo.ancre)
+                }
+                is SceneMontage.Image -> {
+                    // The page's glow round a cut-out photo: a soft frame of its colour.
+                    fo.lueur?.let { c ->
+                        for ((e, a) in listOf(6f to .14, 3.5f to .22, 1.6f to .4))
+                            rect(X(fo.x) - 2f * k, Y(fo.y) - 2f * k, (fo.l.toFloat() + 4f) * k, (fo.h.toFloat() + 4f) * k, null, SceneMontage.alpha(c, a), e * k, 6f * k)
+                    }
+                    image(fo.octets, X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k)
+                }
+            }
         }
 
         private fun pied(): Bloc {

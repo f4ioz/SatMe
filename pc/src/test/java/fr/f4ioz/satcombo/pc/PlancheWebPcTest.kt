@@ -18,6 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.awt.Color
@@ -102,6 +103,35 @@ class PlancheWebPcTest {
         assertEquals(4, r.getInt("cases"))
         assertTrue(File(dossier, "planches").listFiles()!!.any { it.name.startsWith("fond_") })
         assertEquals("400 Bad Request", pl.lit("/importe", emptyMap(), "GET", o).statut)
+    }
+
+    @Test
+    fun le_rapport_dessine_le_plan_du_montage_ou_la_chaine_simple() {
+        val pl = planche()
+        // The station's montage: the owner's plan, his photo of the rig (cut out) shown in place of the drawing.
+        File(dossier, "montage.json").writeText(fr.f4ioz.satcombo.sstv.RapportEssai.PLAN)
+        val photos = File(dossier, "montage-photos/p2").apply { mkdirs() }
+        ImageIO.write(BufferedImage(1000, 550, BufferedImage.TYPE_INT_RGB), "jpg", File(photos, "e6-ic9700.jpg"))
+        val ph = BufferedImage(1000, 550, BufferedImage.TYPE_INT_ARGB).apply { createGraphics().apply { color = Color(40, 44, 50); fillRect(50, 50, 900, 450) } }
+        ImageIO.write(ph, "png", File(photos, "e6-ic9700-detoure.png"))
+        pl.montage = MontagePc(dossier, { fr.f4ioz.satcombo.station.ActiviteMontage.Lectures() })
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "grille")).corps)).getString("id")
+        pl.lit("/remplit", mapOf("id" to id))
+        val plans = JSONArray(String(pl.lit("/plans", mapOf("id" to id)).corps))
+        assertEquals("p2", plans.getJSONObject(0).getString("id"))
+        assertTrue(plans.getJSONObject(0).getBoolean("dessin"))
+        val h = String(pl.lit("/rapport", mapOf("id" to id, "chaine" to "1")).corps)
+        assertTrue(h.contains("<svg class=\"montage large\"") && h.contains("IC-9700 ISS SSTV") && h.contains(">SSTV réception<"))
+        assertTrue(h.contains("<img class=\"logo\""))
+        // The photo inside, made small; nothing of the station's own address.
+        assertTrue(h.contains("<image") && h.contains("data:image/png;base64,"))
+        assertFalse(h.contains("http://") || h.contains("https://") || h.contains("api/montage"))
+        // « Chaîne simple »: the boxes, no drawing.
+        val s = String(pl.lit("/rapport", mapOf("id" to id, "chaine" to "1", "vue" to "simple")).corps)
+        assertFalse(s.contains("<svg class=\"montage")); assertTrue(s.contains("class=\"piece\""))
+        // The PDF with the drawing.
+        val pdf = pl.lit("/rapport", mapOf("id" to id, "chaine" to "1", "format" to "pdf")).corps
+        org.apache.pdfbox.Loader.loadPDF(pdf).use { assertTrue(org.apache.pdfbox.text.PDFTextStripper().getText(it).contains("SSTV réception")) }
     }
 
     private fun png(b: BufferedImage) = ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()
