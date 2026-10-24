@@ -129,6 +129,15 @@ class ComparaisonSstvReelTest {
         return Img(px, 320, 240, l, complete ?: (l >= 240))
     }
 
+    /** QSSTV paints rows it never received one flat grey: those trailing uniform rows are taken as not received (black, cut). */
+    private fun sansFond(i: Img): Img {
+        var l = i.lignes
+        while (l > 1) { val r = l - 1; val c = i.px[r * i.w]; if ((0 until i.w).all { i.px[r * i.w + it] == c }) l-- else break }
+        if (l == i.lignes) return i
+        val px = i.px.copyOf(); for (k in l * i.w until px.size) px[k] = 0xFF000000.toInt()
+        return Img(px, i.w, i.h, l, false)
+    }
+
     private fun copie(i: Img) = FusionSstv.Copie(i.px, i.w, i.h, i.lignes)
     private fun analyse(i: Img) = ClassementSstv.analyse(i.px, i.w, i.lignes, 240, i.complete)
 
@@ -192,7 +201,7 @@ class ComparaisonSstvReelTest {
             v["satme_redec"] = if (s.has("redec_lignes")) lit(File(out, "satme-redec/$stem.png"), s.getInt("redec_lignes"), s.getBoolean("redec_complete")) else null
             v["ow"] = o?.let { lit(File(out, "ow-images/" + it.getString("png")), it.getInt("decodedLines"), it.getBoolean("complete")) }
             v["ow_post"] = v["ow"]?.let { Img(CorrectionSstv.corrige(SstvNettoyage.nettoie(it.px, 320, 240, it.lignes), 320, 240, it.lignes), 320, 240, it.lignes, it.complete) }
-            v["qsstv"] = qs[stem]?.let { lit(File(out, "qsstv-images/" + it.getString("png")), complete = it.optBoolean("complete", false)) }
+            v["qsstv"] = qs[stem]?.let { lit(File(out, "qsstv-images/" + it.getString("png")), complete = it.optBoolean("complete", false))?.let(::sansFond) }
             P(stem, cle(stem)!!, stem.endsWith("_r2"), v)
         }
         val methodes = listOf("live_saved", "satme_live", "satme_redec", "ow", "ow_post", "qsstv")
@@ -324,6 +333,12 @@ class ComparaisonSstvReelTest {
             csv.append(listOf(dec, o.getString("wav"), o.optInt("index"), o.optString("mode"), vis, String.format(java.util.Locale.ROOT, "%.1f", startS), String.format(java.util.Locale.ROOT, "%.1f", endS),
                 i.lignes, complete, a.note, a.glissements, String.format(java.util.Locale.ROOT, "%.3f", a.abimees), String.format(java.util.Locale.ROOT, "%.3f", a.manque), png.name).joinToString(",")).append('\n')
         }
+        fun ligneQ(dec: String, o: JSONObject, png: File, complete: Boolean, startS: Double, endS: Double, vis: String) {
+            val i = lit(png, null, complete)?.let(::sansFond) ?: return
+            val a = analyse(i)
+            csv.append(listOf(dec, o.getString("wav"), o.optInt("index"), o.optString("mode"), vis, String.format(java.util.Locale.ROOT, "%.1f", startS), String.format(java.util.Locale.ROOT, "%.1f", endS),
+                i.lignes, complete, a.note, a.glissements, String.format(java.util.Locale.ROOT, "%.3f", a.abimees), String.format(java.util.Locale.ROOT, "%.3f", a.manque), png.name).joinToString(",")).append('\n')
+        }
         for (o in jsonl(File(out, "satme-passes.jsonl"))) {
             val l = o.getInt("lignes"); val st = o.getDouble("startS")
             ligne("satme_live", o, File(out, "satme-passes/" + o.getString("png")), l, o.getBoolean("complete"), st, st + l * 0.150 + 0.3, o.getBoolean("vis").toString())
@@ -331,7 +346,7 @@ class ComparaisonSstvReelTest {
         for (o in jsonl(File(out, "ow-passes/oscarwatch.jsonl")).filter { !it.optBoolean("summary") })
             ligne("ow", o, File(out, "ow-passes/" + o.getString("png")), o.getInt("decodedLines"), o.getBoolean("complete"), o.getDouble("startS"), o.getDouble("endS"), o.getBoolean("fromVis").toString())
         for (o in jsonl(File(out, "qsstv-passes/qsstv.jsonl")))
-            ligne("qsstv", o, File(out, "qsstv-passes/" + o.getString("png")), null, o.optBoolean("complete", false), o.optDouble("startS", Double.NaN), o.getDouble("endS"), "")
+            ligneQ("qsstv", o, File(out, "qsstv-passes/" + o.getString("png")), o.optBoolean("complete", false), o.optDouble("startS", Double.NaN), o.getDouble("endS"), "")
         File(out, "passes-images.csv").writeText(csv.toString())
         println("passes ok")
     }
