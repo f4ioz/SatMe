@@ -34,7 +34,7 @@ import java.io.File
  *
  * Routes under `/planche`: `/evenements?id=`, `/evenement?id=&ev=` (""
  * chosen by itself again, « aucun » none), `/galerie?id=`,
- * `/remplit-diapos?id=&tous=&reinit=`, `/relance?oublie=`, `/analyse`,
+ * `/remplit-diapos?id=&tous=&sat=&reinit=`, `/relance?oublie=`, `/analyse`,
  * `/case?id=&i=` (a box's versions), `/fusionner?id=&i=`, `/version-vignette?f=`,
  * `/plans?id=`, `/rapport?id=&chaine=&vue=&plan=&dl=&format=` (`pdf`: the PDF, else the
  * page; `vue=simple`: the chain in boxes, else the montage's drawing when
@@ -193,15 +193,29 @@ object ApiPlancheEvenement {
     }
 
     /**
-     * « Fill by slide »: the event's groups (or the whole gallery's with [tous])
-     * in slide order; the choices made by hand kept unless [reinitialise].
+     * « Fill by slide »: the event's groups (or the whole gallery's with [tous],
+     * or one satellite's with [sat], as « Fill » takes them) in slide order;
+     * the choices made by hand kept unless [reinitialise].
      */
-    fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean, reinitialise: Boolean = false): Planche.ParDiapo {
+    fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean, reinitialise: Boolean = false, sat: String = ""): Planche.ParDiapo {
         val e = src.classement.etat(src.dossier, src.images(), attendre = true)
         val ev = m.evenement
-        return if (ev != null && !tous) Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, reinitialise)
-            else Planche.remplitParDiapo(m, e.groupes, 12, reinitialise)
+        return when {
+            sat.isNotBlank() -> groupesDe(e.groupes, sat).let { g -> Planche.remplitParDiapo(m, g, totalDe(g), reinitialise) }
+            ev != null && !tous -> Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, reinitialise)
+            else -> Planche.remplitParDiapo(m, e.groupes, 12, reinitialise)
+        }
     }
+
+    /** One satellite's groups ([sat], as the gallery names it): only its pictures, the others' groups left out. */
+    fun groupesDe(groupes: List<ClassementSstv.Groupe>, sat: String): List<ClassementSstv.Groupe> = groupes.mapNotNull { g ->
+        val l = g.images.filter { it.satName == sat }
+        when { l.isEmpty() -> null; l.size == g.images.size -> g; else -> g.copy(images = l, notes = g.notes.filterKeys { k -> l.any { it.fileName == k } }) }
+    }
+
+    /** How many slides the series has: what its numbered groups say, else 12. */
+    fun totalDe(groupes: List<ClassementSstv.Groupe>): Int =
+        groupes.filter { it.diapo > 0 && it.origine != ClassementSstv.Origine.AUCUNE }.maxOfOrNull { it.total }?.takeIf { it > 0 } ?: 12
 
     /**
      * The event's report: its pictures, passes, the sheet [m] (if any), the
@@ -226,7 +240,7 @@ object ApiPlancheEvenement {
         }
         val ch = if (avecChaine) runCatching { src.chaine(pl?.id ?: plan) }.getOrNull() else null
         return RapportEvenement.construit(
-            evenement = ev, p = p, passes = passes, station = src.station(), elMin = src.elMin(), maintenant = now,
+            evenement = ev, p = p, passes = passes, station = station(src.station(), m), elMin = src.elMin(), maintenant = now,
             positions = positions,
             geometrie = RapportEvenement.Geometrie(passes.isNotEmpty(), if (ev.catnum > 0) src.epoqueElements(ev.catnum) else null),
             traces = src.traces().filter { campagne == null || it.campagne == campagne.id },
@@ -236,6 +250,10 @@ object ApiPlancheEvenement {
             vignette = { runCatching { src.vignette(it) }.getOrNull() }, analyses = e.analyses,
             montage = montage, logo = runCatching { src.logo() }.getOrNull())
     }
+
+    /** The station the report names: the callsign and locator typed on the sheet (« Textes »), else the station's. */
+    fun station(s: RapportEvenement.Station, m: Planche.Modele?): RapportEvenement.Station =
+        if (m == null) s else s.copy(indicatif = m.indicatif.trim().ifBlank { s.indicatif }, locator = m.locator.trim().ifBlank { s.locator })
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
 
@@ -271,7 +289,7 @@ object ApiPlancheEvenement {
         "/remplit-diapos" -> {
             val m = modele(p("id"))?.let { assure(it, src, rangement, verrou) }
             if (m == null) null else {
-                val r = remplitParDiapo(m, src, p("tous") == "1", p("reinit") == "1")
+                val r = remplitParDiapo(m, src, p("tous") == "1", p("reinit") == "1", p("sat"))
                 synchronized(verrou) { rangement.enregistre(r.modele) }
                 json(JSONObject().put("ok", true).put("cases", r.modele.cases.size).put("manquantes", JSONArray(r.manquantes))
                     .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases).put("gardes", r.gardes))

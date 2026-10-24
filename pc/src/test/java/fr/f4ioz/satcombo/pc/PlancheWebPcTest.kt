@@ -270,4 +270,42 @@ class PlancheWebPcTest {
         assertEquals("404 Not Found", pl.lit("/modele-exporte", mapOf("id" to "../x")).statut)
         assertEquals(0, JSONObject(String(pl.lit("/liste").corps)).getJSONArray("modeles").length())
     }
+
+    @Test
+    fun la_page_servie_par_le_pc_parle_du_pc_pas_du_telephone() {
+        fr.f4ioz.satcombo.i18n.I18n.apply("fr", "fr")
+        val h = planche().page()
+        assertTrue(h.contains("Enregistré sur le PC")); assertTrue(h.contains("Aucune image SSTV sur ce PC."))
+        for (x in listOf("par le téléphone", "sur le téléphone", "au téléphone"))
+            assertEquals(x, "", Regex(".{0,80}$x.{0,40}").find(h)?.value.orEmpty())
+        // The phone's own page keeps its words.
+        assertTrue(fr.f4ioz.satcombo.demo.PagePlanche.html().contains("Enregistré sur le téléphone"))
+    }
+
+    @Test
+    fun les_textes_saisis_sont_gardes_le_nom_de_fichier_est_sur_et_une_planche_se_supprime() {
+        val pl = planche()
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "grille")).corps)).getString("id")
+        pl.lit("/remplit", mapOf("id" to id))
+        val texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertEquals("200 OK", pl.lit("/enregistre", mapOf("id" to id), "POST", (texte + "indicatif=F0ABC\ndates=23/10/2026\n").toByteArray()).statut)
+        // Read again (a reload): what was typed is the sheet's.
+        val relu = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertTrue(relu.contains("indicatif=F0ABC")); assertTrue(relu.contains("dates=23/10/2026"))
+        // The date typed with « / »: never a folder in the file's name.
+        val png = pl.lit("/exporte", mapOf("id" to id))
+        assertTrue(png.entetes, png.entetes.contains("SatMe_Planche_ISS_23102026.png"))
+        // More boxes than the station keeps: the first CASES_MAX.
+        val trop = relu + (1..70).joinToString("") { "case=0.1;0.1;0.1;0.1\n" }
+        pl.lit("/enregistre", mapOf("id" to id), "POST", trop.toByteArray())
+        assertEquals(fr.f4ioz.satcombo.sstv.Planche.CASES_MAX,
+            fr.f4ioz.satcombo.sstv.Planche.lit(id, JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte"))!!.cases.size)
+        // Deleted: only by POST; the sheet gone, the SSTV pictures kept.
+        val avant = File(dossier, "sstv").list()!!.toSet()
+        assertEquals("400 Bad Request", pl.lit("/supprime", mapOf("id" to id)).statut)
+        assertEquals("200 OK", pl.lit("/supprime", mapOf("id" to id), "POST").statut)
+        assertEquals(0, JSONObject(String(pl.lit("/liste").corps)).getJSONArray("modeles").length())
+        assertEquals(avant, File(dossier, "sstv").list()!!.toSet())
+        assertEquals("404 Not Found", pl.lit("/supprime", mapOf("id" to "../sstv"), "POST").statut)
+    }
 }

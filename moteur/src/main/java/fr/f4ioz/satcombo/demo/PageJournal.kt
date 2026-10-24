@@ -36,7 +36,7 @@ object PageJournal {
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
         "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc",
-        "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide")
+        "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide", "pj_n_echec", "pj_supprimer", "pj_supprimer_q")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -215,14 +215,30 @@ async function entrer() {
   if (j.ok) { cle = j.cle; localStorage.setItem('satme-cle', cle); demarre(); } else g('porteMsg').textContent = T.code_faux;
 }
 
-// ------------------------------------------------------------ the page's options (kept on this PC)
-let O = {};
+// ------------------------------------------------------------ the page's options (kept in this browser)
+// Only what was changed here is kept (OM); the rest follows the station's journal settings (OD), read at each opening:
+// a setting changed there reaches this page unless it was changed here.
+let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
-  let gardees = {}; try { gardees = JSON.parse(localStorage.getItem('satme-journal') || '{}'); } catch (e) {}
-  O = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
-    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false }, defauts, gardees);
+  OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
+    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage' });
+  for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
+  OM = {};
+  try {
+    const l = localStorage.getItem('satme-journal-choix');
+    if (l) OM = JSON.parse(l) || {};
+    else {
+      // The page's older way kept every option: of those, only what differs from the station's now is taken as a choice.
+      const v = JSON.parse(localStorage.getItem('satme-journal') || '{}');
+      for (const k in v) if (k in OD && v[k] !== OD[k] && !(k in defauts)) OM[k] = v[k];
+    }
+  } catch (e) {}
+  O = Object.assign({}, OD, OM);
 }
-function garde() { try { localStorage.setItem('satme-journal', JSON.stringify(O)); } catch (e) {} }
+function garde() {
+  for (const k in O) { if (O[k] === OD[k]) delete OM[k]; else OM[k] = O[k]; }
+  try { localStorage.setItem('satme-journal-choix', JSON.stringify(OM)); localStorage.removeItem('satme-journal'); } catch (e) {}
+}
 
 // ------------------------------------------------------------ times
 let utc = true;
@@ -242,7 +258,7 @@ async function demarre() {
   utc = l.utc; passages = l.passages;
   cadreSstv = lisCadre(r.cadreSstv); tailleSstv = r.tailleSstv || 0;
   chargeOptions({ accelere: r.accelere, rapide: r.rapide, avant: r.avant, apres: r.apres, surActivite: r.surActivite, sstv: r.sstv,
-    fiches: r.fiches, smetre: r.smetre, freq: r.freq, locator: r.locator, res: r.res, ouverture: r.ouverture, recap: r.recap });
+    fiches: r.fiches, smetre: r.smetre, freq: r.freq, locator: r.locator, res: r.res, ouverture: r.ouverture, recap: r.recap, paquetQsos: r.paquetQsos });
   const sats = [...new Set(passages.map(p => p.sat))].sort();
   const f = g('filtre'); f.innerHTML = '';
   f.appendChild(el('option', { value: '', text: T.tous })); sats.forEach(s => f.appendChild(el('option', { value: s, text: s })));
@@ -286,6 +302,13 @@ async function ouvre(id) {
   lire('/fiches', { id: id }).then(f => { if (P && P.id === id) { fiches = f; maj(); } }).catch(() => {});
   chargeSegments();
 }
+async function supprimePassage() {
+  if (!P || !confirm(tf('supprimer_q', P.sat + ' · ' + jour(P.de)))) return;
+  let j = null; try { j = await envoie('/supprime', { id: P.id }); } catch (e) { return; }
+  if (!j || !j.ok) { g('message').textContent = T.hors_ligne; return; }
+  arrete(); P = null; g('vue').innerHTML = ''; g('vue').appendChild(el('p', { class: 'aide', text: T.choisir }));
+  const l = await lire('/liste'); passages = l.passages; dessineListe();
+}
 function optionsSegments() { return { id: P.id, avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: O.surActivite ? '1' : '0' }; }
 function chargeSegments() { if (!P) return; const id = P.id; lire('/segments', optionsSegments()).then(s => { if (P && P.id === id) { segments = s; dessineFrise(); } }).catch(() => {}); }
 function construitVue() {
@@ -293,7 +316,9 @@ function construitVue() {
   v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: P.sat }),
     el('span', { class: 'd', text: jour(P.de) + ' · ' + tf('duree', duree(P.a - P.de), P.el) + (P.loc ? ' · ' + P.loc : '') + (P.tp ? ' · ' + P.tp : '') })].concat(
     // The observation report (SatMe-PC): its own page, beside the replay.
-    window.SATME_PC ? [el('a', { class: 'discret', id: 'lienRapport', target: '_blank', href: url('/rapport', { id: P.id }), text: T.rapport })] : [])));
+    window.SATME_PC ? [el('a', { class: 'discret', id: 'lienRapport', target: '_blank', href: url('/rapport', { id: P.id }), text: T.rapport })] : []).concat(
+    // Taken out of the journal, asked first: its recordings, pictures and contacts stay.
+    [el('button', { class: 'discret', style: 'color:var(--rose)', text: T.supprimer, onclick: supprimePassage })])));
   const mo = el('div', { class: 'moment' }, [
     el('div', { class: 'heure', id: 'heure' }), el('div', { class: 'val', id: 'angles' }), el('div', { class: 'val', id: 'rx' }),
     el('div', { class: 'smetre', id: 'smetre' }), el('div', { class: 'graduation', id: 'grad' }), el('div', { id: 'lectureS' }),
@@ -553,7 +578,7 @@ async function nouveau() {
 function panneauAjouter(p) {
   // Done: said where it stays seen (the panel is drawn again with the pass), the pass and the list read again.
   const fin = async (j, msg, quoi) => {
-    if (!j.ok) { msg.textContent = j.erreur || T.echec; msg.style.color = 'var(--ambre)'; return; }
+    if (!j.ok) { msg.textContent = j.erreur || tf('n_echec', j.raison || '?'); msg.style.color = 'var(--ambre)'; return; }
     ajoutFait = (quoi ? quoi + ' — ' : '') + T.n_fait + ' · ' + hms(Date.now()).slice(0, 5);
     const l = await lire('/liste'); passages = l.passages; ouvre(P.id);
   };
@@ -950,12 +975,15 @@ document.addEventListener('keydown', ev => {
 window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); } });
 
 // ------------------------------------------------------------ making on the phone
+// A size in the page's language: « 12,3 Mo », « 12.3 MB ».
+function taille(o) { const en = document.documentElement.lang === 'en'; return (o / 1048576).toFixed(1).replace('.', en ? '.' : ',') + (en ? ' MB' : ' Mo'); }
 async function fabrique(quoi) {
   const b = v => v ? '1' : '0';
   const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
-  if (quoi === 'paquet' && O.paquetQsos) p.contacts = '1';
+  // The box as it is here (ticked or not), whatever the station's setting.
+  if (quoi === 'paquet') p.contacts = b(O.paquetQsos);
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { p.de = Math.round(sel[0]); p.a = Math.round(sel[1]); p.titre = titre; }
   // The map as framed here (centre, zoom, the width it is shown at): the export shows the same.
   if (O.vue === 'carte') { const c = g('carte'); p.mcx = mcx; p.mcy = mcy; p.zc = zc; p.cw = c.clientWidth; p.ch = c.clientHeight;
@@ -977,7 +1005,7 @@ async function fabrique(quoi) {
     zone.innerHTML = '';
     if (!e.ok) { zone.appendChild(el('div', { class: 'aide', text: T.echec })); return; }
     const lien = url('/fichier', { n: j.travail });
-    zone.appendChild(el('div', { class: 'rangee' }, [el('span', { text: tf('pret', e.nom, (e.taille / 1048576).toFixed(1) + ' Mo') }),
+    zone.appendChild(el('div', { class: 'rangee' }, [el('span', { text: tf('pret', e.nom, taille(e.taille)) }),
       el('a', { href: lien, download: e.nom }, [el('button', { class: 'primaire', text: '⤓ ' + T.telecharger })])]));
     if (/\.(png|gif)$/.test(e.nom)) zone.appendChild(el('img', { src: url('/fichier', { n: j.travail, voir: '1' }), style: 'max-width:100%;max-height:50vh;margin-top:6px;border-radius:6px' }));
     else if (/\.mp4$/.test(e.nom)) zone.appendChild(el('video', { src: url('/fichier', { n: j.travail, voir: '1' }), controls: '', style: 'max-width:100%;max-height:50vh;margin-top:6px' }));

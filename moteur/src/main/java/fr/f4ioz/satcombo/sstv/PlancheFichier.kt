@@ -122,8 +122,8 @@ object PlancheFichier {
         fun dur(l: List<Planche.Texte>) = if (indicatif.isNullOrBlank()) l else l.map {
             if (it.champ == Planche.Champ.INDICATIF) it.copy(champ = Planche.Champ.LIBRE, libre = indicatif.trim().take(40)) else it
         }
-        // The version chosen for each box travels (« Fusion » in box 3), never which picture was in it.
-        return m.copy(images = emptyMap(), textes = dur(m.textes), textesOrigine = dur(m.textesOrigine),
+        // The version chosen for each box travels (« Fusion » in box 3), never which picture was in it — nor the texts typed for this station.
+        return m.copy(images = emptyMap(), textes = dur(m.textes), textesOrigine = dur(m.textesOrigine), indicatif = "", locator = "", dates = "",
             versions = m.versions.mapValues { it.value.copy(copieMain = false) }.filterValues { !it.auto })
     }
 

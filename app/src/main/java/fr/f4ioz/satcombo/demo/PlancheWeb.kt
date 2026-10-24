@@ -97,10 +97,10 @@ object PlancheWeb {
                         p: (String) -> String): PlancheRendu.Valeurs {
         val reglages = SettingsStore(ctx)
         return PlancheRendu.Valeurs(
-            indicatif = p("ind").ifBlank { reglages.callsign },
+            indicatif = p("ind").ifBlank { m.indicatif }.ifBlank { reglages.callsign },
             nom = p("nom").ifBlank { reglages.plancheNom },
-            locator = p("loc").ifBlank { Planche.locatorDominant(places.values.map { it.second.locator }).ifBlank { SstvHub.qthLocator } },
-            dates = p("dates").ifBlank { Planche.dates(places.values.map { it.second.timeMs }) },
+            locator = p("loc").ifBlank { m.locator }.ifBlank { Planche.locatorDominant(places.values.map { it.second.locator }).ifBlank { SstvHub.qthLocator } },
+            dates = p("dates").ifBlank { m.dates }.ifBlank { Planche.dates(places.values.map { it.second.timeMs }) },
             titre = m.titre.ifBlank { places.values.firstOrNull()?.second?.satName?.let { "$it · SSTV" } ?: "SSTV" })
     }
 
@@ -242,6 +242,14 @@ object PlancheWeb {
                     json("{\"ok\":true}")
                 }
 
+                // A sheet deleted (asked on the page first): its file, its background and patches no other uses — never an SSTV picture.
+                "/supprime" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(r, p("id")) ?: return NON
+                    synchronized(this) { r.supprime(m) }
+                    json("{\"ok\":true}")
+                }
+
                 // A new template, generic.
                 "/nouveau" -> {
                     val n = r.modeles().size + 1
@@ -372,7 +380,7 @@ object PlancheWeb {
                         val b = PlancheRendu.dessine(m, fond, fond?.width ?: 2400, imgs, v, logo,
                             PlancheRendu.chargeDecor(r, m, 4000), PlancheRendu.chargeEcussons(r, m, 1600))
                         val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
-                        val jour = v.dates.take(10).replace("-", "").ifBlank { "planche" }
+                        val jour = Planche.jourFichier(v.dates)
                         val png = ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
                         ReponseWeb("200 OK", "image/png", png,
                             "Content-Disposition: attachment; filename=\"SatMe_Planche_${sat}_$jour.png\"\r\n")

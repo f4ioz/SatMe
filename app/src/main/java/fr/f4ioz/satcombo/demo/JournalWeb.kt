@@ -129,8 +129,9 @@ object JournalWeb {
                 }
                 "image" -> JournalRendu.png(ctx, scene(ctx, j, e, surCarte, null, null, true, p), instant)
                 "gif" -> JournalRendu.gif(ctx, scene(ctx, j, e, surCarte, moment, titre, false, p)) { travail.progres = it }
-                // contacts=1 (the PC's SatMe, the same operator's): the pass's contacts in it whatever the setting.
-                "paquet" -> if (p("contacts") == "1") j.paquet(e, avecContacts = true) else j.paquet(e)
+                // contacts=1 (the PC's SatMe, the same operator's, or the page's box ticked): the pass's contacts in it
+                // whatever the setting; contacts=0 (the page's box unticked): without them; else the setting.
+                "paquet" -> j.paquet(e, avecContacts = opt(p, "contacts", j.paquetQsos()))
                 else -> JournalRendu.video(ctx, scene(ctx, j, e, surCarte, moment, titre, false, p),
                     if (opt(p, "avecSon", true)) morceaux else emptyList()) { travail.progres = it }
             }
@@ -180,7 +181,7 @@ object JournalWeb {
      */
     fun sert(route: String, p: (String) -> String): ReponseWeb = sert(route, p) { false }
 
-    fun sert(route: String, p: (String) -> String, corps: (File) -> Boolean): ReponseWeb {
+    fun sert(route: String, p: (String) -> String, methode: String = "GET", corps: (File) -> Boolean): ReponseWeb {
         val ctx = app ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val j = journal ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val chemin = route.substringBefore('?')
@@ -212,8 +213,18 @@ object JournalWeb {
                     val c = j.contact(e, p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2), p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"), p("nm"), p("qth"),
                         PagesPcTelephone.vm?.let { v -> kotlinx.coroutines.runBlocking { v.emetteursDe(e.catnum) } }.orEmpty(),
                         PagesPcTelephone.vm?.emetteurChoisiPour(e.catnum))
+                    // Why it was not written: the real reason, not always the callsign.
+                    val pourquoi = when { p("c").isBlank() -> "pj_n_indicatif"; c == null -> "pj_n_sat_inconnu"; else -> "pj_n_refuse" }
                     json(if (c != null && ajouteContact?.invoke(c) == true) "{\"ok\":true}"
-                        else "{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t(if (c == null && p("c").isNotBlank()) "pj_n_sat_inconnu" else "pj_n_indicatif"))}\"}")
+                        else "{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t(pourquoi))}\"}")
+                }
+                // A pass taken out of the journal (asked on the page first): its entry only — its recordings,
+                // SSTV pictures and the log's contacts stay where they are.
+                "/supprime" -> {
+                    if (methode != "POST") return ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
+                    val e = passage(j, p("id")) ?: return NON
+                    j.supprime(e)
+                    json("{\"ok\":true}")
                 }
                 // The passes kept, newest first, with what each holds.
                 "/liste" -> {
@@ -284,7 +295,7 @@ object JournalWeb {
                 "/reglages" -> json("{\"avant\":${j.avantS()},\"apres\":${j.apresQsoS()},\"rapide\":${j.rapide()}," +
                     "\"accelere\":${j.accelere()},\"surActivite\":${j.surActivite()},\"sstv\":${j.affSstv()}," +
                     "\"fiches\":${j.affFiches()},\"smetre\":${j.affSmetre()},\"freq\":${j.affFreq()}," +
-                    "\"locator\":${j.affLocator()},\"tx\":${j.affTx()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()}," +
+                    "\"locator\":${j.affLocator()},\"tx\":${j.affTx()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()},\"paquetQsos\":${j.paquetQsos()}," +
                     "\"cadreSstv\":\"${js(CadreSstv.lit(j.cadreSstv())?.texte() ?: "")}\",\"tailleSstv\":${j.flashTaille()}}")
                 // The SSTV picture placed with the mouse on the page (v: "x,y,l"), or back to by itself (v empty).
                 "/cadreSstv" -> {

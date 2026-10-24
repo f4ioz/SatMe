@@ -110,6 +110,8 @@ class JournalPcTest {
             return web.sert("/fichier") { mapOf("n" to r.getString("travail"))[it].orEmpty() }.fichier
         }
         val png = fabrique("image", mapOf("t" to "${t0 + 125_000L}"))!!
+        // Named after its moment, not the pass's start.
+        assertTrue(png.name, png.name.contains(stamp(t0 + 125_000L) + "_moment"))
         val img = javax.imageio.ImageIO.read(png)
         assertEquals(1080, img.width); assertEquals(1440, img.height)
         System.getenv("SATME_CAPTURE")?.let { png.copyTo(File(it), overwrite = true) }
@@ -131,5 +133,31 @@ class JournalPcTest {
             val entier = fabrique("video", mapOf("res" to "XS", "accelere" to "1", "recap" to "1", "ouverture" to "1"))
             assertTrue("whole pass", entier != null && entier.length() > 10_000)
         }
+    }
+
+    @Test
+    fun un_contact_refuse_dit_pourquoi_le_paquet_suit_la_case_et_un_passage_se_supprime() {
+        fr.f4ioz.satcombo.i18n.I18n.apply("fr", "fr")
+        val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
+        val carnet = CarnetPc(st, LogStore(File(dossier, "qso_log.json")))
+        val son = SonStation(SonPc(), st, File(dossier, "enregistrements"), File(dossier, "sstv"))
+        val j = JournalPc(st, carnet, son, File(dossier, "journal"))
+        val web = JournalWebPc(j, st, dossier)
+        val e = JournalPassage.Entree(99999, "INCONNU-1", t0, t0 + 600_000L, "JN18FS",
+            points = (0..10).map { JournalPassage.Point(t0 + it * 60_000L, 100.0 + it * 10, 5.0 + it) })
+        j.rangement.enregistre(e)
+        fun lit(route: String, p: Map<String, String>, methode: String = "GET") = JSONObject(String(web.sert(route, { p[it].orEmpty() }, methode) { false }.corps))
+        // A callsign given, the satellite unknown here: said so, not « il faut un indicatif ».
+        val r = lit("/nouveau/contact", mapOf("id" to e.id, "c" to "F5XYZ"), "POST")
+        assertEquals(fr.f4ioz.satcombo.i18n.t("pj_n_sat_inconnu"), r.getString("erreur"))
+        assertEquals(fr.f4ioz.satcombo.i18n.t("pj_n_indicatif"), lit("/nouveau/contact", mapOf("id" to e.id, "c" to ""), "POST").getString("erreur"))
+        // The station's setting for the pass file's contacts, read by the page.
+        st.settings.journalPaquetQsos = true
+        assertTrue(lit("/reglages", emptyMap()).getBoolean("paquetQsos"))
+        // Deleted only by POST; the pass's entry only.
+        assertEquals("400 Bad Request", web.sert("/supprime", { mapOf("id" to e.id)[it].orEmpty() }, "GET") { false }.statut)
+        assertTrue(lit("/supprime", mapOf("id" to e.id), "POST").getBoolean("ok"))
+        assertEquals(0, JSONObject(String(web.sert("/liste") { "" }.corps)).getJSONArray("passages").length())
+        assertEquals("404 Not Found", web.sert("/supprime", { mapOf("id" to "../x")[it].orEmpty() }, "POST") { false }.statut)
     }
 }

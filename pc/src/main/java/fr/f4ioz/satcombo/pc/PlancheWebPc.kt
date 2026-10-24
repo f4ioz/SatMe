@@ -87,7 +87,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     }
 
     /** The page, under the PC's header, as the journal's. */
-    fun page(): String = PagePlanche.html()
+    fun page(): String = PagePlanche.html(surPc = true)
         .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>${PagePc.STYLE_BARRE}#pupitre,#journal{display:none}</style>\n<script>")
         .replace("<div id=\"editeur\" class=\"cache\">", "<div id=\"editeur\" class=\"cache\">" + PagePc.barre("planche") + "<script>${PagePc.SCRIPT_BARRE}</script>")
 
@@ -124,14 +124,14 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
     private fun jpeg(b: BufferedImage, q: Float = 0.88f): ByteArray = PlancheRenduPc.jpeg(b, q)
 
-    /** What the texts say: what was typed on the page, else what SatMe would write. */
+    /** What the texts say: what was typed on the page (kept with the sheet), else what SatMe would write. */
     private fun valeurs(m: Planche.Modele, places: Map<Int, Pair<File, SstvMeta.SstvShot>>, p: (String) -> String): PlancheRenduPc.Valeurs {
         val s = station.settings
         return PlancheRenduPc.Valeurs(
-            indicatif = p("ind").ifBlank { s.callsign },
+            indicatif = p("ind").ifBlank { m.indicatif }.ifBlank { s.callsign },
             nom = p("nom").ifBlank { s.plancheNom },
-            locator = p("loc").ifBlank { Planche.locatorDominant(places.values.map { it.second.locator }).ifBlank { station.etat.value.locator } },
-            dates = p("dates").ifBlank { Planche.dates(places.values.map { it.second.timeMs }) },
+            locator = p("loc").ifBlank { m.locator }.ifBlank { Planche.locatorDominant(places.values.map { it.second.locator }).ifBlank { station.etat.value.locator } },
+            dates = p("dates").ifBlank { m.dates }.ifBlank { Planche.dates(places.values.map { it.second.timeMs }) },
             titre = m.titre.ifBlank { places.values.firstOrNull()?.second?.satName?.let { "$it · SSTV" } ?: "SSTV" })
     }
 
@@ -189,13 +189,21 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     val avant = modele(p("id")) ?: return NON
                     val lu = corps()?.toString(Charsets.UTF_8)?.let { Planche.lit(avant.id, it) } ?: return REFUS
                     val m = lu.copy(fond = avant.fond, nom = lu.nom.take(60).ifBlank { avant.nom },
-                        cases = lu.cases.take(60).map { it.bornee() },
+                        cases = lu.cases.take(Planche.CASES_MAX).map { it.bornee() },
                         textes = lu.textes.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
                         titre = lu.titre.take(120), images = lu.images.filterKeys { it in lu.cases.indices.take(60) },
                         origine = lu.origine.take(60).map { it.bornee() }, textesOrigine = lu.textesOrigine.take(20))
                         .let { Planche.decorVerifie(it) { n -> r.fichier(n) != null } }
                     synchronized(this) { r.enregistre(m); r.nettoie() }
                     if (p("nom_station").isNotBlank()) station.settings.plancheNom = p("nom_station").take(60)
+                    json("{\"ok\":true}")
+                }
+
+                // A sheet deleted (asked on the page first): its file, its background and patches no other uses — never an SSTV picture.
+                "/supprime" -> {
+                    if (methode != "POST") return REFUS
+                    val m = modele(p("id")) ?: return NON
+                    synchronized(this) { r.supprime(m) }
                     json("{\"ok\":true}")
                 }
 
@@ -335,7 +343,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                         val b = PlancheRenduPc.dessine(m, fond, fond?.width ?: 2400, imgs, v,
                             decor = PlancheRenduPc.chargeDecor(r, m, 4000), ecussons = PlancheRenduPc.chargeEcussons(r, m, 1600))
                         val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
-                        val jour = v.dates.take(10).replace("-", "").ifBlank { "planche" }
+                        val jour = Planche.jourFichier(v.dates)
                         val png = ByteArrayOutputStream().also { ImageIO.write(b, "png", it) }.toByteArray()
                         ReponseWeb("200 OK", "image/png", png, "Content-Disposition: attachment; filename=\"SatMe_Planche_${sat}_$jour.png\"\r\n")
                     }

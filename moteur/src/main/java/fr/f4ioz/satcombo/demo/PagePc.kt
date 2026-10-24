@@ -2485,9 +2485,9 @@ ${rail()}
       <div class="petit aide">Seuls les enregistrements de passages SSTV sont concernés. Jamais supprimés : ceux d’une image utilisée dans une planche ou marquée « à garder », ceux de moins d’un jour. Chaque suppression est notée dans enregistrements/retention-sons.log.</div>
       <div class="ligne"><span class="petit" id="so-bilan" style="flex:1"></span><button id="so-appliquer" onclick="soRetention()">Appliquer maintenant</button></div>
       <div class="ligne" style="margin-top:8px"><span class="petit">Image QSL</span><select id="so-dispo" style="flex:none" onchange="soReglage('dispo', this.value)"><option value="BANDEAU">bandeau dessous</option><option value="INCRUSTE">incrusté</option></select>
-        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> signer « SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
+        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> écrire « reçu avec SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
       <div class="petit" id="so-station"></div>
-      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
+      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" onclick="viFichier(event, this)" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
       <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
@@ -2636,7 +2636,7 @@ ${rail()}
   <div>
     <div class="carte">
       <div class="t">Auto-pilote</div>
-      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitre(this.checked)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitreCase(this)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
       <div class="petit" id="ap-etat" style="margin-top:4px"></div>
     </div>
     <div class="carte">
@@ -4444,7 +4444,7 @@ ${rail()}
   <div class="petit" id="mt-sg-lu"></div>
   <div id="mt-sg-zone"><svg id="mt-sg-svg" role="img" aria-label="Montage proposé"></svg></div>
   <ul id="mt-sg-pourquoi"></ul>
-  <div class="ligne"><button class="primaire" onclick="mtSuggAjoute()">Ajouter les pièces cochées</button><button onclick="mtSuggAdopte()" title="Remplacer tout le montage par toute la proposition">Tout remplacer</button><button onclick="g('mt-sg-dlg').close()">Fermer</button></div>
+  <div class="ligne"><button class="primaire" onclick="mtSuggAjoute()">Ajouter les pièces cochées</button><button onclick="mtSuggAdopte()" title="Remplacer tout le montage par toute la proposition : ses pièces, ses câbles et leurs photos sont effacés">Tout remplacer</button><button onclick="g('mt-sg-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="mt-ph-dlg" class="dlg-mt" onclick="if (event.target === this) this.close()" aria-labelledby="mt-ph-nom">
   <div class="dlg-tete"><b id="mt-ph-nom"></b><button class="discret" onclick="g('mt-ph-dlg').close()" aria-label="Fermer">✕</button></div>
@@ -4544,7 +4544,7 @@ ${rail()}
 </dialog>
 <dialog id="aide-dlg" class="dlg-aide" aria-labelledby="aide-titre">
   <div class="dlg-tete"><b id="aide-titre">Raccourcis clavier</b><button class="discret" onclick="g('aide-dlg').close()" aria-label="Fermer">✕</button></div>
-  <div class="aide-arret"><kbd>Échap</kbd><span><b>Arrêt de toute émission</b> : DATV, SSTV, calibration I/Q, mire. N'arrête que, ne démarre jamais rien. Aussi : le voyant <b class="tx-mot">TX</b> rouge de l'en-tête, d'un clic.</span></div>
+  <div class="aide-arret"><kbd>Échap</kbd><span><b>Arrêt de toute émission</b> : DATV, SSTV, calibration I/Q, mire, et relâche le PTT de l’IC-9700. N'arrête que, ne démarre jamais rien. Aussi : le voyant <b class="tx-mot">TX</b> rouge de l'en-tête, d'un clic.</span></div>
   <div class="aide-grille">
     <div><kbd>Ctrl</kbd> <kbd>K</kbd></div><div>Commandes : aller à un onglet, accorder le récepteur (réception seulement), suivre un satellite, ouvrir un indicatif dans le carnet, actions courantes</div>
     <div><kbd>1</kbd> … <kbd>6</kbd></div><div>Espaces : 1 Ciel · 2 QO-100 · 3 DATV · 4 Modes · 5 Carnet · 6 Station (le dernier onglet vu de chacun)</div>
@@ -4552,7 +4552,7 @@ ${rail()}
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>S</kbd></div><div>Le son des décodeurs (en-tête « Son ») : changer de source, démarrer, arrêter, décodeurs, enregistrer</div>
-    <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement)</div>
+    <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement). Sur l'onglet Montage, <kbd>E</kbd> sert à « Modifier » le dessin et n'enregistre pas</div>
     <div><kbd>P</kbd></div><div>Préparer le passage du satellite suivi : sa source, les décodeurs de son émetteur, l'enregistrement (réception seulement)</div>
     <div><kbd>N</kbd></div><div>Noter un contact : le carnet, le curseur sur l'indicatif</div>
     <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
@@ -4593,22 +4593,22 @@ ${rail()}
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
   <div class="ligne" id="vi-outils" style="margin-top:6px">
     <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
-    <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur">⟳ Redécoder son son</button>
+    <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur : une image de plus dans la galerie (une copie de plus de la même diapo). Pour une version corrigée à côté de la reçue : « Version corrigée depuis l’enregistrement »">⟳ Redécoder en nouvelle image</button>
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
-    <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
+    <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 », sur le nombre de diapos de sa série) : vaut pour toutes les copies du groupe"></select></label>
     <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
-  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (Images › Réglages › Options SSTV)">🪪 QSL</button></a>
-    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer"><button>Voir la QSL</button></a>
-    <a id="vi-ariss" download><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
+  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download onclick="viFichier(event, this)"><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (SSTV › Réglages)">🪪 QSL</button></a>
+    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer" onclick="viFichier(event, this, true)"><button>Voir la QSL</button></a>
+    <a id="vi-ariss" download onclick="viFichier(event, this)"><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
     <button id="vi-garde" onclick="viGarde()" title="Jamais supprimée par la rétention des enregistrements (ni le son de son passage)">☆ À garder</button></div>
   <div class="ligne" id="vi-corr" style="margin-top:6px" hidden>
     <span class="seg"><button id="vi-v-brute" onclick="viMontre('brute')" title="L’image telle que reçue">Brute</button><button id="vi-v-corr" onclick="viMontre('corr')" title="Sa version corrigée (un fichier à part : la réception n’est jamais modifiée)">Corrigée</button><button id="vi-v-fus" onclick="viMontre('fus')" title="Les copies de cette diapo mises ensemble">Fusion</button><button id="vi-v-cmp" onclick="viMontre('cmp')" title="Brute à gauche, traitée à droite : glisser sur l’image">Brute | Corrigée</button></span>
     <input type="range" id="vi-curseur" min="0" max="100" value="50" style="width:110px" hidden oninput="viCurseur()">
     <button id="vi-corriger" onclick="viCorrige('auto')" title="La meilleure correction : re-décodée de son enregistrement quand SatMe l’a gardé, sinon ses taches retirées. L’image reçue n’est pas modifiée.">✨ Corriger</button>
-    <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part">⟳ Re-décoder depuis l’enregistrement</button>
+    <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part (pas une image de plus dans la galerie)">⟳ Version corrigée depuis l’enregistrement</button>
     <button id="vi-fusionner" onclick="viFusionne()" title="Mettre ensemble les copies de cette diapo (chacune re-décodée de son son quand il est gardé) : le bruit d’un passage n’est jamais aux mêmes pixels">⧉ Fusionner les copies</button>
     <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
   <div class="petit" id="vi-sans-son"></div>
@@ -5229,7 +5229,7 @@ async function majSauvegarde() {
   if (!SAUV || !SAUV.present) return;
   const m = g('sv-medias').checked;
   g('sv-lien').href = 'sauvegarde.zip' + (m ? '?medias=1' : '');
-  txt('sv-taille', 'environ ' + ((m ? SAUV.tailleMedias : SAUV.taille) / 1048576).toFixed(1) + ' Mo');
+  txt('sv-taille', 'environ ' + mo1(m ? SAUV.tailleMedias : SAUV.taille));
   g('sv-etat').innerHTML = SAUV.attente ? 'Une sauvegarde du ' + new Date(SAUV.attente.date).toLocaleString() + ' sera restaurée au prochain démarrage de SatMe-PC. <button onclick="post(\'api/sauvegarde/annule\').then(majSauvegarde)">Annuler</button>' : '';
 }
 async function restaureSauvegarde(input) {
@@ -5884,7 +5884,8 @@ function etalMontre(e) {
   txt('etal-brut', e.brutAz == null ? 'silencieux' : 'az ' + etalN(e.brutAz) + ' / él ' + etalN(e.brutEl));
   txt('etal-corr', e.az == null ? '—' : 'az ' + etalN(e.az) + ' / él ' + etalN(e.el) + (e.azCible != null ? ' → ' + etalN(e.azCible) + ' / ' + etalN(e.elCible) : ''));
   txt('etal-suivi', !e.connecte ? 'Rotor non connecté : connecte-le d\'abord (Réglages › Poste et rotor).' :
-    'Suivi automatique arrêté pendant la calibration · ' + e.statut);
+    // Said once: the rotor's own line when it says the same (« Assistant de calibration ouvert… ») is not repeated.
+    'Suivi automatique arrêté pendant la calibration (il reprend à la fermeture)' + (e.statut && !/calibr|étalonn/i.test(e.statut) ? ' · ' + e.statut : ''));
   g('etal-rotctld').hidden = !e.connecte || e.commandes;
   txt('etal-journal', (e.journal || []).join('\n'));
   const c = e.correction || {};
@@ -6040,7 +6041,7 @@ async function ecouteIci() {
     const r = await fetch('api/son/flux?source=' + source, { signal: ecArret.signal });
     const lecteur = r.body.getReader();
     let reste = new Uint8Array(0), entete = true;
-    g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+    g('ec-go').hidden = true; g('ec-stop').hidden = false; ecBouton(true);
     txt('ec-etat', 'en écoute : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
     while (true) {
       const { value, done } = await lecteur.read(); if (done) break;
@@ -6066,7 +6067,7 @@ function arreteEcoute() {
   if (ecLecteur) { try { ecLecteur.disconnect(); } catch (x) {} ecLecteur = null; }
   if (ecCtx) { try { ecCtx.close(); } catch (x) {} ecCtx = null; }
   ecEcrit = 0; ecLu = 0; ecAmorce = true; ecMoy = 0;
-  g('ec-go').hidden = false; g('ec-stop').hidden = true; g('ec-btn').textContent = '🔈 Écouter ici';
+  g('ec-go').hidden = false; g('ec-stop').hidden = true; ecBouton(false);
 }
 // Shown where SatMe-PC streams (not on the page served by the phone).
 g('ec-boite').hidden = !!window.SATME_TELEPHONE;
@@ -6204,7 +6205,7 @@ async function ecouteWs() {
       let m = null; try { m = JSON.parse(ev.data); } catch (x) { return; }
       if (m.t === 'bonjour') {
         ouvert = true; clearTimeout(delai);
-        g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+        g('ec-go').hidden = true; g('ec-stop').hidden = false; ecBouton(true);
         txt('ec-etat', 'en écoute, faible latence : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
       } else if (m.t === 'pong') {
         ecRtt.push(performance.now() - m.c); if (ecRtt.length > 15) ecRtt.shift(); ecPerdusSrv = m.perdus || 0;
@@ -6563,6 +6564,8 @@ document.querySelectorAll('.st').forEach(st => {
   stOuvre(st, p);
   st.querySelectorAll('.st-nav button').forEach(b => b.onclick = () => {
     stOuvre(st, b.dataset.p);
+    // « Activités à venir » opened: its count of new notices read.
+    if (b.dataset.p === 'ag-p-act') acLues();
     try { localStorage.setItem('st-' + st.dataset.st, b.dataset.p); } catch (x) {}
   });
 });
@@ -7398,8 +7401,22 @@ async function chargeDoppler() {
 }
 // ------------------------------------------------------------------ horizon mask
 let HZ = [0, 0, 0, 0, 0, 0, 0, 0];
+// Another number of sectors: each new one takes the highest obstacle of the old ones it overlaps (never lower than what was set).
+function hzRedecoupe(l, n) {
+  const m = l.length;
+  return Array.from({ length: n }, (_, i) => {
+    const a = i * 360 / n, b = (i + 1) * 360 / n; let v = 0;
+    for (let k = 0; k < m; k++) if (k * 360 / m < b - 1e-6 && (k + 1) * 360 / m > a + 1e-6) v = Math.max(v, l[k]);
+    return v;
+  });
+}
 function hzSecteurs(n, zero) {
-  if (zero || HZ.length !== n) HZ = Array(n).fill(0);
+  if (zero) HZ = Array(n).fill(0);
+  else if (HZ.length !== n) {
+    const avant = HZ.some(e => e > 0);
+    HZ = hzRedecoupe(HZ, n);
+    if (avant) txt('hz-etat', 'redécoupé en ' + n + ' secteurs : chacun prend l’obstacle le plus haut de ceux qu’il recouvre ; à vérifier puis enregistrer');
+  }
   g('hz-n').value = String(HZ.length);
   const w = 360 / HZ.length;
   g('hz-champs').innerHTML = HZ.map((e, i) => '<span class="petit">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + '°</span>' +
@@ -8521,6 +8538,8 @@ async function eApercu() {
 // The file browser: folders of the PC running SatMe-PC (read only), and files sent from this computer.
 let FD = { type: 'image', chemin: '', parent: null, max: 0 };
 function fdAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+/** A size in megabytes, one decimal, written the French way (« 12,3 Mo »). */
+function mo1(o) { return (o / 1048576).toFixed(1).replace('.', ',') + ' Mo'; }
 function fdTaille(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' ko'; }
 function fdVignette(e) {
   return '<div class="fd-v"><img loading="lazy" src="api/datv/sources/vignette.jpg?p=' + enc(e.chemin) + '" alt="" data-g="' + (e.genre === 'video' ? '🎞' : '🖼') +
@@ -8735,7 +8754,7 @@ function rendSon() {
   if (enregs !== enregsVus && ouverte('son')) {
     enregsVus = enregs;
     g('s-liste').innerHTML = S.enregistrements.map(e => '<tr><td><a href="#" onclick="ecoute(\'' + enc(e.nom) + '\');return false">' + esc(e.nom) +
-      '</a></td><td class="petit">' + (e.taille / 1048576).toFixed(1) + ' Mo</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
+      '</a></td><td class="petit">' + mo1(e.taille) + '</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
       '<tr><td class="petit">aucun enregistrement</td></tr>';
   }
   // SSTV: the picture arriving, reloaded only when it moved.
@@ -8764,12 +8783,12 @@ function rendSon() {
   if (ouverte('sstv')) clTic();
   if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
   // The sorting's numbers too: each picture's slide badge.
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
-      ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
+      ' · ' + (i.t ? clJour(i.t) + '/' + new Date(i.t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(i.t) + (utc() ? ' UTC' : '') : '') + (i.complete ? '' : ' · partielle') +
       (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
@@ -8921,7 +8940,7 @@ async function clNumerote() {
 }
 async function viDiapo(n) {
   if (!viNom) return;
-  const j = await post('api/sstv/diapo?nom=' + enc(viNom) + '&n=' + enc(n) + '&sur=12');
+  const j = await post('api/sstv/diapo?nom=' + enc(viNom) + '&n=' + enc(n) + '&sur=' + viTotal);
   if (j && j.ok !== false) clTic(true);
 }
 async function viGroupe(v) {
@@ -8929,6 +8948,8 @@ async function viGroupe(v) {
   const j = await post('api/sstv/groupe?nom=' + enc(viNom) + '&vers=' + enc(v));
   if (j && j.ok !== false) clTic(true);
 }
+// The slides of the picture's series: its group's count, else the series', else 12.
+let viTotal = 12;
 // The viewer's line on the sorting: the mark, the slide, the group.
 function viClasse() {
   const gr = clGroupeDe(viNom);
@@ -8938,12 +8959,13 @@ function viClasse() {
   g('vi-classe').hidden = !gr;
   if (!gr) return;
   const i = gr.images.find(x => x.nom === viNom);
-  txt('vi-note', 'Note ' + i.note + '/100 ' + clEtoiles(i.note) + (i.manque ? ' · ' + i.manque + ' % manquant' : '') + (i.abimees ? ' · ' + i.abimees + ' % abîmé' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : ''));
-  const cle = viNom + JSON.stringify(CL.groupes.map(x => [x.id, x.diapo, x.origine, x.images.length]));
+  viTotal = gr.total > 0 ? gr.total : (CL && CL.serie && CL.serie.nb) || 12;
+  txt('vi-note', 'Note ' + i.note + '/100 ' + clEtoiles(i.note) + (i.manque ? ' · ' + i.manque + ' % manquant' : '') + (i.abimees ? ' · ' + i.abimees + ' % abîmé' : '') + (i.lu ? ' · lue ' + i.lu + '/' + viTotal : ''));
+  const cle = viNom + viTotal + JSON.stringify(CL.groupes.map(x => [x.id, x.diapo, x.origine, x.images.length]));
   if (g('vi-classe').dataset.vu === cle) return;
   g('vi-classe').dataset.vu = cle;
   g('vi-diapo').innerHTML = '<option value="0">' + (gr.diapo && gr.origine !== 'main' ? (gr.origine === 'estime' ? '≈' : 'lue ') + gr.diapo + '/' + gr.total : '—') + '</option>' +
-    Array.from({ length: 12 }, (_, k) => '<option value="' + (k + 1) + '">' + (k + 1) + '/12</option>').join('');
+    Array.from({ length: viTotal }, (_, k) => '<option value="' + (k + 1) + '">' + (k + 1) + '/' + viTotal + '</option>').join('');
   g('vi-diapo').value = gr.origine === 'main' ? String(gr.diapo) : '0';
   const autres = CL.groupes.filter(x => x !== gr && x.sat === gr.sat);
   g('vi-groupe').innerHTML = '<option value="">' + (i.groupeMain ? 'tri automatique' : 'celui-ci (' + gr.images.length + ')') + '</option><option value="seule">à part</option>' +
@@ -9031,7 +9053,7 @@ function rendSstv() {
   if (en !== enregsSstvVus) {
     enregsSstvVus = en;
     const avant = g('sstv-enreg').value;
-    g('sstv-enreg').innerHTML = S.enregistrements.map(x => '<option value="' + esc(x.nom).replace(/"/g, '&quot;') + '">' + esc(x.nom) + ' · ' + (x.taille / 1048576).toFixed(1) + ' Mo</option>').join('') || '<option value="">aucun enregistrement</option>';
+    g('sstv-enreg').innerHTML = S.enregistrements.map(x => '<option value="' + esc(x.nom).replace(/"/g, '&quot;') + '">' + esc(x.nom) + ' · ' + mo1(x.taille) + '</option>').join('') || '<option value="">aucun enregistrement</option>';
     if (avant) g('sstv-enreg').value = avant;
   }
   const enCours = D.redecodeProgres >= 0;
@@ -9193,7 +9215,7 @@ async function viSatellite() {
   if (j && j.ok !== false) { i.sat = v.trim(); imagesVus = ''; voisImage(viN); }
 }
 async function viSupprime() {
-  if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son et son GIF) ?')) return;
+  if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son, son GIF, sa version corrigée et sa marque « à garder ») ?')) return;
   const j = await post('api/sstv/supprime?nom=' + enc(viNom));
   if (j && j.ok !== false) { g('visionneuse').close(); imagesVus = ''; }
 }
@@ -9234,6 +9256,23 @@ function viQslMaj() {
   txt('vi-garde', garde ? '★ Gardée' : '☆ À garder'); g('vi-garde').setAttribute('aria-pressed', garde ? 'true' : 'false');
   g('vi-qsl').hidden = !r;
 }
+// A file asked of the station (the QSL, an ARISS pack): a refusal said here (« aucune image »), never a raw JSON page.
+async function viFichier(ev, a, voir) {
+  ev.preventDefault();
+  const w = voir ? window.open('', '_blank') : null;
+  let r = null; try { r = await fetch(a.href); } catch (x) {}
+  if (!r || !r.ok || (r.headers.get('Content-Type') || '').indexOf('json') >= 0) {
+    let e = ''; try { e = (await r.json()).erreur || ''; } catch (x) {}
+    if (w) w.close();
+    annonce('Pas de fichier : ' + (e || 'la station ne répond pas')); return;
+  }
+  const u = URL.createObjectURL(await r.blob());
+  setTimeout(() => URL.revokeObjectURL(u), 120000);
+  if (w) { w.location = u; return; }
+  const x = document.createElement('a'); x.href = u;
+  x.download = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'SatMe';
+  document.body.appendChild(x); x.click(); x.remove();
+}
 async function viGarde() {
   if (!viNom || !SO) return;
   const on = SO.gardes.indexOf(viNom) < 0;
@@ -9250,7 +9289,7 @@ async function sqCharge() {
   g('sq-vu').style.width = (db == null ? 0 : pc(db)) + '%';
   g('sq-vu').style.background = Q.niveau === 'SATURE' ? 'var(--danger)' : Q.niveau === 'FORT' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : Q.niveau === 'SILENCE' ? 'var(--gris)' : 'var(--vert)';
   g('sq-crete').style.left = (Q.creteDb == null ? 0 : pc(Q.creteDb)) + '%';
-  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS (crête ' + Q.creteDb.toFixed(0) + ')');
+  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS' + (Q.creteDb == null ? '' : ' (crête ' + Q.creteDb.toFixed(0) + ')'));
   const avis = { SATURE: '⚠ Le son sature : baisser le volume ou le gain.', FORT: 'Son fort, près de saturer.', FAIBLE: '⚠ Son trop faible : monter le volume.', SILENCE: 'Aucun son.', BON: '' }[Q.niveau] || '';
   txt('sq-avis', avis); g('sq-avis').style.color = Q.niveau === 'SATURE' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : '';
   const c = g('sq-lignes'), x = c.getContext('2d'), w = c.width, h = c.height, n = Math.max(Q.hauteur || 0, Q.qualites.length, 1);
@@ -13484,10 +13523,16 @@ function apOuvre() {
   vue('agenda');
   const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-sstv"]'); if (b) b.click();
 }
+const AP_CONFIRME = 'Activer l’auto-pilote SSTV ?\nChaque passage des campagnes actives sera reçu tout seul : satellite suivi, poste et rotor, son, décodeur, enregistrement. Réception seulement.';
 async function apMaitreBascule() {
   if (!AP) return;
-  if (!AP.maitre && !confirm('Activer l’auto-pilote SSTV ?\nChaque passage des campagnes actives sera reçu tout seul : satellite suivi, poste et rotor, son, décodeur, enregistrement. Réception seulement.')) return;
+  if (!AP.maitre && !confirm(AP_CONFIRME)) return;
   await apMaitre(!AP.maitre);
+}
+// The Agenda's « Actif » box: turned on only once confirmed, as from the header and the palette.
+async function apMaitreCase(c) {
+  if (c.checked && !confirm(AP_CONFIRME)) { c.checked = false; return; }
+  await apMaitre(c.checked);
 }
 async function apMaitre(on) {
   await post('api/autopilote/maitre?on=' + (on ? 1 : 0));
@@ -13681,6 +13726,7 @@ async function acCharge() {
   if (ouverte('agenda')) acDessine();
 }
 let acNonLues = 0;
+function acLues() { acNonLues = 0; g('ac-nb').hidden = true; }
 const acDate = ms => new Date(ms).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 const acHmUtc = ms => new Date(ms).toISOString().slice(11, 16);
 const acHmLoc = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -13704,7 +13750,9 @@ function acReglages() {
     const k = AC_SRC[s.id], premier = !vus[k]; vus[k] = 1;
     const etat = !s.actif ? 'coupée' : s.erreur ? '<span class="err" title="' + escA(s.erreur) + '">⚠ ' + esc(s.erreur.slice(0, 40)) + '</span>' + (s.succes ? ' · lu le ' + jourHeure(s.succes) : '') :
       s.succes ? 'lu le ' + jourHeure(s.succes) : s.id === 'AMSAT' ? 'seulement pendant une SSTV/SSDV annoncée' : 'pas encore lu';
-    return '<span>' + (premier ? '<input type="checkbox" title="Cette source" ' + (r[k] ? 'checked' : '') + (r.actif ? '' : ' disabled') + ' onchange="acReglage(\'' + k + '\', this.checked)">' : '') + '</span>' +
+    // A box for each kind: it turns on or off every source of that kind (AMSAT-UK and AMSAT-F both « rss »; SatNOGS M2-3 and M2-4).
+    const memes = AC.sources.filter(x => AC_SRC[x.id] === k).map(x => x.nom);
+    return '<span>' + (premier ? '<input type="checkbox" title="' + escA(memes.length > 1 ? 'Ces ' + memes.length + ' sources ensemble : ' + memes.join(', ') : 'Cette source') + '" ' + (r[k] ? 'checked' : '') + (r.actif ? '' : ' disabled') + ' onchange="acReglage(\'' + k + '\', this.checked)">' : '') + '</span>' +
       '<span><a href="' + escA(s.lien) + '" target="_blank" rel="noopener noreferrer">' + esc(s.nom) + '</a> <span class="petit">' + etat + '</span></span>';
   }).join('');
 }
@@ -14482,7 +14530,7 @@ async function mtSuggAjoute() {
 }
 async function mtSuggAdopte() {
   if (!MT.sugg) return;
-  if (MT.d && MT.d.chaine.elements.length && !confirm('Remplacer le montage actuel par la proposition ?')) return;
+  if (MT.d && MT.d.chaine.elements.length && !confirm('Remplacer le montage actuel par la proposition ?\nSes pièces et câbles sont effacés, et avec eux les photos ajoutées à ces pièces.')) return;
   g('mt-sg-dlg').close();
   await mtEnregistre(MT.sugg.chaine, 'Montage proposé par SatMe enregistré');
 }
@@ -16018,6 +16066,8 @@ function montreErreurs(b) {
   const l = erreursServeur().concat((window.__err || []).slice(-12).map(x => 'Page : ' + x));
   popMontre(b, l.length ? l.map(x => '<div class="aide-p">' + esc(x) + '</div>').join('') : '<div class="aide-p">Aucune erreur.</div>', true);
 }
+// The header's « Écouter ici »: its words change, its headphones stay.
+function ecBouton(on) { const b = g('ec-btn'), t = b.querySelector('span'); if (t) t.textContent = on ? 'Écoute en cours' : 'Écouter ici'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
 let toastMin = 0;
 function annonce(t, tx) {
   const e = g('toast'); e.textContent = t; e.classList.toggle('tx', !!tx); e.hidden = false;
@@ -16046,7 +16096,8 @@ document.addEventListener('keydown', e => {
   else if (e.key >= '1' && e.key <= '6' && ESPACES_WS[+e.key - 1]) { e.preventDefault(); wsOuvre(ESPACES_WS[+e.key - 1]); }
   // Receive side only: the decoders' sound, the recording, the pass made ready, a contact noted.
   else if ((e.key === 's' || e.key === 'S') && !g('hs-boite').hidden) { e.preventDefault(); hsBascule(); }
-  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); enregistre(); }
+  // On the Montage (SatMe-PC), E is its own « Modifier » key: one action per key, never both.
+  else if ((e.key === 'e' || e.key === 'E') && !(ouverte('montage') && !MT.telephone)) { e.preventDefault(); enregistre(); }
   else if ((e.key === 'p' || e.key === 'P') && !window.SATME_TELEPHONE) { e.preventDefault(); preparePassage(); }
   else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); vue('carnet'); }
   else if (e.key === '[') railRegle(!document.body.classList.contains('rail-ouvert'));
@@ -16302,7 +16353,7 @@ function palSources() {
     l.push({ g: 'Réglages', nom: 'Réglages › ' + c.nom, info: c.desc, ico: ICO[c.ico] || '', mots: 'reglages ' + c.nom + ' ' + c.desc + ' ' + c.cartes.join(' '), go: () => { vue('reglages'); montreReglages(c.id); } });
   });
   const A = (nom, info, go, cl) => l.push({ g: 'Actions', nom, info, go, cl, mots: nom + ' ' + info });
-  A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire', arretEmissions, 'arret');
+  A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire, PTT de l’IC-9700', arretEmissions, 'arret');
   if (AP && AP.campagnes) {
     A('Auto-pilote SSTV : ' + (AP.maitre ? 'couper' : 'activer'), 'interrupteur général · campagnes de l’agenda (réception)', apMaitreBascule);
     A('Agenda › SSTV : campagnes', 'auto-pilote, importer une affiche', apOuvre);

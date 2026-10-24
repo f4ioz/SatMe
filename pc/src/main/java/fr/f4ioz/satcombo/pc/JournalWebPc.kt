@@ -44,7 +44,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** The page's words that speak of the phone, and the PC's in their place. */
     private val TEXTES_PC = mapOf("pj_sous" to "pc_pj_sous", "pj_aucun" to "pc_pj_aucun", "pw_pupitre" to "pc_pj_station",
-        "pj_echec" to "pc_pj_echec")
+        "pj_echec" to "pc_pj_echec", "pj_en_cours" to "pc_pj_en_cours", "pw_hors_ligne" to "pc_pj_hors_ligne",
+        "pj_options_aide" to "pc_pj_options_aide")
 
     /** A received picture by its name: only a PNG of the SSTV folder, never another file. */
     private fun imageSstv(nom: String): File? =
@@ -113,7 +114,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
      */
     fun sert(route: String, p: (String) -> String): ReponseWeb = sert(route, p) { false }
 
-    fun sert(route: String, p: (String) -> String, corps: (File) -> Boolean): ReponseWeb = runCatching {
+    fun sert(route: String, p: (String) -> String, methode: String = "GET", corps: (File) -> Boolean): ReponseWeb = runCatching {
         if (route == "/rapport" || route.startsWith("/rapport/")) return rapport?.sert(route.removePrefix("/rapport"), p) ?: NON
         when (route) {
             // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
@@ -141,10 +142,24 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 val e = j.passage(p("id")) ?: return NON
                 val t0 = p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2)
                 // Who it is: QRZ as for any contact (name, town, e-mail where the log knows nothing).
-                val fiche = p("c").takeIf { it.isNotBlank() }?.let { kotlinx.coroutines.runBlocking { j.ficheQrz(it) } }?.takeIf { it.erreur.isBlank() && !it.vide }
+                // QRZ out of reach never stops the contact: it is written without its record.
+                val fiche = p("c").takeIf { it.isNotBlank() }?.let { runCatching { kotlinx.coroutines.runBlocking { j.ficheQrz(it) } }.getOrNull() }?.takeIf { it.erreur.isBlank() && !it.vide }
                 val c = j.ajouteContact(e, t0, p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"), p("nm"), p("qth"), fiche)
-                val pourquoi = if (p("c").isBlank()) t("pj_n_indicatif") else if (station.etat.value.satellites.none { it.catalogNumber == e.catnum }) t("pj_n_sat_inconnu") else t("pj_n_indicatif")
+                // Why it was not written: the real reason, not always the callsign.
+                val pourquoi = when {
+                    p("c").isBlank() -> t("pj_n_indicatif")
+                    station.etat.value.satellites.none { it.catalogNumber == e.catnum } -> t("pj_n_sat_inconnu")
+                    else -> t("pj_n_refuse")
+                }
                 json(if (c != null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(pourquoi)}\"}")
+            }
+            // A pass taken out of the journal (asked on the page first): its entry only — its recordings,
+            // SSTV pictures and the log's contacts stay where they are.
+            "/supprime" -> {
+                if (methode != "POST") return ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
+                val e = j.passage(p("id")) ?: return NON
+                j.rangement.supprime(e)
+                json("{\"ok\":true}")
             }
             "/liste" -> {
                 val l = j.passages().sortedByDescending { it.debutMs }
@@ -199,7 +214,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 "\"accelere\":${s.journalAccelere},\"surActivite\":${s.journalActivite},\"sstv\":${affSstv()}," +
                 "\"fiches\":${s.journalAffFiches},\"smetre\":${s.journalAffSmetre},\"freq\":${s.journalAffFreq}," +
                 "\"locator\":${s.journalAffLocator},\"tx\":${s.journalAffTx},\"res\":\"${js(s.journalVideoRes)}\"," +
-                "\"ouverture\":${s.journalOuverture},\"recap\":${s.journalRecap}," +
+                "\"ouverture\":${s.journalOuverture},\"recap\":${s.journalRecap},\"paquetQsos\":${s.journalPaquetQsos}," +
                 "\"cadreSstv\":\"${js(CadreSstv.lit(s.journalCadreSstv)?.texte() ?: "")}\"}")
             // The SSTV picture placed with the mouse on the page (v: "x,y,l"), or back to by itself (v empty).
             "/cadreSstv" -> {
@@ -244,13 +259,16 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 kotlin.concurrent.thread(name = "JournalWebPc", isDaemon = true) {
                     val sortie = File(dossier, "exports").apply { mkdirs() }
                     val ext = when (quoi) { "son" -> ".wav"; "image" -> ".png"; "gif" -> ".gif"; "paquet" -> ".zip"; else -> ".mp4" }
+                    // « Image de ce moment »: named after its moment, not the pass's start.
+                    val instant = p("t").toLongOrNull()?.takeIf { quoi == "image" }
                     val nom = "SatMe_" + e.satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                         java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                            .format(java.util.Date(r.first)) + "Z_" + (p("titre").take(30).replace(Regex("[^A-Za-z0-9-]"), "-").ifBlank { if (moment != null) "moment" else "passage" }) + ext
+                            .format(java.util.Date(instant ?: r.first)) + "Z_" + (p("titre").take(30).replace(Regex("[^A-Za-z0-9-]"), "-").ifBlank { if (moment != null || instant != null) "moment" else "passage" }) + ext
                     t.fichier = runCatching {
                         when (quoi) {
                             "son" -> j.extraitWav(e, r.first, r.last, sortie, nom)
-                            "paquet" -> paquet(e, p("contacts") == "1" || s.journalPaquetQsos, sortie) { t.progres = it }
+                            // The page's box ticked or not (contacts=1 / 0), else the station's setting.
+                            "paquet" -> paquet(e, opt(p, "contacts", s.journalPaquetQsos), sortie) { t.progres = it }
                             "image" -> RenduPc.png(scene(e, null, null, true, p), p("t").toLongOrNull(), File(sortie, nom))
                             "gif" -> RenduPc.gif(scene(e, moment, p("titre"), false, p), File(sortie, nom)) { t.progres = it }
                             else -> video(e, scene(e, moment, p("titre"), false, p), opt(p, "avecSon", true), File(sortie, nom), sortie) { t.progres = it }

@@ -101,7 +101,15 @@ object Planche {
          * [ChoixCase] (a version, the copy kept). A box not there: Auto —
          * as every box of an older sheet.
          */
-        val versions: Map<Int, ChoixCase> = emptyMap()
+        val versions: Map<Int, ChoixCase> = emptyMap(),
+        /**
+         * What « Textes » typed for the callsign, the locator and the dates,
+         * kept with the sheet (its preview, the sheet sent in SSTV, the
+         * report). "": SatMe's own — the settings', the pictures'.
+         */
+        val indicatif: String = "",
+        val locator: String = "",
+        val dates: String = ""
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
@@ -181,6 +189,12 @@ object Planche {
     data class Ecusson(val fichier: String, val zone: Zone, val sansContour: Boolean = false)
 
     const val ECUSSONS_MAX = 3
+
+    /** Boxes on one sheet at most: what the station keeps of a sheet saved (« + Case » stops there). */
+    const val CASES_MAX = 60
+
+    /** A text typed in « Textes » (callsign, locator, dates), at most. */
+    const val SAISIE_MAX = 80
 
     const val BLANC = 0xFFFFFFFF.toInt()
     const val NOIR = 0xFF000000.toInt()
@@ -529,6 +543,13 @@ object Planche {
         return if (a == b) a else "$a – $b"
     }
 
+    /**
+     * The day in the downloaded sheet's file name, from what the dates say
+     * (« 2026-10-23 » → « 20261023 », « 23/10/2026 » typed → « 23102026 »):
+     * letters and digits only, never a « / » that would make a folder; "planche" when none.
+     */
+    fun jourFichier(dates: String): String = dates.take(10).filter { it in '0'..'9' || it in 'A'..'Z' || it in 'a'..'z' }.ifBlank { "planche" }
+
     /** The locator most pictures were received at. */
     fun locatorDominant(locators: List<String>): String =
         locators.filter { it.isNotBlank() }.groupingBy { it.uppercase().take(6) }.eachCount()
@@ -822,6 +843,10 @@ object Planche {
         // The versions chosen by hand, box by box (read by older versions as nothing: Auto).
         m.versions.toSortedMap().filter { (i, c) -> !c.auto && i in m.cases.indices }.forEach { (i, c) ->
             append("versioncase=").append(i).append(';').append(c.version.code).append(';').append(if (c.copieMain) 1 else 0).append('\n') }
+        // The texts typed (read by older versions as nothing: SatMe's own).
+        if (m.indicatif.isNotBlank()) append("indicatif=").append(esc(m.indicatif)).append('\n')
+        if (m.locator.isNotBlank()) append("locator=").append(esc(m.locator)).append('\n')
+        if (m.dates.isNotBlank()) append("dates=").append(esc(m.dates)).append('\n')
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
@@ -855,6 +880,9 @@ object Planche {
                 "diapo" -> if (v.contains(';') && diapos.size < 200) diapos[v.substringBefore(';')] = v.substringAfter(';').take(12)
                 "corrigees" -> m = m.copy(corrigees = v == "1")
                 "marquetraitees" -> m = m.copy(marqueTraitees = v == "1")
+                "indicatif" -> m = m.copy(indicatif = unesc(v).take(SAISIE_MAX))
+                "locator" -> m = m.copy(locator = unesc(v).take(SAISIE_MAX))
+                "dates" -> m = m.copy(dates = unesc(v).take(SAISIE_MAX))
                 "versioncase" -> runCatching { val p = v.split(';')
                     val c = ChoixCase(Version.de(p[1]) ?: Version.AUTO, p.getOrNull(2) == "1")
                     if (!c.auto && versions.size < 200) versions[p[0].toInt()] = c }

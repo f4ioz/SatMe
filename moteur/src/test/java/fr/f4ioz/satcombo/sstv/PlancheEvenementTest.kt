@@ -117,6 +117,20 @@ class PlancheEvenementTest {
         assertEquals(mapOf(0 to "a.png", 3 to "b.png"), Planche.reajuste(r.modele.copy(legende = !r.modele.legende)).images)
     }
 
+    @Test fun remplir_par_diapo_avec_un_satellite_ne_prend_que_ses_images() {
+        val a = shot("a.png", T0); val b = shot("b.png", T0 + 1000, sat = "UMKA-1"); val c = shot("c.png", T0 + 2000)
+        val gs = listOf(groupe("g1", 1, Origine.LU, a to 80), groupe("g2", 2, Origine.LU, b to 90), groupe("g3", 3, Origine.LU, c to 70))
+        val iss = fr.f4ioz.satcombo.demo.ApiPlancheEvenement.groupesDe(gs, "ISS")
+        assertEquals(listOf("g1", "g3"), iss.map { it.id })
+        val r = Planche.remplitParDiapo(Planche.genereGrille("p", "x"), iss, fr.f4ioz.satcombo.demo.ApiPlancheEvenement.totalDe(iss))
+        assertEquals(mapOf(0 to "a.png", 2 to "c.png"), r.modele.images)
+        assertTrue(2 in r.manquantes)
+        assertEquals(listOf("g2"), fr.f4ioz.satcombo.demo.ApiPlancheEvenement.groupesDe(gs, "UMKA-1").map { it.id })
+        // A series of 36 slides: its own count, not 12.
+        assertEquals(36, fr.f4ioz.satcombo.demo.ApiPlancheEvenement.totalDe(listOf(gs[0].copy(total = 36))))
+        assertEquals(12, fr.f4ioz.satcombo.demo.ApiPlancheEvenement.totalDe(emptyList()))
+    }
+
     @Test fun l_evenement_les_numeros_et_l_option_vont_dans_le_fichier_et_une_vieille_planche_se_lit() {
         val ev = EvenementSstv.Evenement("c:serie-34", EvenementSstv.Genre.CAMPAGNE, "ARISS série 34; « Artemis »", "ISS", 25544, T0, T0 + 4 * J, 158.97)
         val m = Planche.genereGrille("p1", "Ma planche").copy(images = mapOf(0 to "a.png", 1 to "b.png"), evenement = ev, evenementMain = true,
