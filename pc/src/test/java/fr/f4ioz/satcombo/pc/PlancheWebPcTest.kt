@@ -240,4 +240,15 @@ class PlancheWebPcTest {
         assertEquals("404 Not Found", pl.lit("/modele-exporte", mapOf("id" to "../x")).statut)
         assertEquals(0, JSONObject(String(pl.lit("/liste").corps)).getJSONArray("modeles").length())
     }
+
+    @Test
+    fun la_page_servie_par_le_pc_parle_du_pc_pas_du_telephone() {
+        fr.f4ioz.satcombo.i18n.I18n.apply("fr", "fr")
+        val h = planche().page()
+        assertTrue(h.contains("Enregistré sur le PC")); assertTrue(h.contains("Aucune image SSTV sur ce PC."))
+        for (x in listOf("par le téléphone", "sur le téléphone", "au téléphone"))
+            assertEquals(x, "", Regex(".{0,80}$x.{0,40}").find(h)?.value.orEmpty())
+        // The phone's own page keeps its words.
+        assertTrue(fr.f4ioz.satcombo.demo.PagePlanche.html().contains("Enregistré sur le téléphone"))
+    }
 }

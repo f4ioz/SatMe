@@ -47,7 +47,13 @@ object PagePlanche {
         "rapport_format", "rapport_web", "rapport_pdf", "version_titre", "version_auto", "version_recue", "version_corrigee",
         "version_fusion", "version_creer_fusion", "version_fusion_en_cours", "version_fusion_echec", "version_repli", "version_auto_aide",
         "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
-        "gardes", "version_indic")
+        "gardes", "version_indic", "refus_depot")
+
+    /** The keys whose words depend on who serves the page: SatMe-PC has its own (`pw_…_pc`), the phone the plain ones. */
+    private val CLES_HOTE = setOf("sous", "code", "import_en_cours", "fabrication", "enregistre", "hors_ligne", "aucune_image")
+
+    /** The string key of [k] on this host. */
+    internal fun cle(k: String, surPc: Boolean): String = if (surPc && k in CLES_HOTE) "pw_${k}_pc" else "pw_$k"
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -59,9 +65,9 @@ object PagePlanche {
         }
     }
 
-    /** The page in the app's language. */
-    fun html(): String = HTML
-        .replace("/*T*/", CLES.joinToString(",") { "\"$it\":\"${js(t("pw_$it"))}\"" })
+    /** The page in the app's language; [surPc] when SatMe-PC serves it (its pictures and sheets are the PC's, not a phone's). */
+    fun html(surPc: Boolean = false): String = HTML
+        .replace("/*T*/", CLES.joinToString(",") { "\"$it\":\"${js(t(cle(it, surPc)))}\"" })
         .replace("lang=\"fr\"", "lang=\"${if (I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN) "en" else "fr"}\"")
 
     private val HTML = """
@@ -924,9 +930,10 @@ async function importeModele(f) {
     g('message').textContent = tf('modele_importe', j.nom);
   } catch (e) { g('message').textContent = T.refus_fichier; }
 }
-g('fichier').onchange = async () => {
-  const f = g('fichier').files[0]; if (!f) return;
-  if (estModeleSatme(f)) { await importeModele(f); g('fichier').value = ''; return; }
+g('fichier').onchange = async () => { const f = g('fichier').files[0]; if (f) await importeFichier(f); g('fichier').value = ''; };
+// A file given (chosen or dropped): a SatMe template, else a blank ARISS series picture made a template.
+async function importeFichier(f) {
+  if (estModeleSatme(f)) { await importeModele(f); return; }
   await sauveMaintenant();
   g('message').textContent = T.import_en_cours;
   try {
@@ -936,8 +943,7 @@ g('fichier').onchange = async () => {
     await listeModeles(); await charge(j.id);
     g('message').textContent = tf('import_ok', j.cases);
   } catch (e) { g('message').textContent = T.import_echec; }
-  g('fichier').value = '';
-};
+}
 g('telecharger').onclick = async () => {
   await sauveMaintenant();
   g('message').textContent = T.fabrication;
@@ -972,7 +978,7 @@ g('exportOk').onclick = async () => {
     g('message').textContent = nom;
   } catch (e) { g('message').textContent = T.hors_ligne; }
 };
-// A template file dropped anywhere on the page: a new template. (Pictures dragged into boxes are not files.)
+// A template file or a blank ARISS picture dropped anywhere on the page: a new template. (Pictures dragged into boxes are not files.)
 let depots = 0;
 function porteFichiers(ev) { return ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files'); }
 g('depot').textContent = T.deposer;
@@ -983,7 +989,8 @@ window.addEventListener('drop', ev => {
   if (!porteFichiers(ev)) return;
   ev.preventDefault(); depots = 0; g('depot').classList.add('cache');
   const f = ev.dataTransfer.files[0];
-  if (f && estModeleSatme(f)) importeModele(f); else if (f) g('message').textContent = T.refus_fichier;
+  if (f && (estModeleSatme(f) || /^image\/(jpeg|png)$/.test(f.type) || /\.(jpe?g|png)$/i.test(f.name))) importeFichier(f);
+  else if (f) g('message').textContent = T.refus_depot;
 });
 window.addEventListener('resize', apercuBientot);
 if (cle) demarre().catch(() => {}); else porte();

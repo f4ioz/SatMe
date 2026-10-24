@@ -72,7 +72,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     }
 
     /** The page, under the PC's header, as the journal's. */
-    fun page(): String = PagePlanche.html()
+    fun page(): String = PagePlanche.html(surPc = true)
         .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>${PagePc.STYLE_BARRE}#pupitre,#journal{display:none}</style>\n<script>")
         .replace("<div id=\"editeur\" class=\"cache\">", "<div id=\"editeur\" class=\"cache\">" + PagePc.barre("planche") + "<script>${PagePc.SCRIPT_BARRE}</script>")
 
