@@ -39,7 +39,7 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 
 ### SatMe-PC — the whole station in a browser
 
-SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, the log with the station live beside it, skeds, the **QO-100 cockpit**, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC](docs/station-pc.md)
+SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, the log with the station live beside it, skeds, the **QO-100 cockpit**, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC guide, every function and where to click](https://github.com/f4ioz/SatMe/wiki/SatMe-PC) (wiki, twelve chapters)
 
 **Install**, guided (it sees what is plugged in): `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC on Linux](docs/installer-satme-pc.md) · [SatMe-PC on Windows](docs/installer-satme-pc-windows.md) (all in one) · [SatMe-Node on a Raspberry Pi 3](docs/installer-satme-node.md) (the MiniTiouner next to the antenna) · [downloads](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -107,7 +107,7 @@ The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to 
 
 ## New on SatMe-PC (October 2026)
 
-SatMe-PC grew from a satellite station into a whole station in a browser: QO-100 and DATV with its own DVB-S2 modem, an SDR receiver with every comfort, telemetry, aircraft and ships, the station drawn as it is wired. Everything below is in the [SatMe-PC guide](docs/station-pc.md) (also built in: **F1**) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
+SatMe-PC grew from a satellite station into a whole station in a browser: QO-100 and DATV with its own DVB-S2 modem, an SDR receiver with every comfort, telemetry, aircraft and ships, the station drawn as it is wired. Everything below is detailed, tab by tab and button by button, in the [wiki's SatMe-PC guide](https://github.com/f4ioz/SatMe/wiki/SatMe-PC); the [built-in guide](docs/station-pc.md) also opens in SatMe-PC (**F1**).
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC: the workspaces rail, the header strip, the status bar, and the Ctrl+K palette offering to listen to 145.800 MHz on the SDR receiver"></p>
 
@@ -117,7 +117,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🎙 The IC-9700 transmitting** *(upcoming)* — PTT held from the page (one client, 2 s watchdog, time-out), the browser's microphone to the rig through its USB sound card or the network, RF power capped; HTTPS for the page opened from another machine.
 
-**🖼 The SSTV sheet** *(upcoming)* — fewer pictures than the template, laid out as large as can be, one copy of each slide (the best marked, the pictures sorted by slide); an ARISS series followed slide by slide: those missing, and the passes to wait for them on; a background (built in, NASA pictures or your own) and up to three mission patches, their plain surround removed. A template is exported as one `.satme-planche` file and imported on another phone or PC — without your pictures, the callsign and name filled by the station that imports it.
+**🖼 The SSTV sheet** *(upcoming)* — fewer pictures than the template, laid out as large as can be, one copy of each slide (the best marked, the pictures sorted by slide); an ARISS series followed slide by slide: those missing, and the passes to wait for them on; a background (built in, NASA pictures or your own) and up to three mission patches, their plain surround removed. A template is exported as one `.satme-planche` file and imported on another phone or PC — without your pictures, the callsign and name filled by the station that imports it. The sheet has its **event** (campaign, announced activity or a series in the gallery), is **filled by slide** strictly in place (slide 5 missing: box 5 empty), chooses **box by box** the version shown (Auto, received, corrected, fused), and gives the **event report** — sheet, slides, passes and their sky, timetable — as a web page or an **A4 PDF**.
 
 <p align="center">
 <img src="docs/images/pc-planche-decor.webp" width="58%" alt="The SSTV sheet in SatMe-PC (French page), Décor tab: six ISS pictures fitted large on a twelve-box template, the NASA « Earth's glow » background, the Expedition 75 patch placed on the left, its surround removed">
@@ -129,9 +129,13 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **📣 Upcoming activities** — in the **Agenda**, what the online sources announce that SatMe decodes: ISS SSTV (437.550 MHz, Robot 36 since 2026) and other satellites, ARISS contacts, SSDV, METEOR seen recently; your passes during them, a banner for each new one, "on the air now" from AMSAT reports, and **Préparer la campagne SSTV** that fills in the auto-pilot, to check. On by default, each source can be turned off.
 
+**🖼 The SSTV gallery by slide** — copies of the same slide together, a **mark** from 0 to 100 per picture, the number read at the bottom of ARISS slides, the **series' timetable** and the passes to wait for missing slides on; in the viewer, **Brute | Corrigée | Fusion**: the picture decoded again from its recording, its specks removed, its copies fused — the reception never changed.
+
 **🛰 SSTV options** — a **notice before a pass expected to send a slide still missing** (or only received with a low mark): « Slide 5 expected at 04:32 UTC, 49° — ISS pass », once per pass, on the phone and SatMe-PC; the **reception quality while a picture comes in** (sound level, clipping, each line's sync and SNR, the mark the picture heads for); **the sound of each SSTV pass** recorded and linked to its pictures, kept as long as you choose (never a recording behind a picture on a sheet or marked kept); a **QSL-style picture** signed with your callsign, locator, UTC time, satellite, frequency, mode and slide; and an **ARISS SSTV award pack** (the original pictures, their QSL, a summary ready for the gallery's form — nothing is sent). → [details](docs/station-pc.md#sstv-options)
 
 **🧭 The rotator's plan** — the whole pass planned before AOS: which side of the end stop, **flipped at 180°** over the zenith or a single unwind placed where the satellite is low; **hidden zones** (roof, tree); the plan drawn on the Suivi sky, and each logged contact's rotator path.
+
+**🎯 Rotator calibration** — a step-by-step assistant: the controller's own calibrations (O2, F2, O, F, as the K3NG firmware does them), a check with inclinometer and compass, a per-axis **software correction**; STOP always on screen, nothing moves without a click.
 
 **🛰 QO-100 with a drifting LNB** — the beacon calibration follows a drift of a few Hz/s, a **beacon lock** takes the jumps out of the whole transponder, and FT8 tolerates drift. This mitigates, it does not replace an **LNB held by a GPSDO reference** ([how](docs/station-pc.md#lnb-and-gpsdo-reference)).
 
@@ -142,7 +146,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🧭 A new page** — six workspaces in a side rail (Ciel, QO-100, DATV, Modes, Carnet, Station; keys 1–6), a header strip (what is followed, the active receiver, the next pass, a red **TX** light that only stops), a status bar, the **Ctrl+K** palette (a tab, a satellite, a callsign, a typed frequency), « ? » help on every card, the **built-in manual (F1)** with search, keyboard shortcuts. The header's **« Son »** chip: what the decoders hear, the rig's sound card recognised by name, one-key **Prepare the pass** and record. Non-satellite tabs (aircraft, ships, sondes) only when ticked.
 
-**🔌 Montage: the station as it is wired** — the station drawn from antenna to PC, lit live (cyan receives, red transmits, frequencies on the cables); drag-and-drop editing from a catalogue (dishes, LNBs, DX Patrol converters and PAs, GPSDOs including Leo Bodnar, bias-T, DC block…), photos cut out automatically, **what is missing** checked with dangers flagged (an LNB supply reaching an SDR board); which SatMe function holds which board, conflicts and how to free them, receive profiles applied in a safe order.
+**🔌 Montage: the station as it is wired** — the station drawn from antenna to PC, lit live (cyan receives, red transmits, frequencies on the cables); drag-and-drop editing from a catalogue (dishes, LNBs, DX Patrol converters and PAs, GPSDOs including Leo Bodnar, bias-T, DC block…), photos cut out automatically, **what is missing** checked with dangers flagged (an LNB supply reaching an SDR board); which SatMe function holds which board, conflicts and how to free them, receive profiles applied in a safe order. **Several plans** of the same station, the plan of what is running shown by itself, the detected chain kept as a plan.
 
 <p align="center">
 <img src="docs/images/pc-montage.png" width="49%" alt="Montage of a QO-100 station: dish, LNB, converters, ADALM-PLUTO, amplifier, IC-9700, MiniTiouner, GPSDOs, lit as a simulated transmission; SatMe's functions on the right">
@@ -280,7 +284,8 @@ The phone has a single USB-C port. A powered hub behind it carries everything: r
 ## Documentation
 
 - **[SatMe wiki](https://github.com/f4ioz/SatMe/wiki)**: the full guide, step by step, with screenshots — installation, passes, CAT, recording, SSTV, APRS, logbook, FAQ
-- **[SatMe-PC guide](docs/station-pc.md)**: every tab of the PC — QO-100 cockpit, DATV reception and transmission, SSTV, FT8 / FT4, voice to text, the SDR hardware, the safety rules
+- **[SatMe-PC guide (wiki)](https://github.com/f4ioz/SatMe/wiki/SatMe-PC)**: every SatMe-PC function and where to click, in twelve chapters, with screenshots — also as a PDF manual
+- [SatMe-PC built-in guide](docs/station-pc.md): the manual's text SatMe-PC opens on **F1**
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients
 - [SatMe GP server](https://github.com/f4ioz/SatMe-serveur): relays orbital elements (OMM/GP) to SatMe, to install on a Raspberry Pi, a Linux server or Proxmox
 - [Third-party components](THIRD-PARTY.md)
