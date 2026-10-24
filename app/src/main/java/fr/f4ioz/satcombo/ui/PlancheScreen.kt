@@ -163,7 +163,7 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         val x = m ?: return
         occupe = true
         scope.launch {
-            val r = withContext(Dispatchers.Default) { runCatching { ApiPlancheEvenement.remplitParDiapo(x, src, x.vides, tous) }.getOrNull() }
+            val r = withContext(Dispatchers.Default) { runCatching { ApiPlancheEvenement.remplitParDiapo(x, src, tous) }.getOrNull() }
             occupe = false
             if (r == null) return@launch
             change(r.modele); choix = null
@@ -601,13 +601,10 @@ private fun OngletImages(
         FilterChip(selected = filtre.isBlank(), onClick = { onFiltre("") }, label = { Text(t("sstv_filter_all"), fontSize = 11.sp) })
         sats.forEach { s -> FilterChip(selected = filtre == s, onClick = { onFiltre(s) }, label = { Text(s, fontSize = 11.sp) }) }
     }
-    // « Fill by slide »: 1/12, 2/12… the best copy of each; a missing slide's box empty or not.
+    // « Fill by slide »: slide n in box n, the best copy of each; a missing slide's box left empty.
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Button(onClick = { onParDiapo(filtre != "@ev") }) { Text(t("planche_remplir_diapos"), fontSize = 11.sp) }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onChange(m.copy(vides = !m.vides)) }) {
-            Checkbox(checked = m.vides, onCheckedChange = { onChange(m.copy(vides = it)) })
-            Text(t("planche_garder_vides"), color = TextLo, fontSize = 11.sp)
-        }
+        Text(t("planche_garder_vides"), color = TextLo, fontSize = 11.sp)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(onClick = {
@@ -732,6 +729,7 @@ private fun OngletDisposition(
     Interrupteur(t("planche_legende"), t("planche_legende_desc"), m.legende) { onChange(Planche.reajuste(m.copy(legende = it))) }
     Interrupteur(t("planche_numeros"), t("planche_numeros_desc"), m.numeros) { onChange(m.copy(numeros = it)) }
     Interrupteur(t("planche_corrigees"), t("planche_corrigees_desc"), m.corrigees) { onChange(m.copy(corrigees = it)) }
+    if (m.corrigees) Interrupteur(t("planche_marque_traitees"), t("planche_marque_traitees_desc"), m.marqueTraitees) { onChange(m.copy(marqueTraitees = it)) }
 }
 
 @Composable

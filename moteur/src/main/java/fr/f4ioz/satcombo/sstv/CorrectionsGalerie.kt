@@ -133,12 +133,16 @@ class CorrectionsGalerie(
     fun fichier(galerie: File, nom: String): File? = if (nomValide(nom)) File(dossier(galerie), nom).takeIf { it.isFile } else null
 
     /**
-     * What a sheet shows for picture [png] when it takes the processed
-     * versions: its group's fused picture (when made), else its corrected
-     * version, else null (the picture as received).
+     * What a sheet shows in the box of picture [png] (mark [note]) when it
+     * takes the best versions: of its slide's versions — [png] as received,
+     * the corrected version of each copy of its group [groupe], the group's
+     * fusion —, the best marked; null when [png] as received is (a tie
+     * keeps the picture as received).
      */
-    fun pourPlanche(galerie: File, png: String, groupe: String?): Pair<File, Fiche>? {
-        val f = groupe?.let { fusion(galerie, it) }?.takeIf { png in it.copies } ?: corrigee(galerie, png) ?: return null
+    fun pourPlanche(galerie: File, png: String, note: Int, groupe: ClassementSstv.Groupe?): Pair<File, Fiche>? {
+        val copies = groupe?.images?.map { it.fileName }?.takeIf { png in it } ?: listOf(png)
+        val versions = copies.mapNotNull { corrigee(galerie, it) } + listOfNotNull(groupe?.takeIf { it.images.size > 1 }?.let { fusion(galerie, it.id) })
+        val f = versions.filter { it.noteApres > note }.maxByOrNull { it.noteApres } ?: return null
         return File(dossier(galerie), f.fichier) to f
     }
 

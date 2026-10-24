@@ -223,11 +223,11 @@ object PlancheRenduPc {
                 dessineRempli(g, img.first, ri)
                 if (bande > 0f) {
                     g.color = Color.WHITE; g.fill(Rectangle2D.Float(r.x, ri.y + ri.height, r.width, bande))
-                    texteAjuste(g, Planche.legende(img.second, v.indicatif), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
+                    texteAjuste(g, Planche.legende(img.second, v.indicatif, m.marqueTraitees), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
                 }
                 g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r)
-                // A processed picture says so, legend or not.
-                if (bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
+                // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
+                if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
                 g.color = couleur(0xCC05080D.toInt()); g.fill(r)

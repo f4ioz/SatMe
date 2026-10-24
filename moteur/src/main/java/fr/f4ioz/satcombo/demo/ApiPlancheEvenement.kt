@@ -31,7 +31,7 @@ import java.io.File
  *
  * Routes under `/planche`: `/evenements?id=`, `/evenement?id=&ev=` (""
  * chosen by itself again, « aucun » none), `/galerie?id=`,
- * `/remplit-diapos?id=&vides=&tous=`, `/relance?oublie=`, `/analyse`,
+ * `/remplit-diapos?id=&tous=`, `/relance?oublie=`, `/analyse`,
  * `/plans`, `/rapport?id=&chaine=&plan=&dl=`.
  */
 object ApiPlancheEvenement {
@@ -142,11 +142,11 @@ object ApiPlancheEvenement {
     }
 
     /** « Fill by slide »: the event's groups (or the whole gallery's with [tous]) in slide order. */
-    fun remplitParDiapo(m: Planche.Modele, src: Source, vides: Boolean, tous: Boolean): Planche.ParDiapo {
+    fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean): Planche.ParDiapo {
         val e = src.classement.etat(src.dossier, src.images(), attendre = true)
         val ev = m.evenement
-        return if (ev != null && !tous) Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, vides)
-            else Planche.remplitParDiapo(m, e.groupes, 12, vides)
+        return if (ev != null && !tous) Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb)
+            else Planche.remplitParDiapo(m, e.groupes, 12)
     }
 
     /** The event's report: its pictures, passes, the sheet [m] (if any), the chain of [plan] when [avecChaine]. */
@@ -203,7 +203,7 @@ object ApiPlancheEvenement {
         "/remplit-diapos" -> {
             val m = modele(p("id"))?.let { assure(it, src, rangement, verrou) }
             if (m == null) null else {
-                val r = remplitParDiapo(m, src, p("vides") == "1", p("tous") == "1")
+                val r = remplitParDiapo(m, src, p("tous") == "1")
                 synchronized(verrou) { rangement.enregistre(r.modele) }
                 json(JSONObject().put("ok", true).put("cases", r.modele.cases.size).put("manquantes", JSONArray(r.manquantes))
                     .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases))

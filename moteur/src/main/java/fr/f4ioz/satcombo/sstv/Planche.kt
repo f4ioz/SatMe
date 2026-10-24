@@ -92,8 +92,10 @@ object Planche {
         val diapos: Map<String, String> = emptyMap(),
         /** « Fill by slide » leaves a box empty for a slide not received (else the next one moves up). */
         val vides: Boolean = false,
-        /** Each picture shown as its fused or corrected version when there is one ([CorrectionsGalerie.pourPlanche]), marked so. */
-        val corrigees: Boolean = false
+        /** Each box shows the best marked of its slide's versions — as received, corrected, fused ([CorrectionsGalerie.pourPlanche]). */
+        val corrigees: Boolean = false,
+        /** Say « corrigée » / « fusion » on the sheet itself (legend or corner); off: a clean sheet, the information kept apart. */
+        val marqueTraitees: Boolean = false
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
@@ -453,9 +455,9 @@ object Planche {
             .maxByOrNull { it.value }?.key ?: ""
 
     /** The line under a picture: "PD 120 | 2025/05/31 20:00 UTC | F4IOZ", and « corrigée » for a processed version ([SstvMeta.SstvShot.traitement]). */
-    fun legende(s: SstvMeta.SstvShot, indicatif: String): String =
+    fun legende(s: SstvMeta.SstvShot, indicatif: String, avecTraitement: Boolean = false): String =
         listOf(s.mode, if (s.timeMs > 0) minute.format(Date(s.timeMs)) + " UTC" else "",
-            indicatif.ifBlank { s.callsign }, s.traitement).filter { it.isNotBlank() }.joinToString(" | ")
+            indicatif.ifBlank { s.callsign }, if (avecTraitement) s.traitement else "").filter { it.isNotBlank() }.joinToString(" | ")
 
     /**
      * Boxes filled in order of reception with the pictures given, one per box,
@@ -520,21 +522,26 @@ object Planche {
     }
 
     /**
-     * « Fill by slide »: the boxes take [groupes]' best pictures in slide
-     * order ([ordreParDiapo]); a fitted sheet is fitted to them (as many as
-     * its template has boxes). Each picture keeps the slide it went in for.
+     * « Fill by slide », strictly by place: slide n in box n (slide 1 in
+     * box 1 … slide 12 in box 12), the best marked copy of that slide; a
+     * slide not received leaves its box **empty** (nothing moves up). Only
+     * numbered groups go in — by hand or read first, an estimated number
+     * only for a slide no surer group has ([ordreParDiapo]); groups with no
+     * number are left out. A template with fewer boxes than slides takes
+     * slides 1..k; a fitted sheet is fitted to them. Each picture keeps the
+     * slide it went in for.
      */
-    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12, vides: Boolean = m.vides): ParDiapo {
-        val ordre = ordreParDiapo(groupes, total, vides)
+    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12): ParDiapo {
+        val parN = ordreParDiapo(groupes, total, vides = true).filterNotNull().filter { it.diapo in 1..total }.associateBy { it.diapo }
         val place = if (m.ajustee) nombreMax(m) else m.cases.size
-        val pris = ordre.take(place)
-        val etiquettes = pris.filterNotNull().filter { it.diapo > 0 }.associate { it.fichier to numeroDiapo(it.diapo, it.total, it.origine) }
-        val base = m.copy(diapos = etiquettes, vides = vides)
+        val k = minOf(place, total)
+        val pris = (1..k).map { parN[it] }
+        val etiquettes = pris.filterNotNull().associate { it.fichier to numeroDiapo(it.diapo, it.total, it.origine) }
+        val base = m.copy(diapos = etiquettes, vides = true)
         val n = if (m.ajustee) ajusteA(base, pris.map { it?.fichier })
             else base.copy(images = pris.withIndex().filter { it.value != null }.associate { it.index to it.value!!.fichier })
-        val recues = ordre.filterNotNull().filter { it.diapo > 0 }.map { it.diapo }.toSet()
-        return ParDiapo(n, (1..total).filter { it !in recues }, ordre.count { it != null && it.diapo == 0 },
-            ordre.drop(place).count { it != null })
+        val sansNumero = groupes.count { it.images.isNotEmpty() && (it.diapo <= 0 || it.origine == ClassementSstv.Origine.AUCUNE) }
+        return ParDiapo(n, (1..total).filter { it !in parN }, sansNumero, parN.keys.count { it > k })
     }
 
     /** The number on box [i]: the slide its picture went in for, else its place (« 3/12 »). */
@@ -700,6 +707,7 @@ object Planche {
         val placees = m.images.values.toSet()
         m.diapos.filterKeys { it in placees }.toSortedMap().forEach { (f, d) -> append("diapo=").append(f).append(';').append(d.replace(";", "")).append('\n') }
         if (m.corrigees) append("corrigees=1\n")
+        if (m.marqueTraitees) append("marquetraitees=1\n")
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
@@ -732,6 +740,7 @@ object Planche {
                 "vides" -> m = m.copy(vides = v == "1")
                 "diapo" -> if (v.contains(';') && diapos.size < 200) diapos[v.substringBefore(';')] = v.substringAfter(';').take(12)
                 "corrigees" -> m = m.copy(corrigees = v == "1")
+                "marquetraitees" -> m = m.copy(marqueTraitees = v == "1")
             }
         }
         m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine,

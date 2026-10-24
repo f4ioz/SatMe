@@ -102,9 +102,14 @@ class CorrectionsGalerieTest {
         assertEquals(60, f.noteAvant)
         assertTrue("${f.noteApres}", f.noteApres > 60)
         assertEquals(f, c.fusion(d, g.id))
-        // A sheet takes the fusion for a picture of the group, the corrected one else.
-        assertEquals(f.fichier, c.pourPlanche(d, l[1].fileName, g.id)!!.first.name)
-        assertNull(c.pourPlanche(d, l[1].fileName, null))
+        // A sheet takes the best marked version of the slide: the fusion here.
+        assertEquals(f.fichier, c.pourPlanche(d, l[1].fileName, 60, g)!!.first.name)
+        assertNull(c.pourPlanche(d, l[1].fileName, 60, null))
+        // A corrected copy marked better than the fusion wins; a picture as received marked best keeps its place.
+        val corr = c.corrige(d, l[0]).fiche!!
+        val meilleure = listOf(corr, f).maxByOrNull { it.noteApres }!!
+        assertEquals(meilleure.fichier, c.pourPlanche(d, l[2].fileName, 60, g)!!.first.name)
+        assertNull(c.pourPlanche(d, l[2].fileName, 100, g))
         assertEquals(CorrectionsGalerie.UNE_COPIE, c.fusionne(d, g.copy(images = l.take(1))).erreur)
     }
 

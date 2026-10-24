@@ -59,28 +59,44 @@ class PlancheEvenementTest {
 
         // A template of 12 boxes: slide n in box n, its number kept for the box; slides missing said.
         val m = Planche.genereGrille("p1", "Série 34")
-        val r = Planche.remplitParDiapo(m, gs, 12, vides = true)
-        assertEquals("d.png", r.modele.images[0]); assertNull(r.modele.images[1]); assertEquals("b.png", r.modele.images[2])
+        val r = Planche.remplitParDiapo(m, gs, 12)
+        assertEquals(mapOf(0 to "d.png", 2 to "b.png"), r.modele.images)   // the groups with no number are not placed
         assertEquals("1/12", Planche.etiquette(r.modele, 0))
         assertEquals("3/12", Planche.etiquette(r.modele, 2))
+        assertEquals("2/12", Planche.etiquette(r.modele, 1))   // an empty box: its place
         assertEquals((1..12).filter { it != 1 && it != 3 }, r.manquantes)
         assertEquals(2, r.sansNumero)
-        assertEquals(2, r.horsCases)   // the two with no number found no box
-        // Without empty boxes, they all fit.
-        val r2 = Planche.remplitParDiapo(m, gs, 12, vides = false)
-        assertEquals(listOf("d.png", "b.png", "f.png", "e.png"), Planche.choisies(r2.modele))
-        assertEquals("3/12", Planche.etiquette(r2.modele, 1))   // slide 3 moved up into box 2
-        // A picture with no number: its box's place.
-        assertEquals("3/12", Planche.etiquette(r2.modele, 2))
+        assertEquals(0, r.horsCases)
+    }
+
+    /** Olivier's rule: slide n in box n, slide 5 missing leaves box 5 empty, the best marked copy, no estimate over a surer number. */
+    @Test fun remplir_par_diapo_strictement_par_place() {
+        val gs = (1..12).filter { it != 5 }.map { n ->
+            groupe("g$n", n, Origine.LU, shot("a$n.png", T0 + n * 1000L) to 50, shot("b$n.png", T0 + n * 1000L + 500) to 90)
+        } + listOf(groupe("e7", 7, Origine.ESTIME, shot("est7.png", T0) to 99),     // slide 7 is read already: not placed
+            groupe("e5", 0, Origine.AUCUNE, shot("rien.png", T0) to 99))              // no number: not placed
+        val m = Planche.genereGrille("p", "x")
+        val r = Planche.remplitParDiapo(m, gs, 12)
+        for (n in 1..12) if (n == 5) assertNull(r.modele.images[4]) else assertEquals("b$n.png", r.modele.images[n - 1])
+        assertEquals(listOf(5), r.manquantes)
+        assertEquals("5/12", Planche.etiquette(r.modele, 4))
+        // An estimated number for a slide nobody else has: it takes that slide's box.
+        val r2 = Planche.remplitParDiapo(m, gs + groupe("e5b", 5, Origine.ESTIME, shot("est5.png", T0) to 70), 12)
+        assertEquals("est5.png", r2.modele.images[4]); assertEquals("≈5/12", Planche.etiquette(r2.modele, 4))
+        // Fewer boxes than slides: slides 1..k.
+        val petit = m.copy(cases = m.cases.take(4), images = emptyMap())
+        val r3 = Planche.remplitParDiapo(petit, gs, 12)
+        assertEquals(mapOf(0 to "b1.png", 1 to "b2.png", 2 to "b3.png", 3 to "b4.png"), r3.modele.images)
+        assertEquals(7, r3.horsCases)   // 6..12 received but without a box (5 missing)
     }
 
     @Test fun le_numero_estime_se_voit_et_suit_l_image_echangee() {
         val c = shot("c.png", T0); val d = shot("d.png", T0 + 1000)
         val gs = listOf(groupe("g5", 5, Origine.ESTIME, c to 80), groupe("g6", 6, Origine.LU, d to 70))
-        val r = Planche.remplitParDiapo(Planche.genereGrille("p", "x"), gs, 12, vides = false)
-        assertEquals("≈5/12", Planche.etiquette(r.modele, 0))
-        val e = Planche.echange(r.modele, 0, 1)
-        assertEquals("6/12", Planche.etiquette(e, 0)); assertEquals("≈5/12", Planche.etiquette(e, 1))
+        val r = Planche.remplitParDiapo(Planche.genereGrille("p", "x"), gs, 12)
+        assertEquals("≈5/12", Planche.etiquette(r.modele, 4))
+        val e = Planche.echange(r.modele, 4, 5)
+        assertEquals("6/12", Planche.etiquette(e, 4)); assertEquals("≈5/12", Planche.etiquette(e, 5))
         assertEquals("3/12", Planche.etiquette(e, 2))
         assertEquals("≈5/12", ClassementSstv.badge(5, 12, Origine.ESTIME))
         assertEquals("5/12✎", ClassementSstv.badge(5, 12, Origine.MAIN))
@@ -93,7 +109,7 @@ class PlancheEvenementTest {
         val gs = listOf(groupe("g1", 1, Origine.LU, a to 80), groupe("g4", 4, Origine.LU, b to 80))
         val m = Planche.ajuste(Planche.genereGrille("p", "x"), listOf("z.png"))
         assertTrue(m.ajustee)
-        val r = Planche.remplitParDiapo(m, gs, 12, vides = true)
+        val r = Planche.remplitParDiapo(m, gs, 12)
         // Four boxes: 1, 2 and 3 empty… up to 4; the empty ones at the end dropped.
         assertEquals(4, r.modele.cases.size)
         assertEquals(mapOf(0 to "a.png", 3 to "b.png"), r.modele.images)

@@ -21,12 +21,16 @@ class PlancheCorrigeesTest {
         assertTrue(Planche.lit("a", Planche.ecrit(m))!!.corrigees)
         assertFalse(Planche.lit("a", Planche.ecrit(m.copy(corrigees = false)))!!.corrigees)
         assertFalse(Planche.ecrit(m.copy(corrigees = false)).contains("corrigees"))
+        assertFalse(Planche.lit("a", Planche.ecrit(m))!!.marqueTraitees)
+        assertTrue(Planche.lit("a", Planche.ecrit(m.copy(marqueTraitees = true)))!!.marqueTraitees)
     }
 
     @Test fun la_legende_le_dit() {
         val s = SstvMeta.SstvShot(fileName = "x.png", mode = "Robot 36", timeMs = 0L)
         assertEquals("Robot 36 | F4IOZ", Planche.legende(s, "F4IOZ"))
-        assertEquals("Robot 36 | F4IOZ | corrigée", Planche.legende(s.copy(traitement = "corrigée"), "F4IOZ"))
+        // Said only when the sheet asks: a clean sheet by default.
+        assertEquals("Robot 36 | F4IOZ", Planche.legende(s.copy(traitement = "corrigée"), "F4IOZ"))
+        assertEquals("Robot 36 | F4IOZ | corrigée", Planche.legende(s.copy(traitement = "corrigée"), "F4IOZ", avecTraitement = true))
         // Never written to the sidecar.
         assertFalse(SstvMeta.encode(s.copy(traitement = "corrigée")).contains("corrig"))
     }

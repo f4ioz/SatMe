@@ -43,7 +43,7 @@ object PagePlanche {
         "ev_images", "filtre_ev", "remplir_diapos", "garder_vides", "rempli_diapos", "rempli_toutes", "sans_numero", "hors_cases",
         "relancer", "relancer_aide", "relancer_oublie", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
         "note", "origine_lu", "origine_main", "origine_estime", "rapport", "rapport_titre", "rapport_aide", "rapport_chaine",
-        "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees")
+        "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees", "marque_traitees")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -274,6 +274,7 @@ function litModele(txt) {
     else if (k === 'vides') m.vides = v === '1';
     else if (k === 'diapo') { const j = v.indexOf(';'); if (j > 0) m.diapos[v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'corrigees') m.corrigees = v === '1';
+    else if (k === 'marquetraitees') m.marqueTraitees = v === '1';
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
   });
@@ -291,6 +292,7 @@ function ecrit(m) {
   if (m.vides) s += 'vides=1\n';
   Object.keys(m.diapos).forEach(f => { if (Object.values(m.images).includes(f)) s += 'diapo=' + f + ';' + m.diapos[f] + '\n'; });
   if (m.corrigees) s += 'corrigees=1\n';
+  if (m.marqueTraitees) s += 'marquetraitees=1\n';
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -460,18 +462,16 @@ function panneauImages() {
   sel.value = filtre;
   p.appendChild(el('div', { class: 'rangee' }, [sel,
     el('button', { class: 'discret', text: T.remplir, onclick: async () => { await sauveMaintenant(); await lire('/remplit', Object.assign({ id: id }, filtreParams())); await charge(id); } })]));
-  // « Fill by slide »: the best copy of each slide in slide order.
-  const vides = el('input', { type: 'checkbox' }); vides.checked = !!M.vides;
-  vides.addEventListener('change', () => { M.vides = vides.checked; change(); });
+  // « Fill by slide »: slide n in box n, the best copy of each; a missing slide's box left empty.
   p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
     el('button', { class: 'primaire', text: T.remplir_diapos, onclick: async () => {
       await sauveMaintenant();
-      const j = await lire('/remplit-diapos', { id: id, vides: vides.checked ? 1 : 0, tous: filtre === '@ev' ? 0 : 1 });
+      const j = await lire('/remplit-diapos', { id: id, tous: filtre === '@ev' ? 0 : 1 });
       await charge(id);
       if (j && j.ok) g('message').textContent = (j.manquantes.length ? tf('rempli_diapos', j.manquantes.join(', ')) : T.rempli_toutes) +
         (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '');
     } }),
-    el('label', { class: 'rangee' }, [vides, el('span', { class: 'aide', text: T.garder_vides })])]));
+    el('span', { class: 'aide', text: T.garder_vides })]));
   // How many pictures: the template's boxes, or the sheet fitted to fewer.
   const max = M.origine.length || M.cases.length, n = M.origine.length ? M.cases.length : 0;
   const rn = el('div', { class: 'rangee', style: 'margin-top:6px' }, [el('span', { class: 'aide', text: T.nb_images })]);
@@ -594,8 +594,9 @@ function panneauDispo() {
     if (M.origine.length) { await sauveMaintenant(); await lire('/nombre', { id: id, n: M.cases.length, sat: filtre }); await charge(id); }
   }));
   p.appendChild(caseACocher(T.numeros, M.numeros, v => { M.numeros = v; change(); }));
-  // The processed pictures (fused, corrected) in place of those received, marked so on the sheet.
-  p.appendChild(caseACocher(T.corrigees, !!M.corrigees, v => { M.corrigees = v; change(); }));
+  // The best of each slide's versions (as received, corrected, fused); said on the sheet only when asked.
+  p.appendChild(caseACocher(T.corrigees, !!M.corrigees, v => { M.corrigees = v; change(); panneauDispo(); }));
+  if (M.corrigees) p.appendChild(caseACocher(T.marque_traitees, !!M.marqueTraitees, v => { M.marqueTraitees = v; change(); }));
   const r = el('div', { class: 'rangee' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_case, onclick: () => {
     const der = M.cases[M.cases.length - 1] || { x: 0.4, y: 0.4, w: 0.2, h: 0.2 * ratio * 0.75 };

@@ -80,11 +80,14 @@ class ApiCorrectionSstv(
 
     /**
      * A sheet's picture [p] (its file, what is known of it) as the sheet shows
-     * it with [Planche.Modele.corrigees]: its processed version when there is
-     * one ([CorrectionsGalerie.pourPlanche]), marked so ([SstvMeta.SstvShot.traitement]); else as it is.
+     * it with [Planche.Modele.corrigees]: the best marked of its slide's
+     * versions ([CorrectionsGalerie.pourPlanche]), what it is kept in
+     * [SstvMeta.SstvShot.traitement] (shown only with [Planche.Modele.marqueTraitees]); else as it is.
      */
     fun pourPlanche(p: Pair<File, SstvMeta.SstvShot>): Pair<File, SstvMeta.SstvShot> {
-        val (f, fiche) = runCatching { corrections.pourPlanche(dossier(), p.second.fileName, groupeDe(p.second.fileName)?.takeIf { it.images.size > 1 }?.id) }.getOrNull() ?: return p
+        val g = groupeDe(p.second.fileName)
+        val note = g?.notes?.get(p.second.fileName) ?: -1
+        val (f, fiche) = runCatching { corrections.pourPlanche(dossier(), p.second.fileName, note, g) }.getOrNull() ?: return p
         return f to p.second.copy(traitement = etiquette(fiche))
     }
 

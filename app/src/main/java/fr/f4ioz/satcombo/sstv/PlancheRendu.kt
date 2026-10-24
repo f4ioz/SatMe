@@ -195,13 +195,13 @@ object PlancheRendu {
                 dessineRempli(c, img.first, ri)
                 if (bande > 0f) {
                     c.drawRect(RectF(r.left, ri.bottom, r.right, r.bottom), Paint().apply { color = Color.WHITE })
-                    texteAjuste(c, Planche.legende(img.second, v.indicatif),
+                    texteAjuste(c, Planche.legende(img.second, v.indicatif, m.marqueTraitees),
                         RectF(r.left + 3 * k, ri.bottom, r.right - 3 * k, r.bottom), Color.BLACK, gras = false)
                 }
                 c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 2.5f * k })
-                // A processed picture says so, legend or not.
-                if (bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(c, img.second.traitement, ri, k)
+                // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
+                if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(c, img.second.traitement, ri, k)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
                 c.drawRect(r, Paint().apply { color = 0xCC05080D.toInt() })
