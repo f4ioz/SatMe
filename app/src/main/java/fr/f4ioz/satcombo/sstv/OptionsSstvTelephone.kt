@@ -127,7 +127,10 @@ object OptionsSstvTelephone {
         val st = SettingsStore(ctx)
         val acts = runCatching { ActivitesTelephone.enLigne(ctx).liste(st.reglagesActivites) }.getOrDefault(emptyList())
         val serie = acts.firstOrNull { it.type == fr.f4ioz.satcombo.domain.ActivitesAVenir.Type.SSTV && s.timeMs in (it.debutMs - 3_600_000L)..(it.finMs + 3_600_000L) }?.titre.orEmpty()
-        val g = runCatching { ClassementTelephone.etat(ctx).groupes.firstOrNull { gr -> gr.images.any { it.fileName == s.fileName } } }.getOrNull()
+        // The series' groups first: their numbers include those the timetable estimates.
+        val e = runCatching { ClassementTelephone.etat(ctx) }.getOrNull()
+        val g = (e?.let { runCatching { ClassementTelephone.prevision(ctx, it) }.getOrNull()?.groupes }.orEmpty() + e?.groupes.orEmpty())
+            .firstOrNull { gr -> gr.images.any { it.fileName == s.fileName } }
         val pas = passagesAutour(ctx, s)
         val i = QslSstv.infos(s, st.callsign, SstvHub.qthLocator.ifBlank { st.manualLocator }, pas, acts, emptyList(), serie.take(60),
             if (s.diapo > 0) s.diapo else g?.diapo ?: 0, if (s.diapos > 0) s.diapos else g?.total ?: 12, options(ctx).qslSatme)

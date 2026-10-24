@@ -170,7 +170,9 @@ class OptionsSstvPc(
         val camps = campagnes()
         val serie = acts.firstOrNull { it.type == fr.f4ioz.satcombo.domain.ActivitesAVenir.Type.SSTV && s.timeMs in (it.debutMs - 3_600_000L)..(it.finMs + 3_600_000L) }?.titre
             ?: camps.firstOrNull { s.timeMs in (it.debutMs - 3_600_000L)..(it.finMs + 3_600_000L) }?.nom.orEmpty()
-        val g = runCatching { classement.etat().groupes.firstOrNull { gr -> gr.images.any { it.fileName == s.fileName } } }.getOrNull()
+        // The series' groups first: their numbers include those the timetable estimates.
+        val g = runCatching { classement.prevision()?.groupes?.firstOrNull { gr -> gr.images.any { it.fileName == s.fileName } } }.getOrNull()
+            ?: runCatching { classement.etat().groupes.firstOrNull { gr -> gr.images.any { it.fileName == s.fileName } } }.getOrNull()
         val diapo = if (s.diapo > 0) s.diapo else g?.diapo ?: 0
         val note = g?.notes?.get(s.fileName) ?: -1
         val pas = passagesAutour(s)
@@ -218,8 +220,9 @@ class OptionsSstvPc(
     /** The best copy of each slide of the series under way (numbered ones first, in slide order). */
     fun meilleuresDeLaSerie(): List<String> {
         val p = runCatching { classement.prevision() }.getOrNull() ?: return emptyList()
-        return p.groupes.filter { it.diapo > 0 }.sortedBy { it.diapo }.distinctBy { it.diapo }
-            .map { g -> g.images.maxByOrNull { g.notes[it.fileName] ?: -1 }?.fileName ?: g.meilleure.fileName }
+        return p.groupes.filter { it.diapo > 0 }.groupBy { it.diapo }.toSortedMap().values.map { gs ->
+            gs.flatMap { g -> g.images.map { it.fileName to (g.notes[it.fileName] ?: -1) } }.maxByOrNull { it.second }!!.first
+        }
     }
 
     // ------------------------------------------------------------------ the page
