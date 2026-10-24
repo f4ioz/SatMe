@@ -1645,6 +1645,14 @@ ${STYLE_CADRE}
   .pal-pied { display:flex; gap:16px; flex-wrap:wrap; padding:7px 14px; border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-3); }
   .dlg-aide { width:min(640px,94vw); padding:14px 16px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   .dlg-tete { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:15px; }
+  /* The rotor calibration assistant: the live reading and STOP stay on top whatever the step. */
+  .etal-haut { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; position:sticky; top:0; background:var(--s2); padding:4px 0; z-index:1; }
+  .etal-stop { margin-left:auto; font-size:16px; font-weight:700; padding:10px 22px; }
+  .etal-pas { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 10px; }
+  .etal-pas button { font-size:var(--fs-xs); padding:3px 8px; }
+  .etal-e p { margin:6px 0; line-height:1.5; }
+  .etal-tab { margin:8px 0; }
+  .etal-tab th, .etal-tab td { padding:3px 6px; text-align:right; border-bottom:1px solid var(--ligne); }
   .aide-arret { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border-radius:var(--r2); background:rgba(255,90,54,.12); border:1px solid rgba(255,90,54,.55); margin-bottom:12px; line-height:1.5; }
   .aide-arret kbd { font-size:13px; padding:1px 8px; border-color:var(--tx); color:#FFB3A1; }
   .tx-mot { color:var(--tx); }
@@ -4266,6 +4274,7 @@ ${rail()}
       </div>
       <div class="etat" id="rot-statut"></div>
       <div class="diag" id="rot-diag"></div>
+      <div class="ligne"><button onclick="etalOuvre()" title="Pas à pas : le zéro et la butée haute de l'élévation, les butées d'azimut (commandes O2, F2, O, F du contrôleur), une vérification à l'inclinomètre et à la boussole, et si besoin une correction logicielle">Calibrer le rotor…</button><span class="petit" id="rot-corr"></span></div>
       <details id="rot-reg" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Réglages du rotor</summary>
         <div class="ligne"><span class="petit" style="min-width:120px">Course en azimut</span><select id="r-maxAz" title="360° : un tour, butée à butée. 450° ou 540° : un recouvrement, le même ciel par deux côtés"><option value="360">360° (un tour)</option><option value="450">450° (recouvrement 90°)</option><option value="540">540° (recouvrement 180°)</option></select>
           <span class="petit">Butée</span><select id="r-butee" title="Où le câble arrive en bout de course : un passage qui la franchit fait le tour (déroulement), sauf retournement"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select></div>
@@ -4282,6 +4291,9 @@ ${rail()}
           <svg id="r-plan-ciel" viewBox="-110 -110 220 220" style="width:170px;height:170px;flex:none;touch-action:none;cursor:crosshair" role="img" aria-label="Zones cachées et plan du prochain passage : glisser pour tracer une zone"></svg>
           <div class="petit" id="r-plan-txt" style="flex:1"></div></div>
         <div class="ligne"><button onclick="reglagesRotor()">Appliquer</button></div>
+        <div class="ligne"><span class="petit" style="min-width:120px" title="Ce que lit le contrôleur ↔ l'angle réel, en lu:réel;lu:réel (ses propres nombres). Vide : aucune correction">Correction logicielle</span><span class="petit">az</span><input id="r-corrAz" placeholder="aucune" style="flex:1"><span class="petit">él</span><input id="r-corrEl" placeholder="ex. 0:0;180:160" style="flex:1"></div>
+        <div class="ligne"><button onclick="corrRotor()">Appliquer la correction</button><button onclick="corrRotorRaz()">Remettre à zéro</button></div>
+        <div class="aide">La correction logicielle traduit ce que lit le contrôleur en angle réel (un point : un décalage ; deux : décalage et échelle ; plus : par morceaux), dans les deux sens : consignes envoyées et positions affichées. Les butées et l'élévation maximale restent en degrés réels ; le contrôleur ne reçoit jamais plus que sa course. L'assistant « Calibrer le rotor… » la remplit depuis sa vérification.</div>
         <div class="aide">Le plan du passage est fait avant l'AOS, pour tout le passage : de quel côté de la butée, droit ou retourné, et s'il le faut le seul moment où le rotor change (retournement ou déroulement), joué à la vitesse mesurée du rotor. Il garde le plus de passage, compté selon l'élévation (une minute à 60° vaut bien plus qu'à 5°), puis la plus petite course, puis le moins de changements. Avec 90° au plus, un passage qui franchit la butée demande un déroulement (un tour, ~1 min sans réception) : le plan le place quand le satellite est bas ou caché. Avec 180°, le rotor se retourne et suit par-dessus le zénith, sans tour. Le rotor attend au départ du plan quelques minutes avant l'AOS. Violet : le rotor prévu ; ambre : retourné ; rouge : un changement en cours et son heure ; gris : les zones cachées.</div>
       </details>
     </div>
@@ -4431,6 +4443,74 @@ ${rail()}
 </dialog>
 <div id="pop" role="tooltip" hidden></div>
 <div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="etal-dlg" class="dlg-mt" style="width:min(820px,96vw)" aria-labelledby="etal-t" onclose="etalFerme()">
+  <div class="dlg-tete"><b id="etal-t">Calibrer le rotor</b><button class="discret" onclick="g('etal-dlg').close()" aria-label="Fermer">✕</button></div>
+  <div class="etal-haut">
+    <div class="petit">Contrôleur (C2, brut) <span class="val" id="etal-brut">—</span></div>
+    <div class="petit">SatMe (corrigé) <span class="val" id="etal-corr">—</span></div>
+    <button class="rouge etal-stop" onclick="etalPost('stop')" title="Arrêt immédiat des moteurs (commande S)">■ STOP</button>
+  </div>
+  <div class="petit aide" id="etal-suivi" style="margin:6px 0"></div>
+  <div class="etal-pas" id="etal-pas" role="tablist"></div>
+
+  <section class="etal-e" data-e="0">
+    <p class="petit">Tant que cet assistant est ouvert, <b>le suivi automatique est arrêté</b> (il reprend tel qu'il était à la fermeture). Rien ne bouge sans un clic de ta part : pour amener le mât aux butées, utilise <b>le boîtier de commande</b> (ou les boutons de la vérification, plus loin). Le bouton <b>STOP</b> envoie <code>S</code> à tout moment.</p>
+    <p class="petit">Les étapes 1 à 3 utilisent les commandes de calibration du contrôleur, celles du GS-232A reprises par le firmware K3NG : <code>O2</code> / <code>F2</code> pour l'élévation, <code>O</code> / <code>F</code> pour l'azimut. Chacune lit le potentiomètre <b>là où est le mât</b> et l'écrit tout de suite dans l'EEPROM. Le firmware attend alors une touche : SatMe l'envoie et lit la réponse (« Wrote to memory »).</p>
+    <p class="petit" id="etal-rotctld" hidden style="color:var(--warn)">Rotor par rotctld (Hamlib) : les commandes O/F du contrôleur ne passent pas par là. Seule la correction logicielle de SatMe (étapes 4 et 5) s'applique.</p>
+    <div class="ligne"><button class="primaire" onclick="etalVa(1)">Compris, commencer</button></div>
+  </section>
+
+  <section class="etal-e" data-e="1" hidden>
+    <b>Élévation : le zéro</b>
+    <p class="petit">Mets l'antenne à <b>0° réels</b> avec le boîtier, vérifiés à l'inclinomètre posé sur le boom. Attends qu'elle soit immobile, puis envoie <code>O2</code> : la position actuelle devient 0° pour le contrôleur.</p>
+    <div class="ligne"><button onclick="etalCmd('O2', 'l\'élévation à 0° réels')">Envoyer O2 (ici = 0°)</button><button onclick="etalVa(2)">Passer</button></div>
+  </section>
+
+  <section class="etal-e" data-e="2" hidden>
+    <b>Élévation : la butée haute</b>
+    <p class="petit">Amène l'antenne en <b>butée haute réelle</b> avec le boîtier. Quel angle réel montre l'inclinomètre (de 0 à 180, au-delà de 90 en comptant depuis l'horizon de départ) ?</p>
+    <div class="ligne"><span class="petit">Angle réel en haut</span><input id="etal-haut" value="180" style="max-width:80px" oninput="etalHautMontre()"><span class="petit">°</span></div>
+    <div id="etal-haut-180">
+      <p class="petit"><code>F2</code> fait de la position actuelle <b>l'élévation maximale configurée dans le firmware</b> (ELEVATION_MAXIMUM_DEGREES, 180 par défaut) : à n'envoyer que si le mât est vraiment à cet angle.</p>
+      <div class="ligne"><button onclick="etalCmd('F2', 'l\'élévation à l\'angle maximal du firmware (180° réels)')">Envoyer F2 (ici = 180°)</button><button onclick="etalVa(3)">Passer</button></div>
+    </div>
+    <div id="etal-haut-autre" hidden>
+      <p class="petit" style="color:var(--warn)">Ne pas envoyer F2 ici : le contrôleur prendrait cet angle pour 180°. Deux voies : régler le firmware (<code>ELEVATION_MAXIMUM_DEGREES</code> dans rotator_settings.h, ou les réglages analogiques <code>ANALOG_EL_FULL_UP_EEPROM_INITIALIZE</code>, puis F2 en haut), ou garder le contrôleur tel quel et laisser SatMe corriger : la lecture actuelle du contrôleur (<span id="etal-haut-lu">—</span>°) vaut <span id="etal-haut-reel">—</span>° réels.</p>
+      <div class="ligne"><button onclick="etalHautCorrige()">Appliquer cette correction logicielle</button><button onclick="etalVa(3)">Passer</button></div>
+    </div>
+  </section>
+
+  <section class="etal-e" data-e="3" hidden>
+    <b>Azimut : les deux butées</b>
+    <p class="petit" id="etal-az-txt"></p>
+    <div class="ligne"><button onclick="etalCmd('O', 'l\'azimut en butée gauche (à fond dans le sens inverse des aiguilles)')">Envoyer O (butée gauche, CCW)</button>
+      <button onclick="etalCmd('F', 'l\'azimut en butée droite (à fond dans le sens des aiguilles)')">Envoyer F (butée droite, CW)</button><button onclick="etalVa(4)">Passer</button></div>
+  </section>
+
+  <section class="etal-e" data-e="4" hidden>
+    <b>Vérification</b>
+    <p class="petit">Chaque bouton envoie le mât à cette position (<b>seulement sur ton clic</b>, l'autre axe ne bouge pas). Une fois immobile, note ce que montre l'inclinomètre (élévation, 0 à 180) ou la boussole (azimut vrai), puis « Relever ».</p>
+    <div class="ligne" id="etal-btn-el"></div>
+    <div class="ligne" id="etal-btn-az"></div>
+    <div class="ligne"><span class="petit">Mesuré</span><input id="etal-mes" placeholder="°" style="max-width:80px"><select id="etal-mes-axe"><option value="EL">élévation (inclinomètre)</option><option value="AZ">azimut (boussole, vrai)</option></select><button onclick="etalReleve()">Relever</button></div>
+    <table class="etal-tab"><thead><tr><th>Axe</th><th>Cible</th><th>Contrôleur</th><th>SatMe</th><th>Mesuré</th><th>Écart</th><th></th></tr></thead><tbody id="etal-tab"></tbody></table>
+    <div class="ligne"><label class="petit"><input type="radio" name="etal-mode" value="droite" checked> une droite (décalage + échelle)</label><label class="petit"><input type="radio" name="etal-mode" value="points"> par points</label>
+      <button onclick="etalAjuste()">Créer la correction depuis le tableau</button></div>
+    <div class="ligne"><button onclick="etalVa(5)">Suivant</button></div>
+  </section>
+
+  <section class="etal-e" data-e="5" hidden>
+    <b>Correction logicielle et fin</b>
+    <p class="petit">Correction en place — azimut : <span class="val" id="etal-c-az">—</span> ; élévation : <span class="val" id="etal-c-el">—</span>. <span id="etal-portee"></span></p>
+    <p class="petit">Elle s'applique aux consignes envoyées et aux positions affichées ; les butées et l'élévation maximale restent en degrés réels, et le contrôleur ne reçoit jamais plus que sa course. Elle se règle aussi à la main dans Réglages du rotor.</p>
+    <div class="ligne"><button onclick="etalPost('raz?axe=EL')">Remettre l'élévation à zéro</button><button onclick="etalPost('raz?axe=AZ')">Remettre l'azimut à zéro</button></div>
+    <p class="petit">Pour vérifier que l'EEPROM a gardé la calibration : <b>éteins puis rallume le contrôleur</b>, reconnecte le rotor, et relis la position ci-dessus : elle doit être restée juste.</p>
+    <div class="ligne"><button class="primaire" onclick="g('etal-dlg').close()">Terminer</button></div>
+  </section>
+
+  <div class="petit" id="etal-msg" aria-live="polite" style="margin-top:8px"></div>
+  <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Réponses du contrôleur</summary><pre class="diag" id="etal-journal" style="max-height:160px;overflow:auto"></pre></details>
+</dialog>
 <dialog id="nd-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(760px,94vw)" aria-labelledby="nd-dlg-t">
   <div class="paire" style="margin:0"><b id="nd-dlg-t">SatMe-Node</b><span class="h-esp"></span><button onclick="g('nd-dlg').close()">Fermer</button></div>
   <div id="nd-detail" class="petit" style="margin-top:8px;max-height:60vh;overflow:auto"></div>
@@ -5720,7 +5800,11 @@ function dessine() {
     g('r-parkAz').value = s.parkAz; g('r-parkEl').value = s.parkEl; g('r-minEl').value = s.minEl;
     g('r-ecart').value = s.ecart; g('r-avantAos').value = s.avantAos;
     if (!zoneTrace && document.activeElement !== g('r-zones')) g('r-zones').value = (s.zones || '').split(';').join(' ; ');
+    g('r-corrAz').value = s.corrAz || ''; g('r-corrEl').value = s.corrEl || '';
   }
+  // With a software correction, the controller's own numbers beside SatMe's.
+  const corr = r.reglages && (r.reglages.corrAz || r.reglages.corrEl);
+  txt('rot-corr', !corr ? '' : 'correction logicielle active' + (r.brutAz != null ? ' · contrôleur : ' + Math.round(r.brutAz) + '° / ' + Math.round(r.brutEl || 0) + '°' : ''));
   if (E.convertisseurs) {
     const k = E.convertisseurs, ol = x => x ? (x / 1e6).toFixed(3) + ' MHz' : 'aucun';
     txt('conv-lu', 'Réception : ' + ol(k.rxOl) + (k.rxInv ? ' (inverseur)' : '') + ' · émission : ' + ol(k.txOl) + (k.txInv ? ' (inverseur)' : ''));
@@ -5745,6 +5829,137 @@ function reglagesRotor() {
        '&ecart=' + enc(v('r-ecart')) + '&avantAos=' + enc(v('r-avantAos')) + '&zones=' + enc(v('r-zones').replace(/\s+/g, '') || 'aucune'))
     .then(() => { if (typeof tic === 'function') tic(); setTimeout(() => chargePlanRotor(true), 1500); });
   g('rot-reg').open = false;
+}
+// The rotor calibration assistant: the controller's own calibration (O2/F2/O/F), a verification table, SatMe's correction.
+let ETAL = null, etalT = null, etalEtape = 0, etalReleves = [];
+const ETAL_PAS = ['Sécurité', 'Élévation 0°', 'Élévation haut', 'Azimut', 'Vérification', 'Correction'];
+const etalN = x => x == null ? '—' : (Math.round(x * 10) / 10) + '°';
+async function etalOuvre() {
+  const j = await post('api/rotor/etalonnage/ouvrir');
+  if (!j || j.ok === false) return;
+  etalReleves = []; etalEtape = 0; txt('etal-msg', '');
+  etalMontre(j.etat); etalVa(0);
+  if (!g('etal-dlg').open) g('etal-dlg').showModal();
+  clearInterval(etalT); etalT = setInterval(etalLit, 1000);
+}
+/** Closed (✕, Esc, Terminer): tracking given back as it was. */
+function etalFerme() { clearInterval(etalT); etalT = null; post('api/rotor/etalonnage/fermer'); }
+async function etalLit() {
+  try { etalMontre(await (await fetch('api/rotor/etalonnage')).json()); } catch (x) {}
+}
+async function etalPost(quoi) {
+  const r = await fetch('api/rotor/etalonnage/' + quoi, { method:'POST' });
+  const j = await r.json();
+  if (j.etat) etalMontre(j.etat);
+  txt('etal-msg', j.ok === false ? (j.erreur || 'refusé') : (j.message || ''));
+  return j;
+}
+function etalVa(n) {
+  etalEtape = n;
+  document.querySelectorAll('#etal-dlg .etal-e').forEach(s => s.hidden = +s.dataset.e !== n);
+  g('etal-pas').innerHTML = ETAL_PAS.map((t, i) => '<button role="tab" aria-selected="' + (i === n) + '" class="' + (i === n ? 'primaire' : 'discret') +
+    '" onclick="etalVa(' + i + ')">' + (i + 1) + '. ' + t + '</button>').join('');
+  etalHautMontre();
+}
+function etalMontre(e) {
+  if (!e) return;
+  ETAL = e;
+  txt('etal-brut', e.brutAz == null ? 'silencieux' : 'az ' + etalN(e.brutAz) + ' / él ' + etalN(e.brutEl));
+  txt('etal-corr', e.az == null ? '—' : 'az ' + etalN(e.az) + ' / él ' + etalN(e.el) + (e.azCible != null ? ' → ' + etalN(e.azCible) + ' / ' + etalN(e.elCible) : ''));
+  txt('etal-suivi', !e.connecte ? 'Rotor non connecté : connecte-le d\'abord (Réglages › Poste et rotor).' :
+    'Suivi automatique arrêté pendant la calibration · ' + e.statut);
+  g('etal-rotctld').hidden = !e.connecte || e.commandes;
+  txt('etal-journal', (e.journal || []).join('\n'));
+  const c = e.correction || {};
+  txt('etal-c-az', c.azResume || '—'); txt('etal-c-el', c.elResume || '—');
+  const p = c.portee || {};
+  txt('etal-portee', c.identite ? '' : 'Portée réelle : azimut ' + etalN(p.azMin) + ' à ' + etalN(p.azMax) + ', élévation ' + etalN(p.elMin) + ' à ' + etalN(p.elMax) + '.');
+  const s = e.reglages || {};
+  // The stop as set: which way is « full CCW » and what the controller should then read.
+  const debut = s.depuisButee ? 0 : (s.butee === 'SOUTH' ? 180 : 0);
+  txt('etal-az-txt', 'Butée réglée ' + (s.butee === 'SOUTH' ? 'au sud' : 'au nord') + ', course ' + s.maxAz + '°. ' +
+    'Tourne avec le boîtier à fond dans le sens inverse des aiguilles d\'une montre (butée gauche, ' + (s.butee === 'SOUTH' ? 'au sud' : 'au nord') +
+    ') et envoie O : c\'est le début de la course (' + debut + '°). Puis à fond dans le sens des aiguilles (butée droite, un tour ' + (s.maxAz > 360 ? 'et le recouvrement ' : '') +
+    'plus loin, ' + (debut + s.maxAz) + '° sur l\'anneau) et envoie F. K3NG répond C2 modulo 360 (540 se lit 180). Son point de départ et sa course (360/450, commandes Z et P36/P45) doivent correspondre à ces réglages de SatMe.');
+  // The test positions: 135 only on a mast that goes over the top.
+  const els = (s.flip || s.maxEl >= 180) ? [0, 45, 90, 135, 180] : [0, 45, 90];
+  const azs = s.butee === 'SOUTH' ? [180, 270, 0, 90] : [0, 90, 180, 270];
+  const bel = els.map(x => '<button onclick="etalAller(null,' + x + ')">él ' + x + '°</button>').join('');
+  if (g('etal-btn-el').dataset.k !== bel) { g('etal-btn-el').innerHTML = '<span class="petit">Élévation</span>' + bel; g('etal-btn-el').dataset.k = bel; }
+  const baz = azs.map(x => '<button onclick="etalAller(' + x + ',null)">az ' + x + '°</button>').join('');
+  if (g('etal-btn-az').dataset.k !== baz) { g('etal-btn-az').innerHTML = '<span class="petit">Azimut</span>' + baz; g('etal-btn-az').dataset.k = baz; }
+  g('etal-btn-el').hidden = !!s.azSeul;
+  etalHautMontre();
+}
+async function etalCmd(c, quoi) {
+  if (!confirm('Envoyer ' + c + ' au contrôleur ?\n\nLa position actuelle du mât deviendra ' + quoi + ', écrite dans l\'EEPROM du contrôleur.\nLe mât doit y être vraiment (inclinomètre / boussole) et immobile.')) return;
+  txt('etal-msg', c + ' : envoi, poignée de main avec le contrôleur…');
+  await etalPost('commande?c=' + enc(c) + '&confirme=1');
+}
+function etalAller(az, el) {
+  etalPost('aller?' + (az != null ? 'az=' + az : '') + (el != null ? (az != null ? '&' : '') + 'el=' + el : ''));
+  g('etal-mes-axe').value = az != null ? 'AZ' : 'EL';
+  g('etal-mes').dataset.cible = az != null ? az : el;
+}
+function etalHautMontre() {
+  const h = parseFloat((g('etal-haut').value || '').replace(',', '.'));
+  const autre = !isNaN(h) && Math.abs(h - 180) > 0.5;
+  g('etal-haut-180').hidden = autre; g('etal-haut-autre').hidden = !autre;
+  txt('etal-haut-lu', ETAL && ETAL.brutEl != null ? String(Math.round(ETAL.brutEl * 10) / 10) : '—');
+  txt('etal-haut-reel', isNaN(h) ? '—' : String(h));
+}
+/** The real top is not 180: SatMe maps the controller's reading there to it (0 assumed right, as after O2). */
+function etalHautCorrige() {
+  const h = parseFloat((g('etal-haut').value || '').replace(',', '.'));
+  if (!ETAL || ETAL.brutEl == null || isNaN(h)) { txt('etal-msg', 'pas de lecture du contrôleur'); return; }
+  etalPost('correction?axe=EL&valeur=' + enc('0:0;' + ETAL.brutEl + ':' + h)).then(j => { if (j.ok !== false) etalVa(4); });
+}
+/** Writes down the controller's reading, SatMe's and the measure, now. */
+function etalReleve() {
+  const m = parseFloat((g('etal-mes').value || '').replace(',', '.'));
+  const axe = g('etal-mes-axe').value;
+  if (!ETAL || isNaN(m)) { txt('etal-msg', 'mesure attendue (en degrés)'); return; }
+  const brut = axe === 'AZ' ? ETAL.brutAz : ETAL.brutEl, corr = axe === 'AZ' ? ETAL.az : ETAL.el;
+  if (brut == null) { txt('etal-msg', 'le contrôleur ne répond pas : rien à relever'); return; }
+  etalReleves.push({ axe: axe, cible: g('etal-mes').dataset.cible || '', brut: brut, corr: corr, mes: m });
+  g('etal-mes').value = '';
+  etalTable();
+}
+function etalTable() {
+  g('etal-tab').innerHTML = etalReleves.map((r, i) => {
+    let d = r.mes - r.corr;
+    if (r.axe === 'AZ') d = ((d % 360) + 540) % 360 - 180;
+    const fort = Math.abs(d) >= 2 ? ' style="color:var(--warn)"' : '';
+    return '<tr><td>' + (r.axe === 'AZ' ? 'az' : 'él') + '</td><td>' + (r.cible === '' ? '—' : r.cible + '°') + '</td><td>' + etalN(r.brut) + '</td><td>' + etalN(r.corr) +
+      '</td><td>' + etalN(r.mes) + '</td><td' + fort + '>' + (d >= 0 ? '+' : '') + (Math.round(d * 10) / 10) + '°</td><td><button class="discret" onclick="etalReleves.splice(' + i + ',1);etalTable()" aria-label="Retirer">✕</button></td></tr>';
+  }).join('');
+}
+/** One correction per axis measured, from the controller's raw readings and the measures. */
+async function etalAjuste() {
+  const mode = document.querySelector('input[name="etal-mode"]:checked').value;
+  let fait = [];
+  for (const axe of ['EL', 'AZ']) {
+    const l = etalReleves.filter(r => r.axe === axe);
+    if (!l.length) continue;
+    const j = await etalPost('ajuste?axe=' + axe + '&mode=' + mode + '&releves=' + enc(l.map(r => r.brut + ':' + r.mes).join(';')));
+    if (j.ok === false) return;
+    fait.push(axe === 'EL' ? 'élévation' : 'azimut');
+  }
+  txt('etal-msg', fait.length ? 'Correction créée : ' + fait.join(', ') + '. Relance les positions d\'essai pour voir l\'écart restant.' : 'aucun relevé dans le tableau');
+}
+/** The settings' correction fields, applied or reset. */
+async function corrRotor() {
+  for (const [axe, id] of [['AZ', 'r-corrAz'], ['EL', 'r-corrEl']]) {
+    const r = await fetch('api/rotor/etalonnage/correction?axe=' + axe + '&valeur=' + enc(v(id)), { method:'POST' });
+    const j = await r.json();
+    if (j.ok === false) { alert((axe === 'AZ' ? 'Azimut' : 'Élévation') + ' : ' + j.erreur); return; }
+  }
+  g('rot-reg').open = false; tic();
+}
+async function corrRotorRaz() {
+  if (!confirm('Retirer la correction logicielle des deux axes ? Le contrôleur sera pris au mot.')) return;
+  await fetch('api/rotor/etalonnage/raz', { method:'POST' });
+  g('r-corrAz').value = ''; g('r-corrEl').value = ''; tic();
 }
 async function importe(input) {
   const f = input.files[0]; if (!f) return;

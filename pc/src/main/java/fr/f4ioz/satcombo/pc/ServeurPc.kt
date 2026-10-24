@@ -698,6 +698,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
+        // The rotor calibration assistant: a GET reads; a POST acts (the controller's own calibration only once confirmed).
+        if (fr.f4ioz.satcombo.demo.ApiEtalonnageRotor.pourMoi(chemin)) {
+            val o = if (r.methode == "POST") runCatching { fr.f4ioz.satcombo.demo.ApiEtalonnageRotor.action(station.stationRotor, chemin) { q[it].orEmpty() } }
+                .getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            else fr.f4ioz.satcombo.demo.ApiEtalonnageRotor.etat(station.stationRotor)
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         // A function not about satellites left unticked in Réglages: nothing of it starts.
         if (r.methode == "POST") nonSatRefuse(chemin)?.let { id ->
             envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", false).put("nonSat", id)
