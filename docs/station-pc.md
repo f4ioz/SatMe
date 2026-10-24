@@ -225,6 +225,14 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 - **+ Passage**: a pass made from nothing — the satellite and its times, contacts, a sound, pictures.
 - The pass's **Doppler / CAT log** (when kept, see [Réglages](#réglages-settings)) is linked from it.
 
+### SSTV pictures and report elements
+
+In **Make**, under the buttons, what is chosen for the pass — kept with it, used by the picture, the GIF, the video and the replay:
+
+- **The pass's SSTV pictures**: the **pass's default version** — **Raw (as received)** at first (older videos do not change), **Auto (best mark)**, **Corrected**, **Fused** — then picture by picture (« as the pass », or a version that exists, each with its mark). A version chosen that has gone shows Auto, and says so (« missing: Auto shown »). **Make the fusion** when the slide has several copies and no fusion yet. **Mark corrected/fused** (unticked at first, as on the sheet) writes « corrected » or « N copies fused » on the processed picture.
+- **Report elements** of the pass's SSTV event (the sheet's, found the same way): **Receive montage** (the plan that draws the pass's reception best, or the one chosen in **Montage plan**), **Slide grid** (this pass's slides framed), **Pass sky plot** (the pictures on the track), **Elevation profile** (the slides' slots), **SSTV figures** (slides this pass received/expected, best mark, slides of the series, pictures), **Event's sheet**, **SatMe logo**. Each an **overlay** (on the replay, placed with the mouse as the SSTV picture: drag, its corner or the wheel to size it, **Auto** for its own place) and/or a **card** (a frame of its own in the video and the GIF: the montage after the title, the others at the end). All unticked at first. Without an event, the grid, the figures and the sheet are not offered; the sky and the profile then come from the pass's own track.
+- The pass's **Report** shows its SSTV pictures in the version chosen too.
+
 ### Pass report
 
 **Rapport**, in a journal pass: the pass's observation report on one page.

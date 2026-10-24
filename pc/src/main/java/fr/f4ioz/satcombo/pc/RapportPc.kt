@@ -45,6 +45,9 @@ class RapportPc(
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
     val dossierSpectres = File(dossier, "journal/spectres")
+
+    /** Each SSTV picture of a pass (its file as received) and the version the journal chose to show (set by Main); null: as received. */
+    @Volatile var montre: ((JournalPassage.Entree) -> Map<String, File>)? = null
     private val dossierIq = File(dossier, "enregistrements-iq")
 
     /** How the report's links are made: the PC's page, the single file, the ZIP. */
@@ -168,8 +171,11 @@ class RapportPc(
             niveaux = niv, niveauUnite = unite, niveauSource = source,
             cascade = runCatching { cascade(e) }.getOrNull(),
             evenements = evts.sortedBy { it.tMs },
-            images = l.images.filter { (png, _) -> png.name !in e.masquees }.mapNotNull { (png, shot) ->
-                vignette(png)?.let { RapportPassage.Image(shot.timeMs, shot.mode.ifBlank { "SSTV" }, "image/jpeg", it, png.name) } },
+            images = l.images.filter { (png, _) -> png.name !in e.masquees }.let { im ->
+                val choisies = runCatching { montre?.invoke(e) }.getOrNull().orEmpty()
+                im.map { (png, shot) -> (choisies[png.absolutePath] ?: png) to shot }
+            }.mapNotNull { (png, shot) ->
+                vignette(png)?.let { RapportPassage.Image(shot.timeMs, shot.mode.ifBlank { "SSTV" }, "image/jpeg", it, shot.fileName) } },
             contacts = l.qsos.map { RapportPassage.Contact(it.timeMs, it.callsign, it.theirLocator, it.rstSent, it.rstRcvd, it.mode, it.nom) },
             tramesTelemesure = tlm, tramesTelemesureValides = tlmOk,
             sons = sons, iq = iqs, doppler = dop,

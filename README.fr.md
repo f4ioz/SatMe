@@ -62,6 +62,8 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 
 Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, rien à installer) : le journal des passages rejoué en grand sur une carte avec son son, et la planche SSTV faite à la souris.
 
+Dans les images et vidéos du journal, chaque image SSTV brute, corrigée ou fusionnée (Auto : la meilleure note), et les éléments du rapport SSTV — le montage, la grille des diapos, le ciel du passage, l'élévation, le bilan, la planche, le logo — incrustés à la souris sur le rejeu ou en cartes à part.
+
 <p align="center">
 <img src="docs/images/fr-journal-pc.webp" width="49%" alt="Le journal des passages sur le PC : le passage de l'ISS sur la carte, une image SSTV qui arrive, la frise">
 <img src="docs/images/fr-planche-pc.webp" width="49%" alt="La planche SSTV sur le PC : le modèle en grand, les images de l'ISS à glisser">

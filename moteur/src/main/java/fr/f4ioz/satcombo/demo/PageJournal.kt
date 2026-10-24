@@ -36,7 +36,11 @@ object PageJournal {
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
         "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc",
-        "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide", "pj_n_echec", "pj_supprimer", "pj_supprimer_q")
+        "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide", "pj_n_echec", "pj_supprimer", "pj_supprimer_q",
+        "pj_sstv_titre", "pj_sstv_defaut", "pj_v_auto", "pj_v_recue", "pj_v_corrigee", "pj_v_fusion", "pj_v_passage", "pj_v_note",
+        "pj_creer_fusion", "pj_fusion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
+        "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
+        "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -133,6 +137,19 @@ object PageJournal {
   .ecran:hover #cadreSstv .poignee, #cadreSstv.prise .poignee { display:block; }
   #cadreSstv .auto { position:absolute; left:4px; top:4px; font-size:11px; padding:1px 7px; background:rgba(5,10,16,.85); display:none; }
   #cadreSstv.manuel:hover .auto { display:block; }
+  /* The report's panels laid over the video (Make tab): dragged, resized by their corner or the wheel, as the SSTV picture. */
+  .cadreEl { position:absolute; z-index:2; cursor:move; touch-action:none; user-select:none; }
+  .cadreEl img { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .cadreEl:hover, .cadreEl.prise { outline:1px solid rgba(255,255,255,.75); outline-offset:2px; }
+  .cadreEl .poignee { position:absolute; right:0; bottom:0; width:14px; height:14px; background:var(--cyan); border:2px solid #0B1016; border-radius:3px; cursor:nwse-resize; display:none; }
+  .cadreEl:hover .poignee, .cadreEl.prise .poignee { display:block; }
+  .cadreEl .auto { position:absolute; left:3px; top:3px; font-size:10px; padding:1px 6px; background:rgba(5,10,16,.85); display:none; }
+  .cadreEl.manuel:hover .auto { display:block; }
+  .versions .vi { display:flex; gap:8px; align-items:center; padding:3px 0; flex-wrap:wrap; }
+  .versions .vi img { width:64px; height:48px; object-fit:cover; border-radius:4px; background:#18232D; }
+  .versions .vi .x { color:var(--gris); font-size:11px; }
+  .versions .vi select { max-width:15em; }
+  .bloc { border-top:1px solid var(--bord); margin-top:8px; padding-top:6px; }
   .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:4; }
   .attrib { position:absolute; right:4px; bottom:2px; font-size:10px; color:#333; background:rgba(255,255,255,.7); padding:0 4px; display:none; }
   .moment { align-self:start; background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:9px; }
@@ -300,7 +317,7 @@ async function ouvre(id) {
   dessineListe(); construitVue(); dessineCiel(); maj();
   lire('/activite', { id: id }).then(a => { if (P && P.id === id) { activite = a; dessineFrise(); } }).catch(() => {});
   lire('/fiches', { id: id }).then(f => { if (P && P.id === id) { fiches = f; maj(); } }).catch(() => {});
-  chargeSegments();
+  chargeSegments(); SS = null; chargeSstv();
 }
 async function supprimePassage() {
   if (!P || !confirm(tf('supprimer_q', P.sat + ' · ' + jour(P.de)))) return;
@@ -400,7 +417,7 @@ function majSstv() {
   Object.assign(o.style, { left: (v.x + r.x) + 'px', top: (v.y + r.y) + 'px', width: r.l + 'px', height: r.h + 'px' });
   o.classList.toggle('manuel', !!cadreSstv);
   const img = P.marques.find(m => m.k === 'SSTV' && m.f && t >= m.de && t <= m.a + 4000), im = o.firstChild;
-  if (img) { if (im.dataset.f !== img.f) { im.src = url('/image', { f: img.f }); im.dataset.f = img.f; }
+  if (img) { if (im.dataset.f !== img.f + '#' + tourVersion) { im.src = url('/image', { f: img.f, id: P.id, n: tourVersion }); im.dataset.f = img.f + '#' + tourVersion; }
     im.style.clipPath = 'inset(0 0 ' + ((1 - Math.max(0, Math.min(1, (t - img.de) / Math.max(1, img.a - img.de)))) * 100).toFixed(1) + '% 0)'; }
   o.classList.toggle('vu', !!img);
 }
@@ -482,7 +499,7 @@ function panneau() {
   const p = g('panneau'); p.innerHTML = '';
   if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p);
   else if (onglet === 'ajouter') panneauAjouter(p); else panneauFabriquer(p);
-  dessineCadre(); majSstv();
+  dessineCadre(); majSstv(); majElements();
 }
 function panneauMoments(p) {
   if (!P.marques.length) p.appendChild(el('p', { class: 'aide', text: T.aucun_moment }));
@@ -491,7 +508,7 @@ function panneauMoments(p) {
     const kids = [el('span', { class: 'pastille', style: 'background:' + COUL[k] }), el('span', { class: 'h', text: hms(m.de) }),
       el('span', { class: 't', text: m.t || T.signet }),
       el('span', { class: 'x', text: [m.d || (m.k === 'SSTV' ? T.sstv : ''), f ? [f.nom, f.qth, f.loc].filter(x => x).join(' · ') : ''].filter(x => x).join(' — ') })];
-    if (m.f) kids.splice(1, 0, el('img', { src: url('/vignette', { f: m.f, w: 160 }), loading: 'lazy' }));
+    if (m.f) kids.splice(1, 0, el('img', { src: url('/vignette', { f: m.f, w: 160, id: P.id, n: tourVersion }), loading: 'lazy' }));
     kids.push(el('button', { class: 'discret', text: T.choisir_morceau, onclick: ev => {
       ev.stopPropagation(); sel = [m.de - (m.k === 'SSTV' ? 1000 : O.avant * 1000), m.a + (m.k === 'QSO' ? O.apres * 1000 : 3000)];
       titre = m.k === 'SSTV' ? 'SSTV ' + hms(m.de) : (m.k === 'SIGNET' ? (m.t || T.signet) : (m.k === 'QSO' ? 'QSO ' : 'APRS ') + m.t);
@@ -695,6 +712,143 @@ function panneauFabriquer(p) {
     el('button', { class: 'discret', text: T.gif, onclick: () => fabrique('gif') }),
     el('button', { class: 'discret', text: T.paquet, onclick: () => fabrique('paquet') })]));
   p.appendChild(el('div', { id: 'fabrication' }));
+  p.appendChild(el('div', { id: 'blocSstv' }));
+  dessineSstvChoix();
+}
+
+// ------------------------------------------------------------ the pass's SSTV pictures and the report's panels
+// Kept with the pass (its file on the station), the same for the video, the GIF, the picture and the replay:
+// which version of each picture (as received by default), « corrigée » written or not, the report's panels
+// laid over the view (placed with the mouse, in shares of the view as the SSTV picture) or cards of their own.
+let SS = null, tourVersion = 0, tourEl = 0, attenteFusion = 0;
+async function chargeSstv() {
+  if (!P) return; const id = P.id;
+  try { const j = await lire('/sstv', { id: id }); if (!P || P.id !== id || !j.ok) return; SS = j; } catch (e) { return; }
+  if (onglet === 'fabriquer') dessineSstvChoix();
+  majElements();
+}
+async function choixSstv(prm) {
+  if (!P) return; const id = P.id;
+  let j = null; try { j = await envoie('/sstv/choix', Object.assign({ id: id }, prm)); } catch (e) { return; }
+  if (!j || !j.ok || !P || P.id !== id) return;
+  SS = j;
+  if (prm.quoi !== 'element') { tourVersion++; imageVue = ''; }
+  if (prm.quoi === 'plan') tourEl++;
+  if (prm.quoi !== 'element' || prm.cadre === undefined) dessineSstvChoix();
+  majElements(); majSstv(); maj();
+}
+function libVersion(v) { return { auto: T.v_auto, recue: T.v_recue, corrigee: T.v_corrigee, fusion: T.v_fusion }[v] || v; }
+function dessineSstvChoix() {
+  const z = g('blocSstv'); if (!z) return; z.innerHTML = '';
+  if (!SS) return;
+  const a = el('div', { class: 'bloc versions' });
+  a.appendChild(el('div', { class: 'aide', style: 'font-weight:700;color:var(--clair)', text: T.sstv_titre }));
+  if (!SS.images.length) a.appendChild(el('div', { class: 'aide', text: T.sstv_aucune }));
+  else {
+    const d = el('select', { onchange: ev => choixSstv({ quoi: 'defaut', v: ev.target.value }) },
+      ['auto', 'recue', 'corrigee', 'fusion'].map(v => el('option', { value: v, text: libVersion(v) })));
+    d.value = SS.defaut;
+    a.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.sstv_defaut }), d]));
+    SS.images.forEach(im => {
+      // Only the versions there are, each with its mark.
+      const s = el('select', { onchange: ev => choixSstv({ quoi: 'image', f: im.f, v: ev.target.value }) },
+        [el('option', { value: '', text: T.v_passage + ' · ' + libVersion(SS.defaut) }), el('option', { value: 'auto', text: T.v_auto })].concat(
+          im.versions.map(v => el('option', { value: v.v, text: libVersion(v.v) + (v.note >= 0 ? ' · ' + tf('v_note', v.note) : '') }))));
+      // A version chosen once and gone since: still offered, so the choice shows.
+      if (im.choix && ![...s.options].some(o => o.value === im.choix)) s.appendChild(el('option', { value: im.choix, text: libVersion(im.choix) }));
+      s.value = im.choix || '';
+      const kids = [el('img', { src: url('/vignette', { f: im.f, w: 160, id: P.id, n: tourVersion }), loading: 'lazy' }),
+        el('span', { class: 'h', text: hms(im.t) }), el('span', { class: 'x', text: im.mode }), s,
+        el('span', { class: 'x', text: '→ ' + libVersion(im.montre) + (im.montreNote >= 0 ? ' · ' + tf('v_note', im.montreNote) : '') + (im.repli ? ' · ' + T.repli : '') })];
+      if (im.fusionPossible) kids.push(el('button', { class: 'discret', text: SS.enCours ? T.fusion_en_cours : T.creer_fusion, onclick: ev => fusionner(im.f, ev.target) }));
+      a.appendChild(el('div', { class: 'vi' }, kids));
+    });
+    const c = el('input', { type: 'checkbox' }); c.checked = !!SS.marque;
+    c.addEventListener('change', () => choixSstv({ quoi: 'marque', v: c.checked ? '1' : '0' }));
+    a.appendChild(el('label', { class: 'rangee', title: T.marque_aide }, [c, el('span', { text: T.marque_traitees })]));
+    a.appendChild(el('div', { class: 'aide', text: T.sstv_aide }));
+  }
+  z.appendChild(a);
+  const b = el('div', { class: 'bloc' });
+  b.appendChild(el('div', { class: 'aide', style: 'font-weight:700;color:var(--clair)', text: T.el_titre }));
+  b.appendChild(el('div', { class: 'aide', text: SS.evenement ? tf('el_evenement', SS.evenement.nom) : T.el_sans_evenement }));
+  const c2 = el('div', { class: 'colonnes' });
+  SS.elements.forEach(x => {
+    const caseEl = (cle, lib) => { const k = el('input', { type: 'checkbox' }); k.checked = !!x[cle]; k.disabled = !x.dispo;
+      k.addEventListener('change', () => { const q = { quoi: 'element', k: x.k }; q[cle] = k.checked ? '1' : '0'; choixSstv(q); });
+      return el('label', {}, [k, document.createTextNode(' ' + lib)]); };
+    c2.appendChild(el('div', { class: 'rangee', title: x.dispo ? '' : T.el_absent }, [el('span', { text: x.nom, style: x.dispo ? '' : 'color:var(--gris)' }),
+      caseEl('incruste', T.el_incruste), caseEl('carte', T.el_carte)].concat(x.dispo ? [] : [el('span', { class: 'aide', text: T.el_absent })])));
+  });
+  b.appendChild(c2);
+  if (SS.plans.length && SS.dessin) {
+    const pl = el('select', { onchange: ev => choixSstv({ quoi: 'plan', v: ev.target.value }) },
+      [el('option', { value: '', text: T.el_plan_auto })].concat(SS.plans.map(x => el('option', { value: x.id, text: x.nom }))));
+    pl.value = SS.plan || '';
+    b.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.el_plan }), pl]));
+  } else if (!SS.dessin) b.appendChild(el('div', { class: 'aide', text: T.el_simple }));
+  b.appendChild(el('div', { class: 'aide', text: T.el_aide }));
+  z.appendChild(b);
+}
+async function fusionner(f, bouton) {
+  if (!P) return;
+  bouton.disabled = true; bouton.textContent = T.fusion_en_cours;
+  try { await envoie('/sstv/fusionner', { id: P.id, f: f }); } catch (e) {}
+  // Done in the background: read again until the station says it is over.
+  clearTimeout(attenteFusion);
+  const suite = async n => { await chargeSstv(); if (SS && SS.enCours && n < 60) attenteFusion = setTimeout(() => suite(n + 1), 1500); else { tourVersion++; imageVue = ''; dessineSstvChoix(); maj(); } };
+  attenteFusion = setTimeout(() => suite(0), 1200);
+}
+// The panels over the view: where the file puts them, the view being the SSTV picture's.
+function placeEl(c, x, w, h) {
+  const l = Math.min(Math.max(x.min, Math.min(0.9, c.l)) * w, h * x.ratio), lh = l / x.ratio;
+  return { x: Math.max(0, Math.min(w - l, c.x * w)), y: Math.max(0, Math.min(h - lh, c.y * h)), l: l, h: lh };
+}
+function majElements() {
+  const e = g('ecran'); if (!e) return;
+  const v = onglet === 'fabriquer' && SS ? vueSstv() : null;
+  const voulus = v ? SS.elements.filter(x => x.incruste && x.dispo) : [];
+  [...e.querySelectorAll('.cadreEl')].forEach(o => { if (!voulus.some(x => x.k === o.dataset.k)) o.remove(); });
+  voulus.forEach(x => {
+    let o = e.querySelector('.cadreEl[data-k="' + x.k + '"]');
+    if (!o) { o = el('div', { class: 'cadreEl', 'data-k': x.k, title: x.nom + ' — ' + T.sstv_cadre_aide }, [el('img', { alt: x.nom }),
+      el('button', { class: 'auto discret', text: T.sstv_auto }), el('div', { class: 'poignee' })]); e.appendChild(o); installeEl(o); }
+    const src = url('/sstv/element.svg', { id: P.id, k: x.k, n: tourEl });
+    if (o.dataset.src !== src) { o.firstChild.src = src; o.dataset.src = src; }
+    const c = lisCadre(x.cadre) || lisCadre(x.defaut), r = placeEl(c, x, v.w, v.h);
+    Object.assign(o.style, { left: (v.x + r.x) + 'px', top: (v.y + r.y) + 'px', width: r.l + 'px', height: r.h + 'px' });
+    o.classList.toggle('manuel', !!x.cadre);
+  });
+}
+function installeEl(o) {
+  let pres = null;
+  const x = () => SS && SS.elements.find(y => y.k === o.dataset.k);
+  const garde = c => { const k = x(); if (!k) return; k.cadre = c ? texteCadre(c) : ''; majElements(); };
+  const envoi = () => { const k = x(); if (k) choixSstv({ quoi: 'element', k: k.k, cadre: k.cadre || 'auto' }); };
+  const borne = (c, k, v) => { const r = placeEl(c, k, v.w, v.h); return { x: r.x / v.w, y: r.y / v.h, l: r.l / v.w }; };
+  const ici = (k, v) => placeEl(lisCadre(k.cadre) || lisCadre(k.defaut), k, v.w, v.h);
+  o.addEventListener('pointerdown', ev => {
+    if (ev.target.classList.contains('auto')) return;
+    ev.preventDefault(); ev.stopPropagation(); const v = vueSstv(), k = x(); if (!v || !k) return;
+    o.setPointerCapture(ev.pointerId); o.classList.add('prise');
+    pres = { x: ev.clientX, y: ev.clientY, r: ici(k, v), v: v, taille: ev.target.classList.contains('poignee') };
+  });
+  o.addEventListener('pointermove', ev => {
+    const k = x(); if (!pres || !k) return; const dx = ev.clientX - pres.x, dy = ev.clientY - pres.y, r = pres.r, v = pres.v;
+    const c = pres.taille ? { x: r.x / v.w, y: r.y / v.h, l: Math.max(r.l + dx, (r.h + dy) * k.ratio) / v.w }
+      : { x: (r.x + dx) / v.w, y: (r.y + dy) / v.h, l: r.l / v.w };
+    garde(borne(c, k, v));
+  });
+  const lache = () => { if (!pres) return; pres = null; o.classList.remove('prise'); envoi(); };
+  o.addEventListener('pointerup', lache); o.addEventListener('pointercancel', lache);
+  let minuteur = 0;
+  o.addEventListener('wheel', ev => {
+    ev.preventDefault(); const v = vueSstv(), k = x(); if (!v || !k) return;
+    const r = ici(k, v), l = r.l * (ev.deltaY > 0 ? 1 / 1.1 : 1.1);
+    garde(borne({ x: (r.x + (r.l - l) / 2) / v.w, y: (r.y + (r.h - l / k.ratio) / 2) / v.h, l: l / v.w }, k, v));
+    clearTimeout(minuteur); minuteur = setTimeout(envoi, 300);
+  }, { passive: false });
+  o.querySelector('.auto').addEventListener('click', ev => { ev.stopPropagation(); garde(null); envoi(); });
 }
 
 // ------------------------------------------------------------ the sky
@@ -876,7 +1030,7 @@ function majMoment() {
   }
   const img = O.sstv ? P.marques.find(m => m.k === 'SSTV' && m.f && t >= m.de && t <= m.a + 4000) : null;
   const im = g('imageMoment');
-  if (img) { if (imageVue !== img.f) { im.src = url('/image', { f: img.f }); imageVue = img.f; } im.style.display = 'block';
+  if (img) { if (imageVue !== img.f + '#' + tourVersion) { im.src = url('/image', { f: img.f, id: P.id, n: tourVersion }); imageVue = img.f + '#' + tourVersion; } im.style.display = 'block';
     const fr = Math.max(0, Math.min(1, (t - img.de) / Math.max(1, img.a - img.de))); im.style.clipPath = 'inset(0 0 ' + ((1 - fr) * 100).toFixed(1) + '% 0)'; }
   else { im.style.display = 'none'; imageVue = ''; }
   const st = O.fiches ? P.marques.filter(m => (m.k === 'QSO' || m.k === 'APRS') && t >= m.de - 2000 && t <= m.a + 12000).pop() : null;
@@ -972,7 +1126,7 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'ArrowLeft') { ev.preventDefault(); cherche(t - (ev.shiftKey ? 30000 : 5000)); }
   else if (ev.key === 'ArrowRight') { ev.preventDefault(); cherche(t + (ev.shiftKey ? 30000 : 5000)); }
 });
-window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); } });
+window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); majElements(); } });
 
 // ------------------------------------------------------------ making on the phone
 // A size in the page's language: « 12,3 Mo », « 12.3 MB ».

@@ -62,6 +62,8 @@ SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own eng
 
 The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to install): the pass journal replayed large on a map with its sound, and the SSTV sheet laid out with the mouse.
 
+In the journal's pictures and videos, each SSTV picture as received, corrected or fused (Auto: the best mark), and the SSTV report's elements — the montage, the slide grid, the pass's sky, the elevation, the figures, the sheet, the logo — laid over the replay with the mouse or as cards of their own.
+
 <p align="center">
 <img src="docs/images/en-journal-pc.webp" width="49%" alt="The pass journal on the PC: the ISS pass on the map, an SSTV picture arriving, the timeline">
 <img src="docs/images/en-planche-pc.webp" width="49%" alt="The SSTV sheet on the PC: the template large, the ISS pictures to drag in">

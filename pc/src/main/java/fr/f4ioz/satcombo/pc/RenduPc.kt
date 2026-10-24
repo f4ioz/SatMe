@@ -12,6 +12,8 @@ import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Marque
 import fr.f4ioz.satcombo.domain.JournalPassage.TypeMarque
+import fr.f4ioz.satcombo.domain.OptionsJournal
+import fr.f4ioz.satcombo.sstv.ElementsJournal
 import fr.f4ioz.satcombo.domain.SourcePcm
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.sstv.Gif
@@ -36,6 +38,10 @@ import javax.imageio.ImageIO
  * picture arriving, the stations' cards, the caption with the S-meter, the
  * opening title, each picture full frame and the summary. The sky view
  * only: the map stays the phone's for now. Videos through `ffmpeg`.
+ *
+ * The report's panels ([ElementsJournal]) when the pass asks for them: laid
+ * over the view where the page placed them, or cards of their own — the
+ * montage's after the title, the others after the summary.
  */
 object RenduPc {
 
@@ -64,6 +70,12 @@ object RenduPc {
         val cadreSstv: CadreSstv? = null,
         /** An OpenStreetMap tile (z, x, y), from the disk or the network; null: none. */
         val tuile: (Int, Int, Int) -> BufferedImage? = { _, _, _ -> null },
+        /** The pass's choices: the report's panels laid over the view or cards of their own ([OptionsJournal]). */
+        val options: OptionsJournal = OptionsJournal.DEFAUT,
+        /** What those panels draw; null: none. */
+        val donnees: ElementsJournal.Donnees? = null,
+        /** The words on a processed picture, by its file (only when the pass asks them said). */
+        val etiquettes: Map<String, String> = emptyMap(),
     ) {
         val cadre = if (cielEntier) JournalPassage.Cadre() else JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -81,6 +93,23 @@ object RenduPc {
                 marques.mapNotNull { m -> m.lat?.let { la -> m.lon?.let { lo -> la to lo } } }, w.toDouble(), h.toDouble())
             fond = fondCarte(w, h, vueCarte, tuile)
         }
+        /** The panels laid over a view, drawn once per size (they do not move during the pass). */
+        private var calque: Pair<Pair<Int, Int>, BufferedImage?>? = null
+        fun calque(w: Int, h: Int): BufferedImage? {
+            calque?.let { (t, b) -> if (t == (w to h)) return b }
+            val d = donnees
+            val b = if (d == null || options.incrustes.isEmpty()) null else BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB).also { b ->
+                val g = b.createGraphics()
+                val tl = ToileJava2dPc(g)
+                ElementsJournal.dessineIncrustations(tl, tl, options, d, w.toFloat(), h.toFloat())
+                g.dispose()
+            }
+            calque = (w to h) to b
+            return b
+        }
+        /** The cards of the video: the montage's after the title, the others at the end (those with something to draw). */
+        val cartesOuverture: List<OptionsJournal.Element> get() = donnees?.let { d -> options.cartesOuverture.filter { ElementsJournal.disponible(it, d) } }.orEmpty()
+        val cartesFin: List<OptionsJournal.Element> get() = donnees?.let { d -> options.cartesFin.filter { ElementsJournal.disponible(it, d) } }.orEmpty()
         /** The pictures, read once. */
         val images: Map<String, BufferedImage> = marques.mapNotNull { m -> m.fichier?.let { f -> runCatching { ImageIO.read(File(f)) }.getOrNull()?.let { f to it } } }.toMap()
         var flashMs = 0L
@@ -336,6 +365,14 @@ object RenduPc {
         g.color = SSTV; g.stroke = BasicStroke(2.5f * dp); g.draw(java.awt.geom.Rectangle2D.Float(x, y, lw, lh))
     }
 
+    /** « corrigée », « fusion de 3 copies » on a processed picture: small, at its bottom left ([x], [bas]). */
+    private fun etiquette(g: Graphics2D, s: String, x: Float, bas: Float, dp: Float) {
+        val f = police(11 * dp, true); g.font = f
+        val w = g.fontMetrics.stringWidth(s) + 12 * dp
+        g.color = Color(10, 15, 24, 210); g.fill(RoundRectangle2D.Float(x, bas - 18 * dp, w, 18 * dp, 8 * dp, 8 * dp))
+        g.texte(s, x + 6 * dp, bas - 5 * dp, SSTV, f)
+    }
+
     /** The S-meter as an IC-9700 shows it, as on the phone. */
     private fun smetre(g: Graphics2D, x: Float, y: Float, w: Float, h: Float, v: Int, crete: Int?, dp: Float) {
         fun part(n: Int) = (if (n <= 120) n / 120f * 0.6f else 0.6f + (n - 120) / 121f * 0.4f).coerceIn(0f, 1f)
@@ -384,10 +421,13 @@ object RenduPc {
             ciel(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
             if (p == null) 0.5f else 0.5f + ((JournalPassage.ciel(p.az, p.el).first - sc.cadre.cx) * sc.cadre.echelle).toFloat() / 2
         }
+        // The report's panels, where the page put them (under the picture arriving and the cards).
+        sc.calque(w, haut)?.let { g.drawImage(it, 0, 0, null) }
         if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
             val pl = placeSstv(sc.cadreSstv, w.toFloat(), haut.toFloat(), satX, dp)
             arrivee(g, bm, pl.x, pl.y, pl.l, pl.h, part, dp)
+            m.fichier?.let { sc.etiquettes[it] }?.let { etiquette(g, it, pl.x + 6 * dp, pl.y + pl.h - 6 * dp, dp) }
         }
         if (sc.affFiches) {
             val lw = minOf(w * 0.58f, 260 * dp)
@@ -464,7 +504,7 @@ object RenduPc {
         val iw = ih * bm.width / bm.height
         val top = (h - 70 * dp - ih) / 2
         g.drawImage(bm, ((w - iw) / 2).toInt(), top.toInt(), iw.toInt(), ih.toInt(), null)
-        g.texte(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
+        g.texte(sc.e.satName + " · " + m.texte + (m.fichier?.let { sc.etiquettes[it] }?.let { " · $it" } ?: ""), 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
         g.texte(fmt("yyyy-MM-dd HH:mm:ss").format(Date(m.finMs)) + " UTC  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
             14 * dp, h - 22 * dp, Color(160, 175, 195), police(13 * dp))
         // The mark, as on the other frames.
@@ -513,16 +553,39 @@ object RenduPc {
         return b
     }
 
-    private fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int): List<Pair<() -> BufferedImage, Int>> {
-        if (!sc.recap) return emptyList()
+    /** A report panel alone on a frame: its name, the pass, the panel as large as it goes, the mark. */
+    fun carte(w: Int, h: Int, sc: Scene, k: OptionsJournal.Element): BufferedImage {
+        val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val g = g2(b)
+        val dp = echelle(w, h)
+        val tl = ToileJava2dPc(g)
+        sc.donnees?.let { d -> ElementsJournal.carte(tl, tl, k, d, w.toFloat(), h.toFloat(),
+            sc.e.satName + " · " + fmt("yyyy-MM-dd HH:mm").format(Date(sc.e.debutMs)) + " UTC") }
+        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
+        g.dispose()
+        return b
+    }
+
+    /** After the title: the montage's card when asked, [n] frames. */
+    private fun ouvertureVideo(w: Int, h: Int, sc: Scene, n: Int): List<Pair<() -> BufferedImage, Int>> =
+        sc.cartesOuverture.map { k -> { carte(w, h, sc, k) } to n }
+
+    private fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int, parCarte: Int = resumeN * 2 / 3): List<Pair<() -> BufferedImage, Int>> {
         val l = ArrayList<Pair<() -> BufferedImage, Int>>()
-        sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
-            val bm = m.fichier?.let { sc.images[it] } ?: return@forEach
-            l += { imagePleine(w, h, sc, m, bm) } to parImage
+        if (sc.recap) {
+            sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
+                val bm = m.fichier?.let { sc.images[it] } ?: return@forEach
+                l += { imagePleine(w, h, sc, m, bm) } to parImage
+            }
+            l += { resume(w, h, sc) } to resumeN
         }
-        l += { resume(w, h, sc) } to resumeN
+        // The report's panels asked as cards, after the summary.
+        sc.cartesFin.forEach { k -> l += { carte(w, h, sc, k) } to parCarte }
         return l
     }
+
+    /** How long the video plays before the pass: the title (3 s), each opening card (4 s) — its sound waits that long. */
+    fun secondesAvantPassage(sc: Scene): Int = (if (sc.ouverture) 3 else 0) + 4 * sc.cartesOuverture.size
 
     // ---------------------------------------------------------------- files
 
@@ -549,11 +612,14 @@ object RenduPc {
         val fin = px(image(w, h, sc, a))
         val titrePx = if (sc.ouverture) px(titre(w, h, sc)) else null
         var pourPalette = if (sc.recap) fin + px(resume(w, h, sc)) else fin
+        // The cards' colours too (the report's light cards).
+        (sc.cartesOuverture + sc.cartesFin).firstOrNull()?.let { pourPalette += px(carte(w, h, sc, it)) }
         if (titrePx != null) pourPalette += titrePx
         val pal = Gif.palette(pourPalette, listOf(0x0A0F18, 0x111B29, 0xFFFFFF, CYAN.rgb and 0xFFFFFF, QSO.rgb and 0xFFFFFF, APRS.rgb and 0xFFFFFF, ISS.rgb and 0xFFFFFF))
         sortie.outputStream().buffered().use { o ->
             val g = Gif.Ecrivain(o, w, h, pal)
             titrePx?.let { g.trame(it, 0, h, 200) }
+            for ((dessin, n2) in ouvertureVideo(w, h, sc, 300)) g.trame(px(dessin()), 0, h, n2)
             var avant: IntArray? = null
             for (i in 0..n) {
                 val cur = if (i == n) fin else px(image(w, h, sc, de + duree * i / n))
@@ -565,7 +631,7 @@ object RenduPc {
                     while (y1 > y0 && egale(y1 - 1)) y1--
                     if (y0 >= y1) { y0 = 0; y1 = 1 }
                 }
-                g.trame(cur, y0, y1, if (i == n) (if (sc.recap) 150 else 300) else 20)
+                g.trame(cur, y0, y1, if (i == n) (if (sc.recap || sc.cartesFin.isNotEmpty()) 150 else 300) else 20)
                 avant = cur
                 progres((i + 1f) / (n + 1))
             }
@@ -581,10 +647,12 @@ object RenduPc {
 
     /**
      * The replay as an MP4 (H.264 + AAC) through ffmpeg: 5 frames a second,
-     * the opening title 3 s, the pass (real time with its sound, accelerated
-     * by its stretches, else ×10 and silent), then each picture 3 s and the
-     * summary 6 s. [son]: the sound of the pass as the video plays it (title
-     * included), at [rate]; null: silent.
+     * the opening title 3 s (the montage's card 4 s after it when asked), the
+     * pass (real time with its sound, accelerated by its stretches, else ×10
+     * and silent), then each picture 3 s, the summary 6 s and the report's
+     * cards 4 s each. [son]: the sound of the pass as the video plays it
+     * (its silence before the pass included, [secondesAvantPassage]), at
+     * [rate]; null: silent.
      */
     fun video(sc: Scene, sortie: File, son: SourcePcm?, rate: Int, travail: File, progres: (Float) -> Unit): File? {
         val ff = ffmpeg() ?: return null
@@ -597,8 +665,9 @@ object RenduPc {
         val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000 else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
         val nbTitre = if (sc.ouverture) 3 * fps else 0
         sc.flashMs = sc.flashS * 1000L * vitesse
+        val ouverture = ouvertureVideo(w, h, sc, 4 * fps)
         val fin = finVideo(w, h, sc, 3 * fps, 6 * fps)
-        val total = nbTitre + nb + fin.sumOf { it.second }
+        val total = nbTitre + ouverture.sumOf { it.second } + nb + fin.sumOf { it.second }
         // The sound first, into a WAV file ffmpeg reads beside the frames.
         val wav = son?.let { s -> File(travail, "son-" + System.nanoTime() + ".wav").also { ecritWav(s, rate, it) } }
         try {
@@ -623,6 +692,7 @@ object RenduPc {
             var fait = 0
             val titreImg = if (nbTitre > 0) titre(w, h, sc) else null
             repeat(nbTitre) { ecris(titreImg!!); progres(++fait / total.toFloat()) }
+            for ((dessin, k) in ouverture) { val img = dessin(); repeat(k) { ecris(img); progres(++fait / total.toFloat()) } }
             for (n in 0 until nb) {
                 val tMs = if (segs != null) JournalPassage.instantALecture(segs, n.toLong() * 1000 / fps) else e.debutMs + n.toLong() * 1000 * vitesse / fps
                 ecris(image(w, h, sc, tMs)); progres(++fait / total.toFloat())

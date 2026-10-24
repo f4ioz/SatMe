@@ -44,8 +44,8 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
     private val rangement = Planche.Rangement(File(dossier, "planches").apply { mkdirs() })
 
-    /** What the sheet's event, its picker and its report read on the PC. */
-    private val source = object : ApiPlancheEvenement.Source {
+    /** What the sheet's event, its picker and its report read on the PC (the journal's report panels too). */
+    val source = object : ApiPlancheEvenement.Source {
         override val dossier: File get() = son.sstv.dossier
         override val classement: ClassementGalerie get() = this@PlancheWebPc.classement?.galerie ?: secours
         private val secours = ClassementGalerie { null }
@@ -143,6 +143,9 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
     private fun modele(id: String): Planche.Modele? =
         id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }?.let { i -> rangement.modeles().firstOrNull { it.id == i } }
+
+    /** The sheets kept, whole (the journal finds the one about a pass's event). */
+    fun planches(): List<Planche.Modele> = rangement.modeles()
 
     /** The templates: id and name (the SSTV transmission's choice). */
     fun modeles(): List<Pair<String, String>> = rangement.modeles().map { it.id to it.nom }

@@ -19,6 +19,9 @@ import android.graphics.Typeface
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Marque
 import fr.f4ioz.satcombo.domain.JournalPassage.TypeMarque
+import fr.f4ioz.satcombo.domain.OptionsJournal
+import fr.f4ioz.satcombo.sstv.ElementsJournal
+import fr.f4ioz.satcombo.sstv.ToileCanvas
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.sstv.Gif
 import fr.f4ioz.satcombo.sstv.PlancheRendu
@@ -352,7 +355,13 @@ object JournalRendu {
         /** "TX" while the station transmitted. */
         val affTx: Boolean = true,
         /** The SSTV picture where the journal page placed it, shares of the view; null: [tailleFlash], away from the satellite. */
-        val cadreSstv: fr.f4ioz.satcombo.domain.CadreSstv? = null
+        val cadreSstv: fr.f4ioz.satcombo.domain.CadreSstv? = null,
+        /** The pass's choices: the report's panels laid over the view or cards of their own ([OptionsJournal]). */
+        val options: OptionsJournal = OptionsJournal.DEFAUT,
+        /** What those panels draw (the simple chain here: no montage on the phone); null: none. */
+        val donnees: ElementsJournal.Donnees? = null,
+        /** The words on a processed picture, by its file (only when the pass asks them said). */
+        val etiquettes: Map<String, String> = emptyMap()
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -361,6 +370,21 @@ object JournalRendu {
         var logo: android.graphics.drawable.Drawable? = null
         /** How much of the pass the picture stays shown, at the export's speed. */
         var flashMs = 0L
+        /** The panels laid over the view, drawn once per size (they do not move during the pass). */
+        private var calque: Pair<Int, Bitmap?>? = null
+        fun calque(w: Int): Bitmap? {
+            calque?.let { (n, b) -> if (n == w) return b }
+            val d = donnees
+            val b = if (d == null || options.incrustes.isEmpty()) null else Bitmap.createBitmap(w, w, Bitmap.Config.ARGB_8888).also { b ->
+                val tl = ToileCanvas(Canvas(b))
+                ElementsJournal.dessineIncrustations(tl, tl, options, d, w.toFloat(), w.toFloat())
+            }
+            calque = w to b
+            return b
+        }
+        /** The cards of the video: the montage's after the title, the others at the end (those with something to draw). */
+        val cartesOuverture: List<OptionsJournal.Element> get() = donnees?.let { d -> options.cartesOuverture.filter { ElementsJournal.disponible(it, d) } }.orEmpty()
+        val cartesFin: List<OptionsJournal.Element> get() = donnees?.let { d -> options.cartesFin.filter { ElementsJournal.disponible(it, d) } }.orEmpty()
     }
 
     /** One frame of the replay: the sky or the map, above a caption. */
@@ -379,6 +403,8 @@ object JournalRendu {
             val p = JournalPassage.pointA(e, instant)
             if (p == null) 0.5f else 0.5f + ((JournalPassage.ciel(p.az, p.el).first - sc.cadre.cx) * sc.cadre.echelle).toFloat() / 2
         }
+        // The report's panels, where the journal page put them (under the picture arriving and the cards).
+        sc.calque(w)?.let { c.drawBitmap(it, 0f, 0f, null) }
         // The SSTV picture arriving, in the corner away from the satellite.
         if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
@@ -387,6 +413,7 @@ object JournalRendu {
             val x = pl?.x ?: if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
             val y = pl?.y ?: (8 * dp)
             dessineArrivee(c, bm, android.graphics.RectF(x, y, x + lw, y + lh), part, dp)
+            m.fichier?.let { sc.etiquettes[it] }?.let { etiquette(c, it, x + 6 * dp, y + lh - 6 * dp, dp) }
         }
         // The stations just worked and heard: their cards stacked at the bottom, on the same
         // side as the picture (away from the satellite), the picture being at the top.
@@ -487,6 +514,33 @@ object JournalRendu {
     fun momentDeReception(marques: List<Marque>, instant: Long, garde: Long): Boolean =
         marques.any { instant in (it.debutMs - 2_000L)..(it.finMs + garde) }
 
+    /** « corrigée », « fusion de 3 copies » on a processed picture: small, at its bottom left ([x], [bas]). */
+    private fun etiquette(c: Canvas, s: String, x: Float, bas: Float, dp: Float) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = SSTV[0]; textSize = 11f * dp; isFakeBoldText = true }
+        val w = p.measureText(s) + 12 * dp
+        c.drawRoundRect(android.graphics.RectF(x, bas - 18 * dp, x + w, bas), 4 * dp, 4 * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(210, 10, 15, 24) })
+        c.drawText(s, x + 6 * dp, bas - 5 * dp, p)
+    }
+
+    /** A report panel alone on a frame: its name, the pass, the panel as large as it goes, SatMe's mark. */
+    private fun carte(w: Int, h: Int, sc: Scene, k: OptionsJournal.Element): Bitmap {
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        val dp = w / 360f
+        val tl = ToileCanvas(c)
+        sc.donnees?.let { d -> ElementsJournal.carte(tl, tl, k, d, w.toFloat(), h.toFloat(), sc.e.satName + " · " +
+            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(sc.e.debutMs)) + " UTC") }
+        val logo = sc.logo
+        c.drawText("SatMe", if (logo != null) w - 44f * dp else w - 14f * dp, h - 10f * dp,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CYAN; textSize = 15f * dp; isFakeBoldText = true; textAlign = Paint.Align.RIGHT })
+        logo?.let { it.setBounds((w - 40 * dp).toInt(), (h - 34 * dp).toInt(), (w - 12 * dp).toInt(), (h - 6 * dp).toInt()); it.draw(c) }
+        return out
+    }
+
+    /** After the title: the montage's card (the simple chain here) when asked, [n] frames. */
+    private fun ouvertureVideo(w: Int, h: Int, sc: Scene, n: Int): List<Pair<() -> Bitmap, Int>> =
+        sc.cartesOuverture.map { k -> { carte(w, h, sc, k) } to n }
+
     /** Prepares a scene for frames [w] wide: logo, pictures, and for the map its view and tiles. */
     private fun prepare(ctx: Context, sc: Scene, w: Int) {
         sc.logo = runCatching { ctx.packageManager.getApplicationIcon(ctx.applicationInfo) }.getOrNull()
@@ -561,7 +615,7 @@ object JournalRendu {
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val t1 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 18f * dp; isFakeBoldText = true }
         val t2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 13f * dp }
-        c.drawText(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, t1)
+        c.drawText(sc.e.satName + " · " + m.texte + (m.fichier?.let { sc.etiquettes[it] }?.let { " · $it" } ?: ""), 14 * dp, h - 44 * dp, t1)
         c.drawText(fmt.format(Date(m.finMs)) + " UTC" + "  ·  " +
             listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14 * dp, h - 22 * dp, t2)
         // The mark, as on the other frames.
@@ -624,15 +678,17 @@ object JournalRendu {
         return out
     }
 
-    /** The end of the video: each picture (frames each), then the summary. */
-    private fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int): List<Pair<() -> Bitmap, Int>> {
-        if (!sc.recap) return emptyList()
+    /** The end of the video: each picture (frames each), then the summary; the report's cards asked after them. */
+    private fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int, parCarte: Int = resumeN * 2 / 3): List<Pair<() -> Bitmap, Int>> {
         val l = ArrayList<Pair<() -> Bitmap, Int>>()
-        sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
-            val b = m.fichier?.let { sc.images[it] } ?: return@forEach
-            l += { imagePleine(w, h, sc, m, b) } to parImage
+        if (sc.recap) {
+            sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
+                val b = m.fichier?.let { sc.images[it] } ?: return@forEach
+                l += { imagePleine(w, h, sc, m, b) } to parImage
+            }
+            l += { resume(w, h, sc) } to resumeN
         }
-        l += { resume(w, h, sc) } to resumeN
+        sc.cartesFin.forEach { k -> l += { carte(w, h, sc, k) } to parCarte }
         return l
     }
 
@@ -706,25 +762,35 @@ object JournalRendu {
         val vitesse = if (son != null || segs != null) 1 else 10
         val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000
             else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
-        // The opening title first (3 s): the sound waits for it, to stay with the replay.
+        // The opening title first (3 s), the montage's card (4 s) when asked: the sound waits for them, to stay with the replay.
         val nbTitre = if (sc.ouverture) 3 * fps else 0
-        val sourceSon = son?.source(deSon, segs, titre = nbTitre * son.rate / fps)
+        val ouverture = ouvertureVideo(w, h, sc, 4 * fps)
+        val nbOuverture = ouverture.sumOf { it.second }
+        val sourceSon = son?.source(deSon, segs, titre = (nbTitre + nbOuverture) * son.rate / fps)
         prepare(ctx, sc, w)
         // Shown flashS seconds of the video: that much more of the pass at ×10.
         sc.flashMs = sc.flashS * 1000L * vitesse
         val sortie = File(File(ctx.cacheDir, "export").apply { mkdirs() }, sc.nomFichier?.plus(".mp4") ?: nom(e, ".mp4"))
         // Then, if asked, each picture 3 s and the summary 6 s.
         val fin = finVideo(w, h, sc, 3 * fps, 6 * fps)
-        val total = nbTitre + nb + fin.sumOf { it.second }
+        val total = nbTitre + nbOuverture + nb + fin.sumOf { it.second }
         var courante: Pair<Int, ByteArray>? = null
         var titreYuv: ByteArray? = null
+        var carteYuv: Pair<Int, ByteArray>? = null
         val ok = SstvVideo.encodeMp4(sortie, w, h, fps, total, sourceSon, son?.rate ?: 22050, debit, progres) { n0, trame ->
             if (n0 < nbTitre) {
                 val y = titreYuv ?: SstvVideo.yuv(titre(w, h, sc), nv12).also { titreYuv = it }
                 System.arraycopy(y, 0, trame, 0, trame.size)
                 return@encodeMp4
             }
-            val n = n0 - nbTitre
+            if (n0 < nbTitre + nbOuverture) {
+                val i = (n0 - nbTitre) / (4 * fps)
+                val c0 = carteYuv
+                val y = if (c0 != null && c0.first == i) c0.second else SstvVideo.yuv(ouverture[i].first(), nv12).also { carteYuv = i to it }
+                System.arraycopy(y, 0, trame, 0, trame.size)
+                return@encodeMp4
+            }
+            val n = n0 - nbTitre - nbOuverture
             if (n < nb) {
                 val tMs = if (segs != null) JournalPassage.instantALecture(segs, n.toLong() * 1000 / fps)
                     else e.debutMs + n.toLong() * 1000 * vitesse / fps
@@ -759,6 +825,8 @@ object JournalRendu {
         val fin = px(a)
         // The summary's pictures need their colours too.
         var pourPalette = if (sc.recap) fin + IntArray(w * h).also { resume(w, h, sc).getPixels(it, 0, w, 0, 0, w, h) } else fin
+        // The report's cards need their colours too (its light cards).
+        (sc.cartesOuverture + sc.cartesFin).firstOrNull()?.let { k -> pourPalette = pourPalette + IntArray(w * h).also { carte(w, h, sc, k).getPixels(it, 0, w, 0, 0, w, h) } }
         val titrePx = if (sc.ouverture) IntArray(w * h).also { titre(w, h, sc).getPixels(it, 0, w, 0, 0, w, h) } else null
         if (titrePx != null) pourPalette = pourPalette + titrePx
         val pal = Gif.palette(pourPalette, listOf(0x0A0F18, 0x111B29, 0xFFFFFF, CYAN and 0xFFFFFF, QSO and 0xFFFFFF, APRS and 0xFFFFFF, ISS and 0xFFFFFF))
@@ -767,6 +835,7 @@ object JournalRendu {
             val g = Gif.Ecrivain(o, w, h, pal)
             // The opening title, 2 s.
             titrePx?.let { g.trame(it, 0, h, 200) }
+            for ((dessin, n2) in ouvertureVideo(w, h, sc, 300)) g.trame(IntArray(w * h).also { dessin().getPixels(it, 0, w, 0, 0, w, h) }, 0, h, n2)
             var avant: IntArray? = null
             for (i in 0..n) {
                 val cur = if (i == n) fin else px(de + duree * i / n)
@@ -778,7 +847,7 @@ object JournalRendu {
                     while (y1 > y0 && rangeeEgale(prev, cur, w, y1 - 1)) y1--
                     if (y0 >= y1) { y0 = 0; y1 = 1 }
                 }
-                g.trame(cur, y0, y1, if (i == n) (if (sc.recap) 150 else 300) else 20)
+                g.trame(cur, y0, y1, if (i == n) (if (sc.recap || sc.cartesFin.isNotEmpty()) 150 else 300) else 20)
                 avant = cur
                 progres((i + 1f) / (n + 1))
             }

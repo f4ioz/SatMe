@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.PagePc
 
+import fr.f4ioz.satcombo.demo.ApiJournalSstv
 import fr.f4ioz.satcombo.demo.PageJournal
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.domain.CadreSstv
@@ -70,6 +71,18 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** The pass report's routes (`/rapport…`), when SatMe-PC gives them. */
     @Volatile var rapport: RapportPc? = null
 
+    /** The SSTV sheet (its events, corrections, montage): the SSTV versions and the report's panels read through it (set by Main). */
+    @Volatile var planche: PlancheWebPc? = null
+
+    /** The pass's SSTV versions and the report's panels ([ApiJournalSstv], the phone's too). */
+    val sstv = ApiJournalSstv(object : ApiJournalSstv.Plateforme {
+        override fun source() = planche?.source
+        override fun planches() = planche?.planches().orEmpty()
+        override fun passage(id: String) = j.passage(id)
+        override fun enregistre(e: JournalPassage.Entree) { j.rangement.enregistre(e) }
+        override fun images(e: JournalPassage.Entree) = j.liens(e).images
+    })
+
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
     private fun d(v: Double) = "%.2f".format(Locale.US, v)
@@ -116,6 +129,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     fun sert(route: String, p: (String) -> String, methode: String = "GET", corps: (File) -> Boolean): ReponseWeb = runCatching {
         if (route == "/rapport" || route.startsWith("/rapport/")) return rapport?.sert(route.removePrefix("/rapport"), p) ?: NON
+        if (route.startsWith("/sstv")) return sstv.sert(route, p, methode) ?: NON
         when (route) {
             // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
             "/nouveau/satellites" -> json(org.json.JSONArray(station.etat.value.satellites.sortedBy { it.name.uppercase() }
@@ -235,13 +249,14 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 val m = j.morceaux(e).getOrNull(p("n").toIntOrNull() ?: -1) ?: return NON
                 ReponseWeb("200 OK", "audio/wav", fichier = m.f)
             }
+            // With the pass (id): the version its pictures show (as received, corrected, fused).
             "/image" -> {
-                val f = imageSstv(p("f")) ?: return NON
+                val f = (p("id").takeIf { it.isNotBlank() }?.let { sstv.image(it, File(p("f")).name) }) ?: imageSstv(p("f")) ?: return NON
                 ReponseWeb("200 OK", "image/png", fichier = f)
             }
             // A picture of the pass, small, for its row among the moments (the page asked, nothing answered: 22/10).
             "/vignette" -> {
-                val f = imageSstv(p("f")) ?: return NON
+                val f = (p("id").takeIf { it.isNotBlank() }?.let { sstv.image(it, File(p("f")).name) }) ?: imageSstv(p("f")) ?: return NON
                 val b = vignette(f, p("w").toIntOrNull()?.coerceIn(80, 800) ?: 160) ?: return NON
                 ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: max-age=3600\r\n")
             }
@@ -339,7 +354,10 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** What a picture, a GIF or a video shows, from the page's options (else the settings). */
     private fun scene(e: JournalPassage.Entree, moment: LongRange?, titre: String?, image: Boolean, p: (String) -> String): RenduPc.Scene {
         val l = j.liens(e)
-        val marques = j.marques(l)
+        // Each SSTV picture as the pass chose it (as received by default), « corrigée » said only when asked.
+        val montrees = runCatching { sstv.montrees(e) }.getOrDefault(emptyMap())
+        val marques = sstv.marques(e, j.marques(l), montrees)
+        val elements = e.options.elements.values.any { it.actif }
         return RenduPc.Scene(e, j.prevue(e), marques, s.callsign, flashS(),
             affSstv = opt(p, "sstv", affSstv()), affFiches = opt(p, "fiches", s.journalAffFiches),
             affSmetre = opt(p, "smetre", s.journalAffSmetre), affFreq = opt(p, "freq", s.journalAffFreq), affTx = opt(p, "tx", s.journalAffTx),
@@ -357,7 +375,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             },
             cadreSstv = cadreSstv(p("cadreSstv")),
             paysage = p("format") == "paysage", cielEntier = p("format").isNotEmpty(),
-            tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } })
+            tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } },
+            options = e.options, donnees = if (elements) runCatching { sstv.donnees(e) }.getOrNull() else null,
+            etiquettes = sstv.etiquettes(e, montrees))
     }
 
     /** The SSTV picture's place sent with a request ("auto": by itself), else the one kept. */
@@ -371,7 +391,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         val aSon = maxOf(e.finMs, segs?.lastOrNull()?.aMs ?: e.finMs)
         val son = if (morceaux.isNotEmpty()) fr.f4ioz.satcombo.domain.SonPassage.fabrique(morceaux, deSon, aSon, travail, JournalPc.decodeur) else null
         return try {
-            val titre = if (sc.ouverture && son != null) 3 * son.rate else 0
+            // The sound waits for the title and the opening card.
+            val titre = if (son != null) RenduPc.secondesAvantPassage(sc) * son.rate else 0
             RenduPc.video(sc, sortie, son?.source(deSon, segs, titre), son?.rate ?: 22_050, travail, progres)
         } finally { son?.close() }
     }

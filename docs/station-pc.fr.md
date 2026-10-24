@@ -226,6 +226,14 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
 - Le **journal Doppler / CAT** du passage (quand il est tenu, voir [Réglages](#réglages)) y est relié.
 
+### Images SSTV et éléments du rapport
+
+Dans **Fabriquer**, sous les boutons, ce qui est choisi pour le passage — gardé avec lui, repris par l'image, le GIF, la vidéo et le rejeu :
+
+- **Images SSTV du passage** : la **version par défaut du passage** — **Brute (reçue)** d'origine (les vidéos d'avant ne changent pas), **Auto (meilleure note)**, **Corrigée**, **Fusion** — puis image par image (« comme le passage », ou une version présente, chacune avec sa note). Une version choisie qui a disparu montre Auto, et le dit (« absente : Auto montrée »). **Créer la fusion** quand la diapo a plusieurs copies et pas encore de fusion. **Marquer corrigée/fusion** (décoché d'origine, comme sur la planche) écrit « corrigée » ou « fusion de N copies » sur l'image traitée.
+- **Éléments du rapport** de l'événement SSTV du passage (celui de la planche, trouvé de même) : **Montage de réception** (le plan qui dessine le mieux la réception du passage, ou celui choisi dans **Plan du montage**), **Grille des diapos** (celles de ce passage encadrées), **Ciel du passage** (les images sur la trace), **Profil d'élévation** (les créneaux des diapos), **Bilan SSTV** (diapos de ce passage reçues/prévues, meilleure note, diapos de la série, images), **Planche de l'événement**, **Logo SatMe**. Chacun **incrusté** (sur le rejeu, placé à la souris comme l'image SSTV : glisser, le coin ou la molette pour sa taille, **Auto** pour sa place d'origine) et/ou en **carte** (une image à part dans la vidéo et le GIF : le montage après le titre, les autres à la fin). Tous décochés d'origine. Sans événement, la grille, le bilan et la planche ne sont pas proposés ; le ciel et le profil viennent alors de la trace du passage.
+- Le **Rapport** du passage montre aussi ses images SSTV dans la version choisie.
+
 ### Rapport de passage
 
 **Rapport**, dans un passage du journal : le compte rendu d'observation du passage, en une page.

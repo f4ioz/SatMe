@@ -103,26 +103,26 @@ object RapportPdf {
     }
 
     // The page's colours (the report's light theme; translucent ones mixed on white).
-    private const val ENCRE = 0xFF1D2329.toInt()
-    private const val GRIS = 0xFF5D6873.toInt()
-    private const val TRAIT = 0xFFD9DCD6.toInt()
-    private const val GRILLE = 0xFFE4E6E1.toInt()
-    private const val CARTE = 0xFFFCFCFB.toInt()
-    private const val FOND = 0xFFF4F5F2.toInt()
-    private const val BON = 0xFF0CA30C.toInt()
-    private const val RATE = 0xFFD03B3B.toInt()
-    private const val AVENIR = 0xFF8A94A0.toInt()
-    private const val MUET = 0xFFC3C8CC.toInt()
-    private const val S1 = 0xFF2A78D6.toInt()
-    private const val RECU = 0xFFEB6834.toInt()
-    private const val TETE = 0xFF123F7A.toInt()
-    private const val TETE_SOUS = 0xFFD6E4F5.toInt()
-    private const val AMBRE = 0xFFFFC21A.toInt()
-    private const val BLANC = 0xFFFFFFFF.toInt()
-    private const val NOIR_BADGE = 0xFF2B2F33.toInt()
+    internal const val ENCRE = 0xFF1D2329.toInt()
+    internal const val GRIS = 0xFF5D6873.toInt()
+    internal const val TRAIT = 0xFFD9DCD6.toInt()
+    internal const val GRILLE = 0xFFE4E6E1.toInt()
+    internal const val CARTE = 0xFFFCFCFB.toInt()
+    internal const val FOND = 0xFFF4F5F2.toInt()
+    internal const val BON = 0xFF0CA30C.toInt()
+    internal const val RATE = 0xFFD03B3B.toInt()
+    internal const val AVENIR = 0xFF8A94A0.toInt()
+    internal const val MUET = 0xFFC3C8CC.toInt()
+    internal const val S1 = 0xFF2A78D6.toInt()
+    internal const val RECU = 0xFFEB6834.toInt()
+    internal const val TETE = 0xFF123F7A.toInt()
+    internal const val TETE_SOUS = 0xFFD6E4F5.toInt()
+    internal const val AMBRE = 0xFFFFC21A.toInt()
+    internal const val BLANC = 0xFFFFFFFF.toInt()
+    internal const val NOIR_BADGE = 0xFF2B2F33.toInt()
 
     /** [c] at opacity [a] over white. */
-    private fun mix(c: Int, a: Double): Int {
+    internal fun mix(c: Int, a: Double): Int {
         fun k(sh: Int) = (255 - ((255 - (c shr sh and 0xFF)) * a)).roundToInt().coerceIn(0, 255)
         return (0xFF shl 24) or (k(16) shl 16) or (k(8) shl 8) or k(0)
     }
@@ -131,7 +131,7 @@ object RapportPdf {
         Statut.RECU -> BON; Statut.RECU_BAS -> S1; Statut.ATTENDU_RIEN -> RATE; Statut.BAS -> MUET; Statut.A_VENIR -> AVENIR
     }
 
-    private val TIRETS = floatArrayOf(3f, 2.2f)
+    internal val TIRETS = floatArrayOf(3f, 2.2f)
 
     /** Draws [r] on [d]'s pages; the number of pages. */
     fun dessine(r: RapportEvenement.Rapport, d: Document): Int {
@@ -156,6 +156,134 @@ object RapportPdf {
         }
         return pages.size
     }
+
+    // ------------------------------------------------------------ the charts, for others too
+
+    /*
+     * The pass's sky, its elevation, the montage's drawing: drawn here for
+     * the report's pages, and by the journal's pictures and videos
+     * ([ElementsJournal]) on the platform's own canvas — the same lines.
+     */
+
+    /** [s] anchored left (0), in the middle (1) or right (2) of [x], measured by [m]. */
+    fun Toile.ecrit(m: Mesure, s: String, x: Float, y: Float, taille: Float, couleur: Int = ENCRE, gras: Boolean = false, ancre: Int = 0) {
+        if (s.isEmpty()) return
+        val dx = when (ancre) { 1 -> m.largeur(s, taille, gras) / 2; 2 -> m.largeur(s, taille, gras); else -> 0f }
+        texte(s, x - dx, y, taille, couleur, gras)
+    }
+
+    /** [s] cut to fit [w], « … » at its end. */
+    fun coupe(m: Mesure, s: String, w: Float, taille: Float, gras: Boolean = false): String {
+        if (m.largeur(s, taille, gras) <= w) return s
+        var n = s.length
+        while (n > 1 && m.largeur(s.take(n) + "…", taille, gras) > w) n--
+        return s.take(n).trimEnd() + "…"
+    }
+
+    /** A pass seen from below, as the page's ([RapportEvenement.polaire]): its 220-wide drawing at scale [k] from ([ox], [oy]). */
+    fun polaire(tl: Toile, m: Mesure, p: RapportEvenement.Passage, elMin: Double, ox: Float, oy: Float, k: Float) = with(tl) {
+        val R = 92.0; val C = 110.0
+        fun X(v: Double) = ox + (v * k).toFloat()
+        fun Y(v: Double) = oy + (v * k).toFloat()
+        fun xy(az: Double, el: Double): Pair<Float, Float> {
+            val rr = R * (90 - el.coerceIn(0.0, 90.0)) / 90
+            val a = Math.toRadians(az)
+            return X(C + rr * sin(a)) to Y(C - rr * cos(a))
+        }
+        for (el in listOf(0, 30, 60)) cercle(X(C), Y(C), (R * (90 - el) / 90 * k).toFloat(), null, GRILLE, 0.7f)
+        if (elMin > 0) cercle(X(C), Y(C), (R * (90 - elMin) / 90 * k).toFloat(), null, GRIS, 0.6f)
+        ligne(floatArrayOf(X(C - R), Y(C), X(C + R), Y(C)), GRILLE, 0.7f)
+        ligne(floatArrayOf(X(C), Y(C - R), X(C), Y(C + R)), GRILLE, 0.7f)
+        val ta = 11f * k; val tp = 8.5f * k
+        val o = if (I18n.current() == Lang.EN) "W" else "O"
+        ecrit(m, "N", X(C), Y(12.0), ta, GRIS, ancre = 1); ecrit(m, "E", X(C + R + 10), Y(C + 4), ta, GRIS, ancre = 1)
+        ecrit(m, "S", X(C), Y(C + R + 15), ta, GRIS, ancre = 1); ecrit(m, o, X(C - R - 10), Y(C + 4), ta, GRIS, ancre = 1)
+        ecrit(m, "30°", X(C + 3), Y(C - R * 60 / 90 + 10), tp, GRIS); ecrit(m, "60°", X(C + 3), Y(C - R * 30 / 90 + 10), tp, GRIS)
+        val pts = p.trace.filter { it.el >= -1 }
+        if (pts.size >= 2) {
+            ligne(pts.flatMap { val (x, y) = xy(it.az, it.el); listOf(x, y) }.toFloatArray(), GRIS, 2f * k, rond = true)
+            val (ax, ay) = xy(pts.first().az, pts.first().el); val (lx, ly) = xy(pts.last().az, pts.last().el)
+            cercle(ax, ay, 4f * k, BON, CARTE, 1.4f * k)
+            rect(lx - 3.5f * k, ly - 3.5f * k, 7f * k, 7f * k, RATE, CARTE, 1.4f * k)
+        }
+        for (i in p.images) {
+            if (i.trace.size < 2) continue
+            ligne(i.trace.flatMap { val (x, y) = xy(it.az, it.el); listOf(x, y) }.toFloatArray(), RECU, 5f * k,
+                if (i.complete) null else floatArrayOf(3f * k, 3f * k), rond = i.complete)
+            val mi = i.trace[i.trace.size / 2]; val (mx, my) = xy(mi.az, mi.el)
+            val etiq = if (i.diapo > 0) (if (i.origine == ClassementSstv.Origine.ESTIME) "≈" else "") + i.diapo else "?"
+            cercle(mx, my, 8f * k, CARTE, RECU, 1.4f * k)
+            ecrit(m, etiq, mx, my + 3.2f * k, 9f * k, ENCRE, true, ancre = 1)
+        }
+    }
+
+    /** A pass's elevation against time, as the page's ([RapportEvenement.profil]): 220 × 110 at scale [k]. */
+    fun profil(tl: Toile, m: Mesure, p: RapportEvenement.Passage, elMin: Double, ox: Float, oy: Float, k: Float) = with(tl) {
+        val W = 220.0; val H = 110.0; val G = 26.0; val D = 6.0; val Hh = 6.0; val B = 20.0
+        val t0 = p.aosMs; val t1 = maxOf(p.losMs, p.aosMs + 60_000L)
+        fun x(t: Long) = ox + ((G + (W - G - D) * ((t - t0).toDouble() / (t1 - t0)).coerceIn(0.0, 1.0)) * k).toFloat()
+        val haut = maxOf(30.0, ((p.elMax + 9) / 10).toInt() * 10.0).coerceAtMost(90.0)
+        fun y(el: Double) = oy + ((H - B - (H - B - Hh) * el.coerceIn(0.0, haut) / haut) * k).toFloat()
+        fun X(v: Double) = ox + (v * k).toFloat()
+        val tp = 8.5f * k
+        val recues = p.images.filter { it.diapo > 0 }.map { it.diapo }.toSet()
+        for (c in p.creneaux) {
+            val x0 = x(c.debutMs); val x1 = x(c.finMs)
+            if (x1 - x0 < 0.4f) continue
+            val ok = c.diapo in recues
+            rect(x0, y(haut), x1 - x0, y(0.0) - y(haut), if (ok) mix(BON, 0.22) else if (!c.entiere) mix(S1, 0.05) else mix(S1, 0.10))
+            ecrit(m, c.diapo.toString(), (x0 + x1) / 2, y(haut) + 8.5f * k, tp, GRIS, ancre = 1)
+        }
+        for (el in listOf(0.0, haut / 2, haut)) {
+            ligne(floatArrayOf(X(G), y(el), X(W - D), y(el)), GRILLE, 0.6f)
+            ecrit(m, "${el.roundToInt()}°", X(G - 3), y(el) + 3f * k, tp, GRIS, ancre = 2)
+        }
+        if (elMin in 0.0..haut) ligne(floatArrayOf(X(G), y(elMin), X(W - D), y(elMin)), GRIS, 0.6f, TIRETS)
+        if (p.trace.size >= 2) ligne(p.trace.flatMap { listOf(x(it.tMs), y(it.el)) }.toFloatArray(), GRIS, 2f * k, rond = true)
+        for (i in p.images) if (i.trace.size >= 2)
+            ligne(i.trace.flatMap { listOf(x(it.tMs), y(it.el)) }.toFloatArray(), RECU, 5f * k,
+                if (i.complete) null else floatArrayOf(3f * k, 3f * k), rond = i.complete)
+        ecrit(m, RapportEvenement.hm(p.aosMs), X(G), oy + ((H - 5) * k).toFloat(), tp, GRIS)
+        ecrit(m, RapportEvenement.hm(p.losMs) + " UTC", X(W - D), oy + ((H - 5) * k).toFloat(), tp, GRIS, ancre = 2)
+    }
+
+    /** [s] drawn at ([x0], [y0]), [k] points a unit. */
+    fun scene(tl: Toile, m: Mesure, s: SceneMontage.Scene, x0: Float, y0: Float, k: Float) = with(tl) {
+        fun X(v: Double) = x0 + v.toFloat() * k
+        fun Y(v: Double) = y0 + v.toFloat() * k
+        fun f(p: SceneMontage.Peinture?) = when (p) { is SceneMontage.Uni -> p.argb; is SceneMontage.Degrade -> p.moyenne; null -> null }
+        fun ti(t: DoubleArray?) = t?.map { (it * k).toFloat().coerceAtLeast(0.05f) }?.toFloatArray()
+        rect(x0, y0, s.l.toFloat() * k, s.h.toFloat() * k, s.fond, rayon = 10f * k)
+        for (fo in s.formes) when (fo) {
+            is SceneMontage.Rect -> rect(X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k, fo.r.toFloat() * k, ti(fo.tirets))
+            is SceneMontage.Cercle -> cercle(X(fo.x), Y(fo.y), fo.r.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k)
+            is SceneMontage.Chemin -> {
+                val ops = CharArray(fo.ops.size); val xy = ArrayList<Float>()
+                fo.ops.forEachIndexed { i, o ->
+                    when (o) {
+                        is SceneMontage.M -> { ops[i] = 'M'; xy += X(o.x); xy += Y(o.y) }
+                        is SceneMontage.L -> { ops[i] = 'L'; xy += X(o.x); xy += Y(o.y) }
+                        is SceneMontage.Cu -> { ops[i] = 'C'; xy += X(o.x1); xy += Y(o.y1); xy += X(o.x2); xy += Y(o.y2); xy += X(o.x); xy += Y(o.y) }
+                        else -> ops[i] = 'Z'
+                    }
+                }
+                chemin(ops, xy.toFloatArray(), fo.trait, fo.ep.toFloat() * k, ti(fo.tirets), fo.rond, f(fo.fond))
+            }
+            is SceneMontage.Texte -> {
+                val tt = fo.taille.toFloat() * k
+                ecrit(m, if (fo.max > 0) coupe(m, fo.s, fo.max.toFloat() * k, tt, fo.gras) else fo.s, X(fo.x), Y(fo.y), tt, fo.couleur, fo.gras, fo.ancre)
+            }
+            is SceneMontage.Image -> {
+                // The page's glow round a cut-out photo: a soft frame of its colour.
+                fo.lueur?.let { c ->
+                    for ((e, a) in listOf(6f to .14, 3.5f to .22, 1.6f to .4))
+                        rect(X(fo.x) - 2f * k, Y(fo.y) - 2f * k, (fo.l.toFloat() + 4f) * k, (fo.h.toFloat() + 4f) * k, null, SceneMontage.alpha(c, a), e * k, 6f * k)
+                }
+                image(fo.octets, X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k)
+            }
+        }
+    }
+
 
     /** A piece of the layout: [h] high, in card [carte] (0: no frame), kept with the next one, said again atop a new page ([reprise]). */
     private class Bloc(val h: Float, val carte: Int, val gardeSuivant: Boolean = false, val reprise: Bloc? = null,
@@ -598,72 +726,9 @@ object RapportPdf {
             return out
         }
 
-        /** A pass seen from below, as the page's ([RapportEvenement.polaire]): its 220-wide drawing at scale [k] from ([ox], [oy]). */
-        private fun polaire(tl: Toile, p: RapportEvenement.Passage, ox: Float, oy: Float, k: Float) = with(tl) {
-            val R = 92.0; val C = 110.0
-            fun X(v: Double) = ox + (v * k).toFloat()
-            fun Y(v: Double) = oy + (v * k).toFloat()
-            fun xy(az: Double, el: Double): Pair<Float, Float> {
-                val rr = R * (90 - el.coerceIn(0.0, 90.0)) / 90
-                val a = Math.toRadians(az)
-                return X(C + rr * sin(a)) to Y(C - rr * cos(a))
-            }
-            for (el in listOf(0, 30, 60)) cercle(X(C), Y(C), (R * (90 - el) / 90 * k).toFloat(), null, GRILLE, 0.7f)
-            if (r.elMin > 0) cercle(X(C), Y(C), (R * (90 - r.elMin) / 90 * k).toFloat(), null, GRIS, 0.6f)
-            ligne(floatArrayOf(X(C - R), Y(C), X(C + R), Y(C)), GRILLE, 0.7f)
-            ligne(floatArrayOf(X(C), Y(C - R), X(C), Y(C + R)), GRILLE, 0.7f)
-            val ta = 11f * k; val tp = 8.5f * k
-            val o = if (I18n.current() == Lang.EN) "W" else "O"
-            ecrit("N", X(C), Y(12.0), ta, GRIS, ancre = 1); ecrit("E", X(C + R + 10), Y(C + 4), ta, GRIS, ancre = 1)
-            ecrit("S", X(C), Y(C + R + 15), ta, GRIS, ancre = 1); ecrit(o, X(C - R - 10), Y(C + 4), ta, GRIS, ancre = 1)
-            ecrit("30°", X(C + 3), Y(C - R * 60 / 90 + 10), tp, GRIS); ecrit("60°", X(C + 3), Y(C - R * 30 / 90 + 10), tp, GRIS)
-            val pts = p.trace.filter { it.el >= -1 }
-            if (pts.size >= 2) {
-                ligne(pts.flatMap { val (x, y) = xy(it.az, it.el); listOf(x, y) }.toFloatArray(), GRIS, 2f * k, rond = true)
-                val (ax, ay) = xy(pts.first().az, pts.first().el); val (lx, ly) = xy(pts.last().az, pts.last().el)
-                cercle(ax, ay, 4f * k, BON, CARTE, 1.4f * k)
-                rect(lx - 3.5f * k, ly - 3.5f * k, 7f * k, 7f * k, RATE, CARTE, 1.4f * k)
-            }
-            for (i in p.images) {
-                if (i.trace.size < 2) continue
-                ligne(i.trace.flatMap { val (x, y) = xy(it.az, it.el); listOf(x, y) }.toFloatArray(), RECU, 5f * k,
-                    if (i.complete) null else floatArrayOf(3f * k, 3f * k), rond = i.complete)
-                val mi = i.trace[i.trace.size / 2]; val (mx, my) = xy(mi.az, mi.el)
-                val etiq = if (i.diapo > 0) (if (i.origine == ClassementSstv.Origine.ESTIME) "≈" else "") + i.diapo else "?"
-                cercle(mx, my, 8f * k, CARTE, RECU, 1.4f * k)
-                ecrit(etiq, mx, my + 3.2f * k, 9f * k, ENCRE, true, ancre = 1)
-            }
-        }
-
-        /** A pass's elevation against time, as the page's ([RapportEvenement.profil]): 220 × 110 at scale [k]. */
-        private fun profil(tl: Toile, p: RapportEvenement.Passage, ox: Float, oy: Float, k: Float) = with(tl) {
-            val W = 220.0; val H = 110.0; val G = 26.0; val D = 6.0; val Hh = 6.0; val B = 20.0
-            val t0 = p.aosMs; val t1 = maxOf(p.losMs, p.aosMs + 60_000L)
-            fun x(t: Long) = ox + ((G + (W - G - D) * ((t - t0).toDouble() / (t1 - t0)).coerceIn(0.0, 1.0)) * k).toFloat()
-            val haut = maxOf(30.0, ((p.elMax + 9) / 10).toInt() * 10.0).coerceAtMost(90.0)
-            fun y(el: Double) = oy + ((H - B - (H - B - Hh) * el.coerceIn(0.0, haut) / haut) * k).toFloat()
-            fun X(v: Double) = ox + (v * k).toFloat()
-            val tp = 8.5f * k
-            val recues = p.images.filter { it.diapo > 0 }.map { it.diapo }.toSet()
-            for (c in p.creneaux) {
-                val x0 = x(c.debutMs); val x1 = x(c.finMs)
-                if (x1 - x0 < 0.4f) continue
-                val ok = c.diapo in recues
-                rect(x0, y(haut), x1 - x0, y(0.0) - y(haut), if (ok) mix(BON, 0.22) else if (!c.entiere) mix(S1, 0.05) else mix(S1, 0.10))
-                ecrit(c.diapo.toString(), (x0 + x1) / 2, y(haut) + 8.5f * k, tp, GRIS, ancre = 1)
-            }
-            for (el in listOf(0.0, haut / 2, haut)) {
-                ligne(floatArrayOf(X(G), y(el), X(W - D), y(el)), GRILLE, 0.6f)
-                ecrit("${el.roundToInt()}°", X(G - 3), y(el) + 3f * k, tp, GRIS, ancre = 2)
-            }
-            if (r.elMin in 0.0..haut) ligne(floatArrayOf(X(G), y(r.elMin), X(W - D), y(r.elMin)), GRIS, 0.6f, TIRETS)
-            if (p.trace.size >= 2) ligne(p.trace.flatMap { listOf(x(it.tMs), y(it.el)) }.toFloatArray(), GRIS, 2f * k, rond = true)
-            for (i in p.images) if (i.trace.size >= 2)
-                ligne(i.trace.flatMap { listOf(x(it.tMs), y(it.el)) }.toFloatArray(), RECU, 5f * k,
-                    if (i.complete) null else floatArrayOf(3f * k, 3f * k), rond = i.complete)
-            ecrit(RapportEvenement.hm(p.aosMs), X(G), oy + ((H - 5) * k).toFloat(), tp, GRIS)
-            ecrit(RapportEvenement.hm(p.losMs) + " UTC", X(W - D), oy + ((H - 5) * k).toFloat(), tp, GRIS, ancre = 2)
-        }
+        private fun polaire(tl: Toile, p: RapportEvenement.Passage, ox: Float, oy: Float, k: Float) = polaire(tl, m, p, r.elMin, ox, oy, k)
+        private fun profil(tl: Toile, p: RapportEvenement.Passage, ox: Float, oy: Float, k: Float) = profil(tl, m, p, r.elMin, ox, oy, k)
+        private fun Toile.scene(s: SceneMontage.Scene, x0: Float, y0: Float, k: Float) = scene(this, m, s, x0, y0, k)
 
         // ---------------------------------------------------------- the timetable, the chain, the foot
 
@@ -752,43 +817,6 @@ object RapportPdf {
                 for (s in r.pilote) out += paragraphe("•  $s", c, 8f, avant = 1f)
             }
             return out
-        }
-
-        /** [s] drawn at ([x0], [y0]), [k] points a unit. */
-        private fun Toile.scene(s: SceneMontage.Scene, x0: Float, y0: Float, k: Float) {
-            fun X(v: Double) = x0 + v.toFloat() * k
-            fun Y(v: Double) = y0 + v.toFloat() * k
-            fun f(p: SceneMontage.Peinture?) = when (p) { is SceneMontage.Uni -> p.argb; is SceneMontage.Degrade -> p.moyenne; null -> null }
-            fun ti(t: DoubleArray?) = t?.map { (it * k).toFloat().coerceAtLeast(0.05f) }?.toFloatArray()
-            rect(x0, y0, s.l.toFloat() * k, s.h.toFloat() * k, s.fond, rayon = 10f * k)
-            for (fo in s.formes) when (fo) {
-                is SceneMontage.Rect -> rect(X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k, fo.r.toFloat() * k, ti(fo.tirets))
-                is SceneMontage.Cercle -> cercle(X(fo.x), Y(fo.y), fo.r.toFloat() * k, f(fo.fond), fo.trait, fo.ep.toFloat() * k)
-                is SceneMontage.Chemin -> {
-                    val ops = CharArray(fo.ops.size); val xy = ArrayList<Float>()
-                    fo.ops.forEachIndexed { i, o ->
-                        when (o) {
-                            is SceneMontage.M -> { ops[i] = 'M'; xy += X(o.x); xy += Y(o.y) }
-                            is SceneMontage.L -> { ops[i] = 'L'; xy += X(o.x); xy += Y(o.y) }
-                            is SceneMontage.Cu -> { ops[i] = 'C'; xy += X(o.x1); xy += Y(o.y1); xy += X(o.x2); xy += Y(o.y2); xy += X(o.x); xy += Y(o.y) }
-                            else -> ops[i] = 'Z'
-                        }
-                    }
-                    chemin(ops, xy.toFloatArray(), fo.trait, fo.ep.toFloat() * k, ti(fo.tirets), fo.rond, f(fo.fond))
-                }
-                is SceneMontage.Texte -> {
-                    val tt = fo.taille.toFloat() * k
-                    ecrit(if (fo.max > 0) coupe(fo.s, fo.max.toFloat() * k, tt, fo.gras) else fo.s, X(fo.x), Y(fo.y), tt, fo.couleur, fo.gras, fo.ancre)
-                }
-                is SceneMontage.Image -> {
-                    // The page's glow round a cut-out photo: a soft frame of its colour.
-                    fo.lueur?.let { c ->
-                        for ((e, a) in listOf(6f to .14, 3.5f to .22, 1.6f to .4))
-                            rect(X(fo.x) - 2f * k, Y(fo.y) - 2f * k, (fo.l.toFloat() + 4f) * k, (fo.h.toFloat() + 4f) * k, null, SceneMontage.alpha(c, a), e * k, 6f * k)
-                    }
-                    image(fo.octets, X(fo.x), Y(fo.y), fo.l.toFloat() * k, fo.h.toFloat() * k)
-                }
-            }
         }
 
         private fun pied(): Bloc {

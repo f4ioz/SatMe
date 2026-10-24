@@ -445,6 +445,8 @@ private fun FichePassage(
         var filtreImages by remember(e.id) { mutableStateOf(if (aDuDirect) "live" else "") }
         // And picture by picture: those set aside are kept with the pass.
         var masquees by remember(e.id) { mutableStateOf(e.masquees) }
+        // The pass's choices for its pictures and videos (SSTV versions, the report's panels), kept with it.
+        var options by remember(e.id) { mutableStateOf(e.options) }
         val parSource = remember(l, filtreImages) {
             l.images.filter { (_, s) -> when (filtreImages) { "live" -> s.source == "live"; "file" -> s.source != "live"; else -> true } }
         }
@@ -624,7 +626,7 @@ private fun FichePassage(
                                         .background(if (garde) Cyan.copy(alpha = 0.85f) else Magenta.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
                                         .clickable {
                                             masquees = if (garde) masquees + f.name else masquees - f.name
-                                            vm.journal.maj(e.copy(masquees = masquees))
+                                            vm.journal.maj(e.copy(masquees = masquees, options = options))
                                         }
                                         .padding(horizontal = 8.dp, vertical = 2.dp))
                             }
@@ -899,6 +901,47 @@ private fun FichePassage(
                 OutlinedTextField(titreDecoupe, { titreDecoupe = it.take(40) }, singleLine = true,
                     label = { Text(t("journal_extrait_titre_video")) }, modifier = Modifier.fillMaxWidth())
             }
+            // Which version of the SSTV pictures, the report's panels: kept with the pass (the page served to the PC sets them picture by picture, and places the panels with the mouse).
+            val sstvJ = remember { fr.f4ioz.satcombo.demo.JournalSstvTelephone.api(ctx, vm.journal) }
+            fun change(o: fr.f4ioz.satcombo.domain.OptionsJournal) {
+                options = o; pret = null
+                val en = e.copy(masquees = masquees, options = o)
+                scope.launch(Dispatchers.IO) { vm.journal.maj(en) }
+            }
+            val donneesEl by produceState<fr.f4ioz.satcombo.sstv.ElementsJournal.Donnees?>(null, e.id, masquees, options.plan) {
+                value = withContext(Dispatchers.IO) { runCatching { sstvJ.donnees(e.copy(masquees = masquees, options = options)) }.getOrNull() }
+            }
+            if (lv.images.isNotEmpty()) {
+                Text(t("pj_sstv_defaut"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(fr.f4ioz.satcombo.sstv.Planche.Version.RECUE to "pj_v_recue", fr.f4ioz.satcombo.sstv.Planche.Version.AUTO to "pj_v_auto",
+                        fr.f4ioz.satcombo.sstv.Planche.Version.CORRIGEE to "pj_v_corrigee", fr.f4ioz.satcombo.sstv.Planche.Version.FUSION to "pj_v_fusion").forEach { (v, cle) ->
+                        FilterChip(selected = options.version == v, onClick = { change(options.copy(version = v)) }, label = { Text(t(cle), fontSize = 11.sp) })
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { change(options.copy(marqueTraitees = !options.marqueTraitees)) }) {
+                    Checkbox(checked = options.marqueTraitees, onCheckedChange = null)
+                    Column {
+                        Text(t("pj_marque_traitees"), color = TextHi, fontSize = 12.sp)
+                        Text(t("pj_marque_aide"), color = TextLo, fontSize = 10.sp)
+                    }
+                }
+            }
+            if (format != "son") {
+                Text(t("pj_el_titre"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                fr.f4ioz.satcombo.domain.OptionsJournal.Element.values().forEach { k ->
+                    val r = options.reglage(k)
+                    val dispo = donneesEl?.let { fr.f4ioz.satcombo.sstv.ElementsJournal.disponible(k, it) } ?: false
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(fr.f4ioz.satcombo.sstv.ElementsJournal.nom(k), color = if (dispo) TextHi else TextLo, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        FilterChip(selected = r.incruste, enabled = dispo, onClick = { change(options.copy(elements = options.elements + (k to r.copy(incruste = !r.incruste)))) },
+                            label = { Text(t("pj_el_incruste"), fontSize = 11.sp) })
+                        FilterChip(selected = r.carte, enabled = dispo, onClick = { change(options.copy(elements = options.elements + (k to r.copy(carte = !r.carte)))) },
+                            label = { Text(t("pj_el_carte"), fontSize = 11.sp) })
+                    }
+                }
+                Text(t("pj_el_aide_tel"), color = TextLo, fontSize = 10.sp)
+            }
             Text(t("journal_sous_forme"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 buildList {
@@ -966,7 +1009,10 @@ private fun FichePassage(
                         if (fmt == "son") JournalRendu.extraitWav(ctx, morceaux, de, a, nomX ?: JournalRendu.nomExtrait(e, "passage", de))
                         else {
                             val qth = fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)
-                            val sc = JournalRendu.Scene(e, prevue, marques, sol, qth, surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash,
+                            // The SSTV pictures as the pass chose them, the report's panels when asked.
+                            val en = e.copy(masquees = masquees, options = options)
+                            val montrees = runCatching { sstvJ.montrees(en, lv.images) }.getOrDefault(emptyMap())
+                            val sc = JournalRendu.Scene(en, prevue, sstvJ.marques(en, marques, montrees), sol, qth, surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash,
                                 affSstv = affSstv, affFiches = affFiches,
                                 cadreVu = if (surCarte) null else cadreVu, vueVue = if (surCarte) vueVue else null,
                                 fiches = fiches, recap = recap && !moment && fmt != "image", ouverture = ouverture && fmt != "image",
@@ -974,7 +1020,9 @@ private fun FichePassage(
                                 segments = if (moment) listOf(JournalPassage.Segment(de, a, 1)) else if (fmt == "video" && accelere) segs else null,
                                 nomFichier = nomX, titreExtrait = if (moment) titreDecoupe.trim() else null,
                                 affSmetre = affSmetre, affFreq = affFreq, etiquetteQth = etiquetteQth, frequences = frequences,
-                                affTx = affTx)
+                                affTx = affTx, options = options,
+                                donnees = if (options.elements.values.any { it.actif }) runCatching { sstvJ.donnees(en) }.getOrNull() else null,
+                                etiquettes = sstvJ.etiquettes(en, montrees))
                             when (fmt) {
                                 "image" -> JournalRendu.png(ctx, sc, instant)
                                 "gif" -> JournalRendu.gif(ctx, sc) { fabrication = it }
