@@ -366,6 +366,15 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                             selectedLabelColor = Cyan, labelColor = TextLo))
                 }
                 classement?.restent?.takeIf { it > 0 }?.let { Text(tf("sstv_cl_mesure", it), color = TextLo, fontSize = 11.sp) }
+                // Every picture measured again, its number read again (what the hand set is kept).
+                if (classement?.restent == 0) androidx.compose.material3.TextButton(onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            fr.f4ioz.satcombo.sstv.ClassementTelephone.galerie.relance(SstvHub.dir(ctx), fr.f4ioz.satcombo.sstv.ClassementTelephone.shots(ctx))
+                        }
+                        versionClassement++
+                    }
+                }) { Text("⟳ " + t("sstv_cl_relancer"), color = Cyan, fontSize = 12.sp) }
             }
         }
 
@@ -403,14 +412,22 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                     SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
                         SstvHub.delete(f)
                         gallery = SstvHub.shots(ctx)
-                    }, note = g.notes[f.name] ?: -1, onClasse = { aClasser = f.name })
+                    }, note = g.notes[f.name] ?: -1, onClasse = { aClasser = f.name },
+                        badge = fr.f4ioz.satcombo.sstv.ClassementSstv.badge(g.diapo, g.total, g.origine), origine = g.origine)
                 }
             }
-        } else if (onglet == "IMAGES") items(shown, key = { it.first.absolutePath }) { (f, shot) ->
-            SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
-                SstvHub.delete(f)
-                gallery = SstvHub.shots(ctx)
-            }, note = classement?.groupes?.firstNotNullOfOrNull { it.notes[f.name] } ?: -1, onClasse = { aClasser = f.name })
+        } else if (onglet == "IMAGES") {
+            // Each picture's group (the series' estimates too): its slide's badge.
+            val groupeDe = cl?.let { e -> groupesAffiches(e, prevision, "").flatMap { (g, _) -> g.images.map { it.fileName to g } }.toMap() }.orEmpty()
+            items(shown, key = { it.first.absolutePath }) { (f, shot) ->
+                val g = groupeDe[f.name]
+                SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
+                    SstvHub.delete(f)
+                    gallery = SstvHub.shots(ctx)
+                }, note = g?.notes?.get(f.name) ?: -1, onClasse = { aClasser = f.name },
+                    badge = g?.let { fr.f4ioz.satcombo.sstv.ClassementSstv.badge(it.diapo, it.total, it.origine) }.orEmpty(),
+                    origine = g?.origine ?: fr.f4ioz.satcombo.sstv.ClassementSstv.Origine.AUCUNE)
+            }
         }
 
         item { Spacer(Modifier.height(24.dp)) }
@@ -455,8 +472,11 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
     }
     if (planche) PlancheScreen { planche = false }
     viewing?.let { f ->
+        val g = classement?.let { e -> groupesAffiches(e, prevision, "").firstOrNull { (x, _) -> x.images.any { it.fileName == f.name } }?.first }
         SstvViewer(f, gallery.firstOrNull { it.first == f }?.second ?: SstvMeta.parseName(f.name),
-            onNouvelle = { gallery = SstvHub.shots(ctx) }) { viewing = null }
+            onNouvelle = { gallery = SstvHub.shots(ctx) },
+            badge = g?.let { fr.f4ioz.satcombo.sstv.ClassementSstv.badge(it.diapo, it.total, it.origine) }.orEmpty(),
+            origine = g?.origine ?: fr.f4ioz.satcombo.sstv.ClassementSstv.Origine.AUCUNE) { viewing = null }
     }
 }
 
@@ -465,7 +485,9 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
 private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                       onOpen: () -> Unit, onDeleted: () -> Unit,
                       /** Its mark (0–100) in the gallery sorted, -1 none. */
-                      note: Int = -1, onClasse: (() -> Unit)? = null) {
+                      note: Int = -1, onClasse: (() -> Unit)? = null,
+                      /** Its slide (« 2/12 », « 2/12✎ », « ≈2/12 »), "" none, and where the number comes from. */
+                      badge: String = "", origine: fr.f4ioz.satcombo.sstv.ClassementSstv.Origine = fr.f4ioz.satcombo.sstv.ClassementSstv.Origine.AUCUNE) {
     val ctx = LocalContext.current
     val bmp = remember(file.absolutePath) {
         runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath) }
@@ -486,6 +508,7 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                 if (note >= 0) Text(note.toString(), color = if (note < 40) Magenta else if (note < 70) Amber else Color(0xFFFFD54F),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(3.dp).background(Color(0xB8000000), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp))
+                BadgeDiapo(badge, origine, Modifier.align(Alignment.BottomEnd))
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
@@ -566,7 +589,9 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
 
 /** Full-screen look at one picture, and its own sound when kept. */
 @Composable
-private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Unit, onClose: () -> Unit) {
+private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Unit,
+                       badge: String = "", origine: fr.f4ioz.satcombo.sstv.ClassementSstv.Origine = fr.f4ioz.satcombo.sstv.ClassementSstv.Origine.AUCUNE,
+                       onClose: () -> Unit) {
     val bmp = remember(file.absolutePath) {
         runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath) }
             .getOrNull()
@@ -595,10 +620,13 @@ private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Un
                 Text(file.name, color = TextHi, fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace)
                 Spacer(Modifier.height(8.dp))
-                if (bmp != null) {
+                if (bmp != null) Box {
                     Image(bmp.asImageBitmap(), null, contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
+                    // The slide it is, and where the number comes from (read, by hand, estimated).
+                    BadgeDiapo(badge, origine, Modifier.align(Alignment.TopEnd).padding(4.dp), grand = true)
                 }
+                if (badge.isNotBlank()) Text(origineSstv(origine), color = TextLo, fontSize = 11.sp)
                 Spacer(Modifier.height(8.dp))
                 if (son.isFile) {
                     // Just this picture's sound: hear it, decode it again, share it, or as a video.
