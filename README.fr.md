@@ -113,6 +113,8 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC : le rail des espaces de travail, le bandeau, la barre d'état, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
 
+**🚀 Démarrage** *(en cours)* — une **configuration rapide** au premier lancement (indicatif, locator, heure, réseau), **Quoi de neuf** après chaque mise à jour, un badge discret quand une **nouvelle version** est publiée (rien n'est installé tout seul), `--reseau`, `--port` et `--dossier` réglés dans *Réglages › Démarrage*, et le **déploiement** des réglages sur un autre PC, sans les mots de passe. → [détails](docs/station-pc.fr.md#démarrage-mises-à-jour-et-déploiement)
+
 **🔧 SatMe-Node depuis la page** *(en cours, après la 20.83)* — Station › **SatMe-Node** : la santé du Pi, le rôle de chaque carte (réception DATV, récepteur SDR, émetteur), les services, la version et le journal ; **redémarrer ou éteindre le Pi** après une confirmation. L'alimentation LNB du node est gardée quand on change de station, depuis le PC comme depuis le téléphone ; SatMe-PC redémarré retrouve seul un node qui reçoit ; le téléphone liste les stations de la bande large à recevoir d'un toucher, l'image en plein écran. [Installer SatMe-Node](docs/installer-satme-node.fr.md)
 
 **📺 Émis | Reçu** *(en cours)* — pendant une émission DATV, l'image émise à côté de l'image reçue de QO-100, chacune agrandie d'un clic.

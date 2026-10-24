@@ -29,7 +29,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 17. [Navires (AIS)](#navires-ais)
 18. [Météo spatiale](#météo-spatiale)
 19. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
-20. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, annonces, correction I/Q, accès à distance et HTTPS
+20. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
 21. [Encore sur le PC](#encore-sur-le-pc)
 22. [Sécurité du matériel](#sécurité-du-matériel)
 23. [Avant le premier essai](#avant-le-premier-essai)
@@ -47,6 +47,9 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | `--dossier DIR` | où sont gardés réglages, carnet, journal et enregistrements (`~/.satme`, `%APPDATA%\SatMe` sous Windows) |
 | `--noeud` | SatMe-Node : seulement le récepteur DATV, piloté par le réseau |
 | `--bureau` · `--console` | ouvrir la page dans le navigateur, une icône près de l'horloge (d'origine sous Windows) ; ou pas |
+| `--local` | ce PC seulement, même si le fichier de démarrage dit le contraire |
+
+`--port`, `--reseau` et `--dossier` se règlent aussi dans la page (*Réglages › Démarrage*, gardés dans `~/.config/satme/satme-pc.properties`, `%APPDATA%\SatMe\satme-pc.properties` sous Windows) ; la ligne de commande passe avant (voir [Démarrage, mises à jour et déploiement](#démarrage-mises-à-jour-et-déploiement)).
 
 **La page sur les autres machines du réseau** (une tablette, le PC du salon) : lancer `satme --reseau`, puis ouvrir `http://<adresse du PC>:8090/` (`hostname -I` la donne). Sous Linux avec ufw, ouvrir le port au réseau local une fois, dans un terminal : `sudo ufw allow from 192.168.0.0/24 to any port 8090 proto tcp` (adapter la plage à sa box). **Un mot de passe** est alors demandé aux autres machines (ce PC lui-même entre sans) : tiré au premier démarrage avec `--reseau` (quatre mots, écrits dans le journal de SatMe-PC et montrés dans *Réglages › Accès à distance*), à remplacer par le sien (voir [Accès à distance](#accès-à-distance)). Sans HTTPS, tout passe en clair : réseau de la maison seulement, jamais ouvert sur internet. **🔈 Écouter ici**, en haut, joue le son de SatMe-PC (SDR ou carte son) dans ce navigateur.
 
@@ -803,7 +806,7 @@ L'onglet **Montage** (espace **Station**) dessine la station : l'antenne à gauc
 
 ## Réglages
 
-Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon, fonctions hors satellites), **Poste et rotor** (CAT par USB ou par le réseau, TH-D72, rotor, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Annonces** (annonces vocales), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700 : réseau autorisé, minuterie, puissance au plus, carte son ; correction I/Q des émetteurs), **Accès à distance** (mot de passe, HTTPS, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant).
+Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon, fonctions hors satellites), **Poste et rotor** (CAT par USB ou par le réseau, TH-D72, rotor, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Annonces** (annonces vocales), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700 : réseau autorisé, minuterie, puissance au plus, carte son ; correction I/Q des émetteurs), **Démarrage** (réseau, port, dossier des données, mises à jour, configuration rapide), **Accès à distance** (mot de passe, HTTPS, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant ; le déploiement sur un autre PC).
 
 ### Le poste et le rotor
 
@@ -933,6 +936,26 @@ Pour la page ouverte de loin (un VPN, une autre maison) : le bouton **Distant** 
 - En http depuis une autre machine, les navigateurs refusent l'AudioWorklet : le même tampon tourne alors dans un ScriptProcessor (environ 20 ms de plus). Pas d'Opus (il faudrait un codeur natif sur le PC).
 - **Allégé** : spectre et cascade SDR à 5 images par seconde (256 points, niveaux sur un octet), loupe, panorama QO-100, bande large et vumètre DATV moins souvent, vidéo DATV en vignette toutes les 2 s (**▶ Vidéo en direct** sur l'image pour la demander), carte, avions et navires toutes les 5 à 10 s, le flux en direct réduit à l'onglet affiché, animations coupées.
 - **Réception seule** : cette voie refuse tout son montant et toute commande d'émission (la connexion est fermée). Le micro et le PTT de l'IC-9700 ont leur propre voie (panneau *Émission IC-9700*, voir [L'IC-9700 en émission](#lic-9700-en-émission)), en HTTPS depuis une autre machine.
+
+### Démarrage, mises à jour et déploiement
+
+**Configuration rapide** : au premier lancement (aucun réglage encore), une fenêtre en quatre étapes — l'indicatif et le nom (écrit sur les planches SSTV), le locator (vérifié : `JN18FS`) ou la latitude et la longitude (le carré de six caractères en est tiré, les passages partent du point exact), l'élévation minimale, l'heure locale ou UTC, la langue des rapports PDF, des messages et des notes de version, puis l'accès depuis le réseau et le port. Les mêmes réglages que *Réglages › Ma station* ; **Passer** la ferme, rien n'est bloqué. Toujours là dans **Réglages › Démarrage › Configuration rapide…** ; le poste et le rotor restent dans *Réglages › Poste et rotor*.
+
+**Quoi de neuf** : au premier démarrage d'une nouvelle version, ce qui a changé depuis la dernière version lancée ici (pas sur une installation neuve). Ensuite dans l'aide (**?**), la palette (**Ctrl K**) et *Réglages › Démarrage*. Les notes viennent de `pc/NOUVEAUTES.md`, mises dans SatMe-PC à la compilation.
+
+**Nouvelle version** : SatMe-PC demande à l'API publique de GitHub, au démarrage puis une fois par jour, la dernière version de SatMe-PC publiée. Plus récente : un badge discret **⬆ 2026.10.NN** en haut ; un clic montre ses nouveautés, la page de la version et le bon fichier (`satme-pc-windows.msi` sous Windows, `satme-pc.tar` sous Linux). Rien n'est téléchargé ni installé tout seul ; **Masquer** le cache pour cette version dans ce navigateur. Une version faite à la main (« dev ») ne demande rien ; une erreur ou la limite de GitHub passe sans bruit (redemandé plus tard), la réponse est gardée dans `mise-a-jour.json`. **Réglages › Démarrage › Mise à jour** : *Vérifier les mises à jour* (coché d'origine), *Vérifier maintenant*.
+
+**Options de démarrage** (*Réglages › Démarrage*) : **Accès depuis le réseau** (`--reseau`), **Port** (`--port`), **Dossier des données** (`--dossier`), avec pour chacune sa valeur du moment et d'où elle vient (*ligne de commande*, *fichier de démarrage*, *par défaut*).
+
+- **L'ordre** : la ligne de commande passe avant le fichier, le fichier avant les valeurs d'origine. `--local` force « ce PC seulement » quel que soit le fichier.
+- **Le fichier** : `~/.config/satme/satme-pc.properties` sous Linux et macOS (`$XDG_CONFIG_HOME/satme/` s'il est défini), `%APPDATA%\SatMe\satme-pc.properties` sous Windows — hors du dossier des données, qu'il désigne. Trois lignes, modifiables à la main SatMe-PC arrêté : `port=8090`, `reseau=true`, `dossier=/chemin`.
+- **Pris en compte au prochain démarrage.** **Redémarrer SatMe-PC** n'est proposé que si SatMe-PC peut se relancer lui-même sans risque (lancé par l'icône sous Windows ou par `lance-satme.sh` sous Linux) ; sous systemd : `systemctl --user restart satme-pc` ; dans un terminal : Ctrl+C puis relancer. Refusé pendant une émission.
+- **Seulement depuis ce PC** (ou une session ouverte avec le mot de passe de l'accès à distance) ; une demande venue d'un autre site est refusée. Cocher *Accès depuis le réseau* rappelle le mot de passe et HTTPS (voir [Accès à distance](#accès-à-distance)).
+- **Changer de dossier des données** : un chemin complet où SatMe-PC peut écrire, hors du dossier actuel ; *copier mes données* (au prochain démarrage, dans un dossier vide ou nouveau) ou *commencer avec un dossier vide*. L'ancien dossier n'est jamais effacé.
+
+**Déploiement** (*Réglages › Sauvegarde*) : les réglages de la station et les options de démarrage dans un petit fichier JSON, pour préparer un autre PC de la même façon (le carnet, le journal et les images restent dans la sauvegarde générale). **Sans les secrets** d'origine (mots de passe, clés d'API, identifiants QRZ.com, codes du SatMe-Node) ; la case *avec les secrets* les ajoute. Le mot de passe de l'accès à distance et le certificat HTTPS n'y sont jamais. **Importer** montre d'abord ce qui changerait (réglage par réglage, secrets masqués) ; les options de démarrage sont écrites tout de suite, les réglages repris au prochain démarrage (ceux remplacés gardés dans `avant-deploiement-…`).
+
+**Lancer SatMe-PC avec la session** : *satme-pc.service* (une unité systemd `--user` pour Linux, les commandes pour l'installer en tête du fichier) ou *SatMe-PC-demarrage.cmd* (Windows, à mettre dans le dossier `shell:startup`) ; **Voir** les montre. SatMe-PC n'installe rien lui-même ; les options du fichier de démarrage y sont lues.
 
 ## Encore sur le PC
 

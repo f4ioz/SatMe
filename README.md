@@ -113,6 +113,8 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC: the workspaces rail, the header strip, the status bar, and the Ctrl+K palette offering to listen to 145.800 MHz on the SDR receiver"></p>
 
+**🚀 Start-up** *(upcoming)* — a **quick setup** at the first start (callsign, locator, time, network), **what's new** after each update, a discreet badge when a **new version** is published (nothing installed by itself), `--reseau`, `--port` and `--dossier` set in *Réglages › Démarrage*, and the settings **deployed** to another PC, without passwords. → [details](docs/station-pc.md#start-up-updates-and-deployment)
+
 **🔧 SatMe-Node from the page** *(upcoming, after 20.83)* — Station › **SatMe-Node**: the Pi's health, each board's role (DATV receiver, SDR receiver, transmitter), services, version and log; **restart or switch off the Pi** after a confirmation. The node's LNB supply is kept when changing station, from the PC or the phone; a restarted SatMe-PC finds a receiving node by itself; the phone lists the wide band's stations to receive with a touch, the picture full screen. [Installing SatMe-Node](docs/installer-satme-node.md)
 
 **📺 Émis | Reçu** *(upcoming)* — while transmitting DATV, the picture sent beside the picture received back from QO-100, each one enlarged with a click.
