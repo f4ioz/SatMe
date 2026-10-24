@@ -71,7 +71,9 @@ object JournalPassage {
          * [AUTO_CAT] (every pass under CAT), [AUTO_FOND] (a recording started
          * by hand, the page left). Empty: followed on its page.
          */
-        val auto: String = ""
+        val auto: String = "",
+        /** The journal page's choices for its pictures and videos: SSTV versions, the report's panels ([OptionsJournal]). */
+        val options: OptionsJournal = OptionsJournal.DEFAUT
     ) {
         val id: String get() = "${catnum}_$debutMs"
         val elMax: Double get() = points.maxOfOrNull { it.el } ?: 0.0
@@ -645,6 +647,8 @@ object JournalPassage {
         if (e.reconstitue) append("reconstitue=1\n")
         e.masquees.forEach { append("masquee=").append(esc(it)).append('\n') }
         if (e.auto.isNotBlank()) append("auto=").append(esc(e.auto)).append('\n')
+        // Its tabs are its own separators: written as they are (no tab nor line break inside a field).
+        OptionsJournal.ecrit(e.options).forEach { append(it).append('\n') }
         for (g in e.signal) append("s=").append(g.tMs).append('\t').append(g.s).append('\n')
         for (x in e.emissions) append("tx=").append(x.deMs).append('\t').append(x.aMs).append('\n')
         if (e.test.isNotEmpty()) {
@@ -677,6 +681,7 @@ object JournalPassage {
                 "reconstitue" -> e = e.copy(reconstitue = v == "1")
                 "masquee" -> e = e.copy(masquees = e.masquees + unesc(v))
                 "auto" -> e = e.copy(auto = unesc(v))
+                "sstv_version", "sstv_image", "sstv_marque", "element", "plan" -> e = e.copy(options = OptionsJournal.lit(e.options, k, v))
                 "s" -> runCatching { val c = v.split('\t'); sig += Signal(c[0].toLong(), c[1].toInt()) }
                 "tx" -> runCatching { val c = v.split('\t'); tx += Emission(c[0].toLong(), c[1].toLong()) }
                 "test" -> {
@@ -715,6 +720,7 @@ object JournalPassage {
             test = test.test, testMs = test.testMs, points = points,
             reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees,
             auto = a.auto.ifBlank { b.auto },
+            options = OptionsJournal.fusionne(a.options, b.options),
             signal = (a.signal + b.signal).sortedBy { it.tMs }.distinctBy { it.tMs / 1000 },
             emissions = joint(a.emissions + b.emissions))
     }
