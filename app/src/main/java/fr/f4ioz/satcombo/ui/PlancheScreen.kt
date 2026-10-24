@@ -245,26 +245,28 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
     }
     val enregistre = rememberEnregistrer()
 
-    // The event's report: one HTML file, shared or saved.
-    fun faitRapport(chaine: Boolean, partager: Boolean) {
+    // The event's report: one HTML file or a PDF, shared or saved.
+    fun faitRapport(chaine: Boolean, partager: Boolean, pdf: Boolean) {
         val x = m ?: return
         val ev = x.evenement ?: run { message = t("planche_rapport_sans_ev"); return }
         occupe = true
         scope.launch {
             val f = withContext(Dispatchers.IO) { runCatching {
                 val r = ApiPlancheEvenement.rapport(ev, x, src, chaine, "")
-                File(File(ctx.cacheDir, "export").apply { mkdirs() }, fr.f4ioz.satcombo.sstv.RapportEvenement.nomFichier(r))
-                    .apply { writeText(fr.f4ioz.satcombo.sstv.RapportEvenement.html(r), Charsets.UTF_8) }
+                val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, fr.f4ioz.satcombo.sstv.RapportEvenement.nomFichier(r, if (pdf) "pdf" else "html"))
+                if (pdf) f.writeBytes(src.pdf(r) ?: error("pdf"))
+                else f.writeText(fr.f4ioz.satcombo.sstv.RapportEvenement.html(r), Charsets.UTF_8)
+                f
             }.getOrNull() }
             occupe = false
             if (f == null) { message = t("planche_rapport_echec"); return@launch }
             if (partager) runCatching {
                 val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
                 ctx.startActivity(android.content.Intent.createChooser(
-                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/html")
+                    android.content.Intent(android.content.Intent.ACTION_SEND).setType(if (pdf) "application/pdf" else "text/html")
                         .putExtra(android.content.Intent.EXTRA_STREAM, u)
                         .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
-            } else enregistre(f.name, "text/html", depuisFichier(f))
+            } else enregistre(f.name, if (pdf) "application/pdf" else "text/html", depuisFichier(f))
         }
     }
 
@@ -377,7 +379,7 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                     if (m != null) AssistChip(onClick = { renommer = true }, label = { Text("✎ " + t("planche_renommer"), fontSize = 12.sp, color = Cyan) })
                 }
                 if (renommer) m?.let { y -> DialogueRenommer(y.nom, onNom = { n -> m?.let { change(it.copy(nom = n)) } }, onFerme = { renommer = false }) }
-                if (rapport) DialogueRapport(m?.evenement, onRapport = { c, pa -> faitRapport(c, pa) }, onFerme = { rapport = false })
+                if (rapport) DialogueRapport(m?.evenement, onRapport = { c, pa, pdf -> faitRapport(c, pa, pdf) }, onFerme = { rapport = false })
                 message?.let { Text(it, color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)) }
                 if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
 

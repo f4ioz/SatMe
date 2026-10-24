@@ -171,6 +171,7 @@ object PlancheWeb {
         override fun planche(m: Planche.Modele): ByteArray? = jpeg(dessine(ctx, rangement(ctx), m, 1600), 86)
         override fun vignette(nom: String): ByteArray? =
             galerie(ctx).firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(it, 84) }
+        override fun pdf(r: RapportEvenement.Rapport): ByteArray = fr.f4ioz.satcombo.sstv.RapportPdfTelephone.pdf(r)
     }
 
     private fun modele(r: Planche.Rangement, id: String): Planche.Modele? =
