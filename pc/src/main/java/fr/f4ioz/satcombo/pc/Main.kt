@@ -416,6 +416,10 @@ fun main(args: Array<String>) {
     // « Agenda › Activités à venir »: the online sources (on by default, each one can be turned off), read at their own pace.
     val activites = ActivitesPc(station, dossier)
     serveur.activites = activites
+    // The SSTV gallery sorted by slide (marks, groups, the footer read) and the series' timetable.
+    val classement = ClassementSstvPc(son.sstv, station, { activites }, { autopilote })
+    serveur.classement = classement
+    planche.classement = classement
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(20_000)
         while (true) { runCatching { activites.tic() }; repeat(60) { if (!activites.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }

@@ -27,6 +27,9 @@ import javax.imageio.ImageIO
  */
 class PlancheWebPc(private val station: StationPc, private val son: SonStation, dossier: File) {
 
+    /** The gallery sorted: « Remplir » takes the best copy of each slide (set by Main). */
+    @Volatile var classement: ClassementSstvPc? = null
+
     private val rangement = Planche.Rangement(File(dossier, "planches").apply { mkdirs() })
 
     /** The page, under the PC's header, as the journal's. */
@@ -169,7 +172,8 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     val m = modele(p("id")) ?: return NON
                     val sat = p("sat")
                     val l = galerie().filter { sat.isBlank() || it.second.satName == sat }
-                    val sig = PlancheRenduPc.signatures(l.map { it.first })
+                    val sig = PlancheRenduPc.signatures(l.map { it.first }).let { b ->
+                        classement?.let { c -> runCatching { c.galerie.signatures(b, c.etat(attendre = true)) }.getOrNull() } ?: b }
                     val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
                         else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
                     synchronized(this) { r.enregistre(n) }

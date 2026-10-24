@@ -135,6 +135,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** « Agenda › SSTV »: the campaigns and their auto-pilot (set before [demarre]). */
     @Volatile var autopilote: AutoPiloteSstvPc? = null
     @Volatile var activites: ActivitesPc? = null
+    /** The SSTV gallery sorted by slide, the series' timetable (set before [demarre]). */
+    @Volatile var classement: ClassementSstvPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -1031,6 +1033,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (im == null) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
                 else envoie(sortie, "200 OK", "image/png", java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(im, "png", it) }.toByteArray())
             }
+            "/api/sstv/classement" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (classement?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/api/sauvegarde" -> {
@@ -1954,6 +1958,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
             }
+            "/api/sstv/diapo", "/api/sstv/groupe" ->
+                return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
             "/api/sstv/satellite" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.renommeSatellite(q["nom"].orEmpty(), q["sat"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image ou nom de satellite refusé")
