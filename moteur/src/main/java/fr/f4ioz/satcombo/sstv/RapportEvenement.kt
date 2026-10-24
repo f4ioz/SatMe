@@ -36,7 +36,12 @@ import kotlin.math.sin
  * positions, the sheet drawn), built here ([construit]) and written as one
  * HTML file ([html]): its pictures inside, its charts inline SVG, no font,
  * script or picture fetched — it opens anywhere, offline, and prints to PDF
- * from the browser.
+ * from the browser. Or drawn as a PDF ([RapportPdf]), on the PC and on the
+ * phone, no browser needed.
+ *
+ * [Rapport] is all the report says, and [html] a pure function of it: no
+ * address of the station's own (no link to SatMe-PC, no picture fetched), so
+ * the same report can one day be published on the website (f4ioz.fr).
  *
  * Receive only: nothing is sent to make it.
  */
@@ -261,21 +266,21 @@ object RapportEvenement {
     // ------------------------------------------------------------ writing
 
     private val utc = TimeZone.getTimeZone("UTC")
-    private fun fmt(p: String, t: Long) = SimpleDateFormat(p, Locale.US).apply { timeZone = utc }.format(Date(t))
-    private fun hm(t: Long) = fmt("HH:mm", t)
-    private fun hms(t: Long) = fmt("HH:mm:ss", t)
-    private fun jour(t: Long) = fmt("dd/MM/yyyy", t)
-    private fun jc(t: Long) = fmt("dd/MM", t)
+    internal fun fmt(p: String, t: Long) = SimpleDateFormat(p, Locale.US).apply { timeZone = utc }.format(Date(t))
+    internal fun hm(t: Long) = fmt("HH:mm", t)
+    internal fun hms(t: Long) = fmt("HH:mm:ss", t)
+    internal fun jour(t: Long) = fmt("dd/MM/yyyy", t)
+    internal fun jc(t: Long) = fmt("dd/MM", t)
     private fun h(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-    private fun n1(v: Double) = String.format(Locale.US, "%.1f", v)
-    private fun n2(v: Double) = String.format(Locale.US, "%.2f", v)
+    internal fun n1(v: Double) = String.format(Locale.US, "%.1f", v)
+    internal fun n2(v: Double) = String.format(Locale.US, "%.2f", v)
     /** An elevation: « 5 », « 7.5 ». */
-    private fun el(v: Double) = if (v == Math.floor(v)) v.toInt().toString() else n1(v)
+    internal fun el(v: Double) = if (v == Math.floor(v)) v.toInt().toString() else n1(v)
     private fun b64(o: ByteArray) = Base64.getEncoder().encodeToString(o)
     private fun type(o: ByteArray) = if (PlancheFichier.genre(o) == "png") "image/png" else "image/jpeg"
-    private fun deg(v: Double) = ((v % 360 + 360) % 360).roundToInt().let { if (it == 360) 0 else it }
+    internal fun deg(v: Double) = ((v % 360 + 360) % 360).roundToInt().let { if (it == 360) 0 else it }
     /** « N », « NE »… of an azimuth. */
-    private fun rose(az: Double): String = listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO").let { l ->
+    internal fun rose(az: Double): String = listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO").let { l ->
         val r = if (I18n.current() == Lang.EN) listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW") else l
         r[(((az % 360 + 360) % 360 + 22.5) / 45).toInt() % 8]
     }
@@ -285,19 +290,19 @@ object RapportEvenement {
         Statut.RECU -> "var(--bon)"; Statut.RECU_BAS -> "var(--s1)"; Statut.ATTENDU_RIEN -> "var(--rate)"
         Statut.BAS -> "var(--muet)"; Statut.A_VENIR -> "var(--avenir)"
     }
-    private fun icone(s: Statut) = when (s) { Statut.RECU -> "✓"; Statut.RECU_BAS -> "✓"; Statut.ATTENDU_RIEN -> "✗"; Statut.BAS -> "–"; Statut.A_VENIR -> "◷" }
-    private fun libelle(s: Statut) = t("rev_statut_" + s.name.lowercase())
+    internal fun icone(s: Statut) = when (s) { Statut.RECU -> "✓"; Statut.RECU_BAS -> "✓"; Statut.ATTENDU_RIEN -> "✗"; Statut.BAS -> "–"; Statut.A_VENIR -> "◷" }
+    internal fun libelle(s: Statut) = t("rev_statut_" + s.name.lowercase())
 
-    private fun origineLib(o: ClassementSstv.Origine) = when (o) {
+    internal fun origineLib(o: ClassementSstv.Origine) = when (o) {
         ClassementSstv.Origine.MAIN -> t("rev_origine_main"); ClassementSstv.Origine.LU -> t("rev_origine_lu")
         ClassementSstv.Origine.ESTIME -> t("rev_origine_estime"); ClassementSstv.Origine.AUCUNE -> t("rev_origine_aucune")
     }
 
-    /** The file's name: `SatMe_Rapport_<event>_<day>.html`. */
-    fun nomFichier(r: Rapport): String {
+    /** The file's name: `SatMe_Rapport_<event>_<day>.html` (`.pdf`: [ext]). */
+    fun nomFichier(r: Rapport, ext: String = "html"): String {
         val n = java.text.Normalizer.normalize(r.evenement.nom, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
             .replace(Regex("[^A-Za-z0-9-]+"), "-").trim('-').take(40).ifBlank { "SSTV" }
-        return "SatMe_Rapport_${n}_${fmt("yyyyMMdd", r.evenement.debutMs)}.html"
+        return "SatMe_Rapport_${n}_${fmt("yyyyMMdd", r.evenement.debutMs)}.$ext"
     }
 
     fun html(r: Rapport): String = buildString {

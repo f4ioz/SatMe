@@ -65,6 +65,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         override fun planche(m: Planche.Modele): ByteArray? = image(m.id, 1600)?.let { jpeg(rgb(it), 0.86f) }
         override fun vignette(nom: String): ByteArray? =
             galerie().firstOrNull { it.first.name == nom }?.first?.let { vignette(it, 360) }?.let { jpeg(rgb(it), 0.84f) }
+        override fun pdf(r: RapportEvenement.Rapport): ByteArray = RapportPdfPc.pdf(r)
     }
 
     /** The page, under the PC's header, as the journal's. */

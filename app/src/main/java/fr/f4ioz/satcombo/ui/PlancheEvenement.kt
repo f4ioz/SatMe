@@ -128,10 +128,11 @@ internal fun DialogueRenommer(nom: String, onNom: (String) -> Unit, onFerme: () 
         dismissButton = { TextButton(onClick = onFerme) { Text(t("cancel"), color = TextLo) } })
 }
 
-/** The event's report: with the receive chain or not, shared or saved. */
+/** The event's report: a web page or a PDF, with the receive chain or not, shared or saved. */
 @Composable
-internal fun DialogueRapport(e: EvenementSstv.Evenement?, onRapport: (chaine: Boolean, partager: Boolean) -> Unit, onFerme: () -> Unit) {
+internal fun DialogueRapport(e: EvenementSstv.Evenement?, onRapport: (chaine: Boolean, partager: Boolean, pdf: Boolean) -> Unit, onFerme: () -> Unit) {
     var chaine by remember { mutableStateOf(false) }
+    var pdf by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = onFerme, containerColor = SpaceSurface,
         title = { Text(t("planche_rapport"), color = TextHi, fontSize = 16.sp) },
         text = {
@@ -143,13 +144,18 @@ internal fun DialogueRapport(e: EvenementSstv.Evenement?, onRapport: (chaine: Bo
                     Checkbox(checked = chaine, onCheckedChange = { chaine = it })
                     Text(t("planche_rapport_chaine"), color = TextHi, fontSize = 13.sp)
                 }
+                for ((v, cle) in listOf(false to "planche_rapport_web", true to "planche_rapport_pdf"))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { pdf = v }) {
+                        RadioButton(selected = pdf == v, onClick = { pdf = v })
+                        Text(t(cle), color = TextHi, fontSize = 13.sp)
+                    }
             }
         },
-        confirmButton = { TextButton(enabled = e != null, onClick = { onFerme(); onRapport(chaine, true) }) { Text(t("planche_rapport_partager"), color = Cyan) } },
+        confirmButton = { TextButton(enabled = e != null, onClick = { onFerme(); onRapport(chaine, true, pdf) }) { Text(t("planche_rapport_partager"), color = Cyan) } },
         dismissButton = {
             Row {
                 TextButton(onClick = onFerme) { Text(t("cancel"), color = TextLo) }
-                TextButton(enabled = e != null, onClick = { onFerme(); onRapport(chaine, false) }) { Text(t("planche_rapport_enregistrer"), color = Cyan) }
+                TextButton(enabled = e != null, onClick = { onFerme(); onRapport(chaine, false, pdf) }) { Text(t("planche_rapport_enregistrer"), color = Cyan) }
             }
         })
 }

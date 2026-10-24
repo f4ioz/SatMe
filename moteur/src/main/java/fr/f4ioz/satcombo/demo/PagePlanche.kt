@@ -43,7 +43,8 @@ object PagePlanche {
         "ev_images", "filtre_ev", "remplir_diapos", "garder_vides", "rempli_diapos", "rempli_toutes", "sans_numero", "hors_cases",
         "relancer", "relancer_aide", "relancer_oublie", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
         "note", "origine_lu", "origine_main", "origine_estime", "rapport", "rapport_titre", "rapport_aide", "rapport_chaine",
-        "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees", "marque_traitees")
+        "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees", "marque_traitees",
+        "rapport_format", "rapport_web", "rapport_pdf")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -216,6 +217,9 @@ object PagePlanche {
   <p class="aide" id="tRapportAide"></p>
   <p id="rapportEv" style="font-weight:700"></p>
   <label class="rangee" style="margin:10px 0"><input type="checkbox" id="rapportChaine"><span id="tRapportChaine"></span></label>
+  <div class="rangee" style="margin:0 0 10px"><span class="aide" id="tRapportFormat"></span>
+    <label class="rangee"><input type="radio" name="rapportFormat" value="" checked><span id="tRapportWeb"></span></label>
+    <label class="rangee"><input type="radio" name="rapportFormat" value="pdf"><span id="tRapportPdf"></span></label></div>
   <div class="rangee" id="lRapportPlan"><span class="aide" id="tRapportPlan"></span><select id="rapportPlan"></select></div>
   <div class="actions"><button class="primaire" id="rapportOuvrir"></button><button class="discret" id="rapportDl"></button><button class="discret" id="rapportNon"></button></div>
 </div></div>
@@ -743,9 +747,10 @@ g('renommer').onclick = async () => {
   const n = prompt(T.renommer_q, M.nom); if (n === null || !n.trim()) return;
   M.nom = n.trim().slice(0, 60); clearTimeout(minuteur); minuteur = null; await sauve(); await listeModeles(); panneau();
 };
-// The event's report: opened in a tab of its own (to print to PDF), or downloaded.
+// The event's report: opened in a tab of its own, or downloaded; the page (to print to PDF) or the PDF made here.
 g('rapport').textContent = T.rapport; g('tRapport').textContent = T.rapport_titre; g('tRapportAide').textContent = T.rapport_aide;
 g('tRapportChaine').textContent = T.rapport_chaine; g('tRapportPlan').textContent = T.rapport_plan;
+g('tRapportFormat').textContent = T.rapport_format; g('tRapportWeb').textContent = T.rapport_web; g('tRapportPdf').textContent = T.rapport_pdf;
 g('rapportOuvrir').textContent = T.rapport_ouvrir; g('rapportDl').textContent = T.rapport_telecharger; g('rapportNon').textContent = T.annuler;
 g('rapport').onclick = async () => {
   if (!M) return;
@@ -758,7 +763,8 @@ g('rapport').onclick = async () => {
   g('dlgRapport').classList.remove('cache');
 };
 g('rapportChaine').onchange = () => g('lRapportPlan').classList.toggle('cache', !g('rapportPlan').options.length || !g('rapportChaine').checked);
-function rapportParams(dl) { return { id: id, chaine: g('rapportChaine').checked ? 1 : 0, plan: g('rapportPlan').value || '', dl: dl ? 1 : 0 }; }
+function rapportFormat() { const r = document.querySelector('input[name=rapportFormat]:checked'); return r ? r.value : ''; }
+function rapportParams(dl) { return { id: id, chaine: g('rapportChaine').checked ? 1 : 0, plan: g('rapportPlan').value || '', dl: dl ? 1 : 0, format: rapportFormat() }; }
 g('rapportOuvrir').onclick = () => { g('dlgRapport').classList.add('cache'); window.open(url('/rapport', rapportParams(false)), '_blank'); };
 g('rapportDl').onclick = async () => {
   g('dlgRapport').classList.add('cache');
@@ -766,7 +772,8 @@ g('rapportDl').onclick = async () => {
   try {
     const r = await fetch(url('/rapport', rapportParams(true)));
     if (r.status === 403) { porte(); return; }
-    const nom = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'SatMe_Rapport.html';
+    if (!r.ok) { g('message').textContent = T.hors_ligne; return; }
+    const nom = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || ('SatMe_Rapport.' + (rapportFormat() || 'html'));
     const b = await r.blob();
     const a = el('a', { href: URL.createObjectURL(b), download: nom }); document.body.appendChild(a); a.click(); a.remove();
     g('message').textContent = nom;
