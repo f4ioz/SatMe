@@ -159,16 +159,17 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         }
     }
     // « Fill by slide »: the best copy of each slide in slide order; what is missing said.
-    fun parDiapo(tous: Boolean) {
+    fun parDiapo(tous: Boolean, reinitialise: Boolean) {
         val x = m ?: return
         occupe = true
         scope.launch {
-            val r = withContext(Dispatchers.Default) { runCatching { ApiPlancheEvenement.remplitParDiapo(x, src, tous) }.getOrNull() }
+            val r = withContext(Dispatchers.Default) { runCatching { ApiPlancheEvenement.remplitParDiapo(x, src, tous, reinitialise) }.getOrNull() }
             occupe = false
             if (r == null) return@launch
             change(r.modele); choix = null
             message = (if (r.manquantes.isEmpty()) t("planche_rempli_toutes") else tf("planche_rempli_diapos", r.manquantes.joinToString(", "))) +
-                (if (r.sansNumero > 0) " " + tf("planche_sans_numero", r.sansNumero) else "")
+                (if (r.sansNumero > 0) " " + tf("planche_sans_numero", r.sansNumero) else "") +
+                (if (r.gardes > 0) " " + tf("pw_gardes", r.gardes) else "")
         }
     }
     fun relance(oublie: Boolean) {
@@ -178,14 +179,15 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         }
     }
 
-    // The processed versions (fused, corrected) in place of those received when the sheet takes them, marked so.
-    val corrigees = m?.corrigees == true
-    val parNomVu by produceState(parNom, parNom, corrigees) {
-        value = if (!corrigees) parNom else withContext(Dispatchers.IO) {
-            val a = fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx); parNom.mapValues { a.pourPlanche(it.value) } }
-        apercus.clear()
+    // Each box as drawn: the version chosen for it, Auto the best marked when the sheet takes processed versions (marked so).
+    val corrections = remember { fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx) }
+    var versionCases by remember { mutableIntStateOf(0) }
+    val brutes = m?.images.orEmpty().mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap()
+    val cases by produceState(fr.f4ioz.satcombo.demo.ApiCorrectionSstv.Cases(brutes, emptyList()), parNom, m?.images, m?.versions, m?.corrigees, versionCases) {
+        val x = m ?: return@produceState
+        value = withContext(Dispatchers.IO) { ApiPlancheEvenement.cases(x, parNom, corrections) }
     }
-    val places = m?.images.orEmpty().mapNotNull { (i, f) -> parNomVu[f]?.let { i to it } }.toMap()
+    val places = cases.places
     val valeurs = PlancheRendu.Valeurs(
         indicatif = indicatif, nom = nom,
         locator = locatorSaisi ?: Planche.locatorDominant(places.values.map { it.second.locator })
@@ -195,16 +197,17 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
 
     val fondApercu = remember(m?.fond) { m?.let { rangement.fond(it) }?.let { PlancheRendu.charge(it, 1600) } }
     // The preview, drawn again a moment after each change.
-    LaunchedEffect(m, valeurs, fondApercu, parNomVu) {
+    LaunchedEffect(m, valeurs, fondApercu, places) {
         val x = m ?: run { apercu = null; return@LaunchedEffect }
         delay(120)
         apercu = withContext(Dispatchers.Default) {
-            val imgs = x.images.mapNotNull { (i, f) ->
-                val s = parNomVu[f] ?: return@mapNotNull null
-                val b = apercus[f] ?: PlancheRendu.charge(s.first, 640)?.also { apercus[f] = it } ?: return@mapNotNull null
+            // Kept by the file drawn (a box's version, the picture as received).
+            val imgs = places.filterKeys { it in x.images }.mapNotNull { (i, s) ->
+                val k = s.first.name
+                val b = apercus[k] ?: PlancheRendu.charge(s.first, 640)?.also { apercus[k] = it } ?: return@mapNotNull null
                 i to (b to s.second)
             }.toMap()
-            apercus.keys.retainAll(x.images.values.toSet())
+            apercus.keys.retainAll(places.values.map { it.first.name }.toSet())
             PlancheRendu.dessine(x, fondApercu, 1000, imgs, valeurs, logo,
                 PlancheRendu.chargeDecor(rangement, x, 1000), PlancheRendu.chargeEcussons(rangement, x, 500))
         }
@@ -283,10 +286,7 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         scope.launch {
             val f = withContext(Dispatchers.IO) { runCatching {
                 val fond = rangement.fond(x)?.let { PlancheRendu.charge(it, 4000) }
-                val imgs = x.images.mapNotNull { (i, f) ->
-                    val s = parNomVu[f] ?: return@mapNotNull null
-                    PlancheRendu.charge(s.first, 2000)?.let { i to (it to s.second) }
-                }.toMap()
+                val imgs = places.mapNotNull { (i, s) -> PlancheRendu.charge(s.first, 2000)?.let { i to (it to s.second) } }.toMap()
                 val b = PlancheRendu.dessine(x, fond, fond?.width ?: 2400, imgs, valeurs, logo,
                     PlancheRendu.chargeDecor(rangement, x, 4000), PlancheRendu.chargeEcussons(rangement, x, 1600))
                 val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
@@ -397,7 +397,9 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 val ratio = fondApercu?.let { it.width.toFloat() / it.height } ?: x.ratio
-                ApercuPlanche(x, apercu, ratio, choix, onChoix = { choix = it; if (ecussonChoisi(it) != null) onglet = 3 }, onChange = { change(it) })
+                ApercuPlanche(x, apercu, ratio, choix, cases.replis, onChoix = { choix = it; if (ecussonChoisi(it) != null) onglet = 3
+                    // A box: its panel (the picture, its version) — unless its layout is being worked on.
+                    else if (it != null && it >= 0 && onglet != 1) onglet = 0 }, onChange = { change(it) })
                 // Where the series stands: what is still to receive.
                 val (recues, manquent) = Planche.suivi(x) { it in parNom }
                 if (x.ajustee) Text(tf("planche_ajustee", x.cases.size, x.origine.size), color = Cyan, fontSize = 13.sp,
@@ -431,7 +433,8 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                         OngletImages(x, galerie, places, choix, filtreSat, vignettes, infos, analyse,
                             onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) },
                             onCalcule = { calcule(it) }, onMessage = { message = it },
-                            onParDiapo = { parDiapo(it) }, onRelance = { relance(it) })
+                            onParDiapo = { tous, reinit -> parDiapo(tous, reinit) }, onRelance = { relance(it) },
+                            caseVersion = { i -> PanneauVersion(x, i, corrections, onChange = { change(it) }, onFusion = { versionCases++ }) })
                     }
                     1 -> OngletDisposition(x, choix, fondApercu, onChoix = { choix = it }, onChange = { change(it) })
                     3 -> OngletDecor(x, choix, rangement, onChoix = { choix = it }, onChange = { change(it) },
@@ -471,6 +474,8 @@ private fun ecussonChoisi(c: Int?): Int? = c?.takeIf { it <= -10_000 }?.let { -1
 @Composable
 private fun ApercuPlanche(
     m: Planche.Modele, apercu: Bitmap?, ratio: Float, choix: Int?,
+    /** The boxes whose chosen version is gone (Auto shown). */
+    replis: List<Int>,
     onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit
 ) {
     val modele by rememberUpdatedState(m)
@@ -549,6 +554,15 @@ private fun ApercuPlanche(
                     style = Stroke(epais, pathEffect = if (pointille) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null))
             }
             m.cases.forEachIndexed { i, z -> if (i != choix) cadre(z, Color.White.copy(alpha = 0.45f), false, 2f) }
+            // A version chosen by hand: a small dot in the box's corner, on the editor only (amber: gone, Auto shown).
+            m.cases.forEachIndexed { i, z ->
+                val v = m.versions[i] ?: return@forEachIndexed
+                if (v.auto && i !in replis) return@forEachIndexed
+                val r = 5.dp.toPx()
+                val o = Offset((z.x + z.w) * size.width - 2 * r, (z.y + z.h) * size.height - 2 * r)
+                drawCircle(Color.Black.copy(alpha = 0.6f), r + 2f, o)
+                drawCircle(if (i in replis) Amber else if (v.version == Planche.Version.AUTO) TextHi else Cyan, r, o)
+            }
             m.textes.forEachIndexed { i, tx -> if (-1 - i != choix) cadre(tx.zone, Amber.copy(alpha = 0.7f), true, 2f) }
             m.ecussons.forEachIndexed { i, e -> if (choixEcusson(i) != choix) cadre(e.zone, Magenta.copy(alpha = 0.7f), true, 2f) }
             val c = choix
@@ -570,7 +584,9 @@ private fun OngletImages(
     infos: Map<String, InfoImage>, analyse: String?,
     onFiltre: (String) -> Unit, onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit,
     onCalcule: (() -> Planche.Modele) -> Unit, onMessage: (String) -> Unit,
-    onParDiapo: (tous: Boolean) -> Unit, onRelance: (oublie: Boolean) -> Unit,
+    onParDiapo: (tous: Boolean, reinitialise: Boolean) -> Unit, onRelance: (oublie: Boolean) -> Unit,
+    /** The panel of the box chosen: its version, its copy. */
+    caseVersion: @Composable (Int) -> Unit = {},
 ) {
     val sats = galerie.map { it.second.satName }.filter { it.isNotBlank() }.distinct()
     // No event: « the event's pictures » is all of them.
@@ -604,19 +620,32 @@ private fun OngletImages(
         sats.forEach { s -> FilterChip(selected = filtre == s, onClick = { onFiltre(s) }, label = { Text(s, fontSize = 11.sp) }) }
     }
     // « Fill by slide »: slide n in box n, the best copy of each; a missing slide's box left empty.
+    // What was chosen by hand (a version, a copy) kept, unless « Tout réinitialiser » is ticked.
+    var reinit by remember { mutableStateOf(false) }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = { onParDiapo(filtre != "@ev") }) { Text(t("planche_remplir_diapos"), fontSize = 11.sp) }
+        Button(onClick = { onParDiapo(filtre != "@ev", reinit) }) { Text(t("planche_remplir_diapos"), fontSize = 11.sp) }
         Text(t("planche_garder_vides"), color = TextLo, fontSize = 11.sp)
     }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { reinit = !reinit }) {
+        Checkbox(checked = reinit, onCheckedChange = { reinit = it })
+        Text(t("pw_tout_reinitialiser"), color = TextHi, fontSize = 11.sp)
+        Text(" · " + t("pw_tout_reinitialiser_aide"), color = TextLo, fontSize = 10.sp, modifier = Modifier.weight(1f, fill = false))
+    }
+    // The box chosen: which version of its slide it shows, which copy.
+    if (choix != null && choix >= 0) caseVersion(choix)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(onClick = {
             onCalcule { Planche.remplit(m, liste.map { it.second }, signatures()) }
         }) { Text(t("planche_remplir"), color = Cyan, fontSize = 11.sp) }
         FilterChip(selected = grouper, onClick = { grouper = !grouper }, label = { Text(t("pw_grouper"), fontSize = 11.sp) })
-        if (choix != null && choix >= 0 && !m.ajustee) OutlinedButton(onClick = { onChange(m.copy(images = m.images - choix)) }) {
+        if (choix != null && choix >= 0 && !m.ajustee) OutlinedButton(onClick = {
+            onChange(m.copy(images = m.images - choix, versions = m.versions.mapValues { (k, v) -> if (k == choix) v.copy(copieMain = false) else v }.filterValues { !it.auto }))
+        }) {
             Text(t("planche_vider_case"), color = Cyan, fontSize = 11.sp)
         }
-        OutlinedButton(onClick = { onChange(m.copy(images = emptyMap())) }) { Text(t("planche_tout_vider"), color = Magenta, fontSize = 11.sp) }
+        OutlinedButton(onClick = { onChange(m.copy(images = emptyMap(), versions = m.versions.mapValues { it.value.copy(copieMain = false) }.filterValues { !it.auto })) }) {
+            Text(t("planche_tout_vider"), color = Magenta, fontSize = 11.sp)
+        }
     }
     // The picture of the box chosen, one place earlier or later.
     if (choix != null && choix >= 0 && m.images[choix] != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -660,9 +689,8 @@ private fun OngletImages(
                         }
                         // Into the box chosen, else the first empty one.
                         val c = choix?.takeIf { it >= 0 } ?: m.cases.indices.firstOrNull { it !in m.images.keys } ?: return@clickable
-                        // One picture per box: taken from where it was before.
-                        val im = m.images.filterValues { it != f.name } + (c to f.name)
-                        onChange(m.copy(images = im))
+                        // One picture per box: taken from where it was before; put in by hand (« Fill by slide » keeps it while it is of that slide).
+                        onChange(Planche.avecCopie(m, c, f.name, memeDiapo = false))
                         onChoix((c + 1).takeIf { it < m.cases.size } ?: c)
                     }) {
                     Box {
@@ -711,7 +739,8 @@ private fun OngletDisposition(
         if (choix != null && choix >= 0) OutlinedButton(onClick = {
             // The pictures after it move up one box.
             val im = m.images.filterKeys { it != choix }.mapKeys { (k, _) -> if (k > choix) k - 1 else k }
-            onChange(m.copy(cases = m.cases.filterIndexed { i, _ -> i != choix }, images = im)); onChoix(null)
+            val vs = m.versions.filterKeys { it != choix }.mapKeys { (k, _) -> if (k > choix) k - 1 else k }
+            onChange(m.copy(cases = m.cases.filterIndexed { i, _ -> i != choix }, images = im, versions = vs)); onChoix(null)
         }) { Text(t("planche_supprimer_case"), color = Magenta, fontSize = 11.sp) }
     }
     Text(t("planche_nb_cases"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
@@ -908,4 +937,110 @@ private fun importeFichier(ctx: android.content.Context, r: Planche.Rangement, u
     } catch (e: PlancheFichier.Refus) {
         null to t(if (e.raison == "version") "planche_refus_version" else "planche_refus_fichier")
     } catch (e: Exception) { null to t("planche_refus_fichier") }
+}
+
+/** One version a box may show: what it is, its mark, its file (null: « Créer la fusion »). */
+private class VersionCase(val v: Planche.Version?, val libelle: String, val note: Int, val fichier: File?)
+
+/**
+ * Box [i]'s panel: which version of its slide it shows — Auto (the best
+ * marked), as received, corrected, fused, those there are, each its mark
+ * and a small picture —, « Créer la fusion » when its slide has copies and
+ * no fusion yet (then chosen), and which received copy is the box's picture.
+ */
+@Composable
+private fun PanneauVersion(
+    m: Planche.Modele, i: Int, corrections: fr.f4ioz.satcombo.demo.ApiCorrectionSstv,
+    onChange: (Planche.Modele) -> Unit, onFusion: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val dossier = remember { SstvHub.dir(ctx) }
+    val f = m.images[i]
+    // The sheet as it is when the fusion is done (it may have changed meanwhile).
+    val maintenant by rememberUpdatedState(m)
+    var tour by remember { mutableIntStateOf(0) }
+    val o by produceState<org.json.JSONObject?>(null, m.images[i], m.versions[i], m.corrigees, tour) {
+        value = withContext(Dispatchers.IO) { runCatching { corrections.pourCase(m, i) }.getOrNull() }
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(8.dp)).background(SpaceCard).padding(8.dp)) {
+        Text(tf("pw_version_titre", i + 1), color = TextHi, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (f == null) { Text(t("pw_version_vide"), color = TextLo, fontSize = 11.sp); return@Column }
+        val j = o?.takeIf { it.optString("f") == f } ?: run { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp)); return@Column }
+        val choisie = Planche.version(m, i)
+        fun fichier(n: String): File? = if (n == f) File(dossier, f) else corrections.fichier(n)
+        val va = j.optJSONArray("versions") ?: org.json.JSONArray()
+        val par = (0 until va.length()).map { va.getJSONObject(it) }.associateBy { it.optString("v") }
+        val enCours = j.optString("enCours").let { it.isNotEmpty() && it == j.optString("groupe") }
+        val cartes = buildList {
+            add(VersionCase(Planche.Version.AUTO, t("pw_version_auto") + " → " + t("pw_version_" + j.optString("autoMontre", "recue")),
+                j.optInt("autoNote", -1), fichier(j.optString("autoFichier", f))))
+            listOf(Planche.Version.RECUE, Planche.Version.CORRIGEE, Planche.Version.FUSION).forEach { v ->
+                val x = par[v.code]
+                if (x != null) add(VersionCase(v, t("pw_version_" + v.code) + (if (x.optInt("copies") > 0) " ×" + x.optInt("copies") else ""),
+                    x.optInt("note", -1), fichier(x.optString("fichier", f))))
+                else if (v == Planche.Version.FUSION && j.optBoolean("fusionPossible"))
+                    add(VersionCase(null, t(if (enCours) "pw_version_fusion_en_cours" else "pw_version_creer_fusion"), -1, null))
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            cartes.forEach { c ->
+                CarteVersion(c.libelle, c.note, c.fichier, c.v != null && c.v == choisie, Modifier.weight(1f)) {
+                    val v = c.v
+                    if (v != null) { onChange(Planche.avecVersion(m, i, v)); return@CarteVersion }
+                    if (enCours) return@CarteVersion
+                    // « Créer la fusion »: the gallery's own fusion, followed until it is made, then chosen.
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { corrections.action("/api/sstv/fusionner") { k -> if (k == "nom") f else "" } }
+                        tour++
+                        if (r?.optBoolean("ok") != true) return@launch
+                        while (corrections.enCours.isNotEmpty()) delay(1000)
+                        tour++; onFusion()
+                        val x = maintenant
+                        if (x.id != m.id || x.images[i] != f) return@launch
+                        val fait = withContext(Dispatchers.IO) { runCatching { corrections.pourCase(x, i) }.getOrNull() }
+                        val a = fait?.optJSONArray("versions")
+                        if (a != null && (0 until a.length()).any { a.getJSONObject(it).optString("v") == "fusion" })
+                            onChange(Planche.avecVersion(x, i, Planche.Version.FUSION))
+                    }
+                }
+            }
+            repeat((4 - cartes.size).coerceAtLeast(0)) { Spacer(Modifier.weight(1f)) }
+        }
+        if (j.optBoolean("repli") && j.optString("choix") == choisie.code) Text(t("pw_version_repli"), color = Amber, fontSize = 11.sp)
+        if (!m.corrigees && choisie == Planche.Version.AUTO) Text(t("pw_version_auto_aide"), color = TextLo, fontSize = 10.sp)
+        if (j.optString("erreur").isNotEmpty() && j.optString("erreurSur") == j.optString("groupe"))
+            Text(tf("pw_version_fusion_echec", j.optString("erreur")), color = Magenta, fontSize = 11.sp)
+        // Which copy received is the box's picture.
+        val copies = j.optJSONArray("copies")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.orEmpty()
+        if (copies.size > 1) {
+            Text(t("pw_version_copies") + (if (m.versions[i]?.copieMain == true) " · " + t("pw_version_main") else ""),
+                color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            val heure = remember { java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()) }
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                copies.forEach { x ->
+                    val n = x.optString("f")
+                    CarteVersion(heure.format(java.util.Date(x.optLong("t"))) + (if (x.optBoolean("corrigee")) " ✨" else ""), x.optInt("note", -1),
+                        File(dossier, n), n == f, Modifier.width(84.dp)) { if (n != f) onChange(Planche.avecCopie(m, i, n)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CarteVersion(libelle: String, note: Int, fichier: File?, choisie: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val b by produceState<Bitmap?>(null, fichier?.path, fichier?.lastModified()) {
+        value = fichier?.let { withContext(Dispatchers.IO) { PlancheRendu.charge(it, 200, leger = true) } }
+    }
+    Column(modifier.clip(RoundedCornerShape(6.dp)).background(SpaceBg)
+        .border(2.dp, if (choisie) Cyan else Color.Transparent, RoundedCornerShape(6.dp)).clickable(onClick = onClick)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
+            b?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize()) }
+                ?: Text(if (fichier == null) "＋" else "", color = TextLo, fontSize = 18.sp)
+        }
+        Text(libelle, color = if (choisie) Cyan else TextHi, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+            modifier = Modifier.padding(horizontal = 4.dp))
+        if (note >= 0) Text(tf("pw_version_note", note), color = Amber, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))
+    }
 }
