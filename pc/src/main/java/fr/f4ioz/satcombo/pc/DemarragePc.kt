@@ -81,7 +81,7 @@ class DemarragePc(
         fun opt(valeur: Any, s: LanceurPc.Source, enregistre: Any?) = JSONObject().put("valeur", valeur).put("source", s.cle)
             .put("sourceTexte", source(s)).put("enregistre", enregistre ?: JSONObject.NULL)
         val st = station.settings
-        val refus = redemarrage?.refus() ?: I18n.t("pcd_redem_inconnu")
+        val refus = if (redemarrage == null) I18n.t("pcd_redem_inconnu") else redemarrage.refus()
         return JSONObject().put("ok", true).put("present", true).put("version", actuelle).put("dev", !VersionPc.publiee(actuelle))
             .put("local", local).put("permis", permis(local, session))
             .put("lanceur", JSONObject().put("fichier", fichier.fichier.path).put("existe", fichier.fichier.isFile)
@@ -92,7 +92,7 @@ class DemarragePc(
                     f.reseau?.let { it != l.reseau && l.sourceReseau != LanceurPc.Source.LIGNE } == true ||
                     f.dossier?.let { java.io.File(it).absoluteFile != l.dossier && l.sourceDossier != LanceurPc.Source.LIGNE } == true))
             .put("motDePasse", motDePasse())
-            .put("redemarrage", JSONObject().put("possible", redemarrage?.refus() == null && redemarrage != null).put("raison", refus))
+            .put("redemarrage", JSONObject().put("possible", refus == null).put("raison", refus.orEmpty()))
             .put("configRapide", configRapideAFaire)
             .put("quoiDeNeuf", notesJson(quoiDeNeuf()))
             .put("maj", maj.etat())

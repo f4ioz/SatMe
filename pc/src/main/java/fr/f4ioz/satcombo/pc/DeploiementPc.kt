@@ -81,7 +81,8 @@ class DeploiementPc(private val dossier: File, private val lanceur: LanceurPc,
         val opts = JSONArray()
         fun opt(n: String, avant: Any?, apres: Any?) { if (apres != null && avant?.toString() != apres.toString()) opts.put(JSONObject().put("nom", n).put("avant", avant?.toString() ?: "—").put("apres", apres.toString())) }
         opt("port", actuel.port ?: lanceur.port, lu.port)
-        opt("reseau", actuel.reseau ?: lanceur.reseau, lu.reseau)
+        fun ouiNon(b: Boolean?) = b?.let { if (it) I18n.t("pcd_oui") else I18n.t("pcd_non") }
+        opt("reseau", ouiNon(actuel.reseau ?: lanceur.reseau), ouiNon(lu.reseau))
         opt("dossier", actuel.dossier ?: lanceur.dossier.path, lu.dossier)
         return JSONObject().put("ok", true).put("version", lu.version).put("secrets", lu.secrets)
             .put("reglages", changes).put("pareils", pareils).put("lanceur", opts)
