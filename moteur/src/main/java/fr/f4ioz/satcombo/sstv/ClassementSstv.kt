@@ -385,6 +385,20 @@ object ClassementSstv {
     /** The best picture of each group (for the sheet): their names. */
     fun meilleures(groupes: List<Groupe>): List<String> = groupes.map { it.meilleure.fileName }
 
+    /**
+     * A slide's badge on a thumbnail: « 2/12 » read on the footer, « 2/12✎ »
+     * set by hand, « ≈2/12 » estimated from the timetable; "" none.
+     */
+    fun badge(diapo: Int, total: Int, origine: Origine): String = when {
+        diapo <= 0 || origine == Origine.AUCUNE -> ""
+        origine == Origine.MAIN -> "$diapo/$total✎"
+        origine == Origine.ESTIME -> "≈$diapo/$total"
+        else -> "$diapo/$total"
+    }
+
+    /** [Origine] as the pages name it: « main », « lu », « estime », "". */
+    fun code(o: Origine): String = when (o) { Origine.MAIN -> "main"; Origine.LU -> "lu"; Origine.ESTIME -> "estime"; Origine.AUCUNE -> "" }
+
     /** [a] with what the footer reading found. */
     fun avecLu(a: Analyse, lu: Int): Analyse =
         Analyse(a.signature, a.note, a.manque, a.abimees, a.vert, a.glissements, lu, a.vignette, a.bonnes)

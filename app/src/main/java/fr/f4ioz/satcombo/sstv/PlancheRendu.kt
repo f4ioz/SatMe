@@ -198,7 +198,7 @@ object PlancheRendu {
                     style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 2.5f * k })
             }
             if (m.numeros) {
-                val etiquette = "${i + 1}/$n"
+                val etiquette = Planche.etiquette(m, i)
                 val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = r.height() * 0.11f; typeface = Typeface.DEFAULT_BOLD }
                 val tw = p.measureText(etiquette)
                 val boite = RectF(r.left + 4 * k, r.top + 4 * k, r.left + 4 * k + tw + 10 * k, r.top + 4 * k + p.textSize * 1.25f)

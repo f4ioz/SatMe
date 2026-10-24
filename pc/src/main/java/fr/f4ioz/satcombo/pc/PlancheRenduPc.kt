@@ -223,7 +223,7 @@ object PlancheRenduPc {
                 g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r)
             }
             if (m.numeros) {
-                val etiquette = "${i + 1}/$n"
+                val etiquette = Planche.etiquette(m, i)
                 g.font = Font(Font.SANS_SERIF, Font.BOLD, 1).deriveFont(r.height * 0.11f)
                 val tw = g.fontMetrics.stringWidth(etiquette)
                 val taille = g.font.size2D

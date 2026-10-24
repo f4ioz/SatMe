@@ -79,6 +79,30 @@ class ClassementGalerie(private val charge: (File) -> Pixels?) {
         return base.mapValues { (n, sig) -> parNom[n]?.let { (g, note) -> sig.avec(g, note) } ?: sig }
     }
 
+    /**
+     * « Relancer l'analyse »: the pictures of [shots] measured again, their
+     * footer read again, the groups worked out afresh (in the background:
+     * [etat] says how many are left). What the hand set — a slide's number,
+     * a group — is kept, unless [oublieMain]: then taken off them too.
+     * How many pictures are to be measured.
+     */
+    fun relance(dossier: File, shots: List<SstvMeta.SstvShot>, oublieMain: Boolean = false): Int {
+        var n = 0
+        for (s in shots) {
+            val f = File(dossier, s.fileName)
+            cache.remove(cle(f))
+            if (!f.isFile) continue
+            n++
+            if (oublieMain && (s.diapo > 0 || s.diapos > 0 || s.groupe.isNotEmpty()))
+                SstvMeta.change(f) { it.copy(diapo = 0, diapos = 0, groupe = "") }
+        }
+        dernier = null
+        return n
+    }
+
+    /** How many of [shots] are measured now (for « Relancer l'analyse »'s progress). */
+    fun mesurees(dossier: File, shots: List<SstvMeta.SstvShot>): Int = shots.count { cache[cle(File(dossier, it.fileName))] != null }
+
     // ------------------------------------------------------------ by hand
 
     /**
