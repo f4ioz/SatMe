@@ -40,6 +40,8 @@ celle de la tradition du logiciel radioamateur.
 | `com.naman14.androidlame` (enveloppe Java, dans `src/main/java`) | LGPL-2.1 | Interface Java vers LAME |
 | `com.google.zxing:core` | Apache-2.0 | Génération des QR codes |
 | `com.squareup.okhttp3:okhttp` | Apache-2.0 | Requêtes réseau |
+| `org.apache.pdfbox:pdfbox` (avec `fontbox`, `pdfbox-io` ; `commons-logging`) | Apache-2.0 | SatMe-PC seulement : le rapport d'événement SSTV dessiné en PDF |
+| DejaVu Sans, normale et grasse (`pc/src/main/resources/…/polices/`, licence à côté) | Licences Bitstream Vera et Arev ; modifications DejaVu dans le domaine public | SatMe-PC seulement : les lettres et symboles du rapport PDF, incluses dedans |
 | `com.github.mik3y:usb-serial-for-android` | MIT | Ponts série USB (CAT, rotor) |
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | Interface et cycle de vie |
 | AndroidX Media3 (ExoPlayer) | Apache-2.0 | DATV depuis un SatMe-Node, sur le téléphone |
