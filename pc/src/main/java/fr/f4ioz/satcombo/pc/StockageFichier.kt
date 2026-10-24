@@ -65,6 +65,9 @@ class StockageFichier(private val fichier: File) : Stockage {
         }
     }
 
+    /** Every value as written in the file, its type in front ("s:JN18FS"): for « Déploiement ». */
+    fun brutes(): Map<String, String> = HashMap(valeurs)
+
     /** The settings forced onto the disk now (before the system goes down). */
     fun synchronise() {
         synchronized(this) { runCatching { java.io.FileOutputStream(fichier, true).use { it.fd.sync() } } }
