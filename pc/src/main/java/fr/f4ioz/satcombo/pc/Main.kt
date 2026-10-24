@@ -421,6 +421,18 @@ fun main(args: Array<String>) {
     serveur.classement = classement
     planche.classement = classement
     planche.montage = serveur.montage
+    // The SSTV options: the missing slide's notice, each pass's sound and how long it is kept, the QSL, the ARISS pack.
+    val optionsSstv = OptionsSstvPc(station, son, classement, { activites }, dossier)
+    optionsSstv.annonce = { t ->
+        val r = annonces.reglages
+        if (r.on && r.veut(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS)) annonces.file.propose(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS, t)
+    }
+    son.enregistreSerie = { optionsSstv.enregistreSerie() }
+    serveur.optionsSstv = optionsSstv
+    portee.launch(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.delay(30_000)
+        while (true) { runCatching { optionsSstv.tic() }; kotlinx.coroutines.delay(30_000) }
+    }
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(20_000)
         while (true) { runCatching { activites.tic() }; repeat(60) { if (!activites.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }

@@ -129,6 +129,12 @@ class SonStation(
     @Volatile var silenceDepuis = 0L
         private set
 
+    /**
+     * « Enregistrer le son de chaque passage SSTV »: true while the satellite
+     * followed is the SSTV series' under way and the option is on (set by Main).
+     */
+    @Volatile var enregistreSerie: () -> Boolean = { false }
+
     /** One-shot: record the next time this satellite (its catalogue number), still followed, is up (a pass made ready before its AOS); 0: none. */
     @Volatile var enregistrePassage = 0
 
@@ -257,7 +263,8 @@ class SonStation(
             ?.takeIf { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) != veilleFaite }
         if (!leve && veille == null) arreteALaMain = false
         if (!son.etat.value.actif) silenceDepuis = 0L
-        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null || (enregistrePassage != 0 && leve && enregistrePassage == station.etat.value.suivi?.catalogNumber)) &&
+        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null || (enregistrePassage != 0 && leve && enregistrePassage == station.etat.value.suivi?.catalogNumber) ||
+                (leve && runCatching { enregistreSerie() }.getOrDefault(false))) &&
             runCatching { horsAntenne() }.getOrNull() == null) {
             demarreEnregistrement(auto = true)
             enregistrePassage = 0

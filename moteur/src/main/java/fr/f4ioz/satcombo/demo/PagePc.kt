@@ -2328,6 +2328,14 @@ ${rail()}
         <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
         <span class="petit" id="sstv-source-active" style="min-width:120px;text-align:right"></span></div>
       <div class="etat" id="sstv-etat"></div>
+      <div id="sq" hidden title="Qualité de réception : mesurée sur le son reçu, sans rien changer à l’image décodée">
+        <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Son</span>
+          <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden;position:relative"><div id="sq-vu" style="height:100%;width:0;background:var(--vert)"></div><div id="sq-crete" style="position:absolute;top:0;width:2px;height:100%;background:#E8EEF3;left:0"></div></div>
+          <span class="petit" id="sq-db" style="min-width:120px;text-align:right"></span></div>
+        <div class="petit" id="sq-avis"></div>
+        <canvas id="sq-lignes" width="600" height="26" style="width:100%;height:26px;background:#0E1720;border-radius:6px;margin-top:4px" title="Chaque ligne de l’image en cours : vert nette, ambre bruitée, rouge synchro perdue"></canvas>
+        <div class="ligne" style="margin-top:2px"><span class="petit" id="sq-snr" style="flex:1"></span><span class="val" id="sq-note" title="La note que l’image aura dans le classement, estimée sur ses lignes reçues (à 4 points près d’habitude)"></span></div>
+      </div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()" title="Le son du passage, en WAV (touche E)">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span></div>
       <div class="ligne sx-tx" id="sx-tx" hidden><span class="petit">Émission</span><span id="sx-tx-pastille" class="pastille" style="color:var(--gris)">arrêtée</span><span class="petit" id="sx-tx-pc"></span>
         <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
@@ -2446,6 +2454,24 @@ ${rail()}
       <div class="t">Décodage</div>
       <label class="petit" style="display:block;margin-top:0" title="Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+    </div>
+    <div class="carte" id="so-carte">
+      <div class="t">Options SSTV</div>
+      <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="so-alerte" onchange="soReglage('alerte', this.checked ? 1 : 0)"> Prévenir quand une diapo manquante est attendue</label>
+      <div class="ligne" style="margin-top:2px"><span class="petit"><input id="so-avant" type="number" min="1" max="120" style="max-width:56px" onchange="soReglage('avant', +this.value || 15)"> min avant la diapo · aussi une diapo reçue avec une note sous <input id="so-note" type="number" min="0" max="100" style="max-width:56px" onchange="soReglage('note', +this.value || 0)"> (0 : seulement les manquantes)</span></div>
+      <div class="petit aide">D’après l’horaire des diapos de la série (Images › par diapo). Une seule alerte par passage, dans les alertes d’« Activités à venir » (coupées là : aucune) et dite à voix haute quand les annonces parlent.</div>
+      <div class="petit" id="so-prochaines"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="so-enreg" onchange="soReglage('enreg', this.checked ? 1 : 0)"> Enregistrer le son de chaque passage SSTV <span class="petit" id="so-enreg-etat"></span></label>
+      <div class="petit aide">Chaque passage du satellite de la série en cours, quand il est suivi et la SSTV décodée (de l’AOS à 30 s après le LOS). Les campagnes de l’auto-pilote ont leur case « Enregistrer », cochée par défaut. Chaque image note son enregistrement (pour la redécoder).</div>
+      <div class="ligne" style="margin-top:8px"><span class="petit">Garder les enregistrements SSTV : <input id="so-jours" type="number" min="0" max="3650" style="max-width:64px" onchange="soReglage('jours', +this.value || 0)"> jours (0 : toujours) · <input id="so-mo" type="number" min="0" style="max-width:76px" onchange="soReglage('mo', +this.value || 0)"> Mo au plus (0 : sans limite)</span></div>
+      <label class="petit" style="display:block;margin-top:2px"><input type="checkbox" id="so-journal" onchange="soReglage('journal', this.checked ? 1 : 0)"> Garder aussi ceux du journal des passages</label>
+      <div class="petit aide">Seuls les enregistrements de passages SSTV sont concernés. Jamais supprimés : ceux d’une image utilisée dans une planche ou marquée « à garder », ceux de moins d’un jour. Chaque suppression est notée dans enregistrements/retention-sons.log.</div>
+      <div class="ligne"><span class="petit" id="so-bilan" style="flex:1"></span><button id="so-appliquer" onclick="soRetention()">Appliquer maintenant</button></div>
+      <div class="ligne" style="margin-top:8px"><span class="petit">Image QSL</span><select id="so-dispo" style="flex:none" onchange="soReglage('dispo', this.value)"><option value="BANDEAU">bandeau dessous</option><option value="INCRUSTE">incrusté</option></select>
+        <label class="petit"><input type="checkbox" id="so-satme" onchange="soReglage('satme', this.checked ? 1 : 0)"> signer « SatMe »</label><label class="petit"><input type="checkbox" id="so-jpeg" onchange="soReglage('jpeg', this.checked ? 1 : 0)"> JPEG</label></div>
+      <div class="petit" id="so-station"></div>
+      <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
+      <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
       <div class="t">Décoder un enregistrement</div>
@@ -4484,6 +4510,10 @@ ${rail()}
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
     <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
     <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
+  <div class="ligne" id="vi-qsl" style="margin-top:6px"><a id="vi-qsl-lien" download><button title="L’image signée : indicatif, locator, date et heure UTC, satellite, fréquence, mode, élévation, série et diapo (Images › Réglages › Options SSTV)">🪪 QSL</button></a>
+    <a id="vi-qsl-voir" target="_blank" rel="noopener noreferrer"><button>Voir la QSL</button></a>
+    <a id="vi-ariss" download><button title="Pour le diplôme ARISS SSTV : l’originale, sa QSL et le résumé à recopier dans le formulaire (rien n’est envoyé)">🏅 Pack ARISS</button></a>
+    <button id="vi-garde" onclick="viGarde()" title="Jamais supprimée par la rétention des enregistrements (ni le son de son passage)">☆ À garder</button></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
@@ -8795,6 +8825,7 @@ let viNom = '', viSonVu = '';
 // The picture's own sound, its GIF, deleting it: as the phone's viewer.
 function voisOutils() {
   viClasse();
+  viQslMaj();
   const i = ((S && S.images) || []).find(x => x.nom === viNom);
   const D = S && S.sstvDetail;
   g('vi-outils').hidden = !i || !D;
@@ -8839,6 +8870,70 @@ async function viSupprime() {
 g('visionneuse').addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { e.preventDefault(); voisImage(viN - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); voisImage(viN + 1); }
 });
+// ------------------------------------------------------------------ SSTV options: live quality, alerts, retention, QSL, ARISS pack
+let SO = null, soVu = '';
+async function soCharge() {
+  try { SO = await (await fetch('api/sstv-options')).json(); } catch (x) { SO = null; }
+  if (!SO || !SO.ok) { g('so-carte').hidden = true; return; }
+  g('so-carte').hidden = false;
+  const r = SO.reglages;
+  [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
+  [['so-avant', r.avant], ['so-note', r.note], ['so-jours', r.jours], ['so-mo', r.mo], ['so-dispo', r.dispo]].forEach(([i, v]) => { if (document.activeElement !== g(i)) g(i).value = v; });
+  txt('so-enreg-etat', SO.enregistreMaintenant ? '— en cours pour ce passage' : '');
+  g('so-prochaines').innerHTML = !r.activites ? '<span class="ambre">« Activités à venir » est coupé : aucune alerte.</span>' :
+    SO.prochaines.length ? 'Prochaines alertes : ' + SO.prochaines.map(a => esc(acJourLoc(a.quand)) + ' ' + esc(acHmLoc(a.quand)) + ' — ' + esc(a.texte)).join('<br>') : 'Aucune diapo voulue attendue sur les prochains passages.';
+  const R = SO.retention, mo = o => (o / 1048576).toFixed(0) + ' Mo';
+  txt('so-bilan', R ? R.sstv + ' enregistrement(s) SSTV (' + mo(R.octets) + ') ; ' + (r.jours || r.mo ? R.supprimer.length + ' à supprimer (' + mo(R.octetsLiberes) + '), ' + R.proteges + ' protégé(s)' : 'rétention coupée : rien n’est supprimé') : '');
+  g('so-appliquer').disabled = !R || !R.supprimer.length;
+  txt('so-station', 'Indicatif et locator de la QSL : ceux de l’image, sinon Réglages › Ma station (' + (r.indicatif || '—') + ', ' + (r.locator || '—') + ').');
+  viQslMaj();
+}
+async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); }
+async function soRetention() {
+  const R = SO && SO.retention; if (!R || !R.supprimer.length) return;
+  if (!confirm('Supprimer ' + R.supprimer.length + ' enregistrement(s) SSTV ?\n\n' + R.supprimer.slice(0, 12).join('\n') + (R.supprimer.length > 12 ? '\n…' : ''))) return;
+  const j = await post('api/sstv-options/retention'); toast((j && j.supprimes || 0) + ' enregistrement(s) supprimé(s)'); soCharge();
+}
+function viQslMaj() {
+  if (!viNom) return;
+  const r = SO && SO.reglages;
+  g('vi-qsl-lien').href = 'api/sstv-options/qsl?nom=' + enc(viNom);
+  g('vi-qsl-voir').href = 'api/sstv-options/qsl?voir=1&nom=' + enc(viNom);
+  g('vi-ariss').href = 'api/sstv-options/ariss.zip?noms=' + enc(viNom);
+  const garde = !!(SO && SO.gardes.indexOf(viNom) >= 0);
+  txt('vi-garde', garde ? '★ Gardée' : '☆ À garder'); g('vi-garde').setAttribute('aria-pressed', garde ? 'true' : 'false');
+  g('vi-qsl').hidden = !r;
+}
+async function viGarde() {
+  if (!viNom || !SO) return;
+  const on = SO.gardes.indexOf(viNom) < 0;
+  const j = await post('api/sstv-options/garde?nom=' + enc(viNom) + '&on=' + (on ? 1 : 0));
+  if (j && j.ok) { SO.gardes = j.gardes; viQslMaj(); }
+}
+let sqDernier = 0;
+async function sqCharge() {
+  if (!ouverte('sstv') && !(g('visionneuse') && g('visionneuse').open)) return;
+  let Q = null; try { Q = await (await fetch('api/sstv-options/qualite')).json(); } catch (x) {}
+  g('sq').hidden = !Q || !Q.son;
+  if (!Q || !Q.son) return;
+  const db = Q.niveauDb, pc = d => Math.max(0, Math.min(100, (d + 60) / 60 * 100));
+  g('sq-vu').style.width = (db == null ? 0 : pc(db)) + '%';
+  g('sq-vu').style.background = Q.niveau === 'SATURE' ? 'var(--danger)' : Q.niveau === 'FORT' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : Q.niveau === 'SILENCE' ? 'var(--gris)' : 'var(--vert)';
+  g('sq-crete').style.left = (Q.creteDb == null ? 0 : pc(Q.creteDb)) + '%';
+  txt('sq-db', db == null ? '' : db.toFixed(0) + ' dBFS (crête ' + Q.creteDb.toFixed(0) + ')');
+  const avis = { SATURE: '⚠ Le son sature : baisser le volume ou le gain.', FORT: 'Son fort, près de saturer.', FAIBLE: '⚠ Son trop faible : monter le volume.', SILENCE: 'Aucun son.', BON: '' }[Q.niveau] || '';
+  txt('sq-avis', avis); g('sq-avis').style.color = Q.niveau === 'SATURE' || Q.niveau === 'FAIBLE' ? 'var(--ambre)' : '';
+  const c = g('sq-lignes'), x = c.getContext('2d'), w = c.width, h = c.height, n = Math.max(Q.hauteur || 0, Q.qualites.length, 1);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  Q.qualites.forEach((v, i) => { x.fillStyle = v >= 80 ? '#3FE0C8' : v >= 35 ? '#FFB454' : '#E5484D'; const bw = Math.max(1, w / n); x.fillRect(i * w / n, h - Math.max(3, v / 100 * h), bw, Math.max(3, v / 100 * h)); });
+  const snr = Q.snrSous ? 'S/B < 10 dB : synchros noyées dans le bruit' : Q.snr != null ? 'S/B ≈ ' + Math.round(Q.snr) + ' dB (3 kHz)' : '';
+  txt('sq-snr', [snr, Q.lignes ? 'synchros ' + Q.trouvees + '/' + Q.lignes + ', ' + Q.nettes + ' nettes' : Q.image ? '' : 'en attente d’une image…'].filter(s => s).join(' · '));
+  txt('sq-note', Q.image && Q.note != null ? 'note ≈ ' + Q.note : !Q.image && Q.noteFinale != null ? 'dernière ≈ ' + Q.noteFinale : '');
+  g('sq-note').style.color = (Q.image ? Q.note : Q.noteFinale) >= 80 ? 'var(--vert)' : (Q.image ? Q.note : Q.noteFinale) >= 50 ? 'var(--ambre)' : 'var(--danger)';
+}
+soCharge();
+setInterval(soCharge, 15000);
+setInterval(sqCharge, 1000);
 g('i-encours').style.cursor = 'zoom-in';
 g('i-encours').onclick = () => {
   if (!S || S.sstvMode || !S.sstvDerniere) return;

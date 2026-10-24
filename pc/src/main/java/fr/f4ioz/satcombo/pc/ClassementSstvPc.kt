@@ -71,12 +71,13 @@ class ClassementSstvPc(
     fun json(): JSONObject {
         val t = horloge()
         val e = etat()
-        val s = serie(t)
-        val p = s?.let {
-            val (avenir, faits) = passes(it, t)
-            SerieSstv.prevision(it, e, avenir, faits, SerieSstv.elMin(station.settings.minElevDeg.toDouble()), t)
-        }
-        return ApiClassementSstv.json(e, p, t)
+        return ApiClassementSstv.json(e, prevision(e, t), t)
+    }
+
+    /** The series under way as the page sees it (its slides, the passes to come); null none. */
+    fun prevision(e: ClassementGalerie.Etat = etat(), t: Long = horloge()): SerieSstv.Prevision? = serie(t)?.let {
+        val (avenir, faits) = passes(it, t)
+        SerieSstv.prevision(it, e, avenir, faits, SerieSstv.elMin(station.settings.minElevDeg.toDouble()), t)
     }
 
     /** `POST /api/sstv/diapo`, `/api/sstv/groupe`; null when not one of them. */
