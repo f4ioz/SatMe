@@ -72,7 +72,7 @@ object PagePc {
     private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock", "campaign")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock", "campaign", "history")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart). */
@@ -1724,6 +1724,7 @@ ${STYLE_CADRE}
   .k-vide-t { padding:32px 16px; text-align:center; color:var(--texte-3); font-size:var(--fs-m); }
   .vue { animation:vue-in 160ms ease-out; }
   @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
+${DemarragePagePc.CSS}
 </style></head>
 <body>
 ${rail()}
@@ -1780,6 +1781,7 @@ ${rail()}
       <div class="ec-stats" id="ec-stats" hidden></div>
     </div>
   </span>
+  ${DemarragePagePc.ENTETE}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
@@ -3957,6 +3959,7 @@ ${rail()}
 <div class="reg"><nav class="reg-nav" id="reg-nav"></nav><div class="reg-corps" id="reg-corps"></div></div>
 <div class="grille2" id="reg-origine">
   <div>
+${DemarragePagePc.CARTES}
     <div class="carte" id="af-carte" hidden>
       <div class="t">Accord fin (clé SDR)</div>
       <div class="petit aide">Les aides de l'onglet SDR, comme sur le téléphone : elles touchent le décalage logiciel de la clé, jamais le poste.</div>
@@ -4551,6 +4554,7 @@ ${rail()}
     <div><kbd>1</kbd> … <kbd>6</kbd></div><div>Espaces : 1 Ciel · 2 QO-100 · 3 DATV · 4 Modes · 5 Carnet · 6 Station (le dernier onglet vu de chacun)</div>
     <div><kbd>?</kbd></div><div>Cette aide</div>
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
+    ${DemarragePagePc.AIDE}
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>S</kbd></div><div>Le son des décodeurs (en-tête « Son ») : changer de source, démarrer, arrêter, décodeurs, enregistrer</div>
     <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement). Sur l'onglet Montage, <kbd>E</kbd> sert à « Modifier » le dessin et n'enregistre pas</div>
@@ -4561,6 +4565,7 @@ ${rail()}
     <div><span class="h-rond" style="display:inline-grid">?</span></div><div>Sur un titre : l'explication de la carte (survol, clic ou Entrée)</div>
   </div>
 </dialog>
+${DemarragePagePc.DIALOGUES}
 <div id="man" class="man" hidden role="dialog" aria-modal="true" aria-labelledby="man-t">
   <div class="man-boite">
     <div class="man-tete"><b id="man-t">Manuel</b>${IconesPc.svg("search")}<input id="man-q" type="search" autocomplete="off" placeholder="Chercher dans le manuel (tous les mots)" aria-label="Chercher dans le manuel" aria-controls="man-res">
@@ -5214,8 +5219,9 @@ const CATS_REG = [
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
   { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'IC-9700 (PTT, minuterie, puissance), coupure si la page se tait, correction I/Q des émetteurs', cartes: ['Émission du poste', 'Liaison pendant', 'Correction I/Q'] },
+  { id: 'demarrage', nom: 'Démarrage', ico: 'history', desc: 'Réseau, port, dossier des données, mises à jour, configuration rapide', cartes: ['Options de démarrage', 'Mise à jour', 'Configuration rapide'] },
   { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, HTTPS, mode distant, application, écran allumé', cartes: ['Accès à distance', 'HTTPS', 'Mode distant', 'Sur cet appareil'] },
-  { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
+  { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer ; le déploiement sur un autre PC', cartes: ['Sauvegarde', 'Déploiement'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
 let SAUV = null;
@@ -5271,6 +5277,7 @@ function montreReglages(id) {
   document.querySelectorAll('#reg-nav button').forEach(b => b.classList.toggle('actif', b.dataset.cat === id));
   if (id === 'emission') { chargeIq(); pxLit(); pxCartes(); }
   if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); majHttps(); }
+  if (id === 'demarrage' || id === 'sauvegarde') demCharge();
 }
 // Réglages › Accès à distance: the password other machines are asked, set from this PC or a session.
 var AD = null;
@@ -16395,6 +16402,8 @@ function palSources() {
   }
   A('Déplier ou replier le menu', 'touche [', () => railRegle(!document.body.classList.contains('rail-ouvert')));
   A('Raccourcis clavier', 'touche ?', aideClavier);
+  if (DEM) { A('Quoi de neuf', 'ce qui a changé dans SatMe-PC, version par version', () => qdnOuvre(true)); A('Configuration rapide', 'indicatif, locator, heure, démarrage', cfrOuvre); }
+  if (DEM && DEM.maj && DEM.maj.disponible) A('Nouvelle version ' + DEM.maj.version, 'ses nouveautés et le téléchargement', mjOuvre);
   if (!MAN.absent) A('Manuel', 'F1 · le guide de SatMe-PC, avec recherche', () => manOuvre());
   return l;
 }
@@ -16516,6 +16525,7 @@ setInterval(() => {
 }, 5000);
 setInterval(chargeListe, 30000);
 setInterval(dessinePassages, 5000);
+${DemarragePagePc.JS}
 </script>
 </body></html>
 """
