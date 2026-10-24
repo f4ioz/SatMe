@@ -4450,12 +4450,12 @@ ${rail()}
     <div class="petit">SatMe (corrigé) <span class="val" id="etal-corr">—</span></div>
     <button class="rouge etal-stop" onclick="etalPost('stop')" title="Arrêt immédiat des moteurs (commande S)">■ STOP</button>
   </div>
-  <div class="petit aide" id="etal-suivi" style="margin:6px 0"></div>
+  <div class="petit" id="etal-suivi" style="margin:6px 0;color:var(--warn)"></div>
   <div class="etal-pas" id="etal-pas" role="tablist"></div>
 
   <section class="etal-e" data-e="0">
     <p class="petit">Tant que cet assistant est ouvert, <b>le suivi automatique est arrêté</b> (il reprend tel qu'il était à la fermeture). Rien ne bouge sans un clic de ta part : pour amener le mât aux butées, utilise <b>le boîtier de commande</b> (ou les boutons de la vérification, plus loin). Le bouton <b>STOP</b> envoie <code>S</code> à tout moment.</p>
-    <p class="petit">Les étapes 1 à 3 utilisent les commandes de calibration du contrôleur, celles du GS-232A reprises par le firmware K3NG : <code>O2</code> / <code>F2</code> pour l'élévation, <code>O</code> / <code>F</code> pour l'azimut. Chacune lit le potentiomètre <b>là où est le mât</b> et l'écrit tout de suite dans l'EEPROM. Le firmware attend alors une touche : SatMe l'envoie et lit la réponse (« Wrote to memory »).</p>
+    <p class="petit">Les étapes 1 à 3 utilisent les commandes de calibration du contrôleur, celles du GS-232A reprises par le firmware K3NG : <code>O2</code> / <code>F2</code> pour l'élévation, <code>O</code> / <code>F</code> pour l'azimut (la lettre O, pas le chiffre zéro). Chacune lit le potentiomètre <b>là où est le mât</b> et l'écrit tout de suite dans l'EEPROM. Le firmware attend alors une touche : SatMe l'envoie et lit la réponse (« Wrote to memory »).</p>
     <p class="petit" id="etal-rotctld" hidden style="color:var(--warn)">Rotor par rotctld (Hamlib) : les commandes O/F du contrôleur ne passent pas par là. Seule la correction logicielle de SatMe (étapes 4 et 5) s'applique.</p>
     <div class="ligne"><button class="primaire" onclick="etalVa(1)">Compris, commencer</button></div>
   </section>
@@ -5912,6 +5912,8 @@ function etalHautMontre() {
 function etalHautCorrige() {
   const h = parseFloat((g('etal-haut').value || '').replace(',', '.'));
   if (!ETAL || ETAL.brutEl == null || isNaN(h)) { txt('etal-msg', 'pas de lecture du contrôleur'); return; }
+  // The mast must be up there: a reading near 0 would make a correction of the whole range from nothing.
+  if (ETAL.brutEl < 90) { txt('etal-msg', 'Le contrôleur lit ' + etalN(ETAL.brutEl) + ' : amène d\'abord le mât en butée haute avec le boîtier.'); return; }
   etalPost('correction?axe=EL&valeur=' + enc('0:0;' + ETAL.brutEl + ':' + h)).then(j => { if (j.ok !== false) etalVa(4); });
 }
 /** Writes down the controller's reading, SatMe's and the measure, now. */
