@@ -227,7 +227,7 @@ object FonctionsMontage {
     }
 
     /** The decoders listening to the sound input now. */
-    private fun ecoutentEntree(i: Instantane): List<String> = buildList {
+    internal fun ecoutentEntree(i: Instantane): List<String> = buildList {
         if (i.sstvActif && sstvParEntree(i)) add("sstv-rx")
         if (i.ft8Actif) add("ft8")
         if (i.cwActif) add("cw")

@@ -190,6 +190,46 @@ object ActiviteMontage {
     }
 
     /**
+     * The activity read from SatMe's routes and the parts' state [i]: the
+     * sound decoders (SSTV, APRS, FT8, CW, phonie) fed by a rig's own sound
+     * (its USB codec, its sound over the network) light that rig, its antenna
+     * and the computer, CAT or not; by another card, that card. The rig's
+     * frequency ("poste-rx"): its CAT's, else the followed satellite's.
+     */
+    fun depuis(l: Lectures, i: FonctionsMontage.Instantane?): Activite {
+        val a = depuis(l)
+        if (i == null || !i.sonActif || i.sonParSdr || i.sonAppareil.isBlank()) return a
+        val ecoutent = FonctionsMontage.ecoutentEntree(i)
+        if (ecoutent.isEmpty()) return a
+        val quoi = ecoutent.map { when (it) { "sstv-rx" -> "SSTV"; "ft8" -> i.ft8Mode.ifBlank { "FT8" }; "cw" -> "CW"; "aprs" -> "APRS"; else -> "phonie" } }.joinToString(", ")
+        val rx = LinkedHashSet(a.rx); val mhz = LinkedHashMap(a.mhz); val resume = ArrayList(a.resume)
+        val notes = LinkedHashMap(a.notes); val liaisons = LinkedHashMap(a.liaisons)
+        fun f3(m: Double) = String.format(java.util.Locale.FRANCE, "%.3f", m)
+        if (i.estSonDuPoste(i.sonAppareil)) {
+            rx += "cat"
+            val reseau = i.sonAppareil == FonctionsMontage.SOURCE_RESEAU
+            if ("cat" !in liaisons) liaisons["cat"] = if (reseau) "reseau" else "usb"
+            val cat = l.etat?.optJSONObject("cat")
+            val dl = cat.d("dl").takeIf { cat.b("connecte") && it > 1e6 }
+            val sat = l.etat?.optJSONObject("ciel").d("dl").takeIf { l.etat?.has("suivi") == true && it > 1e6 }
+            val f = (dl ?: sat)?.div(1e6)
+            if (f != null) { mhz["poste-rx"] = f; if ("ciel-rx" !in mhz) mhz["ciel-rx"] = f }
+            val nom = i.libelles[i.sonAppareil]?.substringBefore(" (")?.takeIf { it.isNotBlank() && !it.contains('[') }
+                ?: nomPoste(i.catModele.ifBlank { cat.s("modele") })
+            resume += quoi + " : " + nom + (if (reseau) " par le réseau (son)" else " par sa carte son USB") +
+                (if (f != null) ", " + f3(f) + " MHz" else "") +
+                (if (!cat.b("connecte")) (if (sat != null) " (sans CAT : fréquence du satellite suivi)" else " (sans CAT)") else "")
+            if ("cat" !in notes) notes["cat"] = (if (reseau) "son réseau → " else "son USB → ") + quoi
+        } else {
+            rx += "son"
+            resume += quoi + " : carte son « " + i.nomCarte(i.sonAppareil) + " »"
+        }
+        return a.copy(rx = rx, mhz = mhz, resume = resume, notes = notes, liaisons = liaisons)
+    }
+
+    private fun nomPoste(m: String) = when (m) { "IC9700", "SIM" -> "IC-9700"; "TS2000", "TS2000SIM" -> "TS-2000"; "PAIRE" -> "IC-705"; "" -> "le poste"; else -> m }
+
+    /**
      * The boîtes' states from what the PC knows (settings filled in, a
      * service on, programs connected): never asked of the services
      * themselves. Keys of [o]: wavelog {url, cle}, qrz {configure}, psk {on,
@@ -287,8 +327,10 @@ object ActiviteMontage {
                 val (id, arrivee) = file.removeFirst()
                 if (!vus.add(id + "/" + arrivee)) continue
                 val e = c.element(id) ?: continue
+                val bande = if (id == depart) bandePoste(e, if (tx) null else a.mhz["poste-rx"]) else null
                 for (p in Montage.ports(e)) {
                     if (p.signal != Signal.RF || p.id == arrivee) continue
+                    if (bande != null && p.id !in bande) continue
                     if (tx && !(p.voie.emet && p.sens != Sens.ENTREE)) continue
                     if (!tx && !(p.voie.recoit && p.sens != Sens.SORTIE)) continue
                     for (l in c.liens) {
@@ -303,7 +345,7 @@ object ActiviteMontage {
                         // The band the cable carries: the output's (a wide-band input takes what comes), else the higher.
                         val nominal = bandeDuCable(Montage.port(c, ici), loin)
                         // The frequency shown: the sky's or the IF's, whichever belongs to the cable's band.
-                        val vues = (if (tx) listOf("ciel-tx", "fi-tx") else listOf("ciel-rx", "fi-rx")).mapNotNull { a.mhz[it] }
+                        val vues = (if (tx) listOf("ciel-tx", "fi-tx") else listOf("ciel-rx", "fi-rx", "poste-rx")).mapNotNull { a.mhz[it] }.distinct()
                         val f = if (nominal == null) vues.firstOrNull()
                             else vues.filter { kotlin.math.abs(it - nominal) / nominal < 0.15 }.minByOrNull { kotlin.math.abs(it - nominal) }
                         f?.let { mhz[l.id] = it }
@@ -383,6 +425,13 @@ object ActiviteMontage {
         val notes = HashMap<String, String>()
         for (e in c.elements) roles[e.id]!!.firstNotNullOfOrNull { a.notes[it] }?.let { notes[e.id] = it }
         return Allumage(el, li, mhz, erreurs, bx, notes, detectes)
+    }
+
+    /** A rig's antenna ports of the band it listens on ([mhz]); null (all of them) when unknown or none fits. */
+    private fun bandePoste(e: Montage.Element, mhz: Double?): Set<String>? {
+        if (mhz == null || Montage.modele(e)?.genre != Genre.POSTE) return null
+        val l = Montage.ports(e).filter { it.signal == Signal.RF && it.mhz != null && kotlin.math.abs(mhz - it.mhz) / it.mhz < 0.15 }
+        return l.map { it.id }.toSet().takeIf { it.isNotEmpty() }
     }
 
     /** The band a radio cable between [a] and [b] carries (MHz): the output's when one end is an output, else the higher. */
