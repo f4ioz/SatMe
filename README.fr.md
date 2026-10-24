@@ -203,6 +203,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
 - **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, un fond (étoiles, dégradés, images NASA, ou la vôtre ajustée à la planche) et jusqu'à trois écussons de mission placés et redimensionnés à la souris, leur contour uni enlevé ; planche téléchargée en pleine résolution ; le modèle exporté en fichier `.satme-planche`, celui d'un autre importé (bouton ou déposé sur la page).
+- **Une version choisie case par case** sur la planche (page du PC, page du téléphone et écran) : un clic sur une case — *Auto (la mieux notée)*, *Reçue*, *Corrigée* ou *Fusion*, celles qui existent avec leur note et une vignette, *Créer la fusion* s'il n'y en a pas encore, et la copie reçue dans la case ; *Remplir par diapo* garde ces choix (sauf si *Tout réinitialiser* est coché), le fichier modèle garde la version de chaque case mais jamais une image, le pack ARISS garde les originales.
 - Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
 
 ## Fonctions

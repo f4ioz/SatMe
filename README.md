@@ -203,6 +203,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
 - **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, a background (stars, gradients, NASA pictures, or your own fitted to the sheet) and up to three mission patches placed and resized with the mouse, their plain surround removed; the sheet downloaded at full resolution; the template exported as a `.satme-planche` file, another one imported (button or dropped on the page).
+- **A version chosen box by box** on the sheet (PC page, phone page and screen): click a box — *Auto (best marked)*, *Received*, *Corrected* or *Fused*, those there are with their mark and a small picture, *Make the fusion* when there is none yet, and the received copy in the box; *Fill by slide* keeps these choices (unless *Reset all* is ticked), the template file keeps each box's version but never a picture, the ARISS pack keeps the originals.
 - A tighter control desk page; the three pages linked, under one code.
 
 ## Features
