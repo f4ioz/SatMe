@@ -65,7 +65,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         override fun removeEldestEntry(e: MutableMap.MutableEntry<String, BufferedImage>?) = size > 160
     }
     private fun vignette(f: File, w: Int): BufferedImage? = synchronized(vignettes) {
-        val cle = f.name + "@" + w
+        val cle = f.name + "@" + w + "@" + f.lastModified()
         vignettes[cle] ?: PlancheRenduPc.charge(f, w)?.also { vignettes[cle] = it }
     }
 
@@ -84,7 +84,9 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
     private fun places(m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> {
         val parNom = galerie().associateBy { it.first.name }
-        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap()
+        // The processed versions, when the sheet takes them: marked so.
+        val corr = if (m.corrigees) classement?.corrections?.api else null
+        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to (corr?.pourPlanche(it) ?: it) } }.toMap()
     }
 
     private fun modele(id: String): Planche.Modele? =

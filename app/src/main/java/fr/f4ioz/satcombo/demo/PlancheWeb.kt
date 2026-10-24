@@ -99,7 +99,9 @@ object PlancheWeb {
 
     private fun places(ctx: Context, m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> {
         val parNom = galerie(ctx).associateBy { it.first.name }
-        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap()
+        // The processed versions, when the sheet takes them: marked so.
+        val corr = if (m.corrigees) fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx) else null
+        return m.images.mapNotNull { (i, f) -> parNom[f]?.let { i to (corr?.pourPlanche(it) ?: it) } }.toMap()
     }
 
     private fun modele(r: Planche.Rangement, id: String): Planche.Modele? =

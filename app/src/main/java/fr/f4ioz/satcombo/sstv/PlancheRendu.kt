@@ -156,6 +156,15 @@ object PlancheRendu {
      * what is known of them (for the line under each); [decor] its background
      * picture ([chargeDecor]), [ecussons] its patches ([chargeEcussons]).
      */
+    /** « corrigée » / « fusion de n copies » in a box's lower right corner. */
+    private fun etiquetteTraitee(c: Canvas, texte: String, r: RectF, k: Float) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = (r.height() * 0.075f).coerceAtLeast(9f * k); isFakeBoldText = true; color = 0xFFFFD54F.toInt() }
+        val tw = p.measureText(texte); val taille = p.textSize
+        val boite = RectF(r.right - tw - 14 * k, r.bottom - taille * 1.35f - 4 * k, r.right - 4 * k, r.bottom - 4 * k)
+        c.drawRoundRect(boite, 8 * k, 8 * k, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB0000000.toInt() })
+        c.drawText(texte, boite.left + 5 * k, boite.bottom - taille * 0.32f, p)
+    }
+
     fun dessine(
         m: Planche.Modele, fond: Bitmap?, largeur: Int,
         images: Map<Int, Pair<Bitmap, SstvMeta.SstvShot>>, v: Valeurs,
@@ -191,6 +200,8 @@ object PlancheRendu {
                 }
                 c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 2.5f * k })
+                // A processed picture says so, legend or not.
+                if (bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(c, img.second.traitement, ri, k)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
                 c.drawRect(r, Paint().apply { color = 0xCC05080D.toInt() })

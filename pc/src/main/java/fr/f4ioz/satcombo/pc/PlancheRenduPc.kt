@@ -181,6 +181,15 @@ object PlancheRenduPc {
      * The sheet [largeur] pixels wide; [images] the pictures by box, with what is known of them;
      * [decor] its background picture ([chargeDecor]), [ecussons] its patches ([chargeEcussons]).
      */
+    /** « corrigée » / « fusion de n copies » in a box's lower right corner. */
+    private fun etiquetteTraitee(g: java.awt.Graphics2D, texte: String, r: Rectangle2D.Float, k: Float) {
+        g.font = Font(Font.SANS_SERIF, Font.BOLD, 1).deriveFont((r.height * 0.075f).coerceAtLeast(9f * k))
+        val tw = g.fontMetrics.stringWidth(texte); val taille = g.font.size2D
+        val boite = RoundRectangle2D.Float(r.x + r.width - tw - 14 * k, r.y + r.height - taille * 1.35f - 4 * k, tw + 10 * k, taille * 1.3f, 8 * k, 8 * k)
+        g.color = couleur(0xB0000000.toInt()); g.fill(boite)
+        g.color = Color(0xFF, 0xD5, 0x4F); g.drawString(texte, boite.x + 5 * k, boite.y + boite.height - taille * 0.32f)
+    }
+
     fun dessine(m: Planche.Modele, fond: BufferedImage?, largeur: Int, images: Map<Int, Pair<BufferedImage, SstvMeta.SstvShot>>,
                 v: Valeurs, logo: BufferedImage? = MarquePc.icone, decor: BufferedImage? = null,
                 ecussons: Map<Int, BufferedImage> = emptyMap()): BufferedImage {
@@ -217,6 +226,8 @@ object PlancheRenduPc {
                     texteAjuste(g, Planche.legende(img.second, v.indicatif), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
                 }
                 g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r)
+                // A processed picture says so, legend or not.
+                if (bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
                 g.color = couleur(0xCC05080D.toInt()); g.fill(r)

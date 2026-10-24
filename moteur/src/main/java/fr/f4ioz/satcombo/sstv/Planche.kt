@@ -76,7 +76,9 @@ object Planche {
          */
         val decor: String = "",
         /** Patches laid over the sheet, at most [ECUSSONS_MAX], the last on top. */
-        val ecussons: List<Ecusson> = emptyList()
+        val ecussons: List<Ecusson> = emptyList(),
+        /** Each picture shown as its fused or corrected version when there is one ([CorrectionsGalerie.pourPlanche]), marked so. */
+        val corrigees: Boolean = false
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
@@ -428,10 +430,10 @@ object Planche {
         locators.filter { it.isNotBlank() }.groupingBy { it.uppercase().take(6) }.eachCount()
             .maxByOrNull { it.value }?.key ?: ""
 
-    /** The line under a picture: "PD 120 | 2025/05/31 20:00 UTC | F4IOZ". */
+    /** The line under a picture: "PD 120 | 2025/05/31 20:00 UTC | F4IOZ", and « corrigée » for a processed version ([SstvMeta.SstvShot.traitement]). */
     fun legende(s: SstvMeta.SstvShot, indicatif: String): String =
         listOf(s.mode, if (s.timeMs > 0) minute.format(Date(s.timeMs)) + " UTC" else "",
-            indicatif.ifBlank { s.callsign }).filter { it.isNotBlank() }.joinToString(" | ")
+            indicatif.ifBlank { s.callsign }, s.traitement).filter { it.isNotBlank() }.joinToString(" | ")
 
     /**
      * Boxes filled in order of reception with the pictures given, one per box,
@@ -607,6 +609,7 @@ object Planche {
         if (m.decor.isNotBlank()) append("decor=").append(esc(m.decor)).append('\n')
         m.ecussons.forEach { append("ecusson=").append(it.fichier).append(';').append(z(it.zone)).append(';')
             .append(if (it.sansContour) 1 else 0).append('\n') }
+        if (m.corrigees) append("corrigees=1\n")
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
@@ -633,6 +636,7 @@ object Planche {
                 "texteorigine" -> runCatching { textesOrigine += texte(v) }
                 "decor" -> m = m.copy(decor = unesc(v))
                 "ecusson" -> runCatching { val p = v.split(';'); ecussons += Ecusson(p[0], zone(p, 1), p.getOrNull(5) == "1") }
+                "corrigees" -> m = m.copy(corrigees = v == "1")
             }
         }
         m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine,

@@ -119,7 +119,14 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
         withContext(Dispatchers.IO) { rangement.enregistre(x); runCatching { rangement.nettoie() } }
     }
 
-    val places = m?.images.orEmpty().mapNotNull { (i, f) -> parNom[f]?.let { i to it } }.toMap()
+    // The processed versions (fused, corrected) in place of those received when the sheet takes them, marked so.
+    val corrigees = m?.corrigees == true
+    val parNomVu by produceState(parNom, parNom, corrigees) {
+        value = if (!corrigees) parNom else withContext(Dispatchers.IO) {
+            val a = fr.f4ioz.satcombo.sstv.CorrectionsTelephone.api(ctx); parNom.mapValues { a.pourPlanche(it.value) } }
+        apercus.clear()
+    }
+    val places = m?.images.orEmpty().mapNotNull { (i, f) -> parNomVu[f]?.let { i to it } }.toMap()
     val valeurs = PlancheRendu.Valeurs(
         indicatif = indicatif, nom = nom,
         locator = locatorSaisi ?: Planche.locatorDominant(places.values.map { it.second.locator })
@@ -129,12 +136,12 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
 
     val fondApercu = remember(m?.fond) { m?.let { rangement.fond(it) }?.let { PlancheRendu.charge(it, 1600) } }
     // The preview, drawn again a moment after each change.
-    LaunchedEffect(m, valeurs, fondApercu) {
+    LaunchedEffect(m, valeurs, fondApercu, parNomVu) {
         val x = m ?: run { apercu = null; return@LaunchedEffect }
         delay(120)
         apercu = withContext(Dispatchers.Default) {
             val imgs = x.images.mapNotNull { (i, f) ->
-                val s = parNom[f] ?: return@mapNotNull null
+                val s = parNomVu[f] ?: return@mapNotNull null
                 val b = apercus[f] ?: PlancheRendu.charge(s.first, 640)?.also { apercus[f] = it } ?: return@mapNotNull null
                 i to (b to s.second)
             }.toMap()
@@ -193,7 +200,7 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
             val f = withContext(Dispatchers.IO) { runCatching {
                 val fond = rangement.fond(x)?.let { PlancheRendu.charge(it, 4000) }
                 val imgs = x.images.mapNotNull { (i, f) ->
-                    val s = parNom[f] ?: return@mapNotNull null
+                    val s = parNomVu[f] ?: return@mapNotNull null
                     PlancheRendu.charge(s.first, 2000)?.let { i to (it to s.second) }
                 }.toMap()
                 val b = PlancheRendu.dessine(x, fond, fond?.width ?: 2400, imgs, valeurs, logo,
@@ -595,6 +602,7 @@ private fun OngletDisposition(
     // The line under each picture changes the boxes' shape: a fitted sheet is fitted again.
     Interrupteur(t("planche_legende"), t("planche_legende_desc"), m.legende) { onChange(Planche.reajuste(m.copy(legende = it))) }
     Interrupteur(t("planche_numeros"), t("planche_numeros_desc"), m.numeros) { onChange(m.copy(numeros = it)) }
+    Interrupteur(t("planche_corrigees"), t("planche_corrigees_desc"), m.corrigees) { onChange(m.copy(corrigees = it)) }
 }
 
 @Composable

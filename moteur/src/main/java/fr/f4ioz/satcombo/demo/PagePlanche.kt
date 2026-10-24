@@ -38,7 +38,7 @@ object PagePlanche {
         "pleine", "decor", "fond_planche", "fond_choisir", "fond_aide", "fond_modele", "fond_perso", "ecussons", "ecusson",
         "ecusson_ajouter", "ecusson_aide", "ecusson_contour", "ecusson_contour_aide", "ecusson_supprimer", "ecusson_plein",
         "envoi", "image_illisible", "exporter", "exporter_titre", "exporter_aide", "exporter_indicatif", "exporter_ok",
-        "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer")
+        "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer", "corrigees")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -242,6 +242,7 @@ function litModele(txt) {
     else if (k === 'origine') { const p = v.split(';').map(Number); m.origine.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
     else if (k === 'decor') m.decor = unesc(v);
     else if (k === 'ecusson') { const p = v.split(';'); m.ecussons.push({ fichier: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], sans: p[5] === '1' }); }
+    else if (k === 'corrigees') m.corrigees = v === '1';
     // What this page does not know (the texts' template places…) goes back as it came.
     else if (k !== 'planche') m.autres.push(l);
   });
@@ -256,6 +257,7 @@ function ecrit(m) {
   m.origine.forEach(z => s += 'origine=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
   if (m.decor) s += 'decor=' + esc(m.decor) + '\n';
   m.ecussons.forEach(e => s += 'ecusson=' + [e.fichier, r5(e.x), r5(e.y), r5(e.w), r5(e.h), e.sans ? 1 : 0].join(';') + '\n');
+  if (m.corrigees) s += 'corrigees=1\n';
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -481,6 +483,8 @@ function panneauDispo() {
     if (M.origine.length) { await sauveMaintenant(); await lire('/nombre', { id: id, n: M.cases.length, sat: filtre }); await charge(id); }
   }));
   p.appendChild(caseACocher(T.numeros, M.numeros, v => { M.numeros = v; change(); }));
+  // The processed pictures (fused, corrected) in place of those received, marked so on the sheet.
+  p.appendChild(caseACocher(T.corrigees, !!M.corrigees, v => { M.corrigees = v; change(); }));
   const r = el('div', { class: 'rangee' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_case, onclick: () => {
     const der = M.cases[M.cases.length - 1] || { x: 0.4, y: 0.4, w: 0.2, h: 0.2 * ratio * 0.75 };

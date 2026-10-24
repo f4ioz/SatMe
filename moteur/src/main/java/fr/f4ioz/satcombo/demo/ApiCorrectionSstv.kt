@@ -11,6 +11,8 @@ package fr.f4ioz.satcombo.demo
 import fr.f4ioz.satcombo.sstv.ClassementSstv
 import fr.f4ioz.satcombo.sstv.CorrectionsGalerie
 import fr.f4ioz.satcombo.sstv.SstvMeta
+import fr.f4ioz.satcombo.i18n.t
+import fr.f4ioz.satcombo.i18n.tf
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -43,6 +45,10 @@ class ApiCorrectionSstv(
     companion object {
         const val PREFIXE = "sstv/corrigees/"
 
+        /** What a sheet writes on a processed picture. */
+        fun etiquette(f: CorrectionsGalerie.Fiche): String =
+            if (f.methode == CorrectionsGalerie.Methode.FUSION) tf("sstv_planche_fusion", f.copies.size) else t("sstv_planche_corrigee")
+
         fun fiche(f: CorrectionsGalerie.Fiche?): Any = if (f == null) JSONObject.NULL else JSONObject()
             .put("fichier", f.fichier).put("url", PREFIXE + f.fichier).put("methode", f.methode.code)
             .put("avant", f.noteAvant).put("apres", f.noteApres).put("quand", f.quandMs)
@@ -72,9 +78,15 @@ class ApiCorrectionSstv(
             .put("corrigees", JSONArray(g.images.filter { corrections.corrigee(d, it.fileName) != null }.map { it.fileName }))
     }
 
-    /** A sheet's picture: the processed version when there is one ([CorrectionsGalerie.pourPlanche]). */
-    fun pourPlanche(nom: String): Pair<File, CorrectionsGalerie.Fiche>? =
-        corrections.pourPlanche(dossier(), nom, groupeDe(nom)?.takeIf { it.images.size > 1 }?.id)
+    /**
+     * A sheet's picture [p] (its file, what is known of it) as the sheet shows
+     * it with [Planche.Modele.corrigees]: its processed version when there is
+     * one ([CorrectionsGalerie.pourPlanche]), marked so ([SstvMeta.SstvShot.traitement]); else as it is.
+     */
+    fun pourPlanche(p: Pair<File, SstvMeta.SstvShot>): Pair<File, SstvMeta.SstvShot> {
+        val (f, fiche) = runCatching { corrections.pourPlanche(dossier(), p.second.fileName, groupeDe(p.second.fileName)?.takeIf { it.images.size > 1 }?.id) }.getOrNull() ?: return p
+        return f to p.second.copy(traitement = etiquette(fiche))
+    }
 
     /** A file of `sstv/corrigees/`, or null. */
     fun fichier(nom: String): File? = corrections.fichier(dossier(), nom)

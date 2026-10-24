@@ -61,7 +61,13 @@ object SstvMeta {
         /** Slides in its series (the « 12 »), 0 not set. */
         val diapos: Int = 0,
         /** Group set by hand ([ClassementSstv]), "" sorted by itself. */
-        val groupe: String = ""
+        val groupe: String = "",
+        /**
+         * What was done to the picture shown in its place (a sheet's processed
+         * version, [CorrectionsGalerie]: « corrigée », « fusion de 4 copies »);
+         * "" as received. Never written to the sidecar.
+         */
+        val traitement: String = ""
     )
 
     /**
