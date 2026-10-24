@@ -1170,6 +1170,15 @@ ${STYLE_JETONS}
   #i-groupes .cl-imgs .petit { font-size:11px; line-height:1.3; }
   .cl-note { position:absolute; top:4px; left:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; font-weight:700; }
   .cl-note.bof { color:#FFB74D; } .cl-note.mal { color:#EF9A9A; }
+  /* Corrected pictures (kept apart from those received): the viewer's comparison, the gallery's marks. */
+  #vi-cadre { position:relative; display:inline-block; max-width:100%; }
+  #vi-img2 { position:absolute; left:0; top:0; width:100%; border-radius:6px; pointer-events:none; }
+  #vi-trait { position:absolute; top:0; bottom:0; width:2px; background:#FFD54F; pointer-events:none; box-shadow:0 0 3px #000; }
+  .vi-etiq { position:absolute; top:6px; background:rgba(0,0,0,.72); color:#fff; border-radius:6px; padding:1px 6px; font-size:11px; pointer-events:none; }
+  #vi-corr .seg button { border-radius:0; margin:0; } #vi-corr .seg button:first-child { border-radius:6px 0 0 6px; } #vi-corr .seg button:last-child { border-radius:0 6px 6px 0; }
+  #vi-corr .seg button.actif { background:var(--accent, #4FC3F7); color:#000; }
+  .vi-traitee { color:#FFD54F; font-weight:700; }
+  .cl-corr { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; }
   .cl-puces { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
   .cl-puces span { min-width:26px; text-align:center; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; border:1px solid var(--bord); cursor:default; }
   .cl-puces span.ok { background:rgba(76,175,80,.18); color:var(--vert); cursor:pointer; }
@@ -4466,7 +4475,8 @@ ${rail()}
   <div class="ligne"><button onclick="g('fd-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="visionneuse" onclick="if (event.target === this) this.close()">
-  <img id="vi-img" alt="" onclick="g('visionneuse').close()">
+  <div id="vi-cadre"><img id="vi-img" alt="" onclick="if (viVue !== 'cmp') g('visionneuse').close()"><img id="vi-img2" alt="" hidden><div id="vi-trait" hidden></div>
+    <span class="vi-etiq" id="vi-etiq-g" style="left:6px" hidden>Brute</span><span class="vi-etiq" id="vi-etiq-d" style="right:6px" hidden>Corrigée</span></div>
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
   <div class="ligne" id="vi-outils" style="margin-top:6px">
@@ -4478,6 +4488,13 @@ ${rail()}
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
     <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 ») : vaut pour toutes les copies du groupe"></select></label>
     <label class="petit">Groupe <select id="vi-groupe" onchange="viGroupe(this.value)" title="Mettre cette image avec une autre diapo, à part, ou la laisser au tri automatique"></select></label></div>
+  <div class="ligne" id="vi-corr" style="margin-top:6px" hidden>
+    <span class="seg"><button id="vi-v-brute" onclick="viMontre('brute')" title="L’image telle que reçue">Brute</button><button id="vi-v-corr" onclick="viMontre('corr')" title="Sa version corrigée (un fichier à part : la réception n’est jamais modifiée)">Corrigée</button><button id="vi-v-fus" onclick="viMontre('fus')" title="Les copies de cette diapo mises ensemble">Fusion</button><button id="vi-v-cmp" onclick="viMontre('cmp')" title="Brute à gauche, traitée à droite : glisser sur l’image">Brute | Corrigée</button></span>
+    <input type="range" id="vi-curseur" min="0" max="100" value="50" style="width:110px" hidden oninput="viCurseur()">
+    <button id="vi-corriger" onclick="viCorrige('auto')" title="La meilleure correction : re-décodée de son enregistrement quand SatMe l’a gardé, sinon ses taches retirées. L’image reçue n’est pas modifiée.">✨ Corriger</button>
+    <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part">⟳ Re-décoder depuis l’enregistrement</button>
+    <button id="vi-fusionner" onclick="viFusionne()" title="Mettre ensemble les copies de cette diapo (chacune re-décodée de son son quand il est gardé) : le bruit d’un passage n’est jamais aux mêmes pixels">⧉ Fusionner les copies</button>
+    <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
@@ -8540,7 +8557,7 @@ function clGalerie(filtre) {
   // The viewer's arrows go through the groups in this order.
   imagesMontrees = gs.flatMap(gr => gr.images.map(i => parNom.get(i.nom)).filter(x => x));
   txt('cl-calcul', CL.restent ? 'tri : ' + CL.restent + ' image' + (CL.restent > 1 ? 's' : '') + ' à mesurer…' : '');
-  const cle = JSON.stringify([filtre, gs.map(gr => [gr.id, gr.diapo, gr.origine, gr.images.map(i => i.nom + i.note)]), [...clOuverts], utc()]);
+  const cle = JSON.stringify([filtre, gs.map(gr => [gr.id, gr.diapo, gr.origine, gr.images.map(i => i.nom + i.note), gr.traite || 0]), [...clOuverts], utc()]);
   if (cle === clVu || !ouverte('sstv')) return;
   clVu = cle;
   let n = 0; const index = new Map(imagesMontrees.map((i, k) => [i.nom, k]));
@@ -8551,7 +8568,7 @@ function clGalerie(filtre) {
     const id = escA(gr.id);
     return '<div class="cl-gr"><div class="cl-tete" onclick="clBascule(\'' + id.replace(/'/g, "\\'") + '\')"><b>' + esc(clNomDiapo(gr)) + '</b>' +
       '<span class="petit">' + esc(gr.sat || '') + ' · ' + gr.images.length + ' réception' + (gr.images.length > 1 ? 's' : '') +
-      (best.note >= 0 ? ' · meilleure ' + clEtoiles(best.note) + ' ' + best.note : '') + '</span>' +
+      (best.note >= 0 ? ' · meilleure ' + clEtoiles(best.note) + ' ' + best.note : '') + '</span>' + clTraite(gr) +
       (gr.images.length > 1 ? '<span class="petit" style="margin-left:auto">' + (ouvert ? '▾ replier' : '▸ voir les ' + gr.images.length) + '</span>' : '') + '</div>' +
       '<div class="cl-imgs">' + vues.map(i => {
         const k = index.get(i.nom), im = parNom.get(i.nom) || {};
@@ -8559,9 +8576,22 @@ function clGalerie(filtre) {
         return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + k + '); return false" title="Note ' + i.note + '/100' + (i.manque ? ' · ' + i.manque + ' % manquant' : '') +
           (i.abimees ? ' · ' + i.abimees + ' % de lignes abîmées' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : '') + '">' +
           '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') +
+          (gr.traite && gr.traite.corrigees.includes(i.nom) ? '<span class="cl-corr" title="Une version corrigée existe (à part ; celle-ci est la réception brute)">✨</span>' : '') +
           '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') + '</div></a>';
       }).join('') + '</div></div>';
   }).join('') || '<div class="petit">aucune image</div>';
+}
+// A group's copies put together: open its fused picture, or make it (the viewer shows the work).
+function clTraite(gr) {
+  if (gr.images.length < 2) return '';
+  const f = gr.traite && gr.traite.fusion, id = escA(gr.id).replace(/'/g, "\\'");
+  return f ? '<span class="petit" style="color:#FFD54F;cursor:pointer" title="' + escA(viDit(f)) + '" onclick="event.stopPropagation(); clFusion(\'' + id + '\', false)">⧉ fusion ' + f.apres + '</span>'
+    : '<button class="petit" style="padding:0 6px" title="Mettre ensemble les ' + gr.images.length + ' copies de cette diapo (une image à part, marquée « fusion »)" onclick="event.stopPropagation(); clFusion(\'' + id + '\', true)">⧉ Fusionner</button>';
+}
+function clFusion(id, faire) {
+  const gr = CL && CL.groupes.find(x => x.id === id); if (!gr) return;
+  viVue = 'cmp'; viCible = 'fus'; clVoir(gr.images[0].nom);
+  if (faire) viFusionne();
 }
 function clBascule(id) { if (clOuverts.has(id)) clOuverts.delete(id); else clOuverts.add(id); clVu = ''; rendSon(); }
 function clGroupeDe(nom) { return CL && CL.groupes ? CL.groupes.find(gr => gr.images.some(i => i.nom === nom)) : null; }
@@ -8765,6 +8795,7 @@ function voisImage(n) {
     i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
+  VC = null; viCorrCharge();
   if (!g('visionneuse').open) g('visionneuse').showModal();
 }
 let viNom = '', viSonVu = '';
@@ -8800,6 +8831,88 @@ function afcSstv(A) {
   g('sstv-afc-zero').disabled = !A.actif || (A.totalHz === 0 && A.mesureHz == null);
 }
 async function viAction(a) { if (viNom) await post('api/sstv/' + a + enc(viNom)); }
+// ---- corrected pictures (api/sstv/correction): a separate file, never the reception itself
+let VC = null, viVue = 'brute', viCible = 'corr', viCorrMinuterie = 0;
+try { viVue = localStorage.getItem('satme-sstv-vue-corr') || 'brute'; } catch (x) {}
+const VC_ERREURS = { sans_son: 'pas de son gardé pour cette image', rien_dans_le_son: 'aucune image trouvée dans son son', illisible: 'image illisible',
+  ecriture: 'écriture impossible', une_copie: 'une seule copie de cette diapo', occupe: 'une autre correction est en cours', introuvable: 'image introuvable' };
+async function viCorrCharge() {
+  const nom = viNom; clearTimeout(viCorrMinuterie);
+  let j = null; try { j = await (await fetch('api/sstv/correction?nom=' + enc(nom))).json(); } catch (x) {}
+  if (nom !== viNom) return;
+  const etait = VC && VC.enCours;
+  VC = j && j.existe ? j : null;
+  viCorrRend();
+  if (VC && VC.enCours) viCorrMinuterie = setTimeout(viCorrCharge, 1200);
+  else if (etait) clTic(true);
+}
+function viFiche(k) { return !VC ? null : k === 'corr' ? VC.corrigee : k === 'fus' ? (VC.groupe && VC.groupe.fusion) : null; }
+function viDit(f) {
+  if (!f) return '';
+  const note = f.avant >= 0 && f.apres >= 0 ? ' · note ' + f.avant + ' → ' + f.apres : '';
+  if (f.methode === 'fusion') return 'Fusion de ' + f.copies.length + ' copies' + (f.duSon ? ' (' + f.duSon + ' re-décodée' + (f.duSon > 1 ? 's' : '') + ' de leur son)' : '') + ', taches retirées' + note.replace('note', 'meilleure copie');
+  if (f.methode === 'son') return 'Re-décodée depuis son enregistrement (horloge ' + (f.ppm > 0 ? '+' : '') + f.ppm + ' ppm, bruit ' + f.bruit + ' Hz' + (f.gain < 0.98 ? ', niveaux recalés ×' + String((1 / f.gain).toFixed(2)).replace('.', ',') : '') + '), taches retirées' + note;
+  return 'Taches retirées (sans son gardé)' + note;
+}
+function viCorrRend() {
+  const c = VC, gr = c && c.groupe;
+  g('vi-corr').hidden = !c;
+  if (!c) { viAffiche('brute'); return; }
+  const corr = c.corrigee, fus = gr && gr.fusion;
+  g('vi-v-corr').hidden = !corr; g('vi-v-fus').hidden = !fus; g('vi-v-cmp').hidden = !corr && !fus;
+  const occupe = !!c.enCours;
+  g('vi-corriger').disabled = g('vi-redec-son').disabled = g('vi-fusionner').disabled = occupe;
+  g('vi-redec-son').hidden = !c.son;
+  g('vi-fusionner').hidden = !gr;
+  txt('vi-corriger', corr ? '✨ Corriger à nouveau' : '✨ Corriger');
+  if (gr) txt('vi-fusionner', (fus ? '⧉ Refaire la fusion (' : '⧉ Fusionner les copies (') + gr.copies + ')');
+  let vue = viVue;
+  if (vue === 'corr' && !corr) vue = fus ? 'fus' : 'brute';
+  if (vue === 'fus' && !fus) vue = corr ? 'corr' : 'brute';
+  if (vue === 'cmp' && !corr && !fus) vue = 'brute';
+  if (vue === 'corr' || vue === 'fus') viCible = vue;
+  if (viCible === 'corr' && !corr) viCible = 'fus'; if (viCible === 'fus' && !fus) viCible = 'corr';
+  ['brute', 'corr', 'fus', 'cmp'].forEach(k => g('vi-v-' + k).classList.toggle('actif', k === vue));
+  txt('vi-v-cmp', 'Brute | ' + (viCible === 'fus' ? 'Fusion' : 'Corrigée'));
+  const msg = occupe ? (c.enCours === viNom ? 'Correction en cours…' : gr && c.enCours === gr.id ? 'Fusion en cours…' : 'Une correction est en cours…')
+    : c.erreur && (c.erreurSur === viNom || (gr && c.erreurSur === gr.id)) ? '✗ ' + (VC_ERREURS[c.erreur] || c.erreur)
+    : vue === 'brute' ? (corr || fus ? 'Image reçue, sans traitement.' : '')
+    : '<span class="vi-traitee">Traitée</span> — ' + esc(viDit(viFiche(vue === 'cmp' ? viCible : vue)));
+  if (g('vi-corr-txt').innerHTML !== msg) g('vi-corr-txt').innerHTML = msg;
+  viAffiche(vue);
+}
+function viAffiche(vue) {
+  const brut = 'sstv/' + enc(viNom), f = viFiche(vue === 'cmp' ? viCible : vue);
+  const url = f ? f.url + '?v=' + f.quand : '';
+  const cmp = vue === 'cmp' && f;
+  const src = (vue === 'corr' || vue === 'fus') && f ? url : brut;
+  if (!g('vi-img').src.endsWith(src)) g('vi-img').src = src;
+  g('vi-lien').href = src; g('vi-lien').download = f && vue !== 'brute' && vue !== 'cmp' ? f.fichier : viNom;
+  g('vi-img2').hidden = g('vi-trait').hidden = g('vi-curseur').hidden = g('vi-etiq-g').hidden = g('vi-etiq-d').hidden = !cmp;
+  g('vi-img').style.cursor = cmp ? 'ew-resize' : '';
+  // Compared, the pictures shown large enough to see the noise (an SSTV picture is 320 pixels wide).
+  g('vi-img').style.width = vue !== 'brute' ? 'min(92vw, 960px, calc((92vh - 160px) * 4 / 3))' : '';
+  if (cmp) { if (!g('vi-img2').src.endsWith(url)) g('vi-img2').src = url; txt('vi-etiq-d', viCible === 'fus' ? 'Fusion' : 'Corrigée'); viCurseur(); }
+}
+function viCurseur() {
+  const x = +g('vi-curseur').value;
+  g('vi-img2').style.clipPath = 'inset(0 0 0 ' + x + '%)';
+  g('vi-trait').style.left = 'calc(' + x + '% - 1px)';
+}
+function viMontre(k) { viVue = k; try { localStorage.setItem('satme-sstv-vue-corr', k); } catch (x) {} viCorrRend(); }
+g('vi-cadre').addEventListener('pointermove', e => {
+  if (viVue !== 'cmp' || g('vi-img2').hidden || !(e.buttons & 1) && e.pointerType !== 'mouse') return;
+  const r = g('vi-img').getBoundingClientRect();
+  g('vi-curseur').value = String(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100)); viCurseur();
+});
+async function viCorrPost(u, cible) {
+  if (!viNom) return;
+  let j = null; try { j = await (await fetch(u, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok) { viVue = 'cmp'; viCible = cible; viCorrCharge(); }
+  else txt('vi-corr-txt', '✗ ' + (j && (VC_ERREURS[j.erreur] || j.erreur) || 'pas de réponse'));
+}
+function viCorrige(methode) { viCorrPost('api/sstv/corriger?nom=' + enc(viNom) + '&methode=' + methode, 'corr'); }
+function viFusionne() { viCorrPost('api/sstv/fusionner?nom=' + enc(viNom), 'fus'); }
 async function viSatellite() {
   const i = ((S && S.images) || []).find(x => x.nom === viNom); if (!i) return;
   const v = prompt('Satellite de cette image (QO-100, ISS…) :', i.sat || '');

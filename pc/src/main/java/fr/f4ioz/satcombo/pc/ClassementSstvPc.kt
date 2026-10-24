@@ -31,6 +31,9 @@ class ClassementSstvPc(
 ) {
     val galerie = ClassementGalerie(::pixels)
 
+    /** Its pictures corrected and its copies put together ([CorrectionsSstvPc]). */
+    val corrections by lazy { CorrectionsSstvPc(sstv, this) }
+
     private fun pixels(f: File): ClassementGalerie.Pixels? = runCatching {
         val b = ImageIO.read(f) ?: return null
         ClassementGalerie.Pixels(b.getRGB(0, 0, b.width, b.height, null, 0, b.width), b.width, b.height)
@@ -66,7 +69,7 @@ class ClassementSstvPc(
             val (avenir, faits) = passes(it, t)
             SerieSstv.prevision(it, e, avenir, faits, SerieSstv.elMin(station.settings.minElevDeg.toDouble()), t)
         }
-        return ApiClassementSstv.json(e, p, t)
+        return ApiClassementSstv.json(e, p, t) { g -> corrections.api.pourGroupe(g) }
     }
 
     /** `POST /api/sstv/diapo`, `/api/sstv/groupe`; null when not one of them. */

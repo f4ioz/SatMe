@@ -33,7 +33,7 @@ object ApiClassementSstv {
         ClassementSstv.Origine.ESTIME -> "estime"; ClassementSstv.Origine.AUCUNE -> ""
     }
 
-    private fun groupe(g: ClassementSstv.Groupe, e: ClassementGalerie.Etat, serie: Boolean) = JSONObject()
+    private fun groupe(g: ClassementSstv.Groupe, e: ClassementGalerie.Etat, serie: Boolean, enPlus: ((ClassementSstv.Groupe) -> JSONObject?)? = null) = JSONObject()
         .put("id", g.id).put("diapo", g.diapo).put("total", g.total).put("origine", origine(g.origine))
         .put("sat", g.meilleure.satName).put("serie", serie)
         .put("images", JSONArray(g.images.map { s ->
@@ -42,9 +42,10 @@ object ApiClassementSstv {
                 .put("etoiles", ((g.notes[s.fileName] ?: a?.note ?: -10) + 10).div(20).coerceIn(0, 5))
                 .put("lu", a?.lu ?: 0).put("main", s.diapo).put("groupeMain", s.groupe.isNotEmpty())
                 .put("manque", a?.let { Math.round(it.manque * 100) } ?: 0).put("abimees", a?.let { Math.round(it.abimees * 100) } ?: 0)
-        }))
+        })).apply { enPlus?.invoke(g)?.let { put("traite", it) } }
 
-    fun json(e: ClassementGalerie.Etat, p: SerieSstv.Prevision?, t: Long): JSONObject {
+    /** [enPlus]: what else a group carries (its corrected pictures, its fusion: [ApiCorrectionSstv.pourGroupe]), as « traite ». */
+    fun json(e: ClassementGalerie.Etat, p: SerieSstv.Prevision?, t: Long, enPlus: ((ClassementSstv.Groupe) -> JSONObject?)? = null): JSONObject {
         val dansSerie = p?.groupes?.flatMap { g -> g.images.map { it.fileName } }?.toHashSet() ?: hashSetOf()
         // The series' groups carry their number (estimated ones too); the others as sorted.
         val parId = p?.groupes?.associateBy { it.id }.orEmpty()
@@ -53,7 +54,7 @@ object ApiClassementSstv {
                 val gs = parId[g.id]
                 val n = if (gs != null && gs.origine == ClassementSstv.Origine.ESTIME && g.origine == ClassementSstv.Origine.AUCUNE)
                     g.copy(diapo = gs.diapo, total = gs.total, origine = gs.origine) else g
-                groupe(n, e, g.images.any { it.fileName in dansSerie })
+                groupe(n, e, g.images.any { it.fileName in dansSerie }, enPlus)
             }))
         if (p == null) return o.put("serie", JSONObject.NULL)
         val s = p.serie

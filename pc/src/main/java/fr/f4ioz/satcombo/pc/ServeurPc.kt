@@ -1035,6 +1035,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/sstv/classement" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (classement?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/sstv/correction" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (classement?.corrections?.api?.etat(q["nom"].orEmpty()) ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/api/sauvegarde" -> {
@@ -1075,6 +1077,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 // A recording (seekable, by parts) or an SSTV picture.
                 val f = when {
                     chemin.startsWith("/enregistrements/") -> son?.fichierEnregistrement(java.net.URLDecoder.decode(chemin.removePrefix("/enregistrements/"), "UTF-8"))
+                    // A corrected picture (kept apart from those received).
+                    chemin.startsWith("/sstv/corrigees/") -> classement?.corrections?.api?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/corrigees/"), "UTF-8"))
                     chemin.startsWith("/sstv/") -> son?.fichierImage(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/"), "UTF-8"))
                     // A sonde's log or track: only a plain name, inside its folder.
                     chemin.startsWith("/sked-video/") -> videoSked?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/sked-video/"), "UTF-8"))
@@ -1960,6 +1964,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/sstv/diapo", "/api/sstv/groupe" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
+            "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
+                return classement?.corrections?.api?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
             "/api/sstv/satellite" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.renommeSatellite(q["nom"].orEmpty(), q["sat"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image ou nom de satellite refusé")

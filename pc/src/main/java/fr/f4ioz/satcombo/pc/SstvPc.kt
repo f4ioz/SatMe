@@ -388,6 +388,8 @@ class SstvPc(
         runCatching { File(dossier, SstvMeta.sidecarName(png.name)).delete() }
         runCatching { SstvSon.fichier(png).delete() }
         runCatching { SstvSon.gif(png).delete() }
+        // Its corrected version with it (a fused picture of its group stays: the other copies made it too).
+        runCatching { fr.f4ioz.satcombo.sstv.CorrectionsGalerie.dossier(dossier).let { d -> val c = File(d, fr.f4ioz.satcombo.sstv.CorrectionsGalerie.nomCorrigee(png.name)); File(d, c.name.removeSuffix(".png") + ".meta").delete(); c.delete() } }
         return png.delete()
     }
 
