@@ -13,32 +13,34 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 1. [L'installer](#linstaller) — options, la page sur les autres machines et son mot de passe
 2. [Les onglets d'un coup d'œil](#les-onglets-dun-coup-dœil) — espaces de travail, bandeau, « Son », raccourcis, manuel intégré (F1)
 3. [Station et passages](#station-et-passages) — plan du rotor, mode automatique, campagnes SSTV et leur auto-pilote, activités à venir (sources en ligne), préparer un passage, enregistrement, agenda, horizon
-4. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés, le passage et le rotor d'un contact
-5. [SatMe sur le téléphone](#satme-sur-le-téléphone)
-6. [Journal des passages](#journal-des-passages) — rapport de passage
-7. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples, PSK31 et RTTY, balise, un LNB qui dérive, LNB et référence GPSDO
-8. [DATV : réception](#datv--réception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, bande large, qualité, sous-titres
-9. [DATV : émission](#datv--émission) — DVB-S2 et DVB-S, la station, les règles, l'essai en intérieur, carte et chat
-10. [SSTV](#sstv) — réception et émission
-11. [FT8 / FT4](#ft8--ft4)
-12. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV, FUNcube, SatNOGS
-13. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
-14. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
-15. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
-16. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
-17. [Navires (AIS)](#navires-ais)
-18. [Météo spatiale](#météo-spatiale)
-19. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
-20. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
-21. [Encore sur le PC](#encore-sur-le-pc)
-22. [Sécurité du matériel](#sécurité-du-matériel)
-23. [Avant le premier essai](#avant-le-premier-essai)
+4. [Orbites : la Terre en 3D](#orbites--la-terre-en-3d) — globe 3D, six rendus, détails, villes, relief, contacts, carte 2D, un passage joué en accéléré, le globe de Suivi
+5. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés, le passage et le rotor d'un contact
+6. [SatMe sur le téléphone](#satme-sur-le-téléphone)
+7. [Journal des passages](#journal-des-passages) — vue Globe, sessions de plusieurs passages et leur vidéo, rapport de passage
+8. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples, PSK31 et RTTY, balise, un LNB qui dérive, LNB et référence GPSDO
+9. [DATV : réception](#datv--réception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, bande large, qualité, sous-titres
+10. [DATV : émission](#datv--émission) — DVB-S2 et DVB-S, la station, les règles, l'essai en intérieur, carte et chat
+11. [SSTV](#sstv) — réception et émission
+12. [FT8 / FT4](#ft8--ft4)
+13. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV, FUNcube, SatNOGS
+14. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
+15. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
+16. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
+17. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
+18. [Navires (AIS)](#navires-ais)
+19. [Météo spatiale](#météo-spatiale)
+20. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
+21. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB (Windows, relais vers une autre station), annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
+22. [Encore sur le PC](#encore-sur-le-pc)
+23. [Sécurité du matériel](#sécurité-du-matériel)
+24. [Avant le premier essai](#avant-le-premier-essai)
 
 ## L'installer
 
 - **Linux** : [Installer SatMe-PC](installer-satme-pc.fr.md) — télécharger `satme-pc.tar`, le décompresser, le lancer, puis ouvrir **http://localhost:8090/**.
 - **Windows** : [Installer SatMe-PC sous Windows](installer-satme-pc-windows.fr.md) — tout en un : `satme-pc-windows.msi`, double-clic, la page s'ouvre.
 - **Le MiniTiouner près de l'antenne** : [Installer SatMe-Node sur un Raspberry Pi](installer-satme-node.fr.md).
+- **Portable** (une clé USB) : un dossier **`donnees`** à côté du programme — à côté de `SatMe-PC.exe` dans `satme-pc-windows.zip` (Java et ffmpeg dedans), ou de `bin` et `lib` sous Linux (Java nécessaire) — garde tous les réglages et fichiers, options de démarrage comprises ; rien n'est écrit ailleurs sur le PC.
 
 | Option | Effet |
 |---|---|
@@ -76,6 +78,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | **Montage** | le schéma de la station, ce que tient chaque fonction de SatMe, les profils de réception |
 | **SDR** | le récepteur : RTL-SDR, ADALM-PLUTO, bladeRF 2.0, la FI de l'IC-9700, fichier I/Q, générateur d'essai ; cascade, vernier, loupe, mémoires, balayage, nettoyage du son, mesures |
 | **Carte** · **Avions** · **Navires** | la carte commune (satellites, APRS, sondes, avions, navires, DATV, carrés, aurore) ; l'ADS-B à 1090 MHz et la diffusion par avions ; l'AIS à 162 MHz |
+| **Orbites** | la Terre en 3D avec les satellites sur leur orbite et leur empreinte, six rendus, la carte 2D, un passage joué en accéléré ; tout calculé dans le navigateur |
 | **Météo spatiale** | indice Kp, flux solaire, rayons X, vent solaire, aurore, alertes (téléchargées seulement si on le coche) |
 | **Télémesure** | paquets FSK / GMSK de 1200 à 9600 bit/s, images SSDV, FUNcube, balise QO-100 |
 | **Sondes** · **METEOR** | radiosondes ; images LRPT de METEOR-M |
@@ -83,14 +86,14 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | **SSTV** | le décodage en direct, les images, la mire, l'émission |
 | **Planche** | la planche SSTV : les images sur un modèle — toutes ses cases, ou moins, disposées le plus grand possible —, un fond (étoiles, dégradés, images NASA ou la tienne) et jusqu'à trois écussons glissés à la souris, contour enlevé au besoin ; téléchargée en pleine taille. **Exporter le modèle…** le donne en un fichier `.satme-planche` (disposition, textes, fond, écussons déjà détourés — aucune image reçue ; l'indicatif et le nom restent des champs que remplit qui l'importe, sauf « garder mon indicatif écrit en dur » coché) ; **Importer un modèle…** (ou le fichier déposé sur la page) prend une image ARISS ou un tel fichier comme nouveau modèle, jamais par-dessus un autre ; **Renommer**, l'**événement** de la planche, **Remplir par diapo**, le **Rapport** de l'événement — voir [Images par diapo](#images-par-diapo-note-et-horaire-de-la-série) ; **+ Affiche ISS**, **Titres stylés**, la police et l'effet de chaque texte, le cadre des images — voir *La planche stylée*, au même endroit |
 | **APRS** · **FT8** | l'APRS (radio KISS comprise) et son jeu ; le tableau FT8 / FT4 |
-| **Journal** | les passages rejoués avec leur son, faits en image, vidéo ou GIF |
+| **Journal** | les passages rejoués avec leur son (ciel, carte ou globe), faits en image, vidéo ou GIF ; plusieurs passages d'un satellite animés à la suite (**🌍 Session**) |
 | **Réglages** | par catégorie : Ma station, Poste et rotor, Satellites, Interfaces, Annonces, Services en ligne, Phonie → texte, Téléphone, Accord fin, Émission, Accès à distance, Sauvegarde |
 
 Les onglets QO-100, DATV et SSTV tiennent sur un écran (de 1920×970 à 1366×700) : la vue principale reste en vue, les cartes secondaires sont des **sous-onglets** à icônes, le dernier ouvert gardé.
 
 <p align="center"><img src="images/pc-espaces-palette.png" width="100%" alt="SatMe-PC : le rail des espaces de travail déplié à gauche, le bandeau en haut, la barre d'état en bas, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
 
-- **Espaces de travail**, dans le rail de gauche (touches **1** à **6**, chacun rouvert à son dernier onglet ; **[** le déplie ou le replie) : **Ciel** (Suivi, Agenda, Frise, Sked, Carrés, Carte, Avions, Navires, Météo spatiale, METEOR, Sondes), **QO-100**, **DATV**, **Modes** (SSTV, APRS, FT8, Télémesure), **Carnet** (Carnet, Journal, Planche), **Station** (Montage, SDR, Son, Réglages). Sur un téléphone, le rail devient une barre en bas. Avions, Navires et Sondes ne sont dans le rail que cochés (voir [Fonctions hors satellites](#fonctions-hors-satellites)).
+- **Espaces de travail**, dans le rail de gauche (touches **1** à **6**, chacun rouvert à son dernier onglet ; **[** le déplie ou le replie) : **Ciel** (Suivi, Agenda, Frise, Sked, Carrés, Carte, Orbites, Avions, Navires, Météo spatiale, METEOR, Sondes), **QO-100**, **DATV**, **Modes** (SSTV, APRS, FT8, Télémesure), **Carnet** (Carnet, Journal, Planche), **Station** (Montage, SDR, Son, Réglages). Sur un téléphone, le rail devient une barre en bas. Avions, Navires et Sondes ne sont dans le rail que cochés (voir [Fonctions hors satellites](#fonctions-hors-satellites)).
 - **Ctrl+K** : la palette de commandes — onglets et sous-onglets, catégories de réglages, actions (« Arrêter toute émission »…), un satellite, ou une fréquence tapée (« 145,8 ») que le récepteur SDR écoute.
 - **Le manuel intégré** : **F1** l'ouvre, sur le chapitre de l'onglet en cours ; on y cherche un mot ; ses chapitres sont ceux de ce guide. **Échap** le ferme — un second **Échap** arrête les émissions, comme toujours. Les « ? » à côté des titres des cartes donnent l'explication courte, avec « En savoir plus » vers le manuel.
 
@@ -185,6 +188,19 @@ Onglet **Agenda › Activités à venir**. Ce que les satellites vont émettre e
 - Un enregistrement arrêté à la main ne repart pas tout seul avant le passage suivant.
 - **Une carte son qui enregistre garde ses décodeurs** quand le récepteur SDR démarre : QO-100 allumé pour écouter est seulement entendu, jamais enregistré à sa place (et à la mauvaise cadence). Sinon, le SDR rend en s'arrêtant la carte son qu'il avait prise : le son de l'IC-9700 ne reste plus muet.
 
+## Orbites : la Terre en 3D
+
+**Orbites** (espace **Ciel**) : la **Terre en 3D** avec tes satellites favoris (ou ceux cochés dans *Tous (filtre)*) qui tournent sur leur orbite, leur **empreinte** au sol et un trait vers la station quand ils sont levés. Glisser pour tourner, molette pour approcher. **Tout est calculé dans le navigateur, sans Internet** (SGP4 avec les éléments orbitaux de la station ; la Terre, le relief et les villes livrés avec SatMe-PC).
+
+- **À gauche**, la liste : cocher pour afficher ; un clic sur un nom le **choisit** (le globe le suit) ; **Suivre le satellite choisi** en fait le satellite de Suivi.
+- **Six rendus** : *Réaliste*, ***Dessin animé*** (d'origine), *Hologramme*, *Globe à points*, *Radar rétro*, *Carte ancienne*. **Le satellite choisi se distingue** : un anneau qui tourne autour, son nom marqué d'une ★, une orbite épaisse, une empreinte plus visible ; les autres restent en retrait.
+- **Détails** (*simples*, *normaux*, *riches*) : des **villes** ; le **relief** ombré et, sur le dessin animé, des **montagnes** sur les vrais sommets (relief ETOPO1 de la NOAA), des **monuments** (tour Eiffel, statue de la Liberté, pyramides, Big Ben, Taj Mahal, Fuji, fusées de Kourou et de Baïkonour…), des **bateaux**, et en riches des baleines, des forêts et des manchots — à voir en approchant avec la molette.
+- **Villes** : *toutes*, les *capitales*, *aucune* ; **Noms** : le nom, le **drapeau** du pays, ou les deux. **Contacts** : les contacts du carnet en *points*, *points et indicatifs* ou *carrés locators*.
+- **Le temps** : ⏸, de **×1 réel** à **×1200** (×60 d'origine), **Maintenant**.
+- **Carte 2D** : les mêmes satellites à plat, leurs empreintes, la trace au sol passée et à venir, le jour et la nuit.
+- **Passage** : les passages des **36 prochaines heures** du satellite choisi ; **▶ Jouer le passage** l'anime en accéléré (×10 à ×80), avec le compte à rebours de l'AOS, la culmination, le LOS, le ciel de la station, le profil d'élévation, l'azimut, l'élévation, la distance, l'altitude et le Doppler. Trois caméras (*Poursuite*, *Depuis la station*, *Vue d'ensemble*) et la **Hauteur** (ou la molette) pour voir plus de Terre.
+- **Dans Suivi** : un bouton **Globe** à côté de *Ciel* et *Carte* montre le satellite suivi, son orbite et son empreinte, les favoris autour, avec le rendu au choix.
+
 ## Le carnet
 
 Un contact se saisit avec l'indicatif prédit d'après le carnet et QRZ (Tab passe d'une prédiction à l'autre, Entrée valide). À côté, la station en direct : le satellite, ses fréquences, le polar plot, le rotor, où l'on est dans la bande passante, l'enregistrement. La fiche de l'indicatif : tous les contacts passés et leurs notes, la fiche QRZ.com (photo, distance, carte). Un contact oublié s'ajoute après le passage, à son heure. Les **records** par satellite : le contact le plus lointain de tous, de chaque satellite, mode, continent et pays, le WAC.
@@ -228,6 +244,25 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - **Ajouter** un contact au rejeu : en pause, l'heure est celle du son ; indicatif prédit et QRZ, mode et fréquences du satellite, RST (59 / 59 d'origine) et commentaire ; Entrée valide.
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
 - Le **journal Doppler / CAT** du passage (quand il est tenu, voir [Réglages](#réglages)) y est relié.
+
+### La vue Globe
+
+**Globe**, à côté de *Ciel* et *Carte* : le passage rejoué autour de la Terre (le globe de l'onglet [Orbites](#orbites--la-terre-en-3d)). Les contacts s'allument à leur heure avec un trait station → satellite → correspondant ; les images SSTV reçues viennent se poser près de la station.
+
+- **Ses choix**, en haut à droite : le rendu, la caméra (*Vue d'ensemble*, *Poursuite*, *Depuis la station*), les villes (*toutes*, *capitales*, *aucune*), leur nom, leur drapeau ou les deux, les détails.
+- **Glisser** déplace le globe sur l'écran (de la place pour l'image SSTV), **double-clic** le remet au centre, la **molette** règle la hauteur. L'image, le GIF et la vidéo (*Fabriquer › Vue : Globe*) le montrent là où il est.
+- **La légende des vidéos** : **Taille des textes de la vidéo** (un curseur, ×0,6 à ×2,5) ; l'AOS, la TCA et le LOS du passage et l'heure par rapport à lui (« AOS + 4:02 ») ; l'heure locale ou UTC, comme le journal.
+
+### Session : plusieurs passages animés
+
+**🌍 Session** (en haut, à côté de *+ Passage*) : un **satellite** et deux **dates** (*seulement les passages avec des images SSTV* coché d'origine), **▶ Animer la session** : tous ses passages animés à la suite sur le globe, avec la frise de la session (les passages bout à bout, les images en orange, un clic y va) et les images SSTV qui arrivent une à une.
+
+- **Passages enchaînés** (une courte pause entre deux, le globe tourne vers le suivant) ou **Temps continu** (le temps court sans s'arrêter).
+- **Trois vitesses** : **Hors passage** (temps continu, ×1000 d'origine), **Pendant le passage** (×20), **Image ou contact** (×3) ; on passe de l'une à l'autre en douceur. En passages enchaînés, **Pause entre passages** (0,5 à 6 s, 1,6 s d'origine).
+- *l'image SSTV qui arrive* : en grand sur le globe, loin du satellite, dessinée pendant qu'elle est reçue ; *vignettes des images* : les images reçues sous la frise.
+- Un bandeau : l'heure, « Passage 2 / 4 · 5 images reçues », AOS, TCA et LOS, « AOS + 3:06 ».
+- **▶ Animer la session de l'événement** (*Fabriquer › Éléments du rapport* d'un passage qui a un événement SSTV) : la session de son satellite et de ses jours, lancée tout de suite.
+- **🎬 Vidéo de la session** (il faut ffmpeg) : les mêmes options que la vidéo d'un passage et la taille des textes ; sans son, une **carte d'ouverture**, les passages sur le globe tel qu'il est cadré, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin.
 
 ### Images SSTV et éléments du rapport
 
@@ -894,7 +929,7 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 
 ### La molette USB (VFO)
 
-**Réglages › Interfaces › Molette USB**, coupé d'origine, **Linux seulement** : la molette de volume USB accorde, comme sur le téléphone. Elle est lue dans `/dev/input` ; illisible, la carte donne la règle udev (groupe **plugdev**) à copier dans un terminal.
+**Réglages › Interfaces › Molette USB**, coupé d'origine, **Linux et Windows** : la molette de volume USB accorde, comme sur le téléphone. Sous Linux, elle est lue dans `/dev/input` ; illisible, la carte donne la règle udev (groupe **plugdev**) à copier dans un terminal.
 
 - **Tourner** : un pas (10 Hz, 100 Hz ou 1 kHz). **L'appui** : changer le pas, cible suivante, ou décalage à zéro. Les touches A, B, C d'un petit clavier choisissent la cible (« Apprendre », puis presser la touche).
 - **Accorde** : *Auto* (l'onglet SDR accorde le récepteur SDR, le cockpit QO-100 la bande étroite ; ailleurs le poste relié en CAT, sinon le SDR en marche), ou toujours le *Poste* (VFO, décalage RX ou TX), le *SDR*, *QO-100*.
@@ -907,6 +942,8 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
   ```
 
   (la carte donne la même ligne avec les numéros de la molette branchée). Une puce dans le bandeau montre la cible et le pas, et les change.
+- **Sous Windows** : les touches de volume sont lues par PowerShell (livré avec Windows). Ce sont **toutes les touches de volume du PC** : capturées, toutes sont prises par SatMe et le volume du PC ne bouge plus.
+- **Relais vers une autre station** (dans la même carte) : la molette branchée sur ce PC accorde une autre station SatMe-PC. Son adresse (`https://…` derrière nginx, ou `http://192.168.…:8090`) et son mot de passe d'accès à distance, **Se connecter** : le mot de passe sert une fois et **n'est jamais gardé**, seule la session l'est, sur ce PC. Chaque cran est appliqué par la station avec ses propres réglages de molette (pas, cible, touches apprises). La session finie sur la station, le relais redemande le mot de passe ; **Arrêter le relais** rend la molette à ce PC.
 
 <p align="center"><img src="images/pc-reglages-interfaces.png" width="80%" alt="Réglages, Interfaces : le lien satellite (WebSocket, port 8095), la fréquence pour les carnets (rigctld, port 4532, réseau local, montée, changement de fréquence), la molette USB (cible, pas, appui, touches A B C)"></p>
 
