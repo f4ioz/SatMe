@@ -123,7 +123,7 @@ const Orbites = (function () {
   const garde = (k, v) => { try { localStorage.setItem(k, v); } catch (x) {} };
   // The station's routes: beside the page, or under SATME_RACINE (the journal's page sets it).
   const api = p => (window.SATME_RACINE || '') + p;
-  const monde = () => typeof GLOBE_MONDE !== 'undefined' ? GLOBE_MONDE : { villes: [], reliefs: [], monuments: [], decor: [] };
+  const monde = () => typeof GLOBE_MONDE !== 'undefined' ? GLOBE_MONDE : { villes: [], sommets: [], monuments: [], decor: [] };
   const OB = { donnees: null, sats: [], obs: null, terres: null, style: lit('ob-style2', 'cartoon'), vue: lit('ob-vue', 'globe'), filtre: 'favoris',
     choisi: null, temps: { base: Date.now(), reel: performance.now(), vitesse: 60, pause: false }, anim: null, passages: [], passage: null,
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
@@ -138,9 +138,49 @@ const Orbites = (function () {
       if (typeof THREE === 'undefined') await script(api('api/lib/three.js'));
       if (typeof satellite === 'undefined') await script(api('api/lib/satellite.js'));
       OB.terres = await fetch(api('api/carte/traits')).then(r => r.json());
+      OB.relief = await chargeRelief().catch(() => null);
     })();
     libs.catch(() => { libs = null; });
     return libs;
+  }
+  /**
+   * The relief (ETOPO1, NOAA: 1440 × 720 cells of 0.25°, north at the top): each land cell's height in metres and its
+   * shading lit from the north-west (−1 in the shade … 1 in the light), as SatMe-PC's videos work it out.
+   */
+  async function chargeRelief() {
+    const im = new Image(); im.src = api('api/lib/relief.png'); await im.decode();
+    const W = 1440, H = 720, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d'); x.drawImage(im, 0, 0); const px = x.getImageData(0, 0, W, H).data;
+    const alt = new Float32Array(W * H), ombre = new Float32Array(W * H);
+    for (let k = 0; k < W * H; k++) { const v = px[k * 4]; alt[k] = v >= 128 ? (v - 128) * 40 : 0; }
+    for (let i = 1; i < H - 1; i++) {
+      const la = 90 - i * .25, dx = .25 * 111320 * Math.max(.05, Math.cos(la * D2R)), dy = .25 * 111320;
+      for (let j = 0; j < W; j++) {
+        const k = i * W + j; if (alt[k] <= 0) continue;
+        const gx = (alt[i * W + (j + 1) % W] - alt[i * W + (j + W - 1) % W]) / (2 * dx) * 12, gy = (alt[k - W] - alt[k + W]) / (2 * dy) * 12;
+        const hs = (gx * .5 - gy * .5 + .7071) / Math.sqrt(gx * gx + gy * gy + 1);
+        ombre[k] = Math.max(-1, Math.min(1, (hs - .7071) / .35));
+      }
+    }
+    return { alt: alt, ombre: ombre };
+  }
+  /* The relief over a look's land: the high ground browner, the highest white, slopes lit or shaded. */
+  function reliefSur(x, w, h, teinte, neige, force) {
+    const R = OB.relief; if (!R) return;
+    const W = 1440, H = 720, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const cx = c.getContext('2d'), d = cx.createImageData(W, H), p = d.data;
+    for (let k = 0; k < W * H; k++) {
+      const a = R.alt[k]; if (a <= 0) continue;
+      let r = 0, g = 0, b = 0, al = 0;
+      if (teinte && a > 800) { const t = Math.min(1, (a - 800) / 2600) * .55; r = teinte[0]; g = teinte[1]; b = teinte[2]; al = t; }
+      if (neige && a > 3800) { const n = Math.min(1, (a - 3800) / 1200) * .8; r += (250 - r) * n; g += (252 - g) * n; b += (255 - b) * n; al = al + (1 - al) * n; }
+      const o = R.ombre[k] * force;
+      if (o < 0) { const s = -o * .45; r *= 1 - s; g *= 1 - s; b *= 1 - s; al = al + (1 - al) * s; }
+      else if (o > 0) { const s = o * .3; r += (255 - r) * s; g += (255 - g) * s; b += (255 - b) * s; al = al + (1 - al) * s * .6; }
+      p[k * 4] = r; p[k * 4 + 1] = g; p[k * 4 + 2] = b; p[k * 4 + 3] = Math.round(al * 255);
+    }
+    cx.putImageData(d, 0, 0);
+    x.save(); x.imageSmoothingEnabled = true; x.drawImage(c, 0, 0, w, h); x.restore();
   }
   function charge() {
     if (donnees) return donnees;
@@ -242,9 +282,9 @@ const Orbites = (function () {
     return masque[(py * 1024 + px) * 4] > 128;
   }
   function bandes(x, h, stops) { const gr = x.createLinearGradient(0, 0, 0, h); stops.forEach(s => gr.addColorStop((90 - s[0]) / 180, s[1])); return gr; }
-  /* [ville]: the cities' dots and names; [relief]: the mountains' colours (null: none); [carton]: the cartoon's landmarks and scenery. */
+  /* [ville]: the cities' dots and names; [relief]: the mountains' colours (null: none, the relief's shading alone); [carton]: the cartoon's landmarks and scenery. */
   const STYLES = {
-    realiste: { nom: 'Réaliste', fond: '#000004', etoiles: 0xffffff, nuit: 'rgba(0,4,20,.55)', encre: null, ville: '#E8EEF4', relief: [0x7a6a55, 0xf4f6f8],
+    realiste: { nom: 'Réaliste', fond: '#000004', etoiles: 0xffffff, nuit: 'rgba(0,4,20,.55)', encre: null, ville: '#E8EEF4', relief: null,
       peint(x, w, h) {
         x.fillStyle = bandes(x, h, [[90, '#1d3d5c'], [45, '#0b3463'], [0, '#0c4d80'], [-45, '#0b3463'], [-90, '#1d3d5c']]); x.fillRect(0, 0, w, h);
         const t = chemin(w, h);
@@ -253,6 +293,7 @@ const Orbites = (function () {
         x.fillStyle = bandes(x, h, [[90, '#f2f6f8'], [72, '#e3ebee'], [64, '#6f7f5a'], [55, '#3d6331'], [44, '#567436'], [36, '#8f8a4f'], [28, '#c8a56b'], [20, '#bf9a5e'], [12, '#4f7a30'], [0, '#2d6526'],
           [-12, '#3c6f2b'], [-24, '#b99657'], [-32, '#a98f58'], [-44, '#557a3a'], [-56, '#6b7a5e'], [-63, '#e9eff2'], [-90, '#f4f7f9']]);
         x.fillRect(0, 0, w, h); x.restore();
+        reliefSur(x, w, h, [140, 112, 82], true, 1);
         grain(x, w, h, .18, 8);
         const gl = x.createLinearGradient(0, 0, 0, h * .09); gl.addColorStop(0, 'rgba(240,246,250,.95)'); gl.addColorStop(1, 'rgba(240,246,250,0)');
         x.fillStyle = gl; x.fillRect(0, 0, w, h * .09);
@@ -267,6 +308,7 @@ const Orbites = (function () {
         x.fillStyle = bandes(x, h, [[90, '#ffffff'], [70, '#ffffff'], [64, '#8be06a'], [42, '#7bd85b'], [33, '#f4d77e'], [20, '#f2cf6c'], [11, '#5fc94a'], [-10, '#5fc94a'], [-22, '#f2cf6c'],
           [-32, '#9ddc62'], [-58, '#8be06a'], [-63, '#ffffff'], [-90, '#ffffff']]);
         x.fill(t);
+        reliefSur(x, w, h, [196, 140, 84], true, 1.3);
         x.strokeStyle = '#173f2a'; x.lineWidth = w / 1100; x.stroke(t);
         x.restore();
       } },
@@ -294,7 +336,7 @@ const Orbites = (function () {
         x.fillStyle = 'rgba(40,255,110,.07)'; x.fill(t);
         x.save(); x.shadowColor = '#2f6'; x.shadowBlur = w / 300; x.strokeStyle = '#5dff8f'; x.lineWidth = w / 1000; x.stroke(t); x.restore();
       } },
-    vintage: { nom: 'Carte ancienne', fond: '#140e08', etoiles: 0xf0d9a0, nuit: 'rgba(60,35,10,.30)', encre: '#6b3f17', ville: '#4A2E14', relief: [0x8b6b45, null],
+    vintage: { nom: 'Carte ancienne', fond: '#140e08', etoiles: 0xf0d9a0, nuit: 'rgba(60,35,10,.30)', encre: '#6b3f17', ville: '#4A2E14', relief: null,
       peint(x, w, h) {
         x.fillStyle = '#dcc79a'; x.fillRect(0, 0, w, h);
         const t = chemin(w, h);
@@ -302,7 +344,7 @@ const Orbites = (function () {
         for (let i = 6; i >= 1; i--) { x.strokeStyle = 'rgba(110,80,40,' + (.05 + .03 * (6 - i)) + ')'; x.lineWidth = i * w / 420; x.stroke(t); x.strokeStyle = '#dcc79a'; x.lineWidth = i * w / 420 - w / 900; x.stroke(t); }
         x.restore();
         grille(x, w, h, 'rgba(110,70,30,.35)', 15, w / 1500, [w / 200, w / 400]);
-        x.fillStyle = '#efe0b8'; x.fill(t); x.strokeStyle = '#5a3a1c'; x.lineWidth = w / 900; x.stroke(t);
+        x.fillStyle = '#efe0b8'; x.fill(t); reliefSur(x, w, h, null, false, 1); x.strokeStyle = '#5a3a1c'; x.lineWidth = w / 900; x.stroke(t);
         grain(x, w, h, .25, 2);
         const v = x.createRadialGradient(w / 2, h / 2, h * .3, w / 2, h / 2, w * .62); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(90,55,20,.35)');
         x.fillStyle = v; x.fillRect(0, 0, w, h);
@@ -564,23 +606,13 @@ const Orbites = (function () {
         const [cr, cn] = S.relief, mr = sc.style === 'cartoon' ? mt(0xb07a45) : sc.style === 'realiste' ? new THREE.MeshPhongMaterial({ color: cr, flatShading: true }) : new THREE.MeshLambertMaterial({ color: cr, flatShading: true });
         const mn = cn == null ? null : sc.style === 'cartoon' ? mt(cn) : new THREE.MeshLambertMaterial({ color: cn, flatShading: true });
         let graine = 7; const hasard = () => { graine = (graine * 9301 + 49297) % 233280; return graine / 233280; };
-        M.reliefs.forEach(r => {
-          const pts = r.crete.length === 1 ? [r.crete[0]] : [];
-          for (let i = 0; i + 1 < r.crete.length; i++) {
-            const a = r.crete[i], b = r.crete[i + 1], n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / (carton ? 2.2 : 1.6)));
-            for (let j = 0; j < n; j++) pts.push([a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n]);
-            if (i + 2 === r.crete.length) pts.push(b);
-          }
-          pts.forEach(p => {
-            const rangs = r.h >= .7 && OB.detail >= 2 ? [0, -1, 1] : [0];
-            rangs.forEach(dr => {
-              const h = (carton ? .01 + .024 * r.h : .006 + .016 * r.h) * (dr ? .7 : 1) * (.75 + .5 * hasard()), ray = h * (carton ? 1.05 : .9);
-              const m = new THREE.Group(), c = new THREE.Mesh(cone(), mr); c.scale.set(ray, h, ray); m.add(c);
-              if (carton) { const pied = new THREE.Mesh(cone(), mt(0x7f9a3c)); pied.scale.set(ray * 1.25, h * .35, ray * 1.25); m.add(pied); }
-              if (mn && r.h >= .5) { const n2 = new THREE.Mesh(cone(), mn); n2.scale.set(ray * .4, h * .4, ray * .4); n2.position.y = h * .6 + .0002; m.add(n2); }
-              mondeGp.add(pose(m, p[0] + dr * .9 + (hasard() - .5) * .5, p[1] + dr * .9 + (hasard() - .5) * .5, hasard() * 3, .999));
-            });
-          });
+        // The summits of the relief (GlobeDonnees.SOMMETS), sized by their height: 0.25 at 1 000 m … 1 at 5 000 m.
+        M.sommets.forEach(p => {
+          const k = Math.max(.25, Math.min(1, (p[2] - 900) / 4100));
+          const h = (carton ? .012 + .03 * k : .006 + .016 * k) * (.85 + .3 * hasard()), ray = h * (carton ? .72 : .9);
+          const m = new THREE.Group(), c = new THREE.Mesh(cone(), mr); c.scale.set(ray, h, ray); m.add(c);
+          if (mn && p[2] >= 2500) { const n2 = new THREE.Mesh(cone(), mn); n2.scale.set(ray * .4, h * .4, ray * .4); n2.position.y = h * .6 + .0002; m.add(n2); }
+          mondeGp.add(pose(m, p[0], p[1], hasard() * 3, .999));
         });
       }
       if (carton && OB.detail >= 1) {
@@ -1126,14 +1158,11 @@ const Orbites = (function () {
     // The mountains: little peaks along their crests; the boats on the cartoon.
     if (S.relief && OB.detail >= 1) {
       const c = '#' + S.relief[0].toString(16).padStart(6, '0');
-      M.reliefs.forEach(rl => rl.crete.forEach((p, i) => {
-        const q = rl.crete[i + 1] || p, n = q === p ? 1 : Math.max(1, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) / 3));
-        for (let j = 0; j < n; j++) {
-          const la = p[0] + (q[0] - p[0]) * j / n, lo = p[1] + (q[1] - p[1]) * j / n, hh2 = (5 + 9 * rl.h) * ech, X0 = X(lo), Y0 = Y(la);
-          x.fillStyle = c; x.beginPath(); x.moveTo(X0 - hh2 * .7, Y0 + hh2 * .4); x.lineTo(X0, Y0 - hh2 * .6); x.lineTo(X0 + hh2 * .7, Y0 + hh2 * .4); x.closePath(); x.fill();
-          if (S.relief[1] != null && rl.h >= .5) { x.fillStyle = '#fff'; x.beginPath(); x.moveTo(X0 - hh2 * .25, Y0 - hh2 * .25); x.lineTo(X0, Y0 - hh2 * .6); x.lineTo(X0 + hh2 * .25, Y0 - hh2 * .25); x.closePath(); x.fill(); }
-        }
-      }));
+      M.sommets.forEach(p => {
+        const k = Math.max(.25, Math.min(1, (p[2] - 900) / 4100)), hh2 = (5 + 9 * k) * ech, X0 = X(p[1]), Y0 = Y(p[0]);
+        x.fillStyle = c; x.beginPath(); x.moveTo(X0 - hh2 * .7, Y0 + hh2 * .4); x.lineTo(X0, Y0 - hh2 * .6); x.lineTo(X0 + hh2 * .7, Y0 + hh2 * .4); x.closePath(); x.fill();
+        if (S.relief[1] != null && p[2] >= 2500) { x.fillStyle = '#fff'; x.beginPath(); x.moveTo(X0 - hh2 * .25, Y0 - hh2 * .25); x.lineTo(X0, Y0 - hh2 * .6); x.lineTo(X0 + hh2 * .25, Y0 - hh2 * .25); x.closePath(); x.fill(); }
+      });
     }
     if (S.carton && OB.detail >= 1) M.decor.forEach(d => { if (d[0] !== 'bateau') return; const X0 = X(d[2]), Y0 = Y(d[1]), k = 6 * ech;
       x.fillStyle = '#8e5a2e'; x.beginPath(); x.moveTo(X0 - k, Y0); x.lineTo(X0 + k, Y0); x.lineTo(X0 + k * .6, Y0 + k * .5); x.lineTo(X0 - k * .6, Y0 + k * .5); x.closePath(); x.fill();

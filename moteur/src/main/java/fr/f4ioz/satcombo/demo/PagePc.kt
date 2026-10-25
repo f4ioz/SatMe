@@ -21,9 +21,12 @@ object PagePc {
 
     private val bibliotheques = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
 
-    /** The globes' libraries, bundled beside this page (LICENSE-three.txt, LICENSE-satellite.txt): three.js and satellite.js, both MIT, served at `api/lib/…` by SatMe-PC. */
+    /**
+     * The globes' libraries, bundled beside this page (LICENSE-three.txt, LICENSE-satellite.txt): three.js and satellite.js,
+     * both MIT, and the relief (ETOPO1, NOAA, free to use and redistribute), served at `api/lib/…` by SatMe-PC.
+     */
     fun bibliotheque(nom: String): ByteArray? {
-        val f = when (nom) { "three.js" -> "three.min.js"; "satellite.js" -> "satellite.min.js"; else -> return null }
+        val f = when (nom) { "three.js" -> "three.min.js"; "satellite.js" -> "satellite.min.js"; "relief.png" -> "relief.png"; else -> return null }
         return bibliotheques[nom] ?: PagePc::class.java.getResourceAsStream(f)?.use { it.readBytes() }?.also { bibliotheques[nom] = it }
     }
     /**

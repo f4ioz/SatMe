@@ -97,6 +97,11 @@ respective publishers' terms.
 
 **Satellite status** comes from AMSAT Live OSCAR Status and SatNOGS.
 
+**The globes' relief** (`moteur/src/main/resources/…/demo/relief.png`, and the summits written in
+`GlobeDonnees.kt`) is ETOPO1 (Amante, C. and B. W. Eakins, *ETOPO1 1 Arc-Minute Global Relief Model*,
+NOAA Technical Memorandum NESDIS NGDC-24, 2009), taken at a 0.25° step from NOAA's ERDDAP server: NOAA
+says it may be used and redistributed for free, without any warranty.
+
 **POTA parks** come from `pota.app` (park list) and `pota-map.fr` (area
 boundaries). These are public endpoints, with no key or authentication. SatMe
 queries them, doesn't redistribute them, and controls neither their

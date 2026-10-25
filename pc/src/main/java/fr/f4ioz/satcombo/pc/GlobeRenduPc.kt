@@ -501,6 +501,20 @@ object GlobeRenduPc {
                     oc = terreL!![li]; val f = terreF * lk.terreA
                     cr += (((oc shr 16) and 255) - cr) * f; cg += (((oc shr 8) and 255) - cg) * f; cb += ((oc and 255) - cb) * f
                 }
+                // The relief: lit or shaded slopes, the high ground browner, the highest summits white.
+                val rel = relief
+                if (rel != null && terreF > 0 && (style == "cartoon" || style == "realiste" || style == "vintage")) {
+                    val ci = cellule(la, atan2(py, px) / D2R); val alt = rel.altitude[ci]; val om = rel.ombre[ci] * terreF
+                    if (style != "vintage" && alt > 800) {
+                        val b = ((alt - 800) / 2600.0).coerceIn(0.0, 1.0) * 0.55 * terreF
+                        val c2 = style == "cartoon"
+                        cr += ((if (c2) 196.0 else 140.0) - cr) * b; cg += ((if (c2) 140.0 else 112.0) - cg) * b; cb += ((if (c2) 84.0 else 82.0) - cb) * b
+                        val n = ((alt - 3800) / 1200.0).coerceIn(0.0, 1.0) * 0.8 * terreF
+                        cr += (250 - cr) * n; cg += (252 - cg) * n; cb += (255 - cb) * n
+                    }
+                    val fo = 1 + om * (if (style == "cartoon") 0.28 else 0.35)
+                    cr *= fo; cg *= fo; cb *= fo
+                }
                 if (style == "realiste" && la > 73.8) { val f = .95 * ((la - 73.8) / 9).coerceAtMost(1.0); cr += (240 - cr) * f; cg += (246 - cg) * f; cb += (250 - cb) * f }
                 a = s1[k] ushr 24
                 if (a > 0) { val f = a / 255.0; val s = s1[k]; cr += (((s shr 16) and 255) - cr) * f; cg += (((s shr 8) and 255) - cg) * f; cb += ((s and 255) - cb) * f }
@@ -735,6 +749,41 @@ object GlobeRenduPc {
         }
     }
 
+    /** A summit's size on the globe, 0.25 (1 000 m) to 1 (5 000 m and over): the same scale as the page's. */
+    fun hauteurSommet(altitude: Int): Double = ((altitude - 900) / 4100.0).coerceIn(0.25, 1.0)
+
+    /**
+     * The relief (ETOPO1, NOAA: `relief.png` beside the page, 1440 × 720 cells of 0.25°, north at the top, sea at 0):
+     * the land's height in metres, and its shading lit from the north-west (−1 in the shade … 1 in the light),
+     * worked out as the page does.
+     */
+    private class Relief(val altitude: FloatArray, val ombre: FloatArray)
+    private val relief: Relief? by lazy {
+        runCatching {
+            val img = javax.imageio.ImageIO.read(GlobeDonnees::class.java.getResourceAsStream("relief.png")!!)
+            val w = 1440; val h = 720
+            val a = FloatArray(w * h) { i -> val v = img.raster.getSample(i % w, i / w, 0); if (v >= 128) (v - 128) * 40f else 0f }
+            val o = FloatArray(w * h)
+            for (i in 1 until h - 1) {
+                val la = 90 - i * 0.25; val dx = 0.25 * 111320 * max(0.05, cos(la * D2R)); val dy = 0.25 * 111320
+                for (j in 0 until w) {
+                    if (a[i * w + j] <= 0f) continue
+                    val gx = (a[i * w + (j + 1) % w] - a[i * w + (j + w - 1) % w]) / (2 * dx) * EXAGERATION
+                    val gy = (a[(i - 1) * w + j] - a[(i + 1) * w + j]) / (2 * dy) * EXAGERATION
+                    val nz = 1 / sqrt(gx * gx + gy * gy + 1)
+                    val hs = (-gx * -0.5 + -gy * 0.5 + 0.7071) * nz
+                    o[i * w + j] = ((hs - 0.7071) / 0.35).coerceIn(-1.0, 1.0).toFloat()
+                }
+            }
+            Relief(a, o)
+        }.getOrNull()
+    }
+    private const val EXAGERATION = 12.0
+    private fun cellule(la: Double, lo: Double): Int {
+        val i = ((90 - la) / 0.25).toInt().coerceIn(0, 719); val j = (((lo + 180) / 0.25).toInt() % 1440 + 1440) % 1440
+        return i * 1440 + j
+    }
+
     /** The world drawn on the surface, back to front: mountains, scenery, landmarks, cities' dots (the cartoon's all of it, the others' lighter). */
     private fun monde(g: Graphics2D, cam: Camera, style: String, dp: Float) {
         val cartoon = style == "cartoon"
@@ -744,18 +793,10 @@ object GlobeRenduPc {
             val p = vec(lat, lon); if (cam.profondeur(p) < 0.06) return
             dessins += cam.y(p) to { debout(g, cam, lat, lon, haut, d, style) }
         }
-        for (r in GlobeDonnees.RELIEFS) {
-            val pts = ArrayList<Pair<Double, Double>>()
-            if (r.crete.size == 1) pts += r.crete[0]
-            for (i in 1 until r.crete.size) {
-                val a = vec(r.crete[i - 1].first, r.crete[i - 1].second); val b = vec(r.crete[i].first, r.crete[i].second)
-                val ang = acos(dot(a, b).coerceIn(-1.0, 1.0)); val n = ceil(ang / (1.3 * D2R)).toInt().coerceAtLeast(1)
-                for (s in 0 until n + (if (i == r.crete.size - 1) 1 else 0)) { val q = slerp(a, b, ang, s.toDouble() / n); pts += lat(q) to atan2(q[1], q[0]) / D2R }
-            }
-            pts.forEachIndexed { i, (la, lo) ->
-                val varie = if (i % 2 == 0) 1f else 0.78f
-                ajoute(la, lo, k * (0.022f + 0.05f * r.hauteur.toFloat()) * varie) { montagne(it, r.hauteur * varie) }
-            }
+        // The summits of the relief, sized by their height.
+        for (s in GlobeDonnees.SOMMETS) {
+            val h = hauteurSommet(s.altitude)
+            ajoute(s.lat, s.lon, k * (0.018f + 0.04f * h.toFloat())) { montagne(it, h) }
         }
         if (style != "holo" && style != "radar" && style != "points") for (d in GlobeDonnees.DECOR)
             ajoute(d.lat, d.lon, k * if (d.type == "foret") 0.06f else 0.048f) { decor(it, d.type) }
