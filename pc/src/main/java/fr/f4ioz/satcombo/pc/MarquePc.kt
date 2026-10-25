@@ -30,6 +30,12 @@ object MarquePc {
         runCatching { MarquePc::class.java.getResourceAsStream("/marque/icon.png")?.use { ImageIO.read(it) } }.getOrNull()
     }
 
+    /** The mark's width at [u] (the icon and the word), as [dessine] draws it; its height is 6.4 [u], 4.8 [u] of it above the baseline. */
+    fun largeur(g: Graphics2D, u: Float): Float {
+        val f = Font(Font.SANS_SERIF, Font.BOLD, 1).deriveFont(4.6f * u * 1.33f)
+        return 6.4f * u + 1.0f * u + g.getFontMetrics(f).stringWidth(MOT)
+    }
+
     /**
      * Draws the icon then the word on the [base] baseline; [x] is the mark's
      * right edge, or its centre when [centre].

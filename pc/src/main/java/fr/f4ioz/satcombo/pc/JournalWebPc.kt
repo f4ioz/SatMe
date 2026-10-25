@@ -309,7 +309,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     t.fichier = runCatching {
                         val scenes = es.map { e -> scene(e, null, null, false, pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } } }
                         val session = SessionRenduPc.Session(scenes, q.mode, q.vitesse, q.titre, q.vignettes,
-                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap))
+                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap), entre = q.entre, transition = q.transition)
                         val nom = "SatMe_" + es[0].satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                             java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                                 .format(java.util.Date(es[0].debutMs)) + "Z_session" + (q.titre?.take(30)?.replace(Regex("[^A-Za-z0-9-]"), "-")?.let { "_$it" } ?: "") + ".mp4"
@@ -396,7 +396,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes,
             surCarte = p("carte") == "1" && globe == null, sol = j.traceSol(e), qth = Maidenhead.centre(e.locator),
-            surGlobe = globe != null, styleGlobe = globe ?: GlobeRenduPc.DEFAUT, optionsGlobe = GlobeRenduPc.options(p),
+            surGlobe = globe != null, styleGlobe = globe ?: GlobeRenduPc.DEFAUT, optionsGlobe = GlobeRenduPc.options(p), police = LegendePc.police(p), fuseau = LegendePc.fuseau(p),
             etiquetteQth = if (opt(p, "locator", s.journalAffLocator)) listOf(s.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null,
             vueVue = run {
                 val cx = p("mcx").toDoubleOrNull(); val cy = p("mcy").toDoubleOrNull(); val z = p("zc").toDoubleOrNull(); val cw = p("cw").toFloatOrNull()

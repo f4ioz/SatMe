@@ -36,7 +36,7 @@ class SessionRenduPcTest {
     }
 
     /** Three passes of 6 minutes, 95 minutes apart, over France; pictures in the first and the last, a contact in the second. */
-    private fun scenes(vignettes: Boolean = true): List<RenduPc.Scene> = (0..2).map { k ->
+    private fun scenes(vignettes: Boolean = true, police: Float = 1f, tz: java.util.TimeZone = LegendePc.UTC): List<RenduPc.Scene> = (0..2).map { k ->
         val de = t0 + k * 95 * 60_000L
         val sol = (0..24).map { s -> val f = s / 24.0; JournalPassage.Sol(de + s * 15_000L, 60.0 - 28 * f, -18.0 + 8 * k + 32 * f, 420.0) }
         val e = JournalPassage.Entree(25544, "ISS", de, de + 360_000L, "JN18DU",
@@ -48,7 +48,7 @@ class SessionRenduPcTest {
                 Marque(TypeMarque.SSTV, de + 200_000L, de + 236_000L, "Robot 36", fichier = photo(3)))
         }
         RenduPc.Scene(e, emptyList(), marques, "F4IOZ", sol = sol, qth = 48.85 to 2.35, etiquetteQth = "F4IOZ · JN18DU",
-            paysage = true, surGlobe = true, styleGlobe = "cartoon", resolution = "XS").also { sc ->
+            paysage = true, surGlobe = true, styleGlobe = "cartoon", resolution = "XS", police = police, fuseau = tz).also { sc ->
             // Between the passes: an orbit of 92 minutes, inclined 51.6°, the Earth turning under it.
             sc.horsTrace = { t ->
                 val a = 2 * Math.PI * (t - t0) / (92 * 60_000.0)
@@ -80,8 +80,8 @@ class SessionRenduPcTest {
         // « passages » at ×30: each pass's 7 minutes in 14 s, a turn between two.
         val p = SessionRenduPc.plan(f, "passages", 30.0)
         val parPasse = (420_000 / (1000 / SessionRenduPc.FPS * 30)) + 1
-        assertEquals(3 * parPasse + 2 * SessionRenduPc.TOURNE, p.size)
-        assertEquals(2 * SessionRenduPc.TOURNE, p.count { it is SessionRenduPc.Trame.Tourne })
+        assertEquals(3 * parPasse + 2 * SessionRenduPc.tourne(1.5), p.size)
+        assertEquals(2 * SessionRenduPc.tourne(1.5), p.count { it is SessionRenduPc.Trame.Tourne })
         assertTrue(p.zipWithNext().all { (a, b) -> b.t >= a.t })
         // « continu » at ×600: the time runs on, ten times faster between the passes.
         val c = SessionRenduPc.plan(f, "continu", 600.0)
@@ -112,7 +112,7 @@ class SessionRenduPcTest {
         val img = SessionRenduPc.image(s, arrive, w, h)
         ImageIO.write(img, "png", File(echantillons, "session-image-arrive.png"))
         // The strip, bottom right of the view: the picture's colours, framed in orange.
-        val dp = RenduPc.echelle(w, h); val haut = h - 100 * dp
+        val dp = RenduPc.echelle(w, h); val haut = RenduPc.hautVue(w, h, s.scenes[2]).toFloat()
         var orange = 0
         for (y in (haut - 50 * dp).toInt() until haut.toInt()) for (x in (w - 200 * dp).toInt() until w) if (proche(img.getRGB(x, y), RenduPc.SSTV, 30)) orange++
         assertTrue("strip $orange", orange > 50)
@@ -132,6 +132,13 @@ class SessionRenduPcTest {
         val entre = SessionRenduPc.plan(c.fenetres, c.mode, c.vitesse).filterIsInstance<SessionRenduPc.Trame.Entre>().let { it[it.size / 2] }
         ImageIO.write(SessionRenduPc.image(c, entre, w, h), "png", File(echantillons, "session-entre.png"))
         ImageIO.write(SessionRenduPc.titre(s, w, h), "png", File(echantillons, "session-titre.png"))
+        // Larger texts, the PC's own time: the turn's card and the caption.
+        val s2 = SessionRenduPc.Session(scenes(police = 2f, tz = java.util.TimeZone.getTimeZone("Europe/Paris")), "passages", 30.0, vignettes = true, transition = 3.0)
+        val p2 = SessionRenduPc.plan(s2)
+        assertEquals(2 * 24, p2.count { it is SessionRenduPc.Trame.Tourne })
+        ImageIO.write(SessionRenduPc.image(s2, p2.filterIsInstance<SessionRenduPc.Trame.Tourne>().first { it.i == 2 && it.k >= 0.45 }, w, h), "png",
+            File(echantillons, "session-transition-police2-locale.png"))
+        ImageIO.write(SessionRenduPc.titre(s2, w, h), "png", File(echantillons, "session-titre-police2.png"))
         val m = SessionRenduPc.mosaique(s, w, h)
         ImageIO.write(m, "png", File(echantillons, "session-mosaique.png"))
         var couleurs = 0

@@ -64,6 +64,8 @@ object RenduPc {
         val surGlobe: Boolean = false, val styleGlobe: String = GlobeRenduPc.DEFAUT,
         /** The globe's cities, labels, detail, place and size as the page chose them. */
         val optionsGlobe: GlobeRenduPc.Options = GlobeRenduPc.Options(),
+        /** The caption's and the cards' texts at this scale (0.6 to 2.5), their times in this zone (UTC unless asked). */
+        val police: Float = 1f, val fuseau: TimeZone = LegendePc.UTC,
         /** The map as framed on the page, and the width (px) it was shown at; null: framed to the pass. */
         val vueVue: Pair<JournalPassage.VueCarte, Float>? = null,
         /** The screen's 16:9 rather than the phone's 3:4 (its view square above the caption). */
@@ -123,6 +125,10 @@ object RenduPc {
         var centreImpose: DoubleArray? = null
         /** Kept free along the bottom of the view (px): the session's strip of pictures, the cards above it. */
         var margeBas = 0f
+        /** A session's words in the caption: « Passage k / N », « n images reçues » (and whether any came). */
+        var legendeSession: Triple<String, String, Boolean>? = null
+        /** The caption band's height for a frame size, the same all along the video. */
+        internal var bande: Pair<Pair<Int, Int>, Int>? = null
     }
 
     internal fun g2(b: BufferedImage): Graphics2D = b.createGraphics().apply {
@@ -138,6 +144,8 @@ object RenduPc {
     }
     private val utc = TimeZone.getTimeZone("UTC")
     private fun fmt(p: String) = SimpleDateFormat(p, Locale.US).apply { timeZone = utc }
+    private fun fmt(p: String, sc: Scene) = SimpleDateFormat(p, Locale.US).apply { timeZone = sc.fuseau }
+    private fun zone(sc: Scene, t: Long) = LegendePc.zone(sc.fuseau, t)
 
     fun imageA(marques: List<Marque>, instant: Long, garde: Long): Pair<Marque, Float>? {
         val m = marques.lastOrNull { it.type == TypeMarque.SSTV && it.fichier != null && instant in it.debutMs..(it.finMs + garde) } ?: return null
@@ -417,6 +425,73 @@ object RenduPc {
         return CadreSstv.Place(if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp, 8 * dp, lw, lh)
     }
 
+    /**
+     * The view's height in a frame [w]×[h]: the frame less the caption band, as
+     * high as its texts need at their scale (the same all along the video) —
+     * in the phone's 3:4 the view square above it, unless larger texts need more.
+     */
+    fun hautVue(w: Int, h: Int, sc: Scene): Int {
+        sc.bande?.let { (t, v) -> if (t == (w to h)) return v }
+        val b = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB); val g = g2(b)
+        val dp = echelle(w, h)
+        val bande = LegendePc.dispose(g, rangs(sc, sc.e.debutMs, null, dp), w.toFloat(), dp, sc.police, h * if (sc.paysage) 0.45f else 0.5f).naturelle
+        g.dispose()
+        val v = (h - kotlin.math.ceil(bande)).toInt().let { if (sc.paysage) it else minOf(w, it) }
+        sc.bande = (w to h) to v
+        return v
+    }
+
+    /** The caption of the frame at [instant] laid out in its band (its places from the band's top). */
+    fun legende(w: Int, h: Int, sc: Scene, instant: Long): LegendePc.Mise {
+        val b = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB); val g = g2(b)
+        try {
+            val p = if (sc.horsTrace != null && instant !in sc.e.debutMs..sc.e.finMs) null else JournalPassage.pointA(sc.e, instant)
+            return legende(g, w, h, sc, instant, p)
+        } finally { g.dispose() }
+    }
+    private fun legende(g: Graphics2D, w: Int, h: Int, sc: Scene, instant: Long, p: JournalPassage.Point?): LegendePc.Mise {
+        val dp = echelle(w, h)
+        return LegendePc.dispose(g, rangs(sc, instant, p, dp), w.toFloat(), dp, sc.police, (h - hautVue(w, h, sc)).toFloat())
+    }
+
+    /**
+     * The caption's rows at [instant]: the satellite (TX while it sends), the date
+     * and time and where the pass is (a session's pass number), the pointing (the
+     * session's pictures), AOS · TCA · LOS, the S-meter, the station and the mark.
+     * Each thing keeps its place all along the video, drawn only when it has
+     * something to say.
+     */
+    private fun rangs(sc: Scene, instant: Long, p: JournalPassage.Point?, dp: Float): List<List<LegendePc.Element>> {
+        val e = sc.e; val k = sc.police
+        val gris = Color(160, 175, 195)
+        val f13 = police(13 * dp * k); val f13g = police(13 * dp * k, true)
+        fun t(s: String, f: java.awt.Font, c: Color, prio: Int, droite: Boolean = false, gabarit: String? = null, visible: Boolean = true) =
+            LegendePc.Element(LegendePc.Sorte.TEXTE, s, f, c, prio, droite, gabarit, visible)
+        val ses = sc.legendeSession
+        // The satellite's name large, growing less than the rest.
+        val a = listOfNotNull(t(e.satName, police(20 * dp * (1 + (k - 1) * 0.6f), true), Color.WHITE, 0),
+            if (sc.affTx && e.emissions.isNotEmpty()) LegendePc.Element(LegendePc.Sorte.TX, "TX", f13g, Color.WHITE, 3, droite = true, visible = JournalPassage.enEmissionA(e, instant)) else null)
+        // The date and the time apart: on two lines when the band is narrow.
+        val heure = fmt("HH:mm:ss", sc).format(Date(instant)) + " " + zone(sc, instant)
+        val b = listOfNotNull(t(fmt("yyyy-MM-dd", sc).format(Date(instant)), f13, gris, 1), t(heure, f13, gris, 1, gabarit = "00:00:00 " + zone(sc, instant)),
+            t(LegendePc.relatif(e, instant), f13g, CYAN, 2, gabarit = "AOS dans 00:00:00"),
+            ses?.let { t(it.first, f13g, Color.WHITE, 2, droite = true, gabarit = "Passage 000 / 000") })
+        val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { f -> f.first <= instant + 2_000L }?.second
+        val avecRx = sc.affFreq && sc.frequences.isNotEmpty()
+        val azel = p?.let { "Az %.0f°  El %.0f°".format(it.az, it.el) + (rx?.let { r -> "  RX %.4f MHz".format(r / 1e6) } ?: "") } ?: ""
+        val c = listOfNotNull(t(azel, f13, gris, 3, gabarit = "Az 000°  El 00°" + (if (avecRx) "  RX 000.0000 MHz" else ""), visible = p != null),
+            ses?.let { t(it.second, f13g, if (it.third) SSTV else gris, 5, droite = true, gabarit = "000 images reçues") })
+        val (aos, tca, los) = LegendePc.aosTcaLos(e, sc.fuseau)
+        // The pass's times after the pointing, on the same lines when there is room.
+        val d = listOf(t(aos, f13, gris, 4), t(tca, f13, gris, 5), t(los, f13, gris, 4))
+        val v = JournalPassage.signalA(e, instant)?.takeIf { sc.marques.any { m -> instant in (m.debutMs - 2_000L)..(m.finMs + sc.flashMs) } }
+        val sm = if (sc.affSmetre && e.signal.isNotEmpty()) listOf(LegendePc.Element(LegendePc.Sorte.SMETRE, "", f13, Color.WHITE, 6,
+            visible = v != null, valeur = v, crete = v?.let { JournalPassage.crete(e, instant) })) else emptyList()
+        val fin = listOf(t(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), f13, gris, 7),
+            LegendePc.Element(LegendePc.Sorte.MARQUE, "", f13, CYAN, 1, droite = true))
+        return listOf(a, b, c.filter { !it.droite } + d + c.filter { it.droite }, sm, fin)
+    }
+
     /** One frame of the replay: the sky above a caption. */
     fun image(w: Int, h: Int, sc: Scene, instant: Long): BufferedImage {
         val e = sc.e
@@ -424,7 +499,7 @@ object RenduPc {
         val g = g2(b)
         val dp = echelle(w, h)
         // The view: square above the caption (the phone's 3:4), or the width over the caption (16:9).
-        val haut = if (sc.paysage) (h - 100 * dp).toInt() else w
+        val haut = hautVue(w, h, sc)
         g.clipRect(0, 0, w, haut)
         // A session's video between its passes: no pointing to tell.
         val p = if (sc.horsTrace != null && instant !in e.debutMs..e.finMs) null else JournalPassage.pointA(e, instant)
@@ -455,23 +530,26 @@ object RenduPc {
         }
         g.clip = null
         g.color = FOND; g.fillRect(0, haut, w, h - haut)
-        val gris = Color(160, 175, 195)
-        g.texte(e.satName, 14f * dp, haut + 30f * dp, Color.WHITE, police(20 * dp, true))
-        if (sc.affTx && JournalPassage.enEmissionA(e, instant)) {
-            val x1 = w - 14f * dp; val x0 = x1 - 40f * dp
-            g.color = Color(229, 57, 53); g.fill(RoundRectangle2D.Float(x0, haut + 13f * dp, x1 - x0, 22f * dp, 8 * dp, 8 * dp))
-            g.texte("TX", (x0 + x1) / 2, haut + 30f * dp, Color.WHITE, police(15 * dp, true), centre = true)
+        val mise = legende(g, w, h, sc, instant, p)
+        for (pl in mise.places) {
+            val el = pl.el; if (!el.visible) continue
+            val y = haut + pl.y
+            when (el.sorte) {
+                LegendePc.Sorte.TEXTE -> {
+                    g.font = el.font; g.color = el.couleur
+                    // Its place is as wide as it can get: on the right, flush with the edge.
+                    val x = if (el.droite) pl.x + pl.l - g.fontMetrics.stringWidth(pl.texte) else pl.x
+                    g.drawString(pl.texte, x, y + g.fontMetrics.ascent)
+                }
+                LegendePc.Sorte.TX -> {
+                    g.color = Color(229, 57, 53); g.fill(RoundRectangle2D.Float(pl.x, y, pl.l, pl.h, 8 * dp * sc.police, 8 * dp * sc.police))
+                    val f = police(15 * dp * sc.police, true); g.font = f
+                    g.texte("TX", pl.x + pl.l / 2, y + pl.h / 2 + g.fontMetrics.ascent * 0.36f, Color.WHITE, f, centre = true)
+                }
+                LegendePc.Sorte.SMETRE -> el.valeur?.let { v -> smetre(g, pl.x, y, pl.l, pl.h, v, el.crete, dp * sc.police) }
+                LegendePc.Sorte.MARQUE -> { val u = LegendePc.marque(dp, sc.police); MarquePc.dessine(g, pl.x + pl.l, y + 4.8f * u, u, couleur = CYAN) }
+            }
         }
-        g.texte(fmt("yyyy-MM-dd HH:mm:ss").format(Date(instant)) + " UTC", 14f * dp, haut + 50f * dp, gris, police(13 * dp))
-        p?.let {
-            val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { f -> f.first <= instant + 2_000L }?.second
-            g.texte("Az %.0f°  El %.0f°".format(it.az, it.el) + (rx?.let { r -> "  RX %.4f MHz".format(r / 1e6) } ?: ""), 14f * dp, haut + 68f * dp, gris, police(13 * dp))
-        }
-        JournalPassage.signalA(e, instant)?.takeIf { sc.affSmetre && sc.marques.any { m -> instant in (m.debutMs - 2_000L)..(m.finMs + sc.flashMs) } }?.let { v ->
-            smetre(g, 14f * dp, haut + 72f * dp, w - 70f * dp, 22f * dp, v, JournalPassage.crete(e, instant), dp)
-        }
-        g.texte(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14f * dp, h - 10f * dp, gris, police(13 * dp))
-        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
         g.dispose()
         return b
     }
@@ -485,20 +563,27 @@ object RenduPc {
         g.color = FOND; g.fillRect(0, 0, w, h)
         val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
         val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
-        var y = h * (if (sc.titreExtrait != null) 0.24f else 0.30f)
-        var fs = 40f * dp
-        g.font = police(fs, true); while (g.fontMetrics.stringWidth(e.satName) > w - 24 * dp && fs > 14 * dp) { fs -= 2 * dp; g.font = police(fs, true) }
-        g.texte(e.satName, w / 2f, y, Color.WHITE, police(fs, true), centre = true); y += 34 * dp
-        sc.titreExtrait?.takeIf { it.isNotBlank() }?.let { tx -> g.texte(tx, w / 2f, y + 8 * dp, QSO, police(28 * dp, true), centre = true); y += 44 * dp }
+        // The texts at the asked scale, each made smaller if it would not fit across.
+        val k = sc.police
+        fun ajuste(s: String, px: Float, gras: Boolean): java.awt.Font {
+            var fs = px * k
+            while (g.getFontMetrics(police(fs, gras)).stringWidth(s) > w - 24 * dp && fs > 9 * dp) fs -= dp
+            return police(fs, gras)
+        }
+        var y = h * (if (sc.titreExtrait != null) 0.24f else 0.30f) - (k - 1) * 60 * dp
+        g.texte(e.satName, w / 2f, y, Color.WHITE, ajuste(e.satName, 40f * dp, true), centre = true); y += 34 * dp * k
+        sc.titreExtrait?.takeIf { it.isNotBlank() }?.let { tx -> g.texte(tx, w / 2f, y + 8 * dp * k, QSO, ajuste(tx, 28 * dp, true), centre = true); y += 44 * dp * k }
         val clair = Color(205, 215, 230)
-        g.texte(fmt("yyyy-MM-dd").format(Date(de)), w / 2f, y, clair, police(17 * dp), centre = true); y += 24 * dp
-        g.texte(fmt("HH:mm:ss").format(Date(de)) + " → " + fmt("HH:mm:ss").format(Date(a)) + " UTC", w / 2f, y, clair, police(17 * dp), centre = true); y += 22 * dp
+        val jour = fmt("yyyy-MM-dd", sc).format(Date(de))
+        g.texte(jour, w / 2f, y, clair, ajuste(jour, 17 * dp, false), centre = true); y += 24 * dp * k
+        val heures = fmt("HH:mm:ss", sc).format(Date(de)) + " → " + fmt("HH:mm:ss", sc).format(Date(a)) + " " + zone(sc, de)
+        g.texte(heures, w / 2f, y, clair, ajuste(heures, 17 * dp, false), centre = true); y += 22 * dp * k
         if (sc.titreExtrait == null) g.texte("%.0f°".format(e.elMax) + " · " + "%d:%02d".format(e.dureeMs / 60_000, e.dureeMs / 1000 % 60), w / 2f, y,
-            Color(150, 165, 185), police(14 * dp), centre = true)
-        y += 46 * dp
+            Color(150, 165, 185), police(14 * dp * k), centre = true)
+        y += 46 * dp * k
         listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() }?.let {
-            g.texte(t("journal_station_rx"), w / 2f, y, Color(150, 165, 185), police(12 * dp), centre = true); y += 26 * dp
-            g.texte(it, w / 2f, y, CYAN, police(22 * dp, true), centre = true)
+            g.texte(t("journal_station_rx"), w / 2f, y, Color(150, 165, 185), police(12 * dp * k), centre = true); y += 26 * dp * k
+            g.texte(it, w / 2f, y, CYAN, ajuste(it, 22 * dp, true), centre = true)
         }
         MarquePc.dessine(g, w / 2f, h - 26 * dp, 5.2f * dp, centre = true, couleur = CYAN)
         g.dispose()
@@ -517,7 +602,7 @@ object RenduPc {
         val top = (h - 70 * dp - ih) / 2
         g.drawImage(bm, ((w - iw) / 2).toInt(), top.toInt(), iw.toInt(), ih.toInt(), null)
         g.texte(sc.e.satName + " · " + m.texte + (m.fichier?.let { sc.etiquettes[it] }?.let { " · $it" } ?: ""), 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
-        g.texte(fmt("yyyy-MM-dd HH:mm:ss").format(Date(m.finMs)) + " UTC  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
+        g.texte(fmt("yyyy-MM-dd HH:mm:ss", sc).format(Date(m.finMs)) + " " + zone(sc, m.finMs) + "  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
             14 * dp, h - 22 * dp, Color(160, 175, 195), police(13 * dp))
         // The mark, as on the other frames.
         MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
@@ -535,7 +620,7 @@ object RenduPc {
         val gris = Color(160, 175, 195)
         var y = 40f * dp
         g.texte(e.satName, 16 * dp, y, Color.WHITE, police(24 * dp, true)); y += 22 * dp
-        g.texte(fmt("yyyy-MM-dd HH:mm").format(Date(e.debutMs)) + " UTC · " + "%.0f° · %d min".format(e.elMax, (e.dureeMs / 60_000).toInt()), 16 * dp, y, gris, police(13 * dp)); y += 18 * dp
+        g.texte(fmt("yyyy-MM-dd HH:mm", sc).format(Date(e.debutMs)) + " " + zone(sc, e.debutMs) + " · " + "%.0f° · %d min".format(e.elMax, (e.dureeMs / 60_000).toInt()), 16 * dp, y, gris, police(13 * dp)); y += 18 * dp
         g.texte(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 16 * dp, y, CYAN, police(13 * dp, true)); y += 16 * dp
         val photos = sc.marques.filter { it.type == TypeMarque.SSTV }.mapNotNull { m -> m.fichier?.let { sc.images[it] } }.take(6)
         if (photos.isNotEmpty()) {
@@ -572,7 +657,7 @@ object RenduPc {
         val dp = echelle(w, h)
         val tl = ToileJava2dPc(g)
         sc.donnees?.let { d -> ElementsJournal.carte(tl, tl, k, d, w.toFloat(), h.toFloat(),
-            sc.e.satName + " · " + fmt("yyyy-MM-dd HH:mm").format(Date(sc.e.debutMs)) + " UTC") }
+            sc.e.satName + " · " + fmt("yyyy-MM-dd HH:mm", sc).format(Date(sc.e.debutMs)) + " " + zone(sc, sc.e.debutMs)) }
         MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
         g.dispose()
         return b
