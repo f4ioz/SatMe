@@ -20,6 +20,10 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - *Carte 2D* : les mêmes satellites à plat, leurs empreintes, la trace au sol passée et à venir, le jour et la nuit.
 - *Passage* : les passages des 36 prochaines heures ; **▶ Jouer le passage** l'anime en accéléré, avec le compte à rebours de l'AOS, la culmination, le LOS, le ciel de la station, l'élévation, l'azimut, la distance et le Doppler. Trois caméras (*Poursuite*, *Depuis la station*, *Vue d'ensemble*) et une **hauteur** réglable (ou la molette) pour voir plus de Terre.
 - Onglet *Suivi* : un bouton **Globe** à côté de *Ciel* et *Carte* montre le satellite suivi, son orbite et son empreinte, les favoris autour.
+- Le rendu **Dessin animé** est celui par défaut. Le satellite choisi se distingue des autres : anneau qui tourne autour, nom marqué d'une ★, orbite épaisse, empreinte plus visible ; les autres restent en retrait.
+- **Détails** (simples, normaux, riches) : des **villes** sur le globe et la carte ; sur le dessin animé, les **montagnes** en relief (Alpes, Pyrénées, Himalaya, Andes…), des **monuments** (tour Eiffel, statue de la Liberté, pyramides, Big Ben, Taj Mahal, Fuji, fusées de Kourou et de Baïkonour…), des **bateaux** qui naviguent, et en riche des baleines, des forêts et des manchots. Approcher avec la molette pour les voir.
+- **Contacts** : les contacts du carnet sur le globe et la carte, en points, en points avec l'indicatif, ou en carrés locators.
+- **Journal** : une vue **Globe** à côté de *Ciel* et *Carte* rejoue le passage autour de la Terre ; les contacts s'allument à leur heure avec un trait station → satellite → correspondant, et les images SSTV reçues viennent se poser près de la station.
 - Tout est calculé dans le navigateur, sans Internet.
 
 ### en
@@ -27,6 +31,10 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - *2D map*: the same satellites flat, their footprints, the ground track past and to come, day and night.
 - *Pass*: the passes of the next 36 hours; **▶ Play the pass** animates it fast, with the countdown to AOS, the culmination, LOS, the station's sky, elevation, azimuth, distance and Doppler. Three cameras (*Chase*, *From the station*, *Overview*) and an adjustable **height** (or the wheel) to see more of the Earth.
 - *Suivi* tab: a **Globe** button beside *Sky* and *Map* shows the satellite followed, its orbit and footprint, the favourites around.
+- **Cartoon** is the default look. The satellite chosen stands out: a ring turning round it, its name marked with a ★, a thick orbit, a clearer footprint; the others stay in the background.
+- **Details** (simple, normal, rich): **cities** on the globe and the map; on the cartoon, **mountains** in relief (Alps, Pyrenees, Himalaya, Andes…), **landmarks** (Eiffel Tower, Statue of Liberty, pyramids, Big Ben, Taj Mahal, Fuji, the rockets of Kourou and Baikonur…), **boats** sailing, and in rich, whales, forests and penguins. Come closer with the wheel to see them.
+- **Contacts**: the log's contacts on the globe and the map, as dots, dots with the callsign, or locator squares.
+- **Journal**: a **Globe** view beside *Sky* and *Map* replays the pass round the Earth; the contacts light up at their time with a line station → satellite → correspondent, and the SSTV pictures received land beside the station.
 - All worked out in the browser, without the Internet.
 
 ## 2026.10.29

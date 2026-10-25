@@ -40,7 +40,8 @@ object PageJournal {
         "pj_sstv_titre", "pj_sstv_defaut", "pj_v_auto", "pj_v_recue", "pj_v_corrigee", "pj_v_fusion", "pj_v_passage", "pj_v_note",
         "pj_creer_fusion", "pj_fusion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
-        "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple")
+        "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
+        "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -116,6 +117,9 @@ object PageJournal {
   }
   #ciel { position:absolute; inset:0; width:100%; height:100%; }
   #carte { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:none; }
+  #globe { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:none; touch-action:none; }
+  .globe-choix { position:absolute; right:8px; top:8px; z-index:4; display:none; gap:4px; }
+  .globe-choix select { font-size:12px; padding:2px 4px; }
   /* The file's frame over the replay (PC): its view clear, the rest dimmed, its caption below. */
   #cadreF { position:absolute; inset:0; pointer-events:none; z-index:1; }
   #cadreF .vueF { position:absolute; outline:2px dashed var(--cyan); box-shadow:0 0 0 9999px rgba(5,10,16,.62); }
@@ -207,6 +211,10 @@ object PageJournal {
 <audio id="son" preload="auto"></audio>
 <script>
 const T = {/*T*/};
+// The globe's routes are the station's: under the journal's base.
+window.SATME_RACINE = location.pathname.replace(/\/journal\/?.*/, '') + '/';
+const GLOBE_MONDE = ${GlobeDonnees.json()};
+${OrbitesJs.JS}
 function tf(k) { let s = T[k] || k; for (let i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(arguments[i]); return s; }
 function g(id) { return document.getElementById(id); }
 function el(tag, attrs, kids) {
@@ -342,8 +350,14 @@ function construitVue() {
     el('img', { id: 'imageMoment', alt: '' }), el('div', { id: 'carteMoment' })]);
   const ecran = el('div', { class: 'ecran', id: 'ecran' }, [sv('svg', { id: 'ciel', viewBox: '0 0 440 440', preserveAspectRatio: 'xMidYMid meet' }),
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
+    // The globe (SatMe-PC): the pass replayed round the Earth, its contacts and pictures at their time.
+    el('canvas', { id: 'globe', title: T.globe_aide }),
     el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => montreVue('ciel') }),
-      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })]),
+      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })].concat(
+      window.SATME_PC ? [el('button', { id: 'bGlobe', text: T.vue_globe, onclick: () => montreVue('globe') })] : [])),
+    window.SATME_PC ? el('div', { class: 'globe-choix', id: 'globeChoix' }, [
+      el('select', { class: 'ob-style-choix', onchange: ev => Orbites.style(ev.target.value) }, Orbites.styles().map(s => el('option', { value: s[0], text: s[1] }))),
+      el('select', { id: 'globeCam', onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station]].map(c => el('option', { value: c[0], text: c[1] })))]) : el('span'),
     el('div', { id: 'cadreSstv', title: T.sstv_cadre_aide }, [el('img', { alt: '' }),
       el('div', { class: 'vide' }, [el('b', { text: T.sstv_cadre }), el('span', { text: T.sstv_cadre_aide })]),
       el('button', { class: 'auto discret', text: T.sstv_auto, title: T.sstv_auto_aide }), el('div', { class: 'poignee' })])]);
@@ -376,7 +390,7 @@ function construitVue() {
     el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
     el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } })]));
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
-  installeFrise(); installeCarte(); installeSstv(); montreVue(O.vue); panneau();
+  installeFrise(); installeCarte(); installeSstv(); montreVue(O.vue === 'globe' && !window.SATME_PC ? 'ciel' : O.vue); panneau();
 }
 // ------------------------------------------------------------ the SSTV picture over the replay
 // Where the video puts it: placed by hand (shares of the view: left, top, width;
@@ -400,6 +414,7 @@ function placeSstv(c, w, h) {
 function satX(v) {
   let x = null;
   if (O.vue === 'carte') x = satEcranX;
+  else if (O.vue === 'globe') x = Orbites.satEcranX();
   else { const s = g('sat'), e = g('ecran'); if (s && e) { const a = s.getBoundingClientRect(); if (a.width) x = a.left + a.width / 2 - e.getBoundingClientRect().left; } }
   return x == null ? 0.5 : (x - v.x) / v.w;
 }
@@ -478,8 +493,18 @@ function montreVue(v) {
   g('ciel').style.display = v === 'ciel' ? 'block' : 'none';
   g('carte').style.display = v === 'carte' ? 'block' : 'none';
   g('attrib').style.display = v === 'carte' ? 'block' : 'none';
+  g('globe').style.display = v === 'globe' ? 'block' : 'none';
+  if (g('globeChoix')) g('globeChoix').style.display = v === 'globe' ? 'flex' : 'none';
   g('bCiel').classList.toggle('actif', v === 'ciel'); g('bCarte').classList.toggle('actif', v === 'carte');
+  if (g('bGlobe')) g('bGlobe').classList.toggle('actif', v === 'globe');
   if (v === 'carte') dessineCarte();
+  if (v === 'globe') {
+    g('globeChoix').firstChild.value = Orbites.styleActif();
+    g('globeCam').value = Orbites.cameraActive() === 'poursuite' || Orbites.cameraActive() === 'sol' ? Orbites.cameraActive() : 'espace';
+    if (g('globeCam').value === 'espace') Orbites.camera('espace');
+    Orbites.rejeu(g('globe'), { id: P.id, sat: P.sat, sol: P.sol, qth: P.qth, indicatif: P.indicatif, locator: P.loc, marques: P.marques,
+      image: m => url('/image', { f: m.f, id: P.id, n: tourVersion }), horloge: () => t });
+  }
   majSstv();
 }
 
@@ -1139,7 +1164,7 @@ window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(
 function taille(o) { const en = document.documentElement.lang === 'en'; return (o / 1048576).toFixed(1).replace('.', en ? '.' : ',') + (en ? ' MB' : ' Mo'); }
 async function fabrique(quoi) {
   const b = v => v ? '1' : '0';
-  const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
+  const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', vue: O.vue, style: Orbites.styleActif(), t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
   // The box as it is here (ticked or not), whatever the station's setting.

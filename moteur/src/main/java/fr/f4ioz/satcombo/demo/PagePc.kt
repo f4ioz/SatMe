@@ -1085,6 +1085,7 @@ ${STYLE_JETONS}
   .ob-seg button { border:0; background:transparent; padding:4px 9px; border-radius:var(--r1); font-size:var(--fs-s); font-weight:600; color:var(--texte-2); }
   .ob-seg button[aria-pressed="true"] { background:var(--s3); color:var(--rx); }
   .ob-seg label { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
+  .ob-seg select { padding:2px 6px; font-size:var(--fs-s); }
   .ob-temps { margin-left:auto; font-family:var(--mono); font-size:var(--fs-s); }
   .ob-temps button, .ob-temps select { padding:3px 8px; font-size:var(--fs-s); }
   .ob-temps span { padding:0 4px; color:var(--texte); }
@@ -2078,7 +2079,7 @@ ${rail()}
         <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
         <canvas id="st-globe" hidden title="Glisser pour tourner, molette pour zoomer"></canvas>
-        <select id="st-globe-styles" class="st-globe-styles" hidden aria-label="Rendu du globe" onchange="Orbites.style(this.value)"><option value="realiste">Réaliste</option><option value="cartoon">Dessin animé</option><option value="holo">Hologramme</option><option value="points">Globe à points</option><option value="radar">Radar rétro</option><option value="vintage">Carte ancienne</option></select>
+        <select id="st-globe-styles" class="st-globe-styles ob-style-choix" hidden aria-label="Rendu du globe" onchange="Orbites.style(this.value)"><option value="cartoon">Dessin animé</option><option value="realiste">Réaliste</option><option value="holo">Hologramme</option><option value="points">Globe à points</option><option value="radar">Radar rétro</option><option value="vintage">Carte ancienne</option></select>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="petit" id="ciel-plan" style="text-align:center" title="Le plan du rotor pour ce passage. Violet : le rotor prévu ; ambre : retourné (par-dessus le zénith) ; rouge : un changement (retournement, déroulement) et son heure ; gris : les zones cachées"></div>
@@ -3789,10 +3790,11 @@ ${rail()}
     <div class="ob-haut">
       <div class="ob-seg" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
       <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
+      <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label></div>
       <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1">×1 réel</option><option value="10">×10</option><option value="60" selected>×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
       <div class="ob-cadreur" id="ob-cadreur" hidden>
         <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button></div>
-        <div class="ob-seg"><label title="Plus haut : la caméra s'éloigne et montre plus de Terre (la molette aussi)">Hauteur <input type="range" id="ob-hauteur" min="0.6" max="8" step="0.1"></label></div>
+        <div class="ob-seg"><label title="Plus haut : la caméra s'éloigne et montre plus de Terre (la molette aussi)">Hauteur <input type="range" id="ob-hauteur" class="ob-hauteur-r" min="0.6" max="8" step="0.1"></label></div>
       </div>
     </div>
     <div class="ob-bulle" id="ob-bulle" hidden></div>
@@ -5544,6 +5546,7 @@ function majPassageCarnet() {
 // Points close on the screen (the same square, or a few pixels apart) make one marker with their count,
 // their label one line per station; the labels spread so none covers another, a leader line when moved.
 ${EtiquettesCarteJs.JS}
+const GLOBE_MONDE = ${GlobeDonnees.json()};
 ${OrbitesJs.JS}
 const ETQ_H = 14;
 function pointsDuPassage(m) {

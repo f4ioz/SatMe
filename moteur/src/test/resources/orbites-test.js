@@ -1,7 +1,7 @@
 // The globes' pure part (OrbitesJs.JS), run under node (OrbitesJsTest).
 // By hand: node orbites-test.js orbites.js (orbites.js: OrbitesJs.JS + module.exports).
 const assert = require('assert');
-const { obEmpreinte, obNuit, obPassages, obSoleil } = require(require('path').resolve(process.argv[2]));
+const { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA } = require(require('path').resolve(process.argv[2]));
 
 const ecart = (la1, lo1, la2, lo2) => {
   const r = Math.PI / 180;
@@ -65,5 +65,22 @@ const ecart = (la1, lo1, la2, lo2) => {
   const t = Date.UTC(2026, 3, 15, 12, 0), jd = t / 86400000 + 2440587.5, T = (jd - 2451545) / 36525;
   const gmst = ((280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T) % 360) * Math.PI / 180;
   assert(Math.abs(obSoleil(t, gmst).lon) < 3, 'midi ' + obSoleil(t, gmst).lon);
+}
+// Locators: the square's centre and size; anything else refused.
+{
+  const a = obLocator('JN18fs');
+  assert(Math.abs(a.lat - 48.770833) < 1e-5 && Math.abs(a.lon - 2.458333) < 1e-5, 'JN18FS ' + JSON.stringify(a));
+  const b = obLocator('JN18');
+  assert.deepStrictEqual([b.lat, b.lon, b.dlat, b.dlon], [48.5, 3, 1, 2]);
+  assert.deepStrictEqual([obLocator('RR').lat, obLocator('RR').lon], [85, 170]);
+  ['', 'JN1', 'JN18F', 'ZZ00', 'JN18FSX', 'F4IOZ', null].forEach(x => assert.strictEqual(obLocator(x), null, String(x)));
+}
+// A recorded track: interpolated in between, the short way over the date line, nothing outside.
+{
+  const l = [[0, 10, 170, 400], [1000, 12, -170, 420], [2000, 14, -160, 440]];
+  const p = obPisteA(l, 500);
+  assert(Math.abs(p.lat - 11) < 1e-9 && Math.abs(Math.abs(p.lon) - 180) < 1e-9 && Math.abs(p.alt - 410) < 1e-9, JSON.stringify(p));
+  assert(Math.abs(obPisteA(l, 1500).lon + 165) < 1e-9);
+  assert.strictEqual(obPisteA(l, -1), null); assert.strictEqual(obPisteA(l, 2001), null); assert.strictEqual(obPisteA([], 0), null);
 }
 console.log('ok');
