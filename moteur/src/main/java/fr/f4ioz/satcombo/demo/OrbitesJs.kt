@@ -799,7 +799,7 @@ const Orbites = (function () {
         }
         if (o.carte) {
           // Received: the picture drops to the station and waits there with the others.
-          o.carte.visible = t >= m.a && rj.images.filter(n => t >= n.a).slice(-3).includes(m);
+          o.carte.visible = (!rj.donnees.cartes || rj.donnees.cartes()) && t >= m.a && rj.images.filter(n => t >= n.a).slice(-3).includes(m);
           if (o.carte.visible) {
             const k = Math.min(1, (t - m.a) / 4000), haut = stW.clone().normalize();
             const ici = stW.clone().add(haut.clone().multiplyScalar(.06 + rang * .05));

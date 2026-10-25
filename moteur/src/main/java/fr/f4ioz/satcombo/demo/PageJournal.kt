@@ -42,7 +42,7 @@ object PageJournal {
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
-        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer")
+        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -131,6 +131,8 @@ object PageJournal {
   #sBan { position:absolute; left:10px; bottom:10px; z-index:3; background:rgba(10,15,24,.85); border:1px solid var(--bord); border-radius:8px; padding:6px 10px; font-size:13px; pointer-events:none; }
   #sBan b { font-size:16px; }
   #sFrise { width:100%; height:46px; display:block; margin-top:6px; cursor:pointer; background:#0E1720; border-radius:6px; }
+  #sImage { position:absolute; z-index:2; display:none; pointer-events:none; }
+  #sImage img { width:100%; height:100%; object-fit:contain; outline:2px solid var(--sstv); border-radius:4px; background:#000; }
   #sGalerie { display:flex; gap:6px; overflow-x:auto; padding:6px 0; min-height:96px; }
   #sGalerie figure { margin:0; flex:none; text-align:center; animation:arrive .6s ease-out; }
   #sGalerie img { height:72px; border-radius:4px; border:1px solid var(--bord); display:block; }
@@ -262,7 +264,7 @@ async function entrer() {
 let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
-    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage' });
+    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -747,7 +749,8 @@ function panneauFabriquer(p) {
   res.value = O.res;
   c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.resolution }), res]));
   c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.vue }),
-    radio('vueF', 'ciel', T.vue_ciel, O.vue !== 'carte', () => montreVue('ciel')), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => montreVue('carte'))]));
+    radio('vueF', 'ciel', T.vue_ciel, O.vue === 'ciel', () => montreVue('ciel')), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => montreVue('carte'))].concat(
+    window.SATME_PC ? [radio('vueF', 'globe', T.vue_globe, O.vue === 'globe', () => montreVue('globe'))] : [])));
   // On the PC: the screen's format too (the phone's is 3:4, its view square above the caption).
   if (window.SATME_PC) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.format }),
     radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); dessineCadre(); }),
@@ -1231,16 +1234,18 @@ async function chargeSession() {
   const vitesses = () => { vit.innerHTML = ''; (S.mode === 'continu' ? [600, 2000, 6000] : [10, 30, 100]).forEach(x => vit.appendChild(el('option', { value: x, text: '×' + x })));
     vit.value = S.mode === 'continu' ? '2000' : '30'; S.vitesse = +vit.value; };
   z.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
-  z.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' })]));
+  z.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' }),
+    el('div', { id: 'sImage' }, [el('img', { alt: '' })])]));
   g('sChoix').style.display = 'flex';
   z.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
-    mode, vit]));
+    mode, vit, caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
   vitesses();
   const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); z.appendChild(fr);
   fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
   z.appendChild(el('div', { id: 'sGalerie' }));
+  z.appendChild(panneauSession());
   Orbites.rejeu(g('sGlobe'), { id: 'session:' + sat + ':' + de + ':' + a, sat: sat, sol: sol, qth: ps[0].qth, indicatif: ps[0].indicatif, locator: ps[0].loc, marques: marques,
-    image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle });
+    image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle, cartes: () => !!O.vignettes });
   majSession();
 }
 /* The session's timeline: the passes end to end (the hours between them left out), the pictures as ticks. */
@@ -1255,7 +1260,9 @@ function boucleSession(now) {
   const dt = now - (S.dernier || now); S.dernier = now;
   const fin = S.segs[S.segs.length - 1][1];
   if (S.mode === 'continu') {
-    S.t = Math.min(fin, S.t + dt * S.vitesse);
+    // Outside the passes, ten times faster: the hours between them go by quickly.
+    const dans = S.segs.some(q => S.t >= q[0] && S.t <= q[1]);
+    S.t = Math.min(fin, S.t + dt * S.vitesse * (dans ? 1 : 10));
     while (S.i < S.segs.length - 1 && S.t > S.segs[S.i][1]) S.i++;
   } else if (S.trans) {
     // Between two passes: a short pause, the days going by, then the next one.
@@ -1268,6 +1275,38 @@ function boucleSession(now) {
   majSession();
   if (S.joue) requestAnimationFrame(boucleSession);
 }
+/* The session as a video made by the station: the same options as a pass's, the passes one after another. */
+function panneauSession() {
+  const p = el('div', { class: 'panneau', style: 'margin-top:8px' });
+  p.appendChild(el('div', { class: 'aide', style: 'font-weight:700;color:var(--clair)', text: T.s_video_titre }));
+  const ti = el('input', { placeholder: T.titre_extrait, style: 'width:100%' }); p.appendChild(ti);
+  const c = el('div', { class: 'colonnes' });
+  const res = el('select', { onchange: ev => { O.res = ev.target.value; garde(); } }, [['XS', T.res_xs], ['M', T.res_m], ['HD', T.res_hd]].map(([v, l]) => el('option', { value: v, text: l })));
+  res.value = O.res;
+  c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.resolution }), res]));
+  const fmt = el('select', { onchange: ev => { O.format = ev.target.value; garde(); } }, [['paysage', T.format_paysage], ['portrait', T.format_portrait]].map(([v, l]) => el('option', { value: v, text: l })));
+  fmt.value = O.format || 'paysage';
+  c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.format }), fmt]));
+  [['ouverture', T.ouverture], ['recap', T.recap], ['sstv', T.aff_sstv], ['fiches', T.aff_fiche], ['smetre', T.aff_smetre], ['freq', T.aff_freq], ['locator', T.aff_locator], ['vignettes', T.s_vignettes]]
+    .forEach(q => c.appendChild(caseOpt(q[0], q[1])));
+  p.appendChild(c);
+  const zone = el('div');
+  p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: async () => {
+    const b = v => v ? '1' : '0';
+    const q = Object.assign({ ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: S.vitesse, titre: ti.value, vignettes: b(O.vignettes),
+      res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
+      ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
+      etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif() }, Orbites.cadrage());
+    zone.innerHTML = '';
+    const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
+    zone.appendChild(mot); zone.appendChild(barre);
+    const j = await lire('/fabrique-session', q).catch(() => ({ ok: false }));
+    if (!j.ok) { mot.textContent = j.raison === 'ffmpeg' ? T.s_sans_ffmpeg : T.echec; return; }
+    await suitTravail(j, zone, barre, mot);
+  } })]));
+  p.appendChild(zone);
+  return p;
+}
 function majSession() {
   if (!S || !g('sBan')) return;
   g('sLecture').textContent = S.joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
@@ -1275,8 +1314,18 @@ function majSession() {
   g('sBan').innerHTML = '';
   g('sBan').appendChild(el('b', { text: jour(S.t) }));
   g('sBan').appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) }));
+  // The picture being received, large over the globe (away from the satellite), as the journal and its videos show it.
+  const im = S.images.find(m => S.t >= m.de && S.t <= m.a + 6000), bo = g('sImage');
+  bo.style.display = O.sstv && im ? 'block' : 'none';
+  if (O.sstv && im) {
+    const e = g('sEcran'), W = e.clientWidth, H = e.clientHeight, l = Math.min(W * .42, H * .5 * 4 / 3), sx = Orbites.satEcranX();
+    Object.assign(bo.style, { width: l + 'px', height: l * 3 / 4 + 'px', top: '48px', left: (sx != null && sx < W / 2 ? W - l - 10 : 10) + 'px' });
+    const i = bo.firstChild, src = url('/image', { f: im.f, id: im.pid, n: 0 });
+    if (i.dataset.src !== src) { i.src = src; i.dataset.src = src; }
+    i.style.clipPath = 'inset(0 0 ' + ((1 - Math.max(0, Math.min(1, (S.t - im.de) / Math.max(1, im.a - im.de)))) * 100).toFixed(1) + '% 0)';
+  }
   // The pictures as they come, in the strip under the globe.
-  const gal = g('sGalerie');
+  const gal = g('sGalerie'); gal.style.display = O.vignettes ? 'flex' : 'none';
   while (S.vues < recues.length) { const m = recues[S.vues++];
     gal.appendChild(el('figure', {}, [el('img', { src: url('/image', { f: m.f, id: m.pid, n: 0 }), alt: '', loading: 'lazy' }), el('figcaption', { text: hms(m.a) })])); gal.scrollLeft = gal.scrollWidth; }
   const c = g('sFrise'), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1);
@@ -1314,6 +1363,10 @@ async function fabrique(quoi) {
   const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
   zone.appendChild(mot); zone.appendChild(barre);
   const j = await lire('/fabrique', p); if (!j.ok) { mot.textContent = T.echec; return; }
+  await suitTravail(j, zone, barre, mot);
+}
+/** A file being made on the station: its progress, then its link and a look at it. */
+async function suitTravail(j, zone, barre, mot) {
   while (true) {
     await new Promise(r => setTimeout(r, 700));
     const e = await lire('/travail', { n: j.travail });
