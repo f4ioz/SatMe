@@ -69,7 +69,7 @@ class GlobeRenduPcTest {
             assertTrue("$style: not blank", px.toSet().size > 400)
             vus[style] = px
             // The view above the caption, as RenduPc lays it out.
-            val dp = minOf(w / 360f, h / 480f); val haut = h - 100 * dp
+            val haut = RenduPc.hautVue(w, h, sc).toFloat()
             val cam = GlobeRenduPc.Camera(GlobeRenduPc.centre(sc, instant), w / 2f, haut / 2, 0.425f * haut)
             // The satellite's colour where it is (at its height).
             val (s, alt) = GlobeRenduPc.sousSatellite(sc.sol, instant)!!
@@ -222,7 +222,7 @@ class GlobeRenduPcTest {
         val o = GlobeRenduPc.Options(villes = "capitales", etiquettes = "nomdrapeau", gdx = 0.2f, gdy = 0.15f, gz = 1.8f)
         val sc = scene("cartoon", o = o)
         val img = rend(o, "globe-decale-zoom.png")
-        val dp = minOf(w / 360f, h / 480f); val haut = h - 100 * dp
+        val haut = RenduPc.hautVue(w, h, sc).toFloat()
         val cam = GlobeRenduPc.camera(sc, instant, w.toFloat(), haut)
         assertEquals(w / 2f + 0.2f * w, cam.ox, 0.01f); assertEquals(haut / 2 + 0.15f * haut, cam.oy, 0.01f)
         assertEquals(0.425f * haut * 1.8f, cam.r, 0.01f)
@@ -251,7 +251,7 @@ class GlobeRenduPcTest {
         val sc = scene("cartoon", o = o)
         val img = RenduPc.image(w, h, sc, instant)
         ImageIO.write(img, "png", File(echantillons, "globe-relief.png"))
-        val dp = minOf(w / 360f, h / 480f); val haut = h - 100 * dp
+        val haut = RenduPc.hautVue(w, h, sc).toFloat()
         val cam = GlobeRenduPc.camera(sc, instant, w.toFloat(), haut)
         fun c(lat: Double, lon: Double) = cam.ecran(lat, lon).let { Color(img.getRGB(it.first.toInt(), it.second.toInt())) }
         val alpes = c(46.0, 7.9); val beauce = c(48.3, 1.6)
