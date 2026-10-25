@@ -15,10 +15,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+## 2026.10.30
+
 ### fr
-- **Molette en relais** : la molette de volume USB branchée sur un autre PC accorde ta station à distance. Sur ce PC, lance SatMe-PC, puis *Réglages › Molette › Relais vers une autre station* : l'adresse de la station (https://… derrière nginx, ou http://192.168.…:8090) et son mot de passe d'accès à distance, qui sert une fois et n'est jamais gardé. Chaque cran est appliqué par la station avec ses propres réglages (pas, cible, touches apprises).
+- **Molette en relais** : la molette de volume USB branchée sur un autre PC accorde ta station à distance. Sur ce PC, lance SatMe-PC, puis *Réglages › Interfaces › Molette USB › Relais vers une autre station* (cocher aussi « Accorder avec la molette ») : l'adresse de la station (https://… derrière nginx, ou http://192.168.…:8090) et son mot de passe d'accès à distance, qui sert une fois et n'est jamais gardé. Chaque cran est appliqué par la station avec ses propres réglages (pas, cible, touches apprises).
 - **Molette sous Windows** : les touches de volume (molette USB comprise) sont lues aussi sous Windows, et peuvent être capturées pour que le volume du PC ne bouge plus.
-- **SatMe-PC portable** : un dossier `donnees` à côté du programme (à côté de `SatMe.exe` dans le zip Windows, ou de `bin` et `lib` sous Linux) garde tous les réglages et fichiers ; rien n'est écrit ailleurs sur le PC. Idéal sur une clé USB.
+- **SatMe-PC portable** : un dossier `donnees` à côté du programme (à côté de `SatMe-PC.exe` dans le zip Windows, ou de `bin` et `lib` sous Linux) garde tous les réglages et fichiers ; rien n'est écrit ailleurs sur le PC. Idéal sur une clé USB.
 - Nouvel onglet **Orbites** (espace *Ciel*) : la **Terre en 3D** avec tes satellites favoris (ou ceux que tu coches dans *Tous*) qui tournent sur leur orbite, leur **empreinte** au sol et un trait vers la station quand ils sont levés. Six rendus : *Réaliste*, *Dessin animé*, *Hologramme*, *Globe à points*, *Radar rétro*, *Carte ancienne*. Le temps peut s'accélérer (×1 à ×1200).
 - *Carte 2D* : les mêmes satellites à plat, leurs empreintes, la trace au sol passée et à venir, le jour et la nuit.
 - *Passage* : les passages des 36 prochaines heures ; **▶ Jouer le passage** l'anime en accéléré, avec le compte à rebours de l'AOS, la culmination, le LOS, le ciel de la station, l'élévation, l'azimut, la distance et le Doppler. Trois caméras (*Poursuite*, *Depuis la station*, *Vue d'ensemble*) et une **hauteur** réglable (ou la molette) pour voir plus de Terre.
@@ -33,9 +35,9 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - Tout est calculé dans le navigateur, sans Internet.
 
 ### en
-- **Knob relay**: the USB volume knob plugged into another PC tunes your station from afar. On that PC, start SatMe-PC, then *Settings › Knob › Relay to another station*: the station's address (https://… behind nginx, or http://192.168.…:8090) and its remote access password, used once and never kept. Each step is applied by the station with its own knob settings (step, target, learned keys).
+- **Knob relay**: the USB volume knob plugged into another PC tunes your station from afar. On that PC, start SatMe-PC, then *Settings › Interfaces › USB knob › Relay to another station* (also tick « Tune with the knob »): the station's address (https://… behind nginx, or http://192.168.…:8090) and its remote access password, used once and never kept. Each step is applied by the station with its own knob settings (step, target, learned keys).
 - **Knob on Windows**: the volume keys (the USB knob among them) are read on Windows too, and can be captured so the PC's volume no longer moves.
-- **Portable SatMe-PC**: a `donnees` folder beside the program (beside `SatMe.exe` in the Windows zip, or `bin` and `lib` on Linux) keeps all the settings and files; nothing is written elsewhere on the PC. Ideal on a USB stick.
+- **Portable SatMe-PC**: a `donnees` folder beside the program (beside `SatMe-PC.exe` in the Windows zip, or `bin` and `lib` on Linux) keeps all the settings and files; nothing is written elsewhere on the PC. Ideal on a USB stick.
 - New **Orbites** tab (*Sky* workspace): the **Earth in 3D** with your favourite satellites (or those ticked in *All*) going round on their orbits, their **footprint** on the ground and a line to the station when they are up. Six looks: *Realistic*, *Cartoon*, *Hologram*, *Dotted globe*, *Retro radar*, *Old map*. Time can run faster (×1 to ×1200).
 - *2D map*: the same satellites flat, their footprints, the ground track past and to come, day and night.
 - *Pass*: the passes of the next 36 hours; **▶ Play the pass** animates it fast, with the countdown to AOS, the culmination, LOS, the station's sky, elevation, azimuth, distance and Doppler. Three cameras (*Chase*, *From the station*, *Overview*) and an adjustable **height** (or the wheel) to see more of the Earth.

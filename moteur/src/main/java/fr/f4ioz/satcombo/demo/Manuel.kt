@@ -48,6 +48,7 @@ object Manuel {
         "sdr" to "le-récepteur-sdr",
         "noeud" to "satme-node--son-sdr-son-émetteur-sa-santé",
         "carte" to "avions-ads-b-et-carte",
+        "orbites" to "orbites--la-terre-en-3d",
         "avions" to "avions-ads-b-et-carte",
         "ais" to "navires-ais",
         "espace" to "météo-spatiale",

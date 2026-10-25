@@ -262,7 +262,7 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - *l'image SSTV qui arrive* : en grand sur le globe, loin du satellite, dessinée pendant qu'elle est reçue ; *vignettes des images* : les images reçues sous la frise.
 - Un bandeau : l'heure, « Passage 2 / 4 · 5 images reçues », AOS, TCA et LOS, « AOS + 3:06 ».
 - **▶ Animer la session de l'événement** (*Fabriquer › Éléments du rapport* d'un passage qui a un événement SSTV) : la session de son satellite et de ses jours, lancée tout de suite.
-- **🎬 Vidéo de la session** (il faut ffmpeg) : les mêmes options que la vidéo d'un passage et la taille des textes ; sans son, une **carte d'ouverture**, les passages sur le globe tel qu'il est cadré, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin.
+- **🎬 Vidéo de la session** (il faut ffmpeg) : les mêmes options que la vidéo d'un passage et la taille des textes ; sans son, une **carte d'ouverture**, les passages sur le globe tel qu'il est cadré, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin ; elle suit les trois vitesses de la session (vite entre les passages, moins vite pendant un passage, lentement sur une image ou un contact enregistré).
 
 ### Images SSTV et éléments du rapport
 

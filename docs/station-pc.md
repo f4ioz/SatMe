@@ -261,7 +261,7 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 - *l'image SSTV qui arrive* (the SSTV picture coming in): large over the globe, away from the satellite, drawn as it is received; *vignettes des images* (thumbnails): the pictures received under the timeline.
 - A caption: the time, « Passage 2 / 4 · 5 images reçues », AOS, TCA and LOS, « AOS + 3:06 ».
 - **▶ Animer la session de l'événement** (play the event's session; *Fabriquer › Éléments du rapport* of a pass that has an SSTV event): the session of its satellite and days, played at once.
-- **🎬 Vidéo de la session** (the session's video; ffmpeg needed): the same options as a pass's video and the text size; without sound, an **opening card**, the passes on the globe as it is framed, a **card of the next pass** between two, the **mosaic** of the pictures at the end.
+- **🎬 Vidéo de la session** (the session's video; ffmpeg needed): the same options as a pass's video and the text size; without sound, an **opening card**, the passes on the globe as it is framed, a **card of the next pass** between two, the **mosaic** of the pictures at the end; it follows the session's three speeds (fast between passes, slower in a pass, slow on a picture or a recorded contact).
 
 ### SSTV pictures and report elements
 
