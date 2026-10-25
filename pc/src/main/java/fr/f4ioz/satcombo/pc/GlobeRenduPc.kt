@@ -68,6 +68,25 @@ object GlobeRenduPc {
     fun styleDemande(vue: String, style: String): String? =
         if (vue.trim() != "globe") null else style.trim().lowercase().takeIf { it in STYLES } ?: DEFAUT
 
+    /**
+     * The page's choices for the globe: the cities ([villes] « toutes », « capitales », « aucune »),
+     * the capitals' labels ([etiquettes] « nom », « drapeau », « nomdrapeau »), how much is drawn
+     * ([detail] 0 nothing, 1 summits, landmarks and boats, 2 all the scenery), where the globe sits
+     * ([gdx], [gdy] shares of the view's width and height from its middle) and how large ([gz], 1: 85 % of its height).
+     */
+    data class Options(val villes: String = "toutes", val etiquettes: String = "nom", val detail: Int = 1,
+                       val gdx: Float = 0f, val gdy: Float = 0f, val gz: Float = 1f)
+
+    /** The globe's choices from a request; a missing or wrong one keeps its default. */
+    fun options(p: (String) -> String): Options {
+        fun nombre(k: String, de: Float, a: Float, defaut: Float) = p(k).trim().toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(de, a) ?: defaut
+        return Options(
+            villes = p("villes").trim().takeIf { it in setOf("toutes", "capitales", "aucune") } ?: "toutes",
+            etiquettes = p("etiquettes").trim().takeIf { it in setOf("nom", "drapeau", "nomdrapeau") } ?: "nom",
+            detail = p("detail").trim().toIntOrNull()?.coerceIn(0, 2) ?: 1,
+            gdx = nombre("gdx", -0.5f, 0.5f, 0f), gdy = nombre("gdy", -0.5f, 0.5f, 0f), gz = nombre("gz", 0.5f, 3f, 1f))
+    }
+
     private const val RE = 6371.0
     private const val D2R = PI / 180
     private val STATION = Color(0xFFB454)
@@ -373,13 +392,20 @@ object GlobeRenduPc {
         val style = sc.styleGlobe.takeIf { it in STYLES } ?: DEFAUT
         val lk = LOOKS.getValue(style)
         val t = instant ?: sc.e.points.maxByOrNull { it.el }?.tMs ?: sc.e.finMs
-        val cam = Camera(centre(sc, t), w / 2, h / 2, 0.425f * h)
+        val o = sc.optionsGlobe
+        val cam = camera(sc, t, w, h)
         val soleil = soleil(t)
         fond(g, w, h, lk, style, dp)
         lueurExterieure(g, cam, lk, style)
-        terre(g, cam, lk, style, soleil, dp, t)
+        terre(g, cam, lk, style, soleil, dp, w, h, o.detail)
         if (style == "cartoon") { g.color = Color(0x0a1230); g.stroke = BasicStroke(max(2f, cam.r * 0.018f)); g.draw(Ellipse2D.Float(cam.ox - cam.r, cam.oy - cam.r, 2 * cam.r, 2 * cam.r)) }
         return dessus(g, w, cam, sc, t, style, lk, soleil, dp)
+    }
+
+    /** The view of the frame at [t] in a view [w]×[h]: where it looks, the globe moved and scaled as the page asks. */
+    fun camera(sc: RenduPc.Scene, t: Long, w: Float, h: Float): Camera {
+        val o = sc.optionsGlobe
+        return Camera(centre(sc, t), w / 2 + o.gdx * w, h / 2 + o.gdy * h, 0.425f * h * o.gz)
     }
 
     private fun Graphics2D.lisse() {
@@ -419,17 +445,19 @@ object GlobeRenduPc {
      * shallows, the grid) and over it (the coast, mountains, landmarks,
      * cities), then each pixel coloured by its latitude and lit.
      */
-    private fun terre(g: Graphics2D, cam: Camera, lk: Look, style: String, soleil: DoubleArray, dp: Float, t: Long) {
-        val x0 = floor(cam.ox - cam.r - 2).toInt(); val y0 = floor(cam.oy - cam.r - 2).toInt()
-        val d = ceil(2 * cam.r + 4).toInt().coerceAtLeast(4)
+    private fun terre(g: Graphics2D, cam: Camera, lk: Look, style: String, soleil: DoubleArray, dp: Float, vw: Float, vh: Float, detail: Int) {
+        // Only what of the disc is in the view (a large globe goes beyond it).
+        val x0 = max(0, floor(cam.ox - cam.r - 2).toInt()); val y0 = max(0, floor(cam.oy - cam.r - 2).toInt())
+        val dw = (min(ceil(vw.toDouble()).toInt(), ceil(cam.ox + cam.r + 2.0).toInt()) - x0).coerceAtLeast(1)
+        val dh = (min(ceil(vh.toDouble()).toInt(), ceil(cam.oy + cam.r + 2.0).toInt()) - y0).coerceAtLeast(1)
         val r = cam.r.toDouble()
         val remplir = Path2D.Float(Path2D.WIND_NON_ZERO); val cote = Path2D.Float()
         for (a in terres.anneaux) decoupe(a, cam, remplir, cote)
         val unDeg = (r * D2R).toFloat()
 
-        val masque = BufferedImage(d, d, BufferedImage.TYPE_BYTE_GRAY)
+        val masque = BufferedImage(dw, dh, BufferedImage.TYPE_BYTE_GRAY)
         if (lk.terre != null) masque.createGraphics().apply { lisse(); translate(-x0.toDouble(), -y0.toDouble()); color = Color.WHITE; fill(remplir); dispose() }
-        val dessous = BufferedImage(d, d, BufferedImage.TYPE_INT_ARGB)
+        val dessous = BufferedImage(dw, dh, BufferedImage.TYPE_INT_ARGB)
         dessous.createGraphics().apply {
             lisse(); translate(-x0.toDouble(), -y0.toDouble())
             val rond = BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
@@ -449,7 +477,7 @@ object GlobeRenduPc {
             }
             dispose()
         }
-        val dessus = BufferedImage(d, d, BufferedImage.TYPE_INT_ARGB)
+        val dessus = BufferedImage(dw, dh, BufferedImage.TYPE_INT_ARGB)
         dessus.createGraphics().apply {
             lisse(); translate(-x0.toDouble(), -y0.toDouble())
             lk.cote?.let { c ->
@@ -462,14 +490,14 @@ object GlobeRenduPc {
                 color = couleur(0x8fb0ff); val s = max(1.3f, cam.r * 0.0085f)
                 for (p in points) if (cam.profondeur(p) > 0.02) fill(Ellipse2D.Float(cam.x(p) - s / 2, cam.y(p) - s / 2, s, s))
             }
-            monde(this, cam, style, dp)
+            if (detail > 0) monde(this, cam, style, dp, detail)
             dispose()
         }
 
         val m = (masque.raster.dataBuffer as DataBufferByte).data
         val s0 = (dessous.raster.dataBuffer as DataBufferInt).data
         val s1 = (dessus.raster.dataBuffer as DataBufferInt).data
-        val img = BufferedImage(d, d, BufferedImage.TYPE_INT_ARGB)
+        val img = BufferedImage(dw, dh, BufferedImage.TYPE_INT_ARGB)
         val out = (img.raster.dataBuffer as DataBufferInt).data
         val e = cam.e; val n = cam.n; val c = cam.c
         val hx = norme(doubleArrayOf(soleil[0] + c[0], soleil[1] + c[1], soleil[2] + c[2]))
@@ -477,9 +505,9 @@ object GlobeRenduPc {
         val nr = ((lk.nuit shr 16) and 255).toDouble(); val ng = ((lk.nuit shr 8) and 255).toDouble(); val nb = (lk.nuit and 255).toDouble()
         val br = ((lk.bord ?: 0) shr 16 and 255).toDouble(); val bg = ((lk.bord ?: 0) shr 8 and 255).toDouble(); val bb = ((lk.bord ?: 0) and 255).toDouble()
         val limite = 1 + 1.0 / r
-        for (j in 0 until d) {
+        for (j in 0 until dh) {
             val v = -((y0 + j + 0.5) - cam.oy) / r
-            for (i in 0 until d) {
+            for (i in 0 until dw) {
                 val u = ((x0 + i + 0.5) - cam.ox) / r
                 val q = u * u + v * v
                 if (q > limite * limite) continue
@@ -490,7 +518,7 @@ object GlobeRenduPc {
                 val px = u * e[0] + v * n[0] + wz * c[0]; val py = u * e[1] + v * n[1] + wz * c[1]; val pz = u * e[2] + v * n[2] + wz * c[2]
                 val la = asin(pz.coerceIn(-1.0, 1.0)) / D2R
                 val li = ((90 - la) * 10).toInt().coerceIn(0, 1800)
-                val k = j * d + i
+                val k = j * dw + i
                 var oc = mer[li]
                 var cr = ((oc shr 16) and 255).toDouble(); var cg = ((oc shr 8) and 255).toDouble(); var cb = (oc and 255).toDouble()
                 if (style == "radar") { val f = 1 - 0.75 * rr * rr; cr *= f; cg = 12 + (cg - 12) * f; cb *= f }
@@ -505,14 +533,19 @@ object GlobeRenduPc {
                 val rel = relief
                 if (rel != null && terreF > 0 && (style == "cartoon" || style == "realiste" || style == "vintage")) {
                     val ci = cellule(la, atan2(py, px) / D2R); val alt = rel.altitude[ci]; val om = rel.ombre[ci] * terreF
-                    if (style != "vintage" && alt > 800) {
+                    if (style == "cartoon" && alt > 600) {
+                        // Clearly seen: the high ground brown, the summits white (the page's numbers).
+                        val b = ((alt - 600) / 2400.0).coerceIn(0.0, 1.0) * 0.75 * terreF
+                        cr += (186 - cr) * b; cg += (128 - cg) * b; cb += (72 - cb) * b
+                        val n = ((alt - 3500) / 1200.0).coerceIn(0.0, 1.0) * 0.9 * terreF
+                        cr += (255 - cr) * n; cg += (255 - cg) * n; cb += (255 - cb) * n
+                    } else if (style == "realiste" && alt > 800) {
                         val b = ((alt - 800) / 2600.0).coerceIn(0.0, 1.0) * 0.55 * terreF
-                        val c2 = style == "cartoon"
-                        cr += ((if (c2) 196.0 else 140.0) - cr) * b; cg += ((if (c2) 140.0 else 112.0) - cg) * b; cb += ((if (c2) 84.0 else 82.0) - cb) * b
+                        cr += (140 - cr) * b; cg += (112 - cg) * b; cb += (82 - cb) * b
                         val n = ((alt - 3800) / 1200.0).coerceIn(0.0, 1.0) * 0.8 * terreF
                         cr += (250 - cr) * n; cg += (252 - cg) * n; cb += (255 - cb) * n
                     }
-                    val fo = 1 + om * (if (style == "cartoon") 0.28 else 0.35)
+                    val fo = 1 + om * (if (style == "cartoon") 0.45 else 0.35)
                     cr *= fo; cg *= fo; cb *= fo
                 }
                 if (style == "realiste" && la > 73.8) { val f = .95 * ((la - 73.8) / 9).coerceAtMost(1.0); cr += (240 - cr) * f; cg += (246 - cg) * f; cb += (250 - cb) * f }
@@ -785,7 +818,7 @@ object GlobeRenduPc {
     }
 
     /** The world drawn on the surface, back to front: mountains, scenery, landmarks, cities' dots (the cartoon's all of it, the others' lighter). */
-    private fun monde(g: Graphics2D, cam: Camera, style: String, dp: Float) {
+    private fun monde(g: Graphics2D, cam: Camera, style: String, dp: Float, detail: Int) {
         val cartoon = style == "cartoon"
         val k = cam.r * (if (cartoon) 1f else 0.75f)
         val dessins = ArrayList<Pair<Float, () -> Unit>>()
@@ -798,7 +831,7 @@ object GlobeRenduPc {
             val h = hauteurSommet(s.altitude)
             ajoute(s.lat, s.lon, k * (0.018f + 0.04f * h.toFloat())) { montagne(it, h) }
         }
-        if (style != "holo" && style != "radar" && style != "points") for (d in GlobeDonnees.DECOR)
+        if (style != "holo" && style != "radar" && style != "points") for (d in GlobeDonnees.DECOR.filter { detail >= 2 || it.type == "bateau" })
             ajoute(d.lat, d.lon, k * if (d.type == "foret") 0.06f else 0.048f) { decor(it, d.type) }
         for (m in GlobeDonnees.MONUMENTS) ajoute(m.lat, m.lon, k * 0.095f) { monument(it, m.id) }
         dessins.sortBy { it.first }
@@ -860,7 +893,11 @@ object GlobeRenduPc {
             val p = if (la != null && lo != null) vec(la, lo) else sousSatellite(sc.sol, m.debutMs)?.first ?: continue
             if (cam.profondeur(p) > 0.02) reserve += etiquette(g, m.texte, cam.x(p) - 6 * dp, cam.y(p), coulSat, style, dp, dessine = false)
         }
-        villes(g, cam, style, dp, ArrayList(reserve))
+        when (sc.optionsGlobe.villes) {
+            "capitales" -> capitales(g, cam, style, dp, ArrayList(reserve), sc.optionsGlobe)
+            "aucune" -> {}
+            else -> villes(g, cam, style, dp, ArrayList(reserve))
+        }
 
         // The footprint.
         if (sous != null) {
@@ -1009,5 +1046,74 @@ object GlobeRenduPc {
                 else -> texteCerne(g, v.nom, b.x, y + fm.ascent * 0.35f, teinte(style, 0xffffff, alpha), Color(0, 0, 0, alpha / 2), f, 2.4f * dp)
             }
         }
+    }
+
+    /** How many capitals by the detail asked: the 40 most populous, 100, all. */
+    fun nombreCapitales(detail: Int): Int = when (detail) { 0 -> 40; 1 -> 100; else -> GlobeDonnees.CAPITALES.size }
+
+    /**
+     * The capitals, the most populous first: a dot, then the name, its
+     * country's code on a small badge (the page's flag) or both, where it finds
+     * room; the 40 largest keep their dot without it, the others go.
+     */
+    private fun capitales(g: Graphics2D, cam: Camera, style: String, dp: Float, boites: MutableList<Rectangle2D.Float>, o: Options) {
+        val f = if (style == "vintage") Font(Font.SERIF, Font.ITALIC, 1).deriveFont(10.5f * dp) else Font(Font.SANS_SERIF, Font.BOLD, 1).deriveFont(9.5f * dp)
+        val fb = Font(Font.SANS_SERIF, Font.BOLD, 1).deriveFont(7.5f * dp)
+        g.font = f
+        val fm = g.fontMetrics
+        val fmb = g.getFontMetrics(fb)
+        val nom = o.etiquettes != "drapeau"
+        GlobeDonnees.CAPITALES.take(nombreCapitales(o.detail)).forEachIndexed { rangC, v ->
+            val p = vec(v.lat, v.lon); val z = cam.profondeur(p)
+            if (z < 0.15) return@forEachIndexed
+            val x = cam.x(p); val y = cam.y(p)
+            val grande = rangC < 40
+            val r = (if (rangC < 15) 3.2f else if (grande) 2.6f else 2f) * dp
+            val badge = o.etiquettes != "nom" && v.pays.isNotBlank()
+            val lb = if (badge) fmb.stringWidth(v.pays) + 6 * dp else 0f
+            val l = (if (nom) fm.stringWidth(v.nom).toFloat() else 0f) + (if (badge && nom) lb + 3 * dp else lb)
+            if (l <= 0f) {
+                // Neither name nor code (a flag asked of a capital without country): the dot alone.
+                if (grande || boites.none { it.contains(x.toDouble(), y.toDouble()) }) point(g, x, y, r, style, rangC < 15)
+                return@forEachIndexed
+            }
+            val b = Rectangle2D.Float(x + r + 2 * dp, y - fm.ascent * 0.9f, l, fm.ascent.toFloat() + 2)
+            val place = boites.none { it.intersects(b) }
+            if (!place && !grande) return@forEachIndexed
+            point(g, x, y, r, style, rangC < 15)
+            if (!place) return@forEachIndexed
+            boites += b
+            val alpha = (255 * ((z - 0.15) / 0.2).coerceIn(0.0, 1.0)).toInt()
+            var tx = b.x
+            if (badge) {
+                val hb = fmb.ascent + 3 * dp
+                val chip = RoundRectangle2D.Float(tx, y - hb / 2 - fm.ascent * 0.08f, lb, hb, hb * 0.6f, hb * 0.6f)
+                if (style == "cartoon") {
+                    g.color = Color(255, 255, 255, alpha); g.fill(chip)
+                    g.color = Color(10, 18, 48, alpha); g.stroke = BasicStroke(1.1f * dp); g.draw(chip)
+                } else { g.color = Color(16, 38, 92, alpha * 230 / 255); g.fill(chip) }
+                g.font = fb
+                g.color = if (style == "cartoon") Color(10, 18, 48, alpha) else Color(255, 255, 255, alpha)
+                g.drawString(v.pays, tx + 3 * dp, (chip.y + chip.height / 2 + fmb.ascent * 0.38f))
+                tx += lb + 3 * dp
+            }
+            if (nom) texteNom(g, v.nom, tx, y + fm.ascent * 0.35f, style, alpha, f, dp)
+        }
+    }
+
+    private fun point(g: Graphics2D, x: Float, y: Float, r: Float, style: String, grande: Boolean) {
+        when (style) {
+            "cartoon" -> { g.color = Color(0x0a1230); g.fill(rond(x, y, r + 1.2f * r / 2.6f)); g.color = if (grande) Color(0xff5a5f) else Color.WHITE; g.fill(rond(x, y, r)) }
+            "vintage" -> { g.color = Color(0x5a3a1c); g.fill(rond(x, y, r)); g.color = Color(0xefe0b8); g.fill(rond(x, y, r * 0.45f)) }
+            "realiste" -> { g.color = Color(255, 236, 190, 230); g.fill(rond(x, y, r * 0.8f)) }
+            else -> { g.color = teinte(style, 0xffffff, 230); g.fill(rond(x, y, r * 0.8f)) }
+        }
+    }
+
+    private fun texteNom(g: Graphics2D, s: String, x: Float, y: Float, style: String, alpha: Int, f: Font, dp: Float) = when (style) {
+        "cartoon" -> texteCerne(g, s, x, y, Color(255, 255, 255, alpha), Color(10, 18, 48, alpha), f, 3f * dp)
+        "vintage" -> texteCerne(g, s, x, y, Color(74, 46, 20, alpha), Color(239, 224, 184, alpha * 2 / 3), f, 2.4f * dp)
+        "realiste" -> texteCerne(g, s, x, y, Color(240, 244, 250, alpha), Color(0, 0, 0, alpha / 2), f, 2.4f * dp)
+        else -> texteCerne(g, s, x, y, teinte(style, 0xffffff, alpha), Color(0, 0, 0, alpha / 2), f, 2.4f * dp)
     }
 }
