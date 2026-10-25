@@ -1236,7 +1236,9 @@ async function chargeSession() {
   sol.sort((x, y) => x[0] - y[0]);
   const images = marques.filter(m => m.k === 'SSTV' && m.f).sort((x, y) => x.a - y.a);
   // Where to slow down: a picture being received, a contact being heard (3 s either side; a contact with no span, 20 s round it).
-  const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || m.k === 'QSO').map(m => m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]);
+  // A contact slows down when its pass has its sound (a contact heard), as in the session's video.
+  const avecSon = new Set(ps.filter(q => (q.sons || []).length).map(q => q.id));
+  const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || (m.k === 'QSO' && avecSon.has(m.pid))).map(m => m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]);
   S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', f: O.vPassage,
     images: images, lentes: lentes, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat) };
   S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
