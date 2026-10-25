@@ -42,7 +42,7 @@ object PageJournal {
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
-        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg")
+        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -104,7 +104,13 @@ object PageJournal {
     #page > header { flex:none; }
     .corps { flex:1; min-height:0; }
     .liste { max-height:none; min-height:0; }
-    .vue { min-height:0; display:flex; flex-direction:column; }
+    .vue { min-height:0; display:flex; flex-direction:column; overflow-y:auto; }
+    /* A session: the globe and its timeline on the left, the video's choices in their own column */
+    .s-deux { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:10px; }
+    .s-gauche { display:flex; flex-direction:column; min-height:0; }
+    .s-gauche #sEcran { flex:1; height:auto; min-height:260px; }
+    .s-cote { min-height:0; overflow-y:auto; }
+    #sZone { flex:1; min-height:0; display:flex; flex-direction:column; }
     .deux { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:10px; }
     .gauche { display:flex; flex-direction:column; min-height:0; }
     .gauche .ecran { flex:1; height:auto; min-height:200px; }
@@ -128,8 +134,10 @@ object PageJournal {
   .session-f input[type=date] { padding:3px 6px; }
   #sEcran { position:relative; height:calc(100vh - 430px); min-height:280px; background:#0E1720; border-radius:8px; overflow:hidden; }
   #sGlobe { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
-  #sBan { position:absolute; left:10px; bottom:10px; z-index:3; background:rgba(10,15,24,.85); border:1px solid var(--bord); border-radius:8px; padding:6px 10px; font-size:13px; pointer-events:none; }
-  #sBan b { font-size:16px; }
+  #sBan { position:absolute; left:10px; bottom:10px; z-index:3; background:rgba(10,15,24,.85); border:1px solid var(--bord); border-radius:8px; padding:6px 10px; font-size:calc(13px * var(--police, 1)); pointer-events:none; line-height:1.35; }
+  #sBan b { font-size:1.25em; }
+  .s-curseur { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gris); }
+  .s-curseur input { width:120px; }
   #sFrise { width:100%; height:46px; display:block; margin-top:6px; cursor:pointer; background:#0E1720; border-radius:6px; }
   #sImage { position:absolute; z-index:2; display:none; pointer-events:none; }
   #sImage img { width:100%; height:100%; object-fit:contain; outline:2px solid var(--sstv); border-radius:4px; background:#000; }
@@ -264,7 +272,8 @@ async function entrer() {
 let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
-    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true });
+    smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true,
+    entre: 10, transition: 1.6, police: 1 });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -759,6 +768,7 @@ function panneauFabriquer(p) {
   c.appendChild(caseOpt('avecSon', T.avec_son)); c.appendChild(caseOpt('accelVideo', T.accelere_video));
   c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
   p.appendChild(c);
+  p.appendChild(curseurPolice());
   p.appendChild(el('div', { class: 'rangee' }, [
     el('button', { class: 'discret', text: T.son, onclick: () => fabrique('son') }),
     el('button', { class: 'discret', text: T.image, onclick: () => fabrique('image') }),
@@ -1231,19 +1241,28 @@ async function chargeSession() {
   z.innerHTML = '';
   const vit = el('select', { id: 'sVit', onchange: ev => { S.vitesse = +ev.target.value; } });
   const mode = el('select', { onchange: ev => { S.mode = ev.target.value; vitesses(); } }, [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
-  const vitesses = () => { vit.innerHTML = ''; (S.mode === 'continu' ? [600, 2000, 6000] : [10, 30, 100]).forEach(x => vit.appendChild(el('option', { value: x, text: '×' + x })));
+  // Between the passes: the pause (passes in a row), or how much faster time runs there (continuous time).
+  const libEntre = () => { const c = S.mode === 'continu', r = g('sEntre');
+    Object.assign(r, c ? { min: 1, max: 100, step: 1 } : { min: .5, max: 6, step: .1 }); r.value = c ? O.entre : O.transition;
+    g('sEntreT').textContent = c ? T.s_entre_vite : T.s_entre_pause; g('sEntreV').textContent = c ? '×' + O.entre : (+O.transition).toFixed(1) + ' s'; };
+  const vitesses = () => { if (g('sEntre')) libEntre(); vit.innerHTML = ''; (S.mode === 'continu' ? [600, 2000, 6000] : [10, 30, 100]).forEach(x => vit.appendChild(el('option', { value: x, text: '×' + x })));
     vit.value = S.mode === 'continu' ? '2000' : '30'; S.vitesse = +vit.value; };
-  z.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
-  z.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' }),
+  const gauche = el('div', { class: 's-gauche' }), cote = el('div', { class: 's-cote' });
+  z.appendChild(el('div', { class: 's-deux' }, [gauche, cote]));
+  const zg = { appendChild: n => gauche.appendChild(n) };
+  zg.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
+  zg.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' }),
     el('div', { id: 'sImage' }, [el('img', { alt: '' })])]));
   g('sChoix').style.display = 'flex';
-  z.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
-    mode, vit, caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
+  zg.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
+    mode, vit, el('label', { class: 's-curseur', id: 'sEntreL' }, [el('span', { id: 'sEntreT' }), el('input', { type: 'range', id: 'sEntre', oninput: ev => {
+      if (S.mode === 'continu') O.entre = +ev.target.value; else O.transition = +ev.target.value; garde(); libEntre(); } }), el('b', { id: 'sEntreV' })]),
+    caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
   vitesses();
-  const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); z.appendChild(fr);
+  const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); zg.appendChild(fr);
   fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
-  z.appendChild(el('div', { id: 'sGalerie' }));
-  z.appendChild(panneauSession());
+  zg.appendChild(el('div', { id: 'sGalerie' }));
+  cote.appendChild(panneauSession());
   Orbites.rejeu(g('sGlobe'), { id: 'session:' + sat + ':' + de + ':' + a, sat: sat, sol: sol, qth: ps[0].qth, indicatif: ps[0].indicatif, locator: ps[0].loc, marques: marques,
     image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle, cartes: () => !!O.vignettes });
   majSession();
@@ -1262,18 +1281,24 @@ function boucleSession(now) {
   if (S.mode === 'continu') {
     // Outside the passes, ten times faster: the hours between them go by quickly.
     const dans = S.segs.some(q => S.t >= q[0] && S.t <= q[1]);
-    S.t = Math.min(fin, S.t + dt * S.vitesse * (dans ? 1 : 10));
+    S.t = Math.min(fin, S.t + dt * S.vitesse * (dans ? 1 : O.entre));
     while (S.i < S.segs.length - 1 && S.t > S.segs[S.i][1]) S.i++;
   } else if (S.trans) {
     // Between two passes: a short pause, the days going by, then the next one.
     S.trans -= dt; if (S.trans <= 0) { S.trans = 0; S.i++; S.t = S.segs[S.i][0]; }
   } else {
     S.t += dt * S.vitesse;
-    if (S.t >= S.segs[S.i][1]) { S.t = S.segs[S.i][1]; if (S.i < S.segs.length - 1) S.trans = 1600; }
+    if (S.t >= S.segs[S.i][1]) { S.t = S.segs[S.i][1]; if (S.i < S.segs.length - 1) S.trans = O.transition * 1000; }
   }
   if (S.t >= fin && !S.trans) S.joue = false;
   majSession();
   if (S.joue) requestAnimationFrame(boucleSession);
+}
+/* The size of the video's texts (the caption band's times, the cards): a slider, its value beside it. */
+function curseurPolice(apres) {
+  const v = el('b', { text: '×' + (+O.police).toFixed(1) });
+  const r = el('input', { type: 'range', min: .6, max: 2.5, step: .1, value: O.police, oninput: ev => { O.police = +ev.target.value; v.textContent = '×' + O.police.toFixed(1); garde(); if (apres) apres(); } });
+  return el('label', { class: 'rangee s-curseur' }, [el('span', { text: T.police }), r, v]);
 }
 /* The session as a video made by the station: the same options as a pass's, the passes one after another. */
 function panneauSession() {
@@ -1290,10 +1315,12 @@ function panneauSession() {
   [['ouverture', T.ouverture], ['recap', T.recap], ['sstv', T.aff_sstv], ['fiches', T.aff_fiche], ['smetre', T.aff_smetre], ['freq', T.aff_freq], ['locator', T.aff_locator], ['vignettes', T.s_vignettes]]
     .forEach(q => c.appendChild(caseOpt(q[0], q[1])));
   p.appendChild(c);
+  p.appendChild(curseurPolice(majSession));
   const zone = el('div');
   p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: async () => {
     const b = v => v ? '1' : '0';
     const q = Object.assign({ ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: S.vitesse, titre: ti.value, vignettes: b(O.vignettes),
+      entre: O.entre, transition: O.transition, police: O.police, utc: b(utc),
       res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
       ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
       etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif() }, Orbites.cadrage());
@@ -1311,9 +1338,17 @@ function majSession() {
   if (!S || !g('sBan')) return;
   g('sLecture').textContent = S.joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
   const recues = S.images.filter(m => m.a <= S.t);
-  g('sBan').innerHTML = '';
-  g('sBan').appendChild(el('b', { text: jour(S.t) }));
-  g('sBan').appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) }));
+  const ban = g('sBan'), q = S.ps[S.i], ms = x => { const s = Math.round(Math.abs(x) / 1000); return Math.floor(s / 60) + ':' + p2(s % 60); };
+  ban.style.setProperty('--police', O.police);
+  ban.innerHTML = '';
+  ban.appendChild(el('b', { text: jour(S.t).replace(/ \d\d:\d\dZ?$/, '') + ' ' + hms(S.t) + (utc ? ' UTC' : '') }));
+  ban.appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) }));
+  if (q) {
+    const haut = (q.pts || []).reduce((m, x) => x[2] > m[2] ? x : m, [q.de, 0, -90]), ici = avant(q.pts || [], S.t);
+    ban.appendChild(el('div', { text: 'AOS ' + hms(q.de) + ' · TCA ' + hms(haut[0]).slice(0, 5) + ' (' + Math.round(haut[2]) + '°) · LOS ' + hms(q.a) }));
+    ban.appendChild(el('div', { text: (S.t < q.de ? tf('s_aos_dans', ms(q.de - S.t)) : S.t <= q.a ? 'AOS + ' + ms(S.t - q.de) : T.s_apres_los) +
+      (ici && S.t >= q.de && S.t <= q.a ? ' · Az ' + Math.round(ici[1]) + '° El ' + Math.round(ici[2]) + '°' : '') }));
+  }
   // The picture being received, large over the globe (away from the satellite), as the journal and its videos show it.
   const im = S.images.find(m => S.t >= m.de && S.t <= m.a + 6000), bo = g('sImage');
   bo.style.display = O.sstv && im ? 'block' : 'none';
@@ -1343,7 +1378,7 @@ function taille(o) { const en = document.documentElement.lang === 'en'; return (
 async function fabrique(quoi) {
   const b = v => v ? '1' : '0';
   const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', vue: O.vue, style: Orbites.styleActif(), t: Math.round(t),
-    villes: Orbites.villesActives(), etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
+    villes: Orbites.villesActives(), etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), police: O.police, utc: b(utc), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
   // The box as it is here (ticked or not), whatever the station's setting.
