@@ -23,6 +23,41 @@ object GlobeDonnees {
     /** A city: [rang] 1 the world's great ones, 2 other capitals and space centres, 3 the smaller ones near home (shown with more detail). */
     data class Ville(val nom: String, val lat: Double, val lon: Double, val rang: Int)
 
+    /** A country's capital (Natural Earth, public domain): its French name, its country's ISO code (its flag; empty when none), its population. */
+    data class Capitale(val nom: String, val lat: Double, val lon: Double, val pays: String, val population: Int)
+
+    /** The capitals of the world, the most populous first (« nom|lat|lon|pays|population » separated by « ; »). */
+    val CAPITALES: List<Capitale> by lazy {
+        CAPITALES_TEXTE.split(';').map { s -> s.split('|').let { Capitale(it[0], it[1].toDouble(), it[2].toDouble(), it[3], it[4].toInt()) } }
+    }
+
+    private const val CAPITALES_TEXTE =
+        "Tokyo|35.687|139.749|JP|35676000;Mexico|19.444|-99.133|MX|19028000;Dacca|23.725|90.407|BD|12797394;Buenos Aires|-34.601|-58.399|AR|12795000;Le Caire|30.052|31.248|EG|11893000;Pékin|39.931|116.386|CN|11106000;Manille|14.606|120.980|PH|11100000;Moscou|55.754|37.614|RU|10452000;" +
+        "Paris|48.869|2.331|FR|9904000;Séoul|37.568|126.998|KR|9796000;Jakarta|-6.172|106.827|ID|9125000;Londres|51.502|-0.119|GB|8567000;Lima|-12.046|-77.052|PE|8012000;Téhéran|35.674|51.422|IR|7873000;Kinshasa|-4.328|15.313|CD|7843000;Bogota|4.598|-74.085|CO|7772000;" +
+        "Taipei|25.036|121.568|TW|6900273;Bangkok|13.752|100.515|TH|6704000;Santiago|-33.448|-70.669|CL|5720000;Madrid|40.402|-3.685|ES|5567000;Singapour|1.295|103.854|SG|5183700;Luanda|-8.836|13.232|AO|5172900;Bagdad|33.341|44.392|IQ|5054000;Khartoum|15.590|32.532|SD|4754000;" +
+        "Riyad|24.643|46.771|SA|4465000;Hanoï|21.035|105.848|VN|4378000;Washington|38.901|-77.011|US|4338000;Abidjan|5.322|-4.042|CI|3802000;Brasilia|-15.781|-47.918|BR|3716996;Ankara|39.929|32.862|TR|3716000;Berlin|52.524|13.400|DE|3406000;Alger|36.765|3.049|DZ|3354000;" +
+        "Rome|41.898|12.481|IT|3339000;Pyongyang|39.021|125.753|KP|3300000;Kaboul|34.519|69.181|AF|3277000;Athènes|37.985|23.731|GR|3242000;Le Cap|-33.918|18.433|ZA|3215000;Addis-Abeba|9.035|38.698|ET|3100000;Nairobi|-1.281|36.815|KE|3010000;Caracas|10.503|-66.919|VE|2985000;" +
+        "Dar es Salam|-6.798|39.266|TZ|2930000;Lisbonne|38.725|-9.147|PT|2812000;Kiev|50.435|30.515|UA|2709000;Dakar|14.718|-17.475|SN|2604000;Damas|33.502|36.298|SY|2466000;Tunis|36.803|10.180|TN|2412500;Vienne|48.202|16.365|AT|2400000;Tripoli|32.892|13.180|LY|2189000;" +
+        "Tachkent|41.314|69.293|UZ|2184000;La Havane|23.134|-82.366|CU|2174000;Saint-Domingue|18.472|-69.902|DO|2154000;Bakou|40.397|49.860|AZ|2122300;Accra|5.552|-0.219|GH|2121000;Koweït|29.372|47.976|KW|2063000;Sanaa|15.357|44.205|YE|2008000;Port-au-Prince|18.543|-72.338|HT|1998000;" +
+        "Bucarest|44.435|26.098|RO|1942000;Asuncion|-25.294|-57.643|PY|1870000;Beyrouth|33.874|35.508|LB|1846000;Minsk|53.902|27.565|BY|1805000;Bruxelles|50.835|4.331|BE|1743000;Varsovie|52.252|20.998|PL|1707000;Rabat|34.025|-6.836|MA|1705000;Quito|-0.213|-78.502|EC|1701000;" +
+        "Antananarivo|-18.915|47.515|MG|1697000;Budapest|47.502|19.081|HU|1679000;Yaoundé|3.869|11.515|CM|1611000;La Paz|-16.496|-68.152|BO|1590000;Abuja|9.085|7.531|NG|1576000;Harare|-17.816|31.043|ZW|1572000;Montevideo|-34.856|-56.173|UY|1513000;Bamako|12.652|-8.002|ML|1494000;" +
+        "Conakry|9.533|-13.682|GN|1494000;Phnom Penh|11.552|104.915|KH|1466000;Lomé|6.134|1.221|TG|1452000;Doha|25.287|51.533|QA|1450000;Kuala Lumpur|3.169|101.698|MY|1448000;Maputo|-25.953|32.587|MZ|1446000;San Salvador|13.712|-89.205|SV|1433000;Kampala|0.319|32.581|UG|1420000;" +
+        "Brazzaville|-4.257|15.283|CG|1355000;Pretoria|-25.705|28.227|ZA|1338000;Lusaka|-15.415|28.281|ZM|1328000;San José|9.937|-84.086|CR|1284000;Panama|8.970|-79.535|PA|1281000;Stockholm|59.353|18.095|SE|1264000;Sofia|42.685|23.315|BG|1185000;Prague|50.085|14.464|CZ|1162000;" +
+        "Ouagadougou|12.372|-1.527|BF|1149000;Ottawa|45.419|-75.702|CA|1145000;Helsinki|60.178|24.932|FI|1115000;Erevan|40.183|44.512|AM|1102000;Mogadiscio|2.069|45.365|SO|1100000;Tbilissi|41.727|44.789|GE|1100000;Belgrade|44.821|20.466|RS|1099000;Douchanbé|38.560|68.774|TJ|1086244;" +
+        "Copenhague|55.681|12.562|DK|1085000;Amman|31.952|35.931|JO|1060000;Dublin|53.335|-6.251|IE|1059000;Monrovia|6.315|-10.800|LR|1041000;Amsterdam|52.352|4.915|NL|1031000;Jérusalem|31.778|35.207|IL|1029300;Guatemala-Ville|14.623|-90.529|GT|1024000;N'Djaména|12.115|15.047|TD|989000;" +
+        "Tegucigalpa|14.104|-87.219|HN|946000;Kingston|17.977|-76.767|JM|937700;Naypyidaw|19.769|96.117|MM|930000;Djibouti|11.595|43.148|DJ|923000;Managua|12.155|-86.270|NI|920000;Niamey|13.519|2.115|NE|915000;Tirana|41.328|19.819|AL|895350;Katmandou|27.719|85.315|NP|895000;" +
+        "Oulan-Bator|47.919|106.915|MN|885000;Kigali|-1.952|30.059|RW|860000;Bichkek|42.875|74.583|KG|837000;Oslo|59.919|10.748|NO|835000;Bangui|4.367|18.558|CF|831925;Freetown|8.472|-13.236|SL|827000;Islamabad|33.702|73.165|PK|780000;Cotonou|6.402|2.518|BJ|762000;" +
+        "Vientiane|17.967|102.600|LA|754000;Riga|56.950|24.100|LV|742572;Nouakchott|18.086|-15.975|MR|742144;Mascate|23.613|58.593|OM|734697;Achgabat|37.950|58.383|TM|727700;Zagreb|45.800|16.000|HR|722526;Sarajevo|43.850|18.383|BA|696731;Chișinău|47.005|28.858|MD|688134;" +
+        "Lilongwe|-13.983|33.783|MW|646750;Asmara|15.333|38.933|ER|620802;Abou Dabi|24.467|54.367|AE|603492;Port-Louis|-20.167|57.500|MU|595491;Libreville|0.385|9.458|GA|578156;Manama|26.236|50.583|BH|563920;Vilnius|54.683|25.317|LT|542366;Skopje|42.000|21.433|MK|494087;" +
+        "Hargeisa|9.560|44.065||477876;Pristina|42.667|21.166|XK|465186;Bloemfontein|-29.120|26.230|ZA|463064;Bratislava|48.150|17.117|SK|423737;Bissau|11.865|-15.598|GW|403339;Tallinn|59.434|24.728|EE|394024;Wellington|-41.300|174.783|NZ|393400;La Valette|35.900|14.515|MT|368250;" +
+        "Maseru|-29.317|27.483|LS|361324;Noursoultan|51.181|71.428|KZ|345604;Bujumbura|-3.376|29.360|BI|331700;Canberra|-35.283|149.129|AU|327700;New Delhi|28.600|77.200|IN|317797;Ljubljana|46.055|14.515|SI|314807;Bandar Seri Begawan|4.883|114.933|BN|296500;Port-d'Espagne|10.652|-61.517|TT|294934;" +
+        "Port Moresby|-9.465|147.193|PG|283733;Berne|46.917|7.467|CH|275329;Windhoek|-22.570|17.084|NA|268132;Georgetown|6.802|-58.167|GY|264350;Paramaribo|5.835|-55.167|SR|254169;Dili|-8.559|125.579|TL|234331;Nassau|25.083|-77.350|BS|227940;Sucre|-19.041|-65.260|BO|224838;" +
+        "Nicosie|35.167|33.367|CY|224300;Colombo|6.932|79.858|LK|217000;Gaborone|-24.646|25.912|BW|208411;Yamoussoukro|6.818|-5.276|CI|206499;Bridgetown|13.102|-59.617|BB|191152;Suva|-18.133|178.442|FJ|175399;Reykjavik|64.150|-21.950|IS|166212;Malabo|3.750|8.783|GQ|155963;" +
+        "Podgorica|42.466|19.266|ME|145850;Moroni|-11.704|43.240|KM|128698;Praia|14.917|-23.517|CV|113364;Malé|4.167|73.500|MV|112927;Luxembourg|49.612|6.130|LU|107260;Thimphou|27.473|89.639|BT|98676;Mbabane|-26.317|31.133|SZ|90138;São Tomé|0.333|6.733|ST|88219;" +
+        "Honiara|-9.438|159.950|SB|76328;Apia|-13.842|-171.739|WS|61916;Andorre-la-Vieille|42.500|1.516|AD|53998;Kingstown|13.148|-61.212|VC|49485;Port-Vila|-17.733|168.317|VU|44040;Banjul|13.454|-16.592|GM|43094;Nukuʻalofa|-21.139|-175.221|TO|42620;Castries|14.002|-61.000|LC|37963;" +
+        "Monaco|43.740|7.407|MC|36371;Vaduz|47.134|9.517|LI|36281;Saint John's|17.118|-61.850|AG|35499;Saint-Georges|12.053|-61.742|GD|33734;Victoria|-4.617|55.450|SC|33576;Saint-Marin|43.936|12.442|SM|29579;Tarawa-Sud|1.338|173.018|KI|28802;Majuro|7.103|171.380|MH|25400;" +
+        "Roseau|15.301|-61.387|DM|23336;Basseterre|17.302|-62.717|KN|21887;Belmopan|17.252|-88.767|BZ|15220;Melekeok|7.487|134.627|PW|7026;Funafuti|-8.517|179.217|TV|4749;Palikir|6.917|158.150|FM|4645;Cité du Vatican|41.903|12.453|VA|832"
+
     /**
      * A summit standing out of its surroundings (at least 450 m above the lowest point within 2°),
      * found in the ETOPO1 relief (NOAA, `relief.png`, 0.25° grid): where the globes put their mountains.
@@ -133,10 +168,11 @@ object GlobeDonnees {
         Decor("foret", 63.0, 26.0), Decor("foret", 48.5, 10.0), Decor("foret", 45.0, -122.5),
         Decor("manchot", -74.0, 0.0), Decor("manchot", -70.0, 140.0), Decor("manchot", -72.0, -100.0), Decor("manchot", -67.0, 60.0))
 
-    /** All of it for the page: `{villes: [[nom, lat, lon, rang]], sommets: [[lat, lon, altitude]], monuments: [[id, nom, lat, lon]], decor: [[type, lat, lon]]}`. */
+    /** All of it for the page: `{villes: [[nom, lat, lon, rang]], sommets: [[lat, lon, altitude]], capitales: [[nom, lat, lon, pays, population]], monuments: [[id, nom, lat, lon]], decor: [[type, lat, lon]]}`. */
     fun json(): String = JSONObject()
         .put("villes", JSONArray(VILLES.map { JSONArray(listOf(it.nom, it.lat, it.lon, it.rang)) }))
         .put("sommets", JSONArray(SOMMETS.map { JSONArray(listOf(it.lat, it.lon, it.altitude)) }))
+        .put("capitales", JSONArray(CAPITALES.map { JSONArray(listOf(it.nom, it.lat, it.lon, it.pays, it.population)) }))
         .put("monuments", JSONArray(MONUMENTS.map { JSONArray(listOf(it.id, it.nom, it.lat, it.lon)) }))
         .put("decor", JSONArray(DECOR.map { JSONArray(listOf(it.type, it.lat, it.lon)) }))
         .toString()
