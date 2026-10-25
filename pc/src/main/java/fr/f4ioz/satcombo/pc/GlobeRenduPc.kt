@@ -311,6 +311,16 @@ object GlobeRenduPc {
         return norme(doubleArrayOf(va[0] + (vb[0] - va[0]) * k, va[1] + (vb[1] - va[1]) * k, va[2] + (vb[2] - va[2]) * k)) to a.altKm + (b.altKm - a.altKm) * k
     }
 
+    /**
+     * Where the satellite is at [t] for the frame: on its track, else (a session's
+     * video, [RenduPc.Scene.horsTrace]) where its elements put it — none when unknown.
+     */
+    fun ou(sc: RenduPc.Scene, t: Long): Pair<DoubleArray, Double>? {
+        val hors = sc.horsTrace
+        if (hors == null || (sc.sol.isNotEmpty() && t in sc.sol.first().tMs..sc.sol.last().tMs)) return sousSatellite(sc.sol, t)
+        return hors(t)?.let { vec(it.lat, it.lon) to it.altKm }
+    }
+
     /** Where the view looks at [t]: half way from the station to the satellite, smoothed over a few minutes (no jump). */
     fun centre(sc: RenduPc.Scene, t: Long): DoubleArray {
         val qth = sc.qth?.let { vec(it.first, it.second) }
@@ -405,7 +415,7 @@ object GlobeRenduPc {
     /** The view of the frame at [t] in a view [w]×[h]: where it looks, the globe moved and scaled as the page asks. */
     fun camera(sc: RenduPc.Scene, t: Long, w: Float, h: Float): Camera {
         val o = sc.optionsGlobe
-        return Camera(centre(sc, t), w / 2 + o.gdx * w, h / 2 + o.gdy * h, 0.425f * h * o.gz)
+        return Camera(sc.centreImpose ?: centre(sc, t), w / 2 + o.gdx * w, h / 2 + o.gdy * h, 0.425f * h * o.gz)
     }
 
     private fun Graphics2D.lisse() {
@@ -869,7 +879,7 @@ object GlobeRenduPc {
     private fun dessus(g: Graphics2D, w: Float, cam: Camera, sc: RenduPc.Scene, t: Long, style: String, lk: Look, soleil: DoubleArray, dp: Float): Float {
         val boites = ArrayList<Rectangle2D.Float>()
         fun libre(b: Rectangle2D.Float) = boites.none { it.intersects(b) }
-        val sous = sousSatellite(sc.sol, t)
+        val sous = ou(sc, t)
         val qth = sc.qth?.let { vec(it.first, it.second) }
         val encre = lk.encre?.let { couleur(it) }
         val coulTrace = encre ?: RenduPc.CYAN
