@@ -48,7 +48,8 @@ object PagePlanche {
         "version_fusion", "version_creer_fusion", "version_fusion_en_cours", "version_fusion_echec", "version_repli", "version_auto_aide",
         "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
         "gardes", "version_indic", "refus_depot", "supprimer", "supprimer_q", "supprimee", "cases_max",
-        "rapport_vue", "rapport_dessin", "rapport_simple")
+        "rapport_vue", "rapport_dessin", "rapport_simple", "affiche", "titres", "titres_aide", "titre_aucun", "style", "police",
+        "police_defaut", "italique", "filets", "espacement", "couleur2", "cadre", "cadre_couleur")
 
     /** The keys whose words depend on who serves the page: SatMe-PC has its own (`pw_…_pc`), the phone the plain ones. */
     private val CLES_HOTE = setOf("sous", "code", "import_en_cours", "fabrication", "enregistre", "hors_ligne", "aucune_image")
@@ -158,7 +159,7 @@ object PagePlanche {
   .champ label { color:var(--gris); font-size:12px; }
   .rangee { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .rangee input[type=number] { width:80px; }
-  .nuancier { display:flex; gap:6px; }
+  .nuancier { display:flex; gap:6px; flex-wrap:wrap; }
   .nuance { width:26px; height:26px; border-radius:6px; border:2px solid var(--bord); cursor:pointer; }
   .nuance.choisie { border-color:var(--cyan); }
   #message { color:var(--ambre); font-size:13px; }
@@ -187,6 +188,18 @@ object PagePlanche {
   .zone .vers { position:absolute; right:2px; bottom:2px; font-size:10px; font-weight:700; padding:0 4px; border-radius:4px;
                 background:rgba(0,0,0,.6); color:var(--cyan); pointer-events:none; }
   .zone .vers.repli { color:var(--ambre); }
+  /* A text's dress: fonts and effects shown as they look, the styled titles. */
+  .choix { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:6px; margin:4px 0 8px; }
+  .choix button { font-weight:400; padding:6px 4px; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .choix button.choisi { border-color:var(--cyan); background:rgba(63,224,200,.12); }
+  .choix button small { display:block; font-family:system-ui,sans-serif; font-size:10px; color:var(--gris); }
+  .titres button { font-weight:700; color:var(--cyan); }
+  .st-neon { color:#bfefff; text-shadow:0 0 4px #2EC5FF, 0 0 10px #2EC5FF; }
+  .st-chrome { color:#eef2f7; text-shadow:0 1px 0 #8796a8, 0 2px 0 #0b1e3e, 0 0 2px #000; }
+  .st-or { color:#f7d25a; text-shadow:0 1px 0 #8a5a0e, 0 2px 0 #2a1702; }
+  .st-contour { color:transparent; -webkit-text-stroke:1px #E8F0F7; }
+  .st-relief { color:#E8F0F7; text-shadow:1px 1px 0 #555, 2px 2px 0 #444, 3px 3px 0 #333; }
+  .st-degrade { color:#FFC21A; text-shadow:0 2px 0 #E5484D; }
   .cache { display:none !important; }
 </style>
 <body>
@@ -206,6 +219,7 @@ object PagePlanche {
   <button class="discret rouge" id="supprimer"></button>
   <button class="discret" id="grille"></button>
   <button class="discret" id="tour"></button>
+  <button class="discret" id="affiche"></button>
   <button class="discret" id="importer"></button>
   <input type="file" id="fichier" accept="image/*,.satme-planche,.zip,application/zip" class="cache">
   <button class="discret" id="exporter"></button>
@@ -290,7 +304,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {}, indicatif: '', locator: '', dates: '' };
+  const m = { cadre: '', cadreCouleur: 0xFF00E5FF | 0, nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {}, indicatif: '', locator: '', dates: '' };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -299,7 +313,10 @@ function litModele(txt) {
     else if (k === 'legende') m.legende = v === '1'; else if (k === 'numeros') m.numeros = v === '1';
     else if (k === 'titre') m.titre = unesc(v);
     else if (k === 'case') { const p = v.split(';').map(Number); m.cases.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
-    else if (k === 'texte') { const p = v.split(';'); m.textes.push({ champ: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], couleur: parseInt(p[5]), fond: parseInt(p[6]), libre: unesc(p.slice(7).join(';')) }); }
+    // A text, its dress after it when it has one (font, effect, second colour, italic, spacing, rules, styled title).
+    else if (k === 'texte') { const p = v.split(';'); m.textes.push({ champ: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], couleur: parseInt(p[5]), fond: parseInt(p[6]), libre: unesc(p[7] || ''),
+      police: p[8] || '', style: p[9] || '', couleur2: parseInt(p[10]) || 0, italique: p[11] === '1', espacement: parseFloat(p[12]) || 0, filets: p[13] === '1', groupe: p[14] || '' }); }
+    else if (k === 'cadre') { const p = v.split(';'); m.cadre = p[0] || ''; m.cadreCouleur = parseInt(p[1]) || COULEURS[4]; }
     else if (k === 'image') { const j = v.indexOf(';'); m.images[+v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'origine') { const p = v.split(';').map(Number); m.origine.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
     else if (k === 'decor') m.decor = unesc(v);
@@ -320,7 +337,13 @@ function ecrit(m) {
   let s = 'planche=1\nnom=' + esc(m.nom) + '\nfond=' + esc(m.fond) + '\nratio=' + m.ratio +
     '\nlegende=' + (m.legende ? 1 : 0) + '\nnumeros=' + (m.numeros ? 1 : 0) + '\ntitre=' + esc(m.titre) + '\n';
   m.cases.forEach(z => s += 'case=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
-  m.textes.forEach(t => s += 'texte=' + [t.champ, r5(t.x), r5(t.y), r5(t.w), r5(t.h), t.couleur | 0, t.fond | 0, esc(t.libre).split(';').join(',')].join(';') + '\n');
+  m.textes.forEach(t => {
+    s += 'texte=' + [t.champ, r5(t.x), r5(t.y), r5(t.w), r5(t.h), t.couleur | 0, t.fond | 0, esc(t.libre).split(';').join(',')].join(';');
+    // Its dress, only when it has one: an older sheet stays written as it was.
+    if (t.police || t.style || t.couleur2 || t.italique || t.espacement || t.filets || t.groupe)
+      s += ';' + [t.police || '', t.style || '', t.couleur2 | 0, t.italique ? 1 : 0, +(t.espacement || 0), t.filets ? 1 : 0, t.groupe || ''].join(';');
+    s += '\n';
+  });
   Object.keys(m.images).forEach(i => s += 'image=' + i + ';' + m.images[i] + '\n');
   m.origine.forEach(z => s += 'origine=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
   if (m.decor) s += 'decor=' + esc(m.decor) + '\n';
@@ -331,6 +354,7 @@ function ecrit(m) {
   if (m.marqueTraitees) s += 'marquetraitees=1\n';
   Object.keys(m.versions).forEach(i => { const c = m.versions[i]; if (c && (c.v !== 'auto' || c.main) && +i < m.cases.length) s += 'versioncase=' + i + ';' + c.v + ';' + (c.main ? 1 : 0) + '\n'; });
   ['indicatif', 'locator', 'dates'].forEach(k => { if ((m[k] || '').trim()) s += k + '=' + esc(m[k]) + '\n'; });
+  if (m.cadre) s += 'cadre=' + m.cadre + ';' + (m.cadreCouleur | 0) + '\n';
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -345,6 +369,13 @@ let EV = { evenement: null, main: false, liste: [] }, grouper = true, analyse = 
 const ouverts = new Set();
 try { grouper = localStorage.getItem('satme-planche-grouper') !== '0'; } catch (e) {}
 let defauts = { indicatif: '', nom: '', locator: '', dates: '' };
+// The fonts, effects, frames and styled titles the station offers (its own fonts, served by it: nothing from outside).
+let STY = { polices: [], styles: [], cadres: [], titres: [], lueurs: [] };
+async function chargeStyles() {
+  try { STY = Object.assign(STY, await lire('/styles')); } catch (e) { return; }
+  const f = STY.polices.map(x => "@font-face{font-family:'sp-" + x.id + "';src:url('" + url('/police', { f: x.id }) + "') format('truetype');font-display:swap}").join('\n');
+  document.head.appendChild(el('style', { text: f }));
+}
 // The name is the station's (its settings); the callsign, locator and dates typed are the sheet's (M).
 const saisie = { nom: '' };
 function css(v) { const u = v >>> 0; return 'rgba(' + ((u >>> 16) & 255) + ',' + ((u >>> 8) & 255) + ',' + (u & 255) + ',' + (((u >>> 24) & 255) / 255).toFixed(3) + ')'; }
@@ -769,6 +800,15 @@ function panneauTextes() {
   p.appendChild(valeur('locator', T.locator, defauts.locator));
   p.appendChild(valeur('dates', T.dates, defauts.dates));
   p.appendChild(champ(T.titre_planche, M.titre, v => { M.titre = v; sauveBientot(); }, { placeholder: defauts.titre ? tf('par_defaut', defauts.titre) : '' }));
+  // « Titres stylés »: the title dressed as an ARISS series poster, in one click; its texts stay editable.
+  if (STY.titres.length) {
+    p.appendChild(el('h3', { text: T.titres }));
+    const tt = el('div', { class: 'choix titres' });
+    STY.titres.concat([{ id: 'aucun', nom: T.titre_aucun }]).forEach(x => tt.appendChild(el('button', { text: x.nom, onclick: async () => {
+      await sauveMaintenant(); await lire('/titre-style', { id: id, t: x.id }); choix = null; await charge(id); } })));
+    p.appendChild(tt);
+    p.appendChild(el('p', { class: 'aide', text: T.titres_aide }));
+  }
   const r = el('div', { class: 'rangee', style: 'margin:8px 0' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_texte, onclick: () => {
     M.textes.push({ champ: 'LIBRE', x: 0.35, y: 0.45, w: 0.3, h: 0.07, couleur: COULEURS[0], fond: FONDS[2], libre: T.libre });
@@ -786,8 +826,35 @@ function panneauTextes() {
       style: 'background:' + (c === 0 ? 'transparent' : css(c)), title: c === 0 ? T.sans : '', onclick: () => { t[cle] = c; change(); } })));
     return el('div', { class: 'champ' }, [el('label', { text: lib }), n]);
   };
-  p.appendChild(nuancier(T.couleur, COULEURS, 'couleur'));
+  p.appendChild(nuancier(T.couleur, COULEURS.concat(STY.lueurs.filter(c => !COULEURS.includes(c))), 'couleur'));
   p.appendChild(nuancier(T.fond + ' (' + [T.sans, T.voile_blanc, T.voile_noir].join(' · ') + ')', FONDS, 'fond'));
+  // Its dress: the font and the effect shown as they look, the second colour, italic, spacing, rules.
+  if (STY.styles.length) {
+    const echantillon = (t.champ === 'LIBRE' && t.libre.trim() ? t.libre : 'SSTV 34').slice(0, 14);
+    p.appendChild(el('div', { class: 'aide', text: T.police }));
+    const fp = el('div', { class: 'choix' });
+    [{ id: '', nom: T.police_defaut }].concat(STY.polices).forEach(x => fp.appendChild(el('button', {
+      class: (t.police || '') === x.id ? 'choisi' : '', title: x.nom,
+      style: x.id ? "font-family:'sp-" + x.id + "',sans-serif" : 'font-weight:700',
+      onclick: () => { t.police = x.id; change(); } }, [document.createTextNode(echantillon), el('small', { text: x.nom })])));
+    p.appendChild(fp);
+    p.appendChild(el('div', { class: 'aide', text: T.style }));
+    const fs = el('div', { class: 'choix' });
+    STY.styles.forEach(x => fs.appendChild(el('button', { class: (t.style || '') === x.id ? 'choisi' : '', style: 'font-weight:800',
+      onclick: () => { t.style = x.id; change(); } }, [el('span', { class: x.id ? 'st-' + x.id : '', text: x.nom })])));
+    p.appendChild(fs);
+    if (t.style === 'degrade' || t.style === 'contour') {
+      const n = el('div', { class: 'nuancier' });
+      [0].concat(COULEURS, STY.lueurs.filter(c => !COULEURS.includes(c))).forEach(c => n.appendChild(el('div', { class: 'nuance' + ((t.couleur2 | 0) === c ? ' choisie' : ''),
+        style: 'background:' + (c === 0 ? 'transparent' : css(c)), title: c === 0 ? T.sans : '', onclick: () => { t.couleur2 = c; change(); } })));
+      p.appendChild(el('div', { class: 'champ' }, [el('label', { text: T.couleur2 }), n]));
+    }
+    p.appendChild(caseACocher(T.italique, !!t.italique, v => { t.italique = v; change(); }));
+    p.appendChild(caseACocher(T.filets, !!t.filets, v => { t.filets = v; change(); }));
+    const esp = el('input', { type: 'range', min: '0', max: '0.6', step: '0.02', value: String(t.espacement || 0) });
+    esp.addEventListener('change', () => { t.espacement = parseFloat(esp.value) || 0; change(); });
+    p.appendChild(el('div', { class: 'champ' }, [el('label', { text: T.espacement }), esp]));
+  }
   positionChoisie(p);
   p.appendChild(el('button', { class: 'rouge', style: 'margin-top:8px', text: T.retirer_texte, onclick: () => { M.textes.splice(choix.i, 1); choix = null; change(); } }));
 }
@@ -809,6 +876,18 @@ function panneauDecor() {
     p.appendChild(grille);
     p.appendChild(el('div', { class: 'rangee', style: 'margin-top:8px' }, [el('button', { class: 'discret', text: T.fond_choisir, onclick: () => g('fichierDecor').click() })]));
     p.appendChild(el('p', { class: 'aide', text: T.fond_aide }));
+  }
+  // The frame round each picture; a neon one takes a colour.
+  if (STY.cadres.length) {
+    p.appendChild(el('h3', { text: T.cadre }));
+    const fc = el('div', { class: 'choix' });
+    STY.cadres.forEach(x => fc.appendChild(el('button', { class: (M.cadre || '') === x.id ? 'choisi' : '', text: x.nom, onclick: () => { M.cadre = x.id; change(); } })));
+    p.appendChild(fc);
+    if (M.cadre === 'neon') {
+      const n = el('div', { class: 'nuancier' });
+      STY.lueurs.forEach(c => n.appendChild(el('div', { class: 'nuance' + ((M.cadreCouleur | 0) === c ? ' choisie' : ''), style: 'background:' + css(c), onclick: () => { M.cadreCouleur = c; change(); } })));
+      p.appendChild(el('div', { class: 'champ' }, [el('label', { text: T.cadre_couleur }), n]));
+    }
   }
   p.appendChild(el('h3', { text: tf('ecussons', M.ecussons.length, 3) }));
   const r = el('div', { class: 'rangee' });
@@ -865,13 +944,15 @@ async function demarre() {
   g('porte').classList.add('cache'); g('editeur').classList.remove('cache');
   const l = await listeModeles();
   try { decors = await lire('/decors'); } catch (e) { decors = []; }
+  await chargeStyles();
   if (l.length) await charge(l[l.length - 1].id); else panneau();
 }
 async function nouveau(type) { await sauveMaintenant(); const j = await lire('/nouveau', { type: type }); await listeModeles(); await charge(j.id); }
 
 g('tPorte').textContent = T.titre; g('tCode').textContent = T.code; g('entrer').textContent = T.entrer;
 g('tTitre').textContent = 'SatMe · ' + T.titre; g('tModele').textContent = T.modele; g('tSous').textContent = T.sous;
-g('grille').textContent = T.grille; g('tour').textContent = T.tour; g('importer').textContent = T.importer;
+g('grille').textContent = T.grille; g('tour').textContent = T.tour; g('affiche').textContent = T.affiche;
+g('affiche').onclick = () => nouveau('affiche'); g('importer').textContent = T.importer;
 g('telecharger').textContent = T.telecharger; g('pupitre').textContent = T.pupitre; g('pupitre').href = base + '/'; g('journal').textContent = T.journal; g('journal').href = base + '/journal';
 g('oImages').textContent = T.images; g('oDispo').textContent = T.disposition; g('oTextes').textContent = T.textes; g('oDecor').textContent = T.decor;
 g('oDecor').onclick = () => { onglet = 'decor'; panneau(); };

@@ -15,6 +15,18 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Planche SSTV stylée**, comme l'affiche d'une série ARISS : dans *Textes*, **Titres stylés** (*Série ARISS*, *Néon rétro*, *Écusson doré*, *Titre chrome*) habille le titre en un clic, le numéro tiré de l'événement ; chaque texte reste modifiable.
+- Pour chaque texte : une **police** (sept polices libres livrées avec SatMe), un **effet** (contour, relief, néon, chrome, or, dégradé), l'italique, l'espacement des lettres, des filets lumineux.
+- *Décor* : le **cadre des images** (fin et blanc, arrondi et ombré, néon de la couleur choisie), sept nouveaux fonds (l'ISS au-dessus de la Terre, ses panneaux solaires, la Terre de nuit, une nébuleuse de Spitzer, et deux fonds dessinés).
+- **+ Affiche ISS** : une planche stylée toute prête, fond NASA, titre chrome et douze cases au cadre néon.
+
+### en
+- **Stylish SSTV sheet**, like an ARISS series poster: in *Texts*, **Styled titles** (*ARISS series*, *Retro neon*, *Gold badge*, *Chrome title*) dresses the title in one click, the number taken from the event; each text stays editable.
+- For each text: a **font** (seven free fonts bundled with SatMe), an **effect** (outline, relief, neon, chrome, gold, gradient), italic, letter spacing, glowing rules.
+- *Background*: the **picture frame** (fine white, rounded with a shadow, neon in the colour chosen), seven new backgrounds (the ISS above the Earth, its solar arrays, the Earth at night, a Spitzer nebula, and two drawn ones).
+- **+ ISS poster**: a stylish sheet ready made, NASA background, chrome title and twelve boxes in neon frames.
+
 ## 2026.10.28
 
 ### fr

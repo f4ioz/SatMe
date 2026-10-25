@@ -212,7 +212,14 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
                 "/nouveau" -> {
                     val nom = fr.f4ioz.satcombo.i18n.tf("planche_nom_modele", r.modeles().size + 1)
-                    val m = if (p("type") == "tour") Planche.genereTour(r.nouvelId(), nom) else Planche.genereGrille(r.nouvelId(), nom)
+                    val m = when (p("type")) {
+                        "tour" -> Planche.genereTour(r.nouvelId(), nom)
+                        // « Affiche ISS »: the NASA picture, the chrome title, the glowing frames, in one click.
+                        "affiche" -> fr.f4ioz.satcombo.sstv.PlancheTitres.genereAffiche(r.nouvelId(),
+                            fr.f4ioz.satcombo.i18n.tf("planche_nom_affiche", r.modeles().size + 1),
+                            fr.f4ioz.satcombo.sstv.PlancheTitres.Infos(serie = fr.f4ioz.satcombo.i18n.t("planche_titre_serie_mot")))
+                        else -> Planche.genereGrille(r.nouvelId(), nom)
+                    }
                     synchronized(this) { r.enregistre(m) }
                     json("{\"ok\":true,\"id\":\"${m.id}\"}")
                 }

@@ -9,11 +9,15 @@
 package fr.f4ioz.satcombo.demo
 
 import fr.f4ioz.satcombo.data.SatPass
+import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.domain.CampagneSstv
 import fr.f4ioz.satcombo.sstv.ClassementGalerie
 import fr.f4ioz.satcombo.sstv.ClassementSstv
 import fr.f4ioz.satcombo.sstv.EvenementSstv
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.PlanchePolices
+import fr.f4ioz.satcombo.sstv.PlancheStyle
+import fr.f4ioz.satcombo.sstv.PlancheTitres
 import fr.f4ioz.satcombo.sstv.RapportEvenement
 import fr.f4ioz.satcombo.sstv.SerieSstv
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -327,6 +331,26 @@ object ApiPlancheEvenement {
             val b = f?.let { runCatching { src.vignetteFichier(it) }.getOrNull() }
             if (b == null) ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
             else ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: no-store\r\n")
+        }
+        // What a text and a sheet may be dressed with: the bundled fonts, the effects, the frames, the styled titles.
+        "/styles" -> json(JSONObject()
+            .put("polices", JSONArray(PlanchePolices.LISTE.map { JSONObject().put("id", it.id).put("nom", it.nom) }))
+            .put("styles", JSONArray(PlancheStyle.Style.values().map { JSONObject().put("id", it.code).put("nom", t(it.cle)) }))
+            .put("cadres", JSONArray(PlancheStyle.Cadre.values().map { JSONObject().put("id", it.code).put("nom", t(it.cle)) }))
+            .put("titres", JSONArray(PlancheTitres.LISTE.map { JSONObject().put("id", it.id).put("nom", t(it.cle)) }))
+            .put("lueurs", JSONArray(PlancheStyle.LUEURS)))
+        // A bundled font, for the page's @font-face (nothing fetched from outside).
+        "/police" -> PlanchePolices.de(p("f"))?.let { PlanchePolices.octets(it) }
+            ?.let { ReponseWeb("200 OK", "font/ttf", it, "Cache-Control: max-age=86400\r\n") }
+            ?: ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
+        // A styled title laid on the sheet (« aucun »: the plain title back), its words from the sheet's event.
+        "/titre-style" -> {
+            val m = modele(p("id"))?.let { assure(it, src, rangement, verrou) }
+            if (m == null) null else {
+                val n = PlancheTitres.applique(m, p("t"), PlancheTitres.infos(m, t("planche_titre_serie_mot")))
+                synchronized(verrou) { rangement.enregistre(n) }
+                json(JSONObject().put("ok", true).put("textes", n.textes.size))
+            }
         }
         // The plans, the one drawing the sheet's event best first; whether the montage can be drawn here.
         "/plans" -> {

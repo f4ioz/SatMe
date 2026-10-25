@@ -58,9 +58,13 @@ import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
 import fr.f4ioz.satcombo.sstv.PlancheFichier
+import fr.f4ioz.satcombo.sstv.PlanchePolices
 import fr.f4ioz.satcombo.sstv.PlancheRendu
+import fr.f4ioz.satcombo.sstv.PlancheStyle
+import fr.f4ioz.satcombo.sstv.PlancheTitres
 import fr.f4ioz.satcombo.sstv.SstvHub
 import fr.f4ioz.satcombo.sstv.SstvMeta
+import kotlin.math.roundToInt
 import fr.f4ioz.satcombo.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -398,6 +402,10 @@ fun PlancheScreen(aImporter: android.net.Uri? = null, onClose: () -> Unit) {
                         label = { Text("＋ " + t("planche_grille"), fontSize = 12.sp, color = Cyan) })
                     AssistChip(onClick = { change(Planche.genereTour(rangement.nouvelId(), tf("planche_nom_modele", modeles.size + 1))); choix = null },
                         label = { Text("＋ " + t("planche_tour"), fontSize = 12.sp, color = Cyan) })
+                    // « Affiche ISS »: the NASA picture, the chrome title, the glowing frames, in one click.
+                    AssistChip(onClick = { change(PlancheTitres.genereAffiche(rangement.nouvelId(), tf("planche_nom_affiche", modeles.size + 1),
+                        PlancheTitres.Infos(serie = t("planche_titre_serie_mot")))); choix = null },
+                        label = { Text("＋ " + t("planche_affiche"), fontSize = 12.sp, color = Cyan) })
                     if (m != null) AssistChip(onClick = { renommer = true }, label = { Text("✎ " + t("planche_renommer"), fontSize = 12.sp, color = Cyan) })
                 }
                 if (renommer) m?.let { y -> DialogueRenommer(y.nom, onNom = { n -> m?.let { change(it.copy(nom = n)) } }, onFerme = { renommer = false }) }
@@ -793,6 +801,16 @@ private fun OngletTextes(
     Champ(t("planche_t_locator"), v.locator, onLocator)
     Champ(t("planche_t_dates"), v.dates, onDates)
 
+    // « Titres stylés »: the title dressed as an ARISS series poster, in one click; its texts stay editable.
+    Text(t("planche_titres"), color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        (PlancheTitres.LISTE.map { it.id to t(it.cle) } + ("aucun" to t("planche_titre_aucun"))).forEach { (id, nomTitre) ->
+            AssistChip(onClick = { onChange(PlancheTitres.applique(m, id, PlancheTitres.infos(m, t("planche_titre_serie_mot")))); onChoix(null) },
+                label = { Text(nomTitre, fontSize = 11.sp, color = Cyan) })
+        }
+    }
+    Text(t("planche_titres_aide"), color = TextLo, fontSize = 10.sp)
+
     Text(t("planche_ajouter_texte"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf(Planche.Champ.TITRE to "planche_t_titre", Planche.Champ.INDICATIF to "planche_t_indicatif",
@@ -827,6 +845,33 @@ private fun OngletTextes(
                 FilterChip(selected = tx.fond == f, onClick = { maj(tx.copy(fond = f)) }, label = { Text(t(cle), fontSize = 11.sp) })
             }
     }
+    // Its dress: font, effect, second colour, italic, rules, spacing — drawn as the PC draws it.
+    Text(t("planche_police"), color = TextLo, fontSize = 11.sp)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        (listOf("" to t("planche_police_defaut")) + PlanchePolices.LISTE.map { it.id to it.nom }).forEach { (id, nomPolice) ->
+            FilterChip(selected = tx.police == id, onClick = { maj(tx.copy(police = id)) }, label = { Text(nomPolice, fontSize = 11.sp) })
+        }
+    }
+    Text(t("planche_style"), color = TextLo, fontSize = 11.sp)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        PlancheStyle.Style.values().forEach { st ->
+            FilterChip(selected = tx.style == st, onClick = { maj(tx.copy(style = st)) }, label = { Text(t(st.cle), fontSize = 11.sp) })
+        }
+    }
+    if (tx.style == PlancheStyle.Style.DEGRADE || tx.style == PlancheStyle.Style.CONTOUR) Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+        Text(t("planche_couleur2"), color = TextLo, fontSize = 11.sp)
+        (listOf(0) + Planche.COULEURS + PlancheStyle.LUEURS.filter { it !in Planche.COULEURS }).forEach { c ->
+            Box(Modifier.size(26.dp).clip(CircleShape).background(if (c == 0) Color.Transparent else Color(c))
+                .border(if (tx.couleur2 == c) 3.dp else 1.dp, if (tx.couleur2 == c) Cyan else TextLo, CircleShape)
+                .clickable { maj(tx.copy(couleur2 = c)) })
+        }
+    }
+    Interrupteur(t("planche_italique"), "", tx.italique) { maj(tx.copy(italique = it)) }
+    Interrupteur(t("planche_filets"), "", tx.filets) { maj(tx.copy(filets = it)) }
+    Text(t("planche_espacement"), color = TextLo, fontSize = 11.sp)
+    androidx.compose.material3.Slider(value = tx.espacement, onValueChange = { maj(tx.copy(espacement = (it * 50).roundToInt() / 50f)) },
+        valueRange = 0f..PlancheStyle.ESPACEMENT_MAX)
     TextButton(onClick = { onChange(m.copy(textes = m.textes.filterIndexed { j, _ -> j != i })); onChoix(null) }) {
         Text(t("planche_supprimer_texte"), color = Magenta, fontSize = 12.sp)
     }
@@ -861,6 +906,24 @@ private fun OngletDecor(
         }
         OutlinedButton(onClick = onFond) { Text(t("planche_fond_choisir"), color = Cyan, fontSize = 11.sp) }
         Text(t("planche_fond_aide"), color = TextLo, fontSize = 10.sp, modifier = Modifier.padding(vertical = 4.dp))
+    }
+
+    // The frame round each picture; a neon one takes a colour.
+    Spacer(Modifier.height(8.dp))
+    Text(t("planche_cadre"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        PlancheStyle.Cadre.values().forEach { c ->
+            FilterChip(selected = m.cadre == c, onClick = { onChange(m.copy(cadre = c)) }, label = { Text(t(c.cle), fontSize = 11.sp) })
+        }
+    }
+    if (m.cadre == PlancheStyle.Cadre.NEON) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+        Text(t("planche_cadre_couleur"), color = TextLo, fontSize = 11.sp)
+        PlancheStyle.LUEURS.forEach { c ->
+            Box(Modifier.size(26.dp).clip(CircleShape).background(Color(c))
+                .border(if (m.cadreCouleur == c) 3.dp else 1.dp, if (m.cadreCouleur == c) Cyan else TextLo, CircleShape)
+                .clickable { onChange(m.copy(cadreCouleur = c)) })
+        }
     }
 
     Spacer(Modifier.height(8.dp))
