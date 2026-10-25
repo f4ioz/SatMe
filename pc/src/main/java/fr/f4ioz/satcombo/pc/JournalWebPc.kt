@@ -358,6 +358,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         val montrees = runCatching { sstv.montrees(e) }.getOrDefault(emptyMap())
         val marques = sstv.marques(e, j.marques(l), montrees)
         val elements = e.options.elements.values.any { it.actif }
+        // The globe (vue=globe, style=…): the page sends carte=0 with it.
+        val globe = GlobeRenduPc.styleDemande(p("vue"), p("style"))
         return RenduPc.Scene(e, j.prevue(e), marques, s.callsign, flashS(),
             affSstv = opt(p, "sstv", affSstv()), affFiches = opt(p, "fiches", s.journalAffFiches),
             affSmetre = opt(p, "smetre", s.journalAffSmetre), affFreq = opt(p, "freq", s.journalAffFreq), affTx = opt(p, "tx", s.journalAffTx),
@@ -367,7 +369,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 ?: if (!image && opt(p, "accelere", false)) segments(e, marques, p) else null,
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes,
-            surCarte = p("carte") == "1", sol = j.traceSol(e), qth = Maidenhead.centre(e.locator),
+            surCarte = p("carte") == "1" && globe == null, sol = j.traceSol(e), qth = Maidenhead.centre(e.locator),
+            surGlobe = globe != null, styleGlobe = globe ?: GlobeRenduPc.DEFAUT,
             etiquetteQth = if (opt(p, "locator", s.journalAffLocator)) listOf(s.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null,
             vueVue = run {
                 val cx = p("mcx").toDoubleOrNull(); val cy = p("mcy").toDoubleOrNull(); val z = p("zc").toDoubleOrNull(); val cw = p("cw").toFloatOrNull()
