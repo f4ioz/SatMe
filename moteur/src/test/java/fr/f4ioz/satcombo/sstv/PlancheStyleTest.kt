@@ -225,4 +225,15 @@ class PlancheStyleTest {
         }
         assertNull(PlanchePolices.de("")); assertNull(PlanchePolices.de("../x"))
     }
+    @Test fun affiche_avec_moins_d_images_les_cases_evitent_titre_et_pied() {
+        val a = PlancheTitres.genereAffiche("a", "Affiche ISS", PlancheTitres.Infos("34", "ARISS SSTV Series 34"))
+        for (n in 1..12) {
+            val m = Planche.ajusteA(a, (1..n).map { "img$it.png" })
+            assertEquals(n, m.cases.size)
+            for (c in m.cases) for (t in m.textes) {
+                val chevauche = c.x < t.zone.x + t.zone.w && t.zone.x < c.x + c.w && c.y < t.zone.y + t.zone.h && t.zone.y < c.y + c.h
+                assertFalse("$n images : case $c sur ${t.champ}", chevauche)
+            }
+        }
+    }
 }

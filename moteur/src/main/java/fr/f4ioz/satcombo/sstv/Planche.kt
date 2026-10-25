@@ -299,7 +299,24 @@ object Planche {
         return Zone(x0, y0, zones.maxOf { it.x + it.w } - x0, zones.maxOf { it.y + it.h } - y0)
     }
 
-    private fun touche(a: Zone, b: Zone) = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+    /**
+     * The full-width rows and full-height columns of [zone] that none of [occupees] reaches,
+     * [mg] kept from them — the room between texts spread all over, which no single side of
+     * their whole extent leaves.
+     */
+    private fun bandesLibres(zone: Zone, occupees: List<Zone>, mg: Float): List<Zone> {
+        fun trous(debut: Float, fin: Float, pris: List<Pair<Float, Float>>): List<Pair<Float, Float>> {
+            val l = ArrayList<Pair<Float, Float>>(); var a = debut
+            for ((p, q) in pris.sortedBy { it.first }) { if (p - mg > a) l += a to p - mg; a = maxOf(a, q + mg) }
+            if (fin > a) l += a to fin
+            return l
+        }
+        val lignes = trous(zone.y, zone.y + zone.h, occupees.map { it.y to it.y + it.h }).map { (a, b) -> Zone(zone.x, a, zone.w, b - a) }
+        val colonnes = trous(zone.x, zone.x + zone.w, occupees.map { it.x to it.x + it.w }).map { (a, b) -> Zone(a, zone.y, b - a, zone.h) }
+        return (lignes + colonnes).filter { it.w > 0.05f && it.h > 0.05f }
+    }
+
+    private fun touche(a: Zone, b: Zone) =a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
     /** Twelve boxes round the edge of a 4×4 grid, the middle left for the title. */
     fun tour(ratioPlanche: Float = 1.414f): List<Zone> {
@@ -386,6 +403,8 @@ object Planche {
             listOf(Zone(zone.x, zone.y, gauche, zone.h), Zone(u.x + u.w + mg, zone.y, droite, zone.h),
                 Zone(zone.x, zone.y, zone.w, haut), Zone(zone.x, u.y + u.h + mg, zone.w, bas))
                 .filter { it.w > 0.05f && it.h > 0.05f }.forEach { essais += Triple(it, textes, 1f) }
+            // Texts above and below (a poster's title and its footer): the bands left free between them.
+            bandesLibres(zone, genants.map { it.zone }, mg).forEach { essais += Triple(it, textes, 1f) }
         }
         val bloc = englobe(textes.map { it.zone })
         if (generique && bloc != null) {
