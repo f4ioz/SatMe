@@ -4242,7 +4242,7 @@ ${DemarragePagePc.CARTES}
     </div>
     <div class="carte" id="mol-carte" hidden>
       <div class="t">Molette USB (VFO)</div>
-      <div class="petit" id="mol-nd" hidden>Non disponible sur cette machine (Linux seulement).</div>
+      <div class="petit" id="mol-nd" hidden>Non disponible sur cette machine (Linux ou Windows seulement).</div>
       <div id="mol-corps">
         <label class="petit" style="display:block"><input type="checkbox" id="mol-on" onchange="regleMol('on=' + (this.checked ? 1 : 0))"> Accorder avec la molette de volume USB</label>
         <div class="ligne"><select id="mol-app" style="max-width:260px" onchange="regleMol('appareil=' + enc(this.value))"></select><span class="petit" id="mol-etat"></span></div>
@@ -4256,6 +4256,14 @@ ${DemarragePagePc.CARTES}
           <span class="petit">Appui</span><select id="mol-action" style="flex:none" onchange="regleMol('action=' + this.value)"><option value="PAS">change le pas</option><option value="CIBLE">cible suivante</option><option value="ZERO">décalage à zéro</option></select></div>
         <div id="mol-touches" class="mol-touches"></div>
         <div class="petit" id="mol-dernier">Dernier événement : —</div>
+        <div class="mol-relais">
+          <div class="t" style="margin-top:10px">Relais vers une autre station</div>
+          <div class="ligne"><input id="mol-r-adr" placeholder="https://satme.mondomaine.fr ou http://192.168.0.65:8090" style="flex:1;min-width:220px">
+            <input id="mol-r-mdp" type="password" autocomplete="off" placeholder="mot de passe de la station" style="width:190px">
+            <button onclick="relaisMol()">Se connecter</button><button class="discret" id="mol-r-coupe" onclick="coupeRelais()" hidden>Arrêter le relais</button></div>
+          <div class="petit" id="mol-r-etat">Relais coupé : la molette accorde ce PC.</div>
+          <div class="petit aide">La molette branchée sur ce PC accorde une autre station SatMe-PC, celle que tu pilotes à distance : chaque cran lui est envoyé, et elle l'applique avec ses propres réglages de molette (pas, cible, touches apprises). Son mot de passe d'accès à distance sert une fois à ouvrir une session et n'est jamais gardé ; seule la session l'est, sur ce PC. La station doit être une version récente de SatMe-PC.</div>
+        </div>
         <div class="petit aide">Comme sur le téléphone : tourner déplace la fréquence d'un pas (10 Hz, 100 Hz ou 1 kHz), l'appui fait l'action choisie, et les touches A, B, C d'un petit clavier choisissent la cible. « Apprendre » puis presser la touche (20 s).</div>
         <div class="petit aide">Auto : l'onglet SDR accorde le récepteur SDR, le cockpit QO-100 la bande étroite ; ailleurs le poste quand il est relié en CAT (QO-100 s'il y est), sinon le SDR en marche. Poste : le VFO du satellite (le repos dans le transpondeur, la montée suit), ou les décalages RX / TX que la boucle CAT écrit.</div>
         <div class="petit aide">Réception seulement : la molette ne passe jamais en émission (PTT) et ne lance rien. Capturer : SatMe seul lit la molette, le volume du bureau ne bouge plus tant que SatMe-PC tourne ; jamais un clavier complet (lecture seule alors).</div>
@@ -7436,9 +7444,29 @@ function rendMol(j) {
         (k.code ? '<button class="discret" onclick="regleMol(\'oublie=' + i + '\')" title="Oublier cette touche">✕</button>' : '') + '</span>';
     }).join('');
   }
+  rendRelais(j.relais);
   const d = j.dernier;
   txt('mol-dernier', 'Dernier événement : ' + (d ? hm(d.ms, true) + ' · ' + d.nom + (d.valeur === 2 ? ' (répétée)' : '') + ' → ' + d.geste : '—'));
 }
+const MOL_RELAIS = { connecte: 'Relais en marche vers ', reconnexion: 'Session terminée sur ', erreur: 'Station injoignable : ' };
+function rendRelais(r) {
+  if (!r) return;
+  const en = r.etat !== 'coupe';
+  g('mol-r-coupe').hidden = !en;
+  if (document.activeElement !== g('mol-r-adr') && r.adresse) g('mol-r-adr').value = r.adresse;
+  txt('mol-r-etat', en ? (MOL_RELAIS[r.etat] || '') + r.adresse + (r.envoyes ? ' · ' + r.envoyes + ' crans envoyés' : '') + (r.message ? ' — ' + r.message : '')
+    : 'Relais coupé : la molette accorde ce PC.');
+}
+async function relaisMol() {
+  const b = new URLSearchParams({ adresse: g('mol-r-adr').value.trim(), mdp: g('mol-r-mdp').value });
+  g('mol-r-mdp').value = '';
+  txt('mol-r-etat', 'Connexion à la station…');
+  let j = null;
+  try { j = await (await fetch('api/molette/relais', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: b.toString() })).json(); } catch (x) {}
+  if (j && j.relais) rendRelais(j.relais);
+  if (!j || !j.ok) txt('mol-r-etat', 'Échec : ' + (j && j.erreur ? j.erreur : 'pas de réponse'));
+}
+async function coupeRelais() { await post('api/molette/relais/coupe'); chargeMol(); }
 async function regleMol(q) { const j = await post('api/molette?' + q); if (j && j.dispo !== undefined) rendMol(j); else chargeMol(); HX.t.mol = 0; }
 setInterval(() => { if (ouverte('reglages') && !g('mol-carte').hidden && g('mol-carte').offsetParent) chargeMol(); }, 1000);
 // ------------------------------------------------------------------ spoken announcements

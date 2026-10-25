@@ -42,7 +42,8 @@ fun main(args: Array<String>) {
     }
     // Started again by « Redémarrer SatMe-PC »: the previous one gone first (its port, its files).
     a.apres?.let { RedemarragePc.attend(it) }
-    val fichierLanceur = FichierLanceur(FichierLanceur.emplacement())
+    // Portable (a `donnees` folder beside the program): its start options kept there too, nothing on the PC.
+    val fichierLanceur = FichierLanceur(dossierPortable()?.let { File(it, FichierLanceur.NOM) } ?: FichierLanceur.emplacement())
     val optionsLanceur = fichierLanceur.lit()
     val lanceur = LanceurPc.resout(a, optionsLanceur, fichierLanceur.fichier, dossierParDefaut())
     val port = lanceur.port
@@ -384,8 +385,12 @@ fun main(args: Array<String>) {
     serveur.rigctld = rigctld
     // The USB volume knob as a VFO (Linux): off unless chosen in Réglages › Interfaces; receive tuning only.
     val molette = MoletteUsbPc(station.stockage, station.settings, mondeMolette(station, sdr))
+    // Or relayed to another station (Réglages › Molette › Relais): its session kept here, never its password.
+    val relaisMolette = RelaisMolettePc(File(dossier, "relais-molette.properties"))
+    molette.relais = relaisMolette
     molette.demarre()
     serveur.molette = molette
+    serveur.relaisMolette = relaisMolette
     // Spoken announcements: off unless chosen in Réglages › Annonces; read from the objects above, said by the browser or this PC.
     // The SDR speaker lowered while either speaks: the lowest level asked wins.
     val baisseSdr = BaisseSon { sdr.gainHautParleur = it }
@@ -638,8 +643,19 @@ internal fun instantaneAnnonces(station: StationPc, son: SonStation, sdr: SdrPc,
         molettePasHz = station.settings.molettePasHz.takeIf { station.settings.moletteVfo })
 }
 
-/** ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */
+/**
+ * A portable SatMe-PC (on a USB stick): a `donnees` folder beside the program (next to `bin` and `lib`, or to
+ * SatMe.exe) holds its settings and files, nothing written elsewhere on the PC. [jar]: where this program runs from.
+ */
+fun dossierPortable(jar: File? = runCatching { File(LanceurPc::class.java.protectionDomain.codeSource.location.toURI()) }.getOrNull()): File? {
+    val ici = jar?.parentFile ?: return null
+    val racine = if (ici.name == "lib" || ici.name == "app") ici.parentFile ?: return null else ici
+    return File(racine, "donnees").takeIf { it.isDirectory }
+}
+
+/** The portable folder when there is one, else ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */
 fun dossierParDefaut(): File {
+    dossierPortable()?.let { return it }
     val appdata = System.getenv("APPDATA")
     return if (System.getProperty("os.name").orEmpty().startsWith("Windows") && !appdata.isNullOrBlank())
         File(appdata, "SatMe") else File(System.getProperty("user.home"), ".satme")

@@ -90,6 +90,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** The USB volume knob as a VFO, Linux (set before [demarre]). */
     @Volatile var molette: MoletteUsbPc? = null
+    /** This PC relaying its knob to another station. */
+    @Volatile var relaisMolette: RelaisMolettePc? = null
 
     /** The IC-9700 transmitting: PTT, microphone, power (set before [demarre]). */
     @Volatile var emissionPoste: EmissionPostePc? = null
@@ -544,6 +546,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val b = if (t == null || r.longueur <= 0 || r.longueur > JournalPaquet.MAX_OCTETS) null
                 else runCatching { t.importeZip(Borne(c.getInputStream(), r.longueur), q["enLigne"] != "0") }.getOrNull()
             envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.bilanTelephone(b).toString().toByteArray())
+            return
+        }
+        if (r.methode == "POST" && chemin == "/api/molette/relais") {
+            // The other station's password: in the body, never in an address, never kept.
+            val f = RequeteHttp.corps(c.getInputStream(), r, 4096)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty()
+            val rl = relaisMolette
+            val err = if (rl == null) "absent" else rl.connecte(f["adresse"].orEmpty(), f["mdp"].orEmpty())
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", (if (err == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", err))
+                .put("relais", rl?.json()).toString().toByteArray())
             return
         }
         if (r.methode == "POST" && chemin == "/api/import/adif") {
@@ -1838,6 +1849,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/molette" -> return (molette ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q).put("ok", true)
             // The page's wheel or drag on a frequency: the knob's steps, its settings.
+            // Another SatMe-PC's knob, relayed here (its keys, as this station's own knob would send them).
+            "/api/molette/touches" -> {
+                val m = molette ?: return JSONObject().put("ok", false).put("erreur", "absent")
+                var g = ""
+                q["l"].orEmpty().split(',').take(50).forEach { k ->
+                    val (c, v) = k.split(':').let { (it.getOrNull(0)?.toIntOrNull() ?: return@forEach) to (it.getOrNull(1)?.toIntOrNull() ?: return@forEach) }
+                    if (c in 1..0x2ff && v in 0..2) { m.recoit(c, v, distant = true); g = m.dernierGeste() }
+                }
+                return JSONObject().put("ok", true).put("geste", g)
+            }
+            "/api/molette/relais/coupe" -> { relaisMolette?.deconnecte(); return JSONObject().put("ok", true) }
             "/api/molette/tourne" -> {
                 val m = molette ?: return JSONObject().put("ok", false).put("erreur", "absent")
                 m.contextePage(q["ctx"])

@@ -270,8 +270,11 @@ class MoletteUsbPc(
         fun qo100(dHz: Long)
     }
 
-    /** Linux with its input list: elsewhere (Windows) the card says « non disponible ». */
-    val dispo: Boolean = System.getProperty("os.name").orEmpty().startsWith("Linux") && fichierAppareils.canRead() || ouvre != null
+    /** Linux with its input list, or Windows (its volume keys through PowerShell); elsewhere the card says « non disponible ». */
+    val dispo: Boolean = System.getProperty("os.name").orEmpty().startsWith("Linux") && fichierAppareils.canRead() || ouvre != null || EntreesWindows.estWindows
+
+    /** Set: this PC relays its knob to another station (Réglages › Molette › Relais) instead of tuning itself. */
+    @Volatile var relais: RelaisMolettePc? = null
 
     var appareilChoisi: String
         get() = stockage.getString("pc_molette_appareil", "") ?: ""
@@ -316,7 +319,8 @@ class MoletteUsbPc(
 
     private fun attends(ms: Long) = synchronized(verrou) { verrou.wait(ms) }
 
-    fun appareils(): List<EntreesLinux.Appareil> = runCatching { EntreesLinux.lit(fichierAppareils.readText()) }.getOrDefault(emptyList())
+    fun appareils(): List<EntreesLinux.Appareil> = if (EntreesWindows.estWindows && ouvre == null) listOf(EntreesWindows.APPAREIL)
+        else runCatching { EntreesLinux.lit(fichierAppareils.readText()) }.getOrDefault(emptyList())
 
     /** Capture only the knob, or a device that is no whole keyboard: never the PC's keyboard. */
     fun captureAutorisee(a: EntreesLinux.Appareil) = a.molette || !a.lettres
@@ -331,10 +335,11 @@ class MoletteUsbPc(
             attends(3_000); return
         }
         val dev = File(dossierDev, a.evenement)
-        if (ouvre == null && !dev.canRead()) { etat = "permission"; message = "/dev/input/${a.evenement} illisible"; attends(3_000); return }
+        val windows = EntreesWindows.estWindows && ouvre == null
+        if (ouvre == null && !windows && !dev.canRead()) { etat = "permission"; message = "/dev/input/${a.evenement} illisible"; attends(3_000); return }
         val veut = captureVoulue && captureAutorisee(a)
         val s = try {
-            (ouvre ?: ::ouvreParDefaut)(dev, veut)
+            if (windows) EntreesWindows.Source(veut) else (ouvre ?: ::ouvreParDefaut)(dev, veut)
         } catch (e: Exception) {
             etat = if (e.message.orEmpty().contains("ermission")) "permission" else "erreur"; message = e.message ?: "erreur"
             attends(3_000); return
@@ -344,6 +349,7 @@ class MoletteUsbPc(
         message = when {
             captureVoulue && !captureAutorisee(a) -> "lecture seule : un clavier complet n'est jamais capturé"
             veut && !s.capture -> "lecture seule : capture refusée" + ((s as? EntreesLinux.SourceAssistant)?.refusCapture?.let { " ($it)" } ?: "")
+            windows && s.capture -> "toutes les touches de volume de ce PC sont prises par SatMe"
             else -> ""
         }
         if (gen != generation) { s.close(); source = null; return }
@@ -378,9 +384,13 @@ class MoletteUsbPc(
 
     fun accordEffectif(): MoletteUsb.Accord = MoletteUsb.accordDe(accord, monde.contexte(contexteActuel()))
 
-    /** One key of the knob, Linux code; value 1 pressed, 2 repeated, 0 released. */
-    fun recoit(codeLinux: Int, valeur: Int) {
+    /**
+     * One key of the knob, Linux code; value 1 pressed, 2 repeated, 0 released. Relaying, it goes to the other
+     * station. [distant]: a key relayed here by another SatMe-PC, applied even when this station has no knob of its own on.
+     */
+    fun recoit(codeLinux: Int, valeur: Int, distant: Boolean = false) {
         if (valeur == 0) return
+        if (!distant && relais?.envoie(codeLinux, valeur) == true) { note(codeLinux, valeur, "envoyée à la station " + relais?.adresse); return }
         val code = MoletteUsb.codeDepuisLinux(codeLinux)
         val rang = apprend
         if (rang != null) {
@@ -390,7 +400,7 @@ class MoletteUsbPc(
                 note(codeLinux, valeur, "appris"); return
             }
         }
-        val g = MoletteUsb.geste(code, settings.moletteVfo, externe = true, pasHz = settings.molettePasHz, touches = touches())
+        val g = MoletteUsb.geste(code, settings.moletteVfo || distant, externe = true, pasHz = settings.molettePasHz, touches = touches())
         // A held key repeats: only a turn may (a held press would cycle the step).
         if (valeur == 2 && g !is MoletteUsb.Geste.Bouge) return
         note(codeLinux, valeur, applique(g))
@@ -411,6 +421,9 @@ class MoletteUsbPc(
         }
         return applique(MoletteUsb.Geste.Bouge(d))
     }
+
+    /** The last key's effect in words (for the relaying station's line). */
+    fun dernierGeste(): String = dernier?.optString("geste").orEmpty()
 
     private fun note(code: Int, valeur: Int, quoi: String) {
         dernier = JSONObject().put("code", code).put("nom", nomLinux(code)).put("valeur", valeur).put("geste", quoi).put("ms", horloge())
@@ -481,7 +494,8 @@ class MoletteUsbPc(
 
     fun json(): JSONObject {
         val o = JSONObject().put("dispo", dispo)
-        if (!dispo) return o.put("message", "non disponible : Linux seulement")
+        relais?.let { o.put("relais", it.json()) }
+        if (!dispo) return o.put("message", "non disponible : Linux ou Windows seulement")
         val liste = appareils()
         val a = lu ?: EntreesLinux.choisit(liste, appareilChoisi)
         if (apprend != null && horloge() > apprendJusqua) apprend = null
