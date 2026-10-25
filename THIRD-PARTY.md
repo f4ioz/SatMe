@@ -41,6 +41,7 @@ position; it is also the tradition of amateur radio software.
 | `com.google.zxing:core` | Apache-2.0 | QR code generation |
 | `com.squareup.okhttp3:okhttp` | Apache-2.0 | Network requests |
 | `org.apache.pdfbox:pdfbox` (with `fontbox`, `pdfbox-io`; `commons-logging`) | Apache-2.0 | SatMe-PC only: the SSTV event report drawn as a PDF |
+| Display fonts of the SSTV sheet: Orbitron Black, Audiowide, Exo 2 Black Italic, Russo One, Michroma, Bungee, Monoton (`moteur/src/main/resources/fr/f4ioz/satcombo/sstv/polices/`, each with its `*-OFL.txt`) | SIL Open Font License 1.1 | The styled titles and texts of the sheet, drawn on the phone and the PC, served to the sheet page (see below) |
 | DejaVu Sans, regular and bold (`pc/src/main/resources/…/polices/`, licence beside them) | Bitstream Vera and Arev licences; DejaVu changes public domain | SatMe-PC only: the PDF report's letters and symbols, embedded in it |
 | `com.github.mik3y:usb-serial-for-android` | MIT | USB serial bridges (CAT, rotator) |
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | UI and lifecycle |
@@ -64,6 +65,18 @@ a modified version, as the LGPL requires. This separation must be preserved.
 91) error-correcting code tables from `ft8_lib`, under the MIT license. It
 carries its own provenance notice and **is not covered by SatMe's copyright**:
 the MIT license is GPL-compatible, but its author must remain credited.
+
+**On the sheet's fonts.** They are bundled unmodified, each with its OFL
+text: Orbitron Black from the League of Moveable Type's repository
+(github.com/theleagueof/orbitron, © The Orbitron Project Authors, Matt
+McInerney, Reserved Font Name "Orbitron"); Exo 2 Black Italic from
+github.com/googlefonts/Exo-2.0 (© The Exo 2 Project Authors, Natanael Gama);
+Audiowide (© Astigmatic, Brian J. Bonislawsky, Reserved Font Name
+"Audiowide"), Russo One (© Jovanny Lemonad, Reserved Font Name "Russo"),
+Michroma (© The Michroma Project Authors, Vernon Adams), Bungee (© The Bungee
+Project Authors, David Jonathan Ross) and Monoton (© Vernon Adams, Reserved
+Font Name "Monoton") from github.com/google/fonts. The OFL allows them to be
+bundled with any software, GPL included, as long as they are not sold alone.
 
 **On the Google components.** They are not free software. A distribution that
 wanted to do without them — F-Droid, for example — would have to replace
@@ -92,8 +105,8 @@ those services' rules.
 
 ## Pictures
 
-The SSTV sheet offers four backgrounds made from **NASA** pictures, reduced to
-the sheet's size (2400 × 1697) and recompressed, in
+The SSTV sheet offers nine backgrounds made from **NASA** pictures, reduced to
+the sheet's size (2400 × 1697, or 1600 × 1132 for the later ones) and recompressed, in
 `moteur/src/main/resources/fr/f4ioz/satcombo/sstv/decors/`. NASA pictures are
 generally not subject to copyright in the United States (NASA Images and
 Media Usage Guidelines, nasa.gov/nasa-brand-center/images-and-media); they
@@ -106,8 +119,13 @@ released by NASA itself were chosen: none credited to a third party alone.
 | `limbe.jpg` | The Earth's glow and the aurora australis over the Indian Ocean (iss062e148363, 13 Apr 2020) | https://images.nasa.gov/details/iss062e148363 | NASA (ISS crew photograph, JSC) — public domain |
 | `lever.jpg` | An orbital sunrise over the Pacific, north of Auckland (iss071e439624, 6 Aug 2024) | https://images.nasa.gov/details/iss071e439624 | NASA (ISS crew photograph, JSC) — public domain |
 | `lagune.jpg` | Hubble reveals heart of Lagoon Nebula (released 22 Sep 2010) | https://images.nasa.gov/details/GSFC_20171208_Archive_e001955 | NASA, ESA (NASA Goddard release) — public domain under NASA's guidelines |
+| `iss_espace.jpg` | The ISS backdropped by Earth's horizon and the blackness of space, from Discovery after undocking (s131e011050, 17 Apr 2010) | https://images.nasa.gov/details/s131e011050 | NASA (STS-131 crew photograph, JSC) — public domain |
+| `iss_terre.jpg` | Flyaround view of the ISS after undocking, from Atlantis (s132e012208, 23 May 2010) | https://images.nasa.gov/details/s132e012208 | NASA (STS-132 crew photograph, JSC) — public domain |
+| `panneaux.jpg` | ISS solar array wing panels, backdropped by space and Earth's horizon (s118e07242, 14 Aug 2007), the frame number at the bottom cut off | https://images.nasa.gov/details/s118e07242 | NASA (STS-118 crew photograph, JSC) — public domain |
+| `nuit.jpg` | Aurora borealis and city lights of the Midwestern United States from the ISS (iss029e012564, 29 Sep 2011) | https://images.nasa.gov/details/iss029e012564 | NASA (Expedition 29 crew photograph, JSC) — public domain |
+| `papillon.jpg` | Space Butterfly: the W40 nebula in infrared, Spitzer Space Telescope (PIA23121, 27 Mar 2019) | https://images.nasa.gov/details/PIA23121 | NASA/JPL-Caltech — public domain under NASA's guidelines |
 
-The other backgrounds (starry sky, dusk, abyss, slate) are drawn by SatMe.
+The other backgrounds (starry sky, dusk, abyss, slate, nebula, orbit) are drawn by SatMe.
 
 ---
 

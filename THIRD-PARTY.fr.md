@@ -41,6 +41,7 @@ celle de la tradition du logiciel radioamateur.
 | `com.google.zxing:core` | Apache-2.0 | Génération des QR codes |
 | `com.squareup.okhttp3:okhttp` | Apache-2.0 | Requêtes réseau |
 | `org.apache.pdfbox:pdfbox` (avec `fontbox`, `pdfbox-io` ; `commons-logging`) | Apache-2.0 | SatMe-PC seulement : le rapport d'événement SSTV dessiné en PDF |
+| Polices d'affichage de la planche SSTV : Orbitron Black, Audiowide, Exo 2 Black Italic, Russo One, Michroma, Bungee, Monoton (`moteur/src/main/resources/fr/f4ioz/satcombo/sstv/polices/`, chacune avec son `*-OFL.txt`) | SIL Open Font License 1.1 | Les titres et textes stylés de la planche, dessinés par le téléphone et le PC, servis à la page de la planche (voir plus bas) |
 | DejaVu Sans, normale et grasse (`pc/src/main/resources/…/polices/`, licence à côté) | Licences Bitstream Vera et Arev ; modifications DejaVu dans le domaine public | SatMe-PC seulement : les lettres et symboles du rapport PDF, incluses dedans |
 | `com.github.mik3y:usb-serial-for-android` | MIT | Ponts série USB (CAT, rotor) |
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | Interface et cycle de vie |
@@ -65,6 +66,18 @@ la LGPL. Cette séparation doit être préservée.
 du code correcteur (174, 91) de `ft8_lib`, sous licence MIT. Il porte sa propre
 mention de provenance et **n'est pas couvert par le copyright de SatMe** : la
 licence MIT est compatible avec la GPL, mais son auteur doit rester nommé.
+
+**Sur les polices de la planche.** Elles sont livrées sans modification, chacune
+avec son texte OFL : Orbitron Black vient du dépôt de la League of Moveable
+Type (github.com/theleagueof/orbitron, © The Orbitron Project Authors, Matt
+McInerney, nom réservé « Orbitron ») ; Exo 2 Black Italic de
+github.com/googlefonts/Exo-2.0 (© The Exo 2 Project Authors, Natanael Gama) ;
+Audiowide (© Astigmatic, Brian J. Bonislawsky, nom réservé « Audiowide »),
+Russo One (© Jovanny Lemonad, nom réservé « Russo »), Michroma (© The Michroma
+Project Authors, Vernon Adams), Bungee (© The Bungee Project Authors, David
+Jonathan Ross) et Monoton (© Vernon Adams, nom réservé « Monoton ») de
+github.com/google/fonts. L'OFL permet de les livrer avec tout logiciel, GPL
+compris, tant qu'elles ne sont pas vendues seules.
 
 **Sur les composants Google.** Ils ne sont pas libres. Une distribution qui
 voudrait s'en passer — F-Droid, par exemple — devrait remplacer la
@@ -95,8 +108,8 @@ reprend ce code s'en remet aux règles de ces services.
 
 ## Images
 
-La planche SSTV propose quatre fonds tirés d'images de la **NASA**, réduites à
-la taille de la planche (2400 × 1697) et recompressées, dans
+La planche SSTV propose neuf fonds tirés d'images de la **NASA**, réduites à
+la taille de la planche (2400 × 1697, ou 1600 × 1132 pour les plus récentes) et recompressées, dans
 `moteur/src/main/resources/fr/f4ioz/satcombo/sstv/decors/`. Les images de la
 NASA ne sont en général pas protégées par le droit d'auteur aux États-Unis
 (NASA Images and Media Usage Guidelines, nasa.gov/nasa-brand-center/images-and-media) ;
@@ -110,8 +123,13 @@ un tiers seul.
 | `limbe.jpg` | La lueur de la Terre et l'aurore australe sur l'océan Indien (iss062e148363, 13 avril 2020) | https://images.nasa.gov/details/iss062e148363 | NASA (photo de l'équipage de l'ISS, JSC) — domaine public |
 | `lever.jpg` | Un lever de soleil orbital sur le Pacifique, au nord d'Auckland (iss071e439624, 6 août 2024) | https://images.nasa.gov/details/iss071e439624 | NASA (photo de l'équipage de l'ISS, JSC) — domaine public |
 | `lagune.jpg` | Hubble reveals heart of Lagoon Nebula (publiée le 22 septembre 2010) | https://images.nasa.gov/details/GSFC_20171208_Archive_e001955 | NASA, ESA (publication NASA Goddard) — domaine public selon les règles de la NASA |
+| `iss_espace.jpg` | L'ISS sur fond d'horizon terrestre et de noir de l'espace, vue de Discovery après le désamarrage (s131e011050, 17 avril 2010) | https://images.nasa.gov/details/s131e011050 | NASA (photo de l'équipage de STS-131, JSC) — domaine public |
+| `iss_terre.jpg` | L'ISS vue d'Atlantis après le désamarrage (s132e012208, 23 mai 2010) | https://images.nasa.gov/details/s132e012208 | NASA (photo de l'équipage de STS-132, JSC) — domaine public |
+| `panneaux.jpg` | Ailes de panneaux solaires de l'ISS sur fond d'espace et d'horizon terrestre (s118e07242, 14 août 2007), le numéro de cliché du bas coupé | https://images.nasa.gov/details/s118e07242 | NASA (photo de l'équipage de STS-118, JSC) — domaine public |
+| `nuit.jpg` | Aurore boréale et lumières des villes du Midwest américain, vues de l'ISS (iss029e012564, 29 septembre 2011) | https://images.nasa.gov/details/iss029e012564 | NASA (photo de l'équipage de l'Expédition 29, JSC) — domaine public |
+| `papillon.jpg` | « Space Butterfly » : la nébuleuse W40 en infrarouge, télescope spatial Spitzer (PIA23121, 27 mars 2019) | https://images.nasa.gov/details/PIA23121 | NASA/JPL-Caltech — domaine public selon les règles de la NASA |
 
-Les autres fonds (ciel étoilé, crépuscule, abysse, ardoise) sont dessinés par SatMe.
+Les autres fonds (ciel étoilé, crépuscule, abysse, ardoise, nébuleuse, orbite) sont dessinés par SatMe.
 
 ---
 
