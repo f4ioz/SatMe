@@ -475,15 +475,15 @@ object RenduPc {
         val heure = fmt("HH:mm:ss", sc).format(Date(instant)) + " " + zone(sc, instant)
         val b = listOfNotNull(t(fmt("yyyy-MM-dd", sc).format(Date(instant)), f13, gris, 1), t(heure, f13, gris, 1, gabarit = "00:00:00 " + zone(sc, instant)),
             t(LegendePc.relatif(e, instant), f13g, CYAN, 2, gabarit = "AOS dans 00:00:00"),
-            ses?.let { t(it.first, f13g, Color.WHITE, 2, droite = true, gabarit = "Passage 000 / 000") })
+            ses?.let { t(it.first, f13g, Color.WHITE, 4, droite = true, gabarit = "Passage 000 / 000") })
         val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { f -> f.first <= instant + 2_000L }?.second
         val avecRx = sc.affFreq && sc.frequences.isNotEmpty()
         val azel = p?.let { "Az %.0f°  El %.0f°".format(it.az, it.el) + (rx?.let { r -> "  RX %.4f MHz".format(r / 1e6) } ?: "") } ?: ""
         val c = listOfNotNull(t(azel, f13, gris, 3, gabarit = "Az 000°  El 00°" + (if (avecRx) "  RX 000.0000 MHz" else ""), visible = p != null),
             ses?.let { t(it.second, f13g, if (it.third) SSTV else gris, 5, droite = true, gabarit = "000 images reçues") })
         val (aos, tca, los) = LegendePc.aosTcaLos(e, sc.fuseau)
-        // The pass's times after the pointing, on the same lines when there is room.
-        val d = listOf(t(aos, f13, gris, 4), t(tca, f13, gris, 5), t(los, f13, gris, 4))
+        // The pass's times after the pointing, on the same lines when there is room; kept before the pass's number and the pictures' count.
+        val d = listOf(t(aos, f13, gris, 2), t(tca, f13, gris, 3), t(los, f13, gris, 2))
         val v = JournalPassage.signalA(e, instant)?.takeIf { sc.marques.any { m -> instant in (m.debutMs - 2_000L)..(m.finMs + sc.flashMs) } }
         val sm = if (sc.affSmetre && e.signal.isNotEmpty()) listOf(LegendePc.Element(LegendePc.Sorte.SMETRE, "", f13, Color.WHITE, 6,
             visible = v != null, valeur = v, crete = v?.let { JournalPassage.crete(e, instant) })) else emptyList()
