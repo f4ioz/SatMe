@@ -42,7 +42,7 @@ object PageJournal {
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
-        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los")
+        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -273,7 +273,7 @@ let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
     smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true,
-    entre: 10, transition: 1.6, police: 1 });
+    entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3 });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -1235,18 +1235,16 @@ async function chargeSession() {
   ps.forEach(q => { (q.sol || []).forEach(x => sol.push(x)); (q.marques || []).forEach(m => { const k = m.k + '|' + (m.f || m.t) + '|' + m.de; if (!vus.has(k)) { vus.add(k); marques.push(Object.assign({}, m, { pid: q.id })); } }); });
   sol.sort((x, y) => x[0] - y[0]);
   const images = marques.filter(m => m.k === 'SSTV' && m.f).sort((x, y) => x.a - y.a);
-  S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', vitesse: 30,
-    images: images, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat) };
+  // Where to slow down: a picture being received, a contact being heard (3 s either side; a contact with no span, 20 s round it).
+  const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || m.k === 'QSO').map(m => m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]);
+  S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', f: O.vPassage,
+    images: images, lentes: lentes, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat) };
   S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
   z.innerHTML = '';
-  const vit = el('select', { id: 'sVit', onchange: ev => { S.vitesse = +ev.target.value; } });
   const mode = el('select', { onchange: ev => { S.mode = ev.target.value; vitesses(); } }, [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
-  // Between the passes: the pause (passes in a row), or how much faster time runs there (continuous time).
-  const libEntre = () => { const c = S.mode === 'continu', r = g('sEntre');
-    Object.assign(r, c ? { min: 1, max: 100, step: 1 } : { min: .5, max: 6, step: .1 }); r.value = c ? O.entre : O.transition;
-    g('sEntreT').textContent = c ? T.s_entre_vite : T.s_entre_pause; g('sEntreV').textContent = c ? '×' + O.entre : (+O.transition).toFixed(1) + ' s'; };
-  const vitesses = () => { if (g('sEntre')) libEntre(); vit.innerHTML = ''; (S.mode === 'continu' ? [600, 2000, 6000] : [10, 30, 100]).forEach(x => vit.appendChild(el('option', { value: x, text: '×' + x })));
-    vit.value = S.mode === 'continu' ? '2000' : '30'; S.vitesse = +vit.value; };
+  // Three speeds: outside the passes (continuous time; passes in a row: the pause between them), in a pass, on a picture or a contact.
+  const vHors = curseurVitesse('vHors', T.s_v_hors, 10, 20000), pause = curseurPause(), vPas = curseurVitesse('vPassage', T.s_v_passage, 1, 500), vImg = curseurVitesse('vImage', T.s_v_image, .5, 100);
+  const vitesses = () => { vHors.style.display = S.mode === 'continu' ? '' : 'none'; pause.style.display = S.mode === 'continu' ? 'none' : ''; };
   const gauche = el('div', { class: 's-gauche' }), cote = el('div', { class: 's-cote' });
   z.appendChild(el('div', { class: 's-deux' }, [gauche, cote]));
   const zg = { appendChild: n => gauche.appendChild(n) };
@@ -1255,9 +1253,8 @@ async function chargeSession() {
     el('div', { id: 'sImage' }, [el('img', { alt: '' })])]));
   g('sChoix').style.display = 'flex';
   zg.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
-    mode, vit, el('label', { class: 's-curseur', id: 'sEntreL' }, [el('span', { id: 'sEntreT' }), el('input', { type: 'range', id: 'sEntre', oninput: ev => {
-      if (S.mode === 'continu') O.entre = +ev.target.value; else O.transition = +ev.target.value; garde(); libEntre(); } }), el('b', { id: 'sEntreV' })]),
-    caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
+    mode, caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
+  zg.appendChild(el('div', { class: 'commandes' }, [vHors, pause, vPas, vImg]));
   vitesses();
   const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); zg.appendChild(fr);
   fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
@@ -1274,20 +1271,42 @@ function chercheSession(f) {
   for (let i = 0; i < S.segs.length; i++) { const q = S.segs[i], l = q[1] - q[0]; if (reste <= l || i === S.segs.length - 1) { S.i = i; S.t = q[0] + Math.min(l, reste); break; } reste -= l; }
   S.vues = 0; g('sGalerie').innerHTML = ''; majSession();
 }
+/** A speed's slider, from [min] to [max] on a log scale (×10 000 and ×2 both within reach), its value beside it. */
+function curseurVitesse(cle, lib, min, max) {
+  const lmin = Math.log(min), lmax = Math.log(max), v = el('b'), r = el('input', { type: 'range', min: 0, max: 1000, step: 1 });
+  const montre = () => { const x = +O[cle]; v.textContent = '×' + (x < 10 ? x.toFixed(1).replace(/\.0$/, '') : Math.round(x)); };
+  r.value = Math.round((Math.log(Math.max(min, Math.min(max, +O[cle]))) - lmin) / (lmax - lmin) * 1000);
+  r.oninput = () => { const x = Math.exp(lmin + (lmax - lmin) * r.value / 1000); O[cle] = x < 10 ? Math.round(x * 2) / 2 : x < 100 ? Math.round(x) : Math.round(x / 10) * 10; garde(); montre(); };
+  montre();
+  return el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
+}
+function curseurPause() {
+  const v = el('b'), r = el('input', { type: 'range', min: .5, max: 6, step: .1, value: O.transition });
+  const montre = () => { v.textContent = (+O.transition).toFixed(1) + ' s'; };
+  r.oninput = () => { O.transition = +r.value; garde(); montre(); }; montre();
+  return el('label', { class: 's-curseur' }, [el('span', { text: T.s_entre_pause }), r, v]);
+}
+/** The speed wanted at [tt]: slow on a picture or a contact, middling in a pass, fast between passes. */
+function vitesseSession(tt) {
+  if (S.lentes.some(q => tt >= q[0] && tt <= q[1])) return +O.vImage;
+  if (S.segs.some(q => tt >= q[0] && tt <= q[1])) return +O.vPassage;
+  return +O.vHors;
+}
 function boucleSession(now) {
   if (!S || !S.joue || !g('sGlobe')) return;
   const dt = now - (S.dernier || now); S.dernier = now;
   const fin = S.segs[S.segs.length - 1][1];
+  // The speed eased towards the one wanted here (about a second, on a log scale): no jump on a picture's start.
+  const voulue = vitesseSession(S.t), k = 1 - Math.exp(-dt / 500);
+  S.f = Math.exp(Math.log(S.f || voulue) + (Math.log(voulue) - Math.log(S.f || voulue)) * k);
   if (S.mode === 'continu') {
-    // Outside the passes, ten times faster: the hours between them go by quickly.
-    const dans = S.segs.some(q => S.t >= q[0] && S.t <= q[1]);
-    S.t = Math.min(fin, S.t + dt * S.vitesse * (dans ? 1 : O.entre));
+    S.t = Math.min(fin, S.t + dt * S.f);
     while (S.i < S.segs.length - 1 && S.t > S.segs[S.i][1]) S.i++;
   } else if (S.trans) {
     // Between two passes: a short pause, the days going by, then the next one.
-    S.trans -= dt; if (S.trans <= 0) { S.trans = 0; S.i++; S.t = S.segs[S.i][0]; }
+    S.trans -= dt; if (S.trans <= 0) { S.trans = 0; S.i++; S.t = S.segs[S.i][0]; S.f = vitesseSession(S.t); }
   } else {
-    S.t += dt * S.vitesse;
+    S.t += dt * S.f;
     if (S.t >= S.segs[S.i][1]) { S.t = S.segs[S.i][1]; if (S.i < S.segs.length - 1) S.trans = O.transition * 1000; }
   }
   if (S.t >= fin && !S.trans) S.joue = false;
@@ -1319,7 +1338,7 @@ function panneauSession() {
   const zone = el('div');
   p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: async () => {
     const b = v => v ? '1' : '0';
-    const q = Object.assign({ ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: S.vitesse, titre: ti.value, vignettes: b(O.vignettes),
+    const q = Object.assign({ ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: O.vPassage, vHors: O.vHors, vPassage: O.vPassage, vImage: O.vImage, titre: ti.value, vignettes: b(O.vignettes),
       entre: O.entre, transition: O.transition, police: O.police, utc: b(utc),
       res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
       ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
@@ -1342,7 +1361,7 @@ function majSession() {
   ban.style.setProperty('--police', O.police);
   ban.innerHTML = '';
   ban.appendChild(el('b', { text: jour(S.t).replace(/ \d\d:\d\dZ?$/, '') + ' ' + hms(S.t) + (utc ? ' UTC' : '') }));
-  ban.appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) }));
+  ban.appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) + (S.joue ? ' · ×' + Math.round(S.f || 0) : '') }));
   if (q) {
     const haut = (q.pts || []).reduce((m, x) => x[2] > m[2] ? x : m, [q.de, 0, -90]), ici = avant(q.pts || [], S.t);
     ban.appendChild(el('div', { text: 'AOS ' + hms(q.de) + ' · TCA ' + hms(haut[0]).slice(0, 5) + ' (' + Math.round(haut[2]) + '°) · LOS ' + hms(q.a) }));
