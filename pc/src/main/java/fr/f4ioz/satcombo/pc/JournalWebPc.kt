@@ -308,8 +308,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     val pg: (String) -> String = { k -> when (k) { "vue" -> "globe"; "carte" -> "0"; "accelere" -> "0"; else -> p(k) } }
                     t.fichier = runCatching {
                         val scenes = es.map { e -> scene(e, null, null, false, pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } } }
-                        val session = SessionRenduPc.Session(scenes, q.mode, q.vitesse, q.titre, q.vignettes,
-                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap), entre = q.entre, transition = q.transition)
+                        val session = SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
+                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap), transition = q.transition)
                         val nom = "SatMe_" + es[0].satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                             java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                                 .format(java.util.Date(es[0].debutMs)) + "Z_session" + (q.titre?.take(30)?.replace(Regex("[^A-Za-z0-9-]"), "-")?.let { "_$it" } ?: "") + ".mp4"

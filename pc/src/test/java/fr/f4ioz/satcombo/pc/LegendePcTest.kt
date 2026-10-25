@@ -56,43 +56,32 @@ class LegendePcTest {
     }
 
     @Test
-    fun les_mots_de_la_session() {
-        val d = SessionRenduPc.parametres(lit())
-        assertEquals(10.0, d.entre, 0.0); assertEquals(1.5, d.transition, 0.0)
-        val p = SessionRenduPc.parametres(lit("entre" to "25", "transition" to "3"))
-        assertEquals(25.0, p.entre, 0.0); assertEquals(3.0, p.transition, 0.0)
-        val b = SessionRenduPc.parametres(lit("entre" to "0", "transition" to "60"))
-        assertEquals(1.0, b.entre, 0.0); assertEquals(6.0, b.transition, 0.0)
-        val h = SessionRenduPc.parametres(lit("entre" to "1000", "transition" to "0.1"))
-        assertEquals(100.0, h.entre, 0.0); assertEquals(0.5, h.transition, 0.0)
-        val n = SessionRenduPc.parametres(lit("entre" to "x", "transition" to "NaN"))
-        assertEquals(10.0, n.entre, 0.0); assertEquals(1.5, n.transition, 0.0)
+    fun le_tour_de_la_session_demande() {
+        assertEquals(1.5, SessionRenduPc.parametres(lit()).transition, 0.0)
+        assertEquals(3.0, SessionRenduPc.parametres(lit("transition" to "3")).transition, 0.0)
+        assertEquals(6.0, SessionRenduPc.parametres(lit("transition" to "60")).transition, 0.0)
+        assertEquals(0.5, SessionRenduPc.parametres(lit("transition" to "0.1")).transition, 0.0)
+        assertEquals(1.5, SessionRenduPc.parametres(lit("transition" to "NaN")).transition, 0.0)
     }
 
     private val fenetres = (0..2).map { k -> val de = t0 + k * 95 * 60_000L; (de - 30_000L)..(de + 390_000L) }
 
     @Test
-    fun entre_les_passages_le_temps_va_entre_fois_plus_vite() {
-        val vitesse = 600.0
-        fun minutesParSeconde(entre: Double): Double {
-            val plan = SessionRenduPc.plan(fenetres, "continu", vitesse, SessionRenduPc.FPS, entre = entre)
-            val dehors = plan.filterIsInstance<SessionRenduPc.Trame.Entre>().size
-            val reel = (fenetres.last().last - fenetres.first().first - fenetres.sumOf { it.last - it.first }) / 60_000.0
-            return reel / (dehors.toDouble() / SessionRenduPc.FPS)
+    fun hors_des_passages_le_temps_va_a_v_hors() {
+        // Far from the passes, a frame covers vHors × 1/8 s; inside them vPassage × 1/8 s.
+        for (h in listOf(500.0, 1000.0, 4000.0)) {
+            val plan = SessionRenduPc.plan(fenetres, emptyList(), "continu", SessionRenduPc.Vitesses(hors = h, passage = 20.0))
+            val pas = plan.zipWithNext().map { (a, b) -> b.t - a.t }
+            assertTrue("$h", pas.count { Math.abs(it - h * 125) <= 1 } > 3)
+            assertTrue(pas.max() <= h * 125 + 1)
+            assertTrue(plan.zipWithNext().any { (a, b) -> a is SessionRenduPc.Trame.Passe && b is SessionRenduPc.Trame.Passe && b.t - a.t == 2_500L })
         }
-        val m5 = minutesParSeconde(5.0); val m10 = minutesParSeconde(10.0); val m40 = minutesParSeconde(40.0)
-        // Real minutes outside the passes per video second: vitesse × entre / 60.
-        assertEquals(600 * 10 / 60.0, m10, 600 * 10 / 60.0 * 0.1)
-        assertEquals(2.0, m10 / m5, 0.2); assertEquals(4.0, m40 / m10, 0.6)
-        // Inside the passes: the same for every « entre ».
-        val dedans = { e: Double -> SessionRenduPc.plan(fenetres, "continu", vitesse, SessionRenduPc.FPS, entre = e).count { it is SessionRenduPc.Trame.Passe } }
-        assertTrue(Math.abs(dedans(5.0) - dedans(40.0)) <= 3)
     }
 
     @Test
     fun le_tour_entre_deux_passages_dure_ce_qui_est_demande() {
         for (s in listOf(0.5, 1.5, 3.0, 6.0)) {
-            val plan = SessionRenduPc.plan(fenetres, "passages", 30.0, SessionRenduPc.FPS, transition = s)
+            val plan = SessionRenduPc.plan(fenetres, emptyList(), "passages", SessionRenduPc.Vitesses(passage = 30.0), SessionRenduPc.FPS, transition = s)
             val tours = plan.filterIsInstance<SessionRenduPc.Trame.Tourne>()
             assertEquals("$s s", 2 * Math.round(s * SessionRenduPc.FPS).toInt(), tours.size)
             assertEquals(s, tours.count { it.i == 1 }.toDouble() / SessionRenduPc.FPS, 0.07)
