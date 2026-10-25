@@ -126,7 +126,7 @@ object PageJournal {
   /* A session: the globe over several passes, its timeline, the pictures as they come */
   .session-f { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 10px; }
   .session-f input[type=date] { padding:3px 6px; }
-  #sEcran { position:relative; height:calc(100vh - 330px); min-height:280px; background:#0E1720; border-radius:8px; overflow:hidden; }
+  #sEcran { position:relative; height:calc(100vh - 430px); min-height:280px; background:#0E1720; border-radius:8px; overflow:hidden; }
   #sGlobe { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
   #sBan { position:absolute; left:10px; bottom:10px; z-index:3; background:rgba(10,15,24,.85); border:1px solid var(--bord); border-radius:8px; padding:6px 10px; font-size:13px; pointer-events:none; }
   #sBan b { font-size:16px; }
@@ -1217,7 +1217,9 @@ async function chargeSession() {
   for (let i = 0; i < l.length; i++) { mot.textContent = tf('s_chargement', i + 1, l.length); try { ps.push(await lire('/passage', { id: l[i].id })); } catch (x) {} }
   if (!ps.length) { mot.textContent = T.s_aucun; return; }
   const sol = [], marques = [];
-  ps.forEach(q => { (q.sol || []).forEach(x => sol.push(x)); (q.marques || []).forEach(m => marques.push(Object.assign({}, m, { pid: q.id }))); });
+  // A picture or a contact tied to two passes close together comes once.
+  const vus = new Set();
+  ps.forEach(q => { (q.sol || []).forEach(x => sol.push(x)); (q.marques || []).forEach(m => { const k = m.k + '|' + (m.f || m.t) + '|' + m.de; if (!vus.has(k)) { vus.add(k); marques.push(Object.assign({}, m, { pid: q.id })); } }); });
   sol.sort((x, y) => x[0] - y[0]);
   const images = marques.filter(m => m.k === 'SSTV' && m.f).sort((x, y) => x.a - y.a);
   S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', vitesse: 30,

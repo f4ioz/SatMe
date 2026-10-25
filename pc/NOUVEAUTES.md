@@ -23,6 +23,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - Le rendu **Dessin animé** est celui par défaut. Le satellite choisi se distingue des autres : anneau qui tourne autour, nom marqué d'une ★, orbite épaisse, empreinte plus visible ; les autres restent en retrait.
 - **Détails** (simples, normaux, riches) : des **villes** sur le globe et la carte ; le **relief** ombré de la Terre et, sur le dessin animé, des **montagnes** posées sur les vrais sommets (relief ETOPO1 de la NOAA), des **monuments** (tour Eiffel, statue de la Liberté, pyramides, Big Ben, Taj Mahal, Fuji, fusées de Kourou et de Baïkonour…), des **bateaux** qui naviguent, et en riche des baleines, des forêts et des manchots. Approcher avec la molette pour les voir.
 - **Contacts** : les contacts du carnet sur le globe et la carte, en points, en points avec l'indicatif, ou en carrés locators.
+- **Villes** : toutes, seulement les **capitales** (avec leur nom, le **drapeau** de leur pays, ou les deux), ou aucune. Le relief du dessin animé est plus marqué.
+- **Journal › 🌍 Session** : choisis un satellite et deux dates, et tous ses passages s'animent à la suite sur le globe (passages enchaînés ou temps continu, rapide ou non), avec la frise de la session et les images SSTV qui arrivent une à une. Un bouton anime directement la session d'un événement SSTV. Dans le Journal, le globe se **déplace** en le glissant pour laisser de la place à l'image, et la vidéo le garde où il est.
 - **Journal** : une vue **Globe** à côté de *Ciel* et *Carte* rejoue le passage autour de la Terre ; les contacts s'allument à leur heure avec un trait station → satellite → correspondant, et les images SSTV reçues viennent se poser près de la station.
 - Tout est calculé dans le navigateur, sans Internet.
 
@@ -34,6 +36,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Cartoon** is the default look. The satellite chosen stands out: a ring turning round it, its name marked with a ★, a thick orbit, a clearer footprint; the others stay in the background.
 - **Details** (simple, normal, rich): **cities** on the globe and the map; the Earth's **relief** shaded and, on the cartoon, **mountains** set on the real summits (NOAA's ETOPO1 relief), **landmarks** (Eiffel Tower, Statue of Liberty, pyramids, Big Ben, Taj Mahal, Fuji, the rockets of Kourou and Baikonur…), **boats** sailing, and in rich, whales, forests and penguins. Come closer with the wheel to see them.
 - **Contacts**: the log's contacts on the globe and the map, as dots, dots with the callsign, or locator squares.
+- **Cities**: all, only the **capitals** (with their name, their country's **flag**, or both), or none. The cartoon's relief shows more.
+- **Journal › 🌍 Session**: choose a satellite and two dates, and all its passes play one after another on the globe (passes in a row or continuous time, fast or not), with the session's timeline and the SSTV pictures arriving one by one. A button plays an SSTV event's session directly. In the Journal, drag the globe to make room for the picture; the video keeps it where it is.
 - **Journal**: a **Globe** view beside *Sky* and *Map* replays the pass round the Earth; the contacts light up at their time with a line station → satellite → correspondent, and the SSTV pictures received land beside the station.
 - All worked out in the browser, without the Internet.
 
