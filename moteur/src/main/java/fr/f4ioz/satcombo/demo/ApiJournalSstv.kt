@@ -210,7 +210,7 @@ class ApiJournalSstv(private val p: Plateforme) {
         val plans = s?.let { runCatching { it.plans() }.getOrNull() }.orEmpty()
         val premier = ev?.let { x -> s?.let { runCatching { ApiPlancheEvenement.planPour(x, it, "") }.getOrNull()?.id } }
         return JSONObject().put("ok", true).put("defaut", o.version.code).put("marque", o.marqueTraitees).put("plan", o.plan)
-            .put("evenement", ev?.let { JSONObject().put("id", it.id).put("nom", it.nom) } ?: JSONObject.NULL)
+            .put("evenement", ev?.let { JSONObject().put("id", it.id).put("nom", it.nom).put("de", it.debutMs).put("a", it.finMs).put("sat", it.satNom) } ?: JSONObject.NULL)
             .put("plans", JSONArray(plans.sortedBy { if (it.first == premier) 0 else 1 }.map { (id, nom) -> JSONObject().put("id", id).put("nom", nom) }))
             .put("dessin", s?.let { runCatching { it.montage() }.getOrNull() } != null)
             .put("corrections", c != null).put("enCours", c?.enCours ?: "").put("erreur", c?.erreur ?: "")

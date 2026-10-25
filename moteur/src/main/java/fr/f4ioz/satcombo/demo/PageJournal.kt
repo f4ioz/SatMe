@@ -41,7 +41,8 @@ object PageJournal {
         "pj_creer_fusion", "pj_fusion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
-        "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble")
+        "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
+        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -120,6 +121,21 @@ object PageJournal {
   #globe { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:none; touch-action:none; }
   .globe-choix { position:absolute; right:8px; top:8px; z-index:4; display:none; gap:4px; }
   .globe-choix select { font-size:12px; padding:2px 4px; }
+  .globe-choix { flex-wrap:wrap; justify-content:flex-end; max-width:60%; }
+  @font-face { font-family:Drapeaux; src:url(api/police-drapeaux) format('woff2'); unicode-range:U+1F1E6-1F1FF; font-display:swap; }
+  /* A session: the globe over several passes, its timeline, the pictures as they come */
+  .session-f { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 10px; }
+  .session-f input[type=date] { padding:3px 6px; }
+  #sEcran { position:relative; height:calc(100vh - 330px); min-height:280px; background:#0E1720; border-radius:8px; overflow:hidden; }
+  #sGlobe { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
+  #sBan { position:absolute; left:10px; bottom:10px; z-index:3; background:rgba(10,15,24,.85); border:1px solid var(--bord); border-radius:8px; padding:6px 10px; font-size:13px; pointer-events:none; }
+  #sBan b { font-size:16px; }
+  #sFrise { width:100%; height:46px; display:block; margin-top:6px; cursor:pointer; background:#0E1720; border-radius:6px; }
+  #sGalerie { display:flex; gap:6px; overflow-x:auto; padding:6px 0; min-height:96px; }
+  #sGalerie figure { margin:0; flex:none; text-align:center; animation:arrive .6s ease-out; }
+  #sGalerie img { height:72px; border-radius:4px; border:1px solid var(--bord); display:block; }
+  #sGalerie figcaption { font-size:10px; color:var(--gris); }
+  @keyframes arrive { from { transform:scale(.4); opacity:0; } to { transform:none; opacity:1; } }
   /* The file's frame over the replay (PC): its view clear, the rest dimmed, its caption below. */
   #cadreF { position:absolute; inset:0; pointer-events:none; z-index:1; }
   #cadreF .vueF { position:absolute; outline:2px dashed var(--cyan); box-shadow:0 0 0 9999px rgba(5,10,16,.62); }
@@ -351,13 +367,11 @@ function construitVue() {
   const ecran = el('div', { class: 'ecran', id: 'ecran' }, [sv('svg', { id: 'ciel', viewBox: '0 0 440 440', preserveAspectRatio: 'xMidYMid meet' }),
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
     // The globe (SatMe-PC): the pass replayed round the Earth, its contacts and pictures at their time.
-    el('canvas', { id: 'globe', title: T.globe_aide }),
+    el('canvas', { id: 'globe', title: T.globe_deplacer }),
     el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => montreVue('ciel') }),
       el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })].concat(
       window.SATME_PC ? [el('button', { id: 'bGlobe', text: T.vue_globe, onclick: () => montreVue('globe') })] : [])),
-    window.SATME_PC ? el('div', { class: 'globe-choix', id: 'globeChoix' }, [
-      el('select', { class: 'ob-style-choix', onchange: ev => Orbites.style(ev.target.value) }, Orbites.styles().map(s => el('option', { value: s[0], text: s[1] }))),
-      el('select', { id: 'globeCam', onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station]].map(c => el('option', { value: c[0], text: c[1] })))]) : el('span'),
+    window.SATME_PC ? choixGlobe('globeChoix', 'globeCam') : el('span'),
     el('div', { id: 'cadreSstv', title: T.sstv_cadre_aide }, [el('img', { alt: '' }),
       el('div', { class: 'vide' }, [el('b', { text: T.sstv_cadre }), el('span', { text: T.sstv_cadre_aide })]),
       el('button', { class: 'auto discret', text: T.sstv_auto, title: T.sstv_auto_aide }), el('div', { class: 'poignee' })])]);
@@ -488,6 +502,16 @@ function dessineCadre() {
   if (ciel) Object.assign(ciel.style, { left: c.fx + 'px', top: c.fy + 'px', width: c.fw + 'px', height: c.vh + 'px' });
 }
 
+/* The globe's choices (look, camera, cities, their names, details), the same on the pass and the session. */
+function choixGlobe(id, idCam) {
+  const sel = (attrs, l, v) => { const s = el('select', attrs, l.map(c => el('option', { value: c[0], text: c[1] }))); s.value = v; return s; };
+  return el('div', { class: 'globe-choix', id: id }, [
+    sel({ class: 'ob-style-choix', onchange: ev => Orbites.style(ev.target.value) }, Orbites.styles(), Orbites.styleActif()),
+    sel({ id: idCam, onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station]], Orbites.cameraActive()),
+    sel({ title: T.villes, onchange: ev => Orbites.villes(ev.target.value) }, [['toutes', T.villes + ' : ' + T.v_toutes], ['capitales', T.villes + ' : ' + T.v_capitales], ['aucune', T.villes + ' : ' + T.v_aucune]], Orbites.villesActives()),
+    sel({ onchange: ev => Orbites.etiquettes(ev.target.value) }, [['nom', T.e_nom], ['drapeau', T.e_drapeau], ['nomdrapeau', T.e_nomdrapeau]], Orbites.etiquettesActives()),
+    sel({ title: T.detail, onchange: ev => Orbites.detail(+ev.target.value) }, [['0', T.detail + ' : ' + T.d_0], ['1', T.detail + ' : ' + T.d_1], ['2', T.detail + ' : ' + T.d_2]], String(Orbites.detailActif()))]);
+}
 function montreVue(v) {
   O.vue = v; garde();
   g('ciel').style.display = v === 'ciel' ? 'block' : 'none';
@@ -799,6 +823,9 @@ function dessineSstvChoix() {
   const b = el('div', { class: 'bloc' });
   b.appendChild(el('div', { class: 'aide', style: 'font-weight:700;color:var(--clair)', text: T.el_titre }));
   b.appendChild(el('div', { class: 'aide', text: SS.evenement ? tf('el_evenement', SS.evenement.nom) : T.el_sans_evenement }));
+  // The event's days: all its passes animated on the globe (SatMe-PC).
+  if (window.SATME_PC && SS.evenement && SS.evenement.de) b.appendChild(el('button', { class: 'discret', text: T.s_evenement,
+    onclick: () => construitSession({ sat: SS.evenement.sat || P.sat, de: SS.evenement.de, a: SS.evenement.a, lance: true }) }));
   const c2 = el('div', { class: 'colonnes' });
   SS.elements.forEach(x => {
     const caseEl = (cle, lib) => { const k = el('input', { type: 'checkbox' }); k.checked = !!x[cle]; k.disabled = !x.dispo;
@@ -1159,12 +1186,113 @@ document.addEventListener('keydown', ev => {
 });
 window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); majElements(); } });
 
+// ------------------------------------------------------------ a session: several passes, several days, on the globe
+let S = null;
+const jourLocal = tt => { const d = new Date(tt); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); };
+/** The session's form (satellite, dates), filled from [pre] (an SSTV event) or the last week of the satellite. */
+function construitSession(pre) {
+  arrete(); P = null; S = null; dessineListe();
+  const v = g('vue'); v.innerHTML = '';
+  const sats = [...new Set(passages.map(p => p.sat))].sort();
+  const sat = el('select', { id: 'sSat' }, sats.map(s => el('option', { value: s, text: s })));
+  sat.value = pre && pre.sat && sats.includes(pre.sat) ? pre.sat : (filtre || (sats.includes('ISS') ? 'ISS' : sats[0] || ''));
+  const dernier = Math.max(0, ...passages.filter(p => p.sat === sat.value).map(p => p.de)) || Date.now();
+  const de = el('input', { type: 'date', id: 'sDe', value: jourLocal(pre && pre.de ? pre.de : dernier - 6 * 86400000) });
+  const a = el('input', { type: 'date', id: 'sA', value: jourLocal(pre && pre.a ? pre.a : dernier) });
+  const img = el('input', { type: 'checkbox', id: 'sImg' }); img.checked = true;
+  v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: T.s_titre }), el('span', { class: 'd', text: T.session_aide })]));
+  v.appendChild(el('div', { class: 'session-f' }, [el('span', { class: 'aide', text: T.s_sat }), sat, el('span', { class: 'aide', text: T.s_de }), de,
+    el('span', { class: 'aide', text: T.s_a }), a, el('label', { class: 'aide' }, [img, document.createTextNode(' ' + T.s_images)]),
+    el('button', { class: 'primaire', text: T.s_animer, onclick: () => chargeSession() })]));
+  v.appendChild(el('div', { id: 'sZone' }));
+  if (pre && pre.lance) chargeSession();
+}
+async function chargeSession() {
+  const sat = g('sSat').value, de = new Date(g('sDe').value + 'T00:00:00').getTime(), a = new Date(g('sA').value + 'T23:59:59').getTime();
+  const l = passages.filter(p => p.sat === sat && p.de >= de && p.de <= a && (!g('sImg').checked || p.i > 0)).sort((x, y) => x.de - y.de).slice(0, 150);
+  const z = g('sZone'); z.innerHTML = '';
+  if (!l.length) { z.appendChild(el('p', { class: 'aide', text: T.s_aucun })); return; }
+  const mot = el('div', { class: 'aide' }); z.appendChild(mot);
+  const ps = [];
+  for (let i = 0; i < l.length; i++) { mot.textContent = tf('s_chargement', i + 1, l.length); try { ps.push(await lire('/passage', { id: l[i].id })); } catch (x) {} }
+  if (!ps.length) { mot.textContent = T.s_aucun; return; }
+  const sol = [], marques = [];
+  ps.forEach(q => { (q.sol || []).forEach(x => sol.push(x)); (q.marques || []).forEach(m => marques.push(Object.assign({}, m, { pid: q.id }))); });
+  sol.sort((x, y) => x[0] - y[0]);
+  const images = marques.filter(m => m.k === 'SSTV' && m.f).sort((x, y) => x.a - y.a);
+  S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', vitesse: 30,
+    images: images, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat) };
+  S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
+  z.innerHTML = '';
+  const vit = el('select', { id: 'sVit', onchange: ev => { S.vitesse = +ev.target.value; } });
+  const mode = el('select', { onchange: ev => { S.mode = ev.target.value; vitesses(); } }, [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
+  const vitesses = () => { vit.innerHTML = ''; (S.mode === 'continu' ? [600, 2000, 6000] : [10, 30, 100]).forEach(x => vit.appendChild(el('option', { value: x, text: '×' + x })));
+    vit.value = S.mode === 'continu' ? '2000' : '30'; S.vitesse = +vit.value; };
+  z.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
+  z.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' })]));
+  g('sChoix').style.display = 'flex';
+  z.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
+    mode, vit]));
+  vitesses();
+  const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); z.appendChild(fr);
+  fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
+  z.appendChild(el('div', { id: 'sGalerie' }));
+  Orbites.rejeu(g('sGlobe'), { id: 'session:' + sat + ':' + de + ':' + a, sat: sat, sol: sol, qth: ps[0].qth, indicatif: ps[0].indicatif, locator: ps[0].loc, marques: marques,
+    image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle });
+  majSession();
+}
+/* The session's timeline: the passes end to end (the hours between them left out), the pictures as ticks. */
+function xSession(tt) { let x = 0; for (const q of S.segs) { if (tt <= q[1]) return (x + Math.max(0, tt - q[0])) / S.duree; x += q[1] - q[0]; } return 1; }
+function chercheSession(f) {
+  let reste = f * S.duree;
+  for (let i = 0; i < S.segs.length; i++) { const q = S.segs[i], l = q[1] - q[0]; if (reste <= l || i === S.segs.length - 1) { S.i = i; S.t = q[0] + Math.min(l, reste); break; } reste -= l; }
+  S.vues = 0; g('sGalerie').innerHTML = ''; majSession();
+}
+function boucleSession(now) {
+  if (!S || !S.joue || !g('sGlobe')) return;
+  const dt = now - (S.dernier || now); S.dernier = now;
+  const fin = S.segs[S.segs.length - 1][1];
+  if (S.mode === 'continu') {
+    S.t = Math.min(fin, S.t + dt * S.vitesse);
+    while (S.i < S.segs.length - 1 && S.t > S.segs[S.i][1]) S.i++;
+  } else if (S.trans) {
+    // Between two passes: a short pause, the days going by, then the next one.
+    S.trans -= dt; if (S.trans <= 0) { S.trans = 0; S.i++; S.t = S.segs[S.i][0]; }
+  } else {
+    S.t += dt * S.vitesse;
+    if (S.t >= S.segs[S.i][1]) { S.t = S.segs[S.i][1]; if (S.i < S.segs.length - 1) S.trans = 1600; }
+  }
+  if (S.t >= fin && !S.trans) S.joue = false;
+  majSession();
+  if (S.joue) requestAnimationFrame(boucleSession);
+}
+function majSession() {
+  if (!S || !g('sBan')) return;
+  g('sLecture').textContent = S.joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
+  const recues = S.images.filter(m => m.a <= S.t);
+  g('sBan').innerHTML = '';
+  g('sBan').appendChild(el('b', { text: jour(S.t) }));
+  g('sBan').appendChild(el('div', { text: tf('s_passage', S.i + 1, S.segs.length) + ' · ' + tf('s_recues', recues.length) }));
+  // The pictures as they come, in the strip under the globe.
+  const gal = g('sGalerie');
+  while (S.vues < recues.length) { const m = recues[S.vues++];
+    gal.appendChild(el('figure', {}, [el('img', { src: url('/image', { f: m.f, id: m.pid, n: 0 }), alt: '', loading: 'lazy' }), el('figcaption', { text: hms(m.a) })])); gal.scrollLeft = gal.scrollWidth; }
+  const c = g('sFrise'), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+  const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, w, h);
+  let x0 = 0;
+  S.segs.forEach((q, i) => { const l = (q[1] - q[0]) / S.duree * w; x.fillStyle = i === S.i ? 'rgba(63,224,200,.35)' : 'rgba(154,167,180,.18)'; x.fillRect(x0 + 1, 8, Math.max(1, l - 2), h - 16); x0 += l; });
+  x.fillStyle = COULHEX.SSTV; S.images.forEach(m => x.fillRect(xSession(m.a) * w - 1, 4, 3, h - 8));
+  x.fillStyle = '#fff'; x.fillRect(xSession(S.t) * w - 1, 0, 2, h);
+}
+
 // ------------------------------------------------------------ making on the phone
 // A size in the page's language: « 12,3 Mo », « 12.3 MB ».
 function taille(o) { const en = document.documentElement.lang === 'en'; return (o / 1048576).toFixed(1).replace('.', en ? '.' : ',') + (en ? ' MB' : ' Mo'); }
 async function fabrique(quoi) {
   const b = v => v ? '1' : '0';
-  const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', vue: O.vue, style: Orbites.styleActif(), t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
+  const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', vue: O.vue, style: Orbites.styleActif(), t: Math.round(t),
+    villes: Orbites.villesActives(), etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
   // The box as it is here (ticked or not), whatever the station's setting.
@@ -1176,6 +1304,8 @@ async function fabrique(quoi) {
     const f = cadreFichier();
     if (f) { const s = 256 * Math.pow(2, zc); p.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; p.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; p.cw = f.fw; p.ch = f.vh; } }
   if (window.SATME_PC) p.format = O.format || 'paysage';
+  // The globe as framed here: moved and scaled the same in the file.
+  if (O.vue === 'globe') Object.assign(p, Orbites.cadrage());
   // The SSTV picture where it shows here (or "auto").
   p.cadreSstv = texteCadre(cadreSstv);
   const zone = g('fabrication'); zone.innerHTML = '';
@@ -1205,6 +1335,8 @@ g('lienPupitre').textContent = T.pupitre; g('lienPupitre').href = base + '/';
 g('lienPlanche').textContent = T.planche; g('lienPlanche').href = base + '/planche';
 g('entrer').onclick = entrer;
 g('bNouveau').textContent = T.n_bouton; g('bNouveau').onclick = () => nouveau().catch(() => {});
+// A session of several passes on the globe (SatMe-PC).
+if (window.SATME_PC) { const b = el('button', { class: 'discret', text: '🌍 ' + T.session, title: T.session_aide, onclick: () => construitSession(null) }); g('bNouveau').after(b); }
 g('code').addEventListener('keydown', ev => { if (ev.key === 'Enter') entrer(); });
 g('filtre').onchange = ev => { filtre = ev.target.value; dessineListe(); };
 if (cle) demarre().catch(() => {}); else porte();

@@ -24,8 +24,8 @@ package fr.f4ioz.satcombo.demo
  */
 object OrbitesJs {
 
-    /** The page's script, in two parts (a constant holds at most 64 KB). */
-    val JS: String get() = DEBUT + FIN
+    /** The page's script, in three parts (a constant holds at most 64 KB). */
+    val JS: String get() = DEBUT + MILIEU + FIN
 
     private const val DEBUT = """
 /* ------------------------------------------------------------ pure part (OrbitesJsTest) */
@@ -103,12 +103,16 @@ function obLocator(l) {
   if (l.length >= 6) { lon += (l.charCodeAt(4) - 65) * 5 / 60; lat += (l.charCodeAt(5) - 65) * 2.5 / 60; dlon = 5 / 60; dlat = 2.5 / 60; }
   return { lat: lat + dlat / 2, lon: lon + dlon / 2, dlat: dlat, dlon: dlon };
 }
-/** A position at [t] along a track [[t, lat, lon, altKm]…] (sorted by time), longitudes interpolated the short way; null outside it. */
-function obPisteA(l, t) {
+/**
+ * A position at [t] along a track [[t, lat, lon, altKm]…] (sorted by time), longitudes interpolated the short way;
+ * null outside it, or between two points more than [ecart] ms apart (two passes of a session: nothing recorded between).
+ */
+function obPisteA(l, t, ecart) {
   if (!l || !l.length || t < l[0][0] || t > l[l.length - 1][0]) return null;
   let a = 0, b = l.length - 1;
   while (b - a > 1) { const m = (a + b) >> 1; if (l[m][0] <= t) a = m; else b = m; }
   const p = l[a], q = l[b], k = q[0] > p[0] ? (t - p[0]) / (q[0] - p[0]) : 0;
+  if (q[0] - p[0] > (ecart || 600000)) return null;
   let dl = q[2] - p[2]; if (dl > 180) dl -= 360; if (dl < -180) dl += 360;
   let lon = p[2] + dl * k; lon = ((lon + 540) % 360) - 180;
   return { lat: p[1] + (q[1] - p[1]) * k, lon: lon, alt: p[3] + (q[3] - p[3]) * k };
@@ -127,7 +131,8 @@ const Orbites = (function () {
   const OB = { donnees: null, sats: [], obs: null, terres: null, style: lit('ob-style2', 'cartoon'), vue: lit('ob-vue', 'globe'), filtre: 'favoris',
     choisi: null, temps: { base: Date.now(), reel: performance.now(), vitesse: 60, pause: false }, anim: null, passages: [], passage: null,
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
-    detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0 };
+    detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0,
+    villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom') };
   let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null;
 
   /* Libraries and the coastline: fetched once, when a globe is first shown; the station's elements for the tab and the Suivi. */
@@ -139,6 +144,8 @@ const Orbites = (function () {
       if (typeof satellite === 'undefined') await script(api('api/lib/satellite.js'));
       OB.terres = await fetch(api('api/carte/traits')).then(r => r.json());
       OB.relief = await chargeRelief().catch(() => null);
+      // The flags' font, before any label is drawn with it.
+      if (document.fonts) await document.fonts.load('26px Drapeaux', String.fromCodePoint(0x1F1EB, 0x1F1F7)).catch(() => null);
     })();
     libs.catch(() => { libs = null; });
     return libs;
@@ -165,17 +172,19 @@ const Orbites = (function () {
     return { alt: alt, ombre: ombre };
   }
   /* The relief over a look's land: the high ground browner, the highest white, slopes lit or shaded. */
-  function reliefSur(x, w, h, teinte, neige, force) {
+  function reliefSur(x, w, h, teinte, neige, force, fort) {
     const R = OB.relief; if (!R) return;
     const W = 1440, H = 720, c = document.createElement('canvas'); c.width = W; c.height = H;
     const cx = c.getContext('2d'), d = cx.createImageData(W, H), p = d.data;
     for (let k = 0; k < W * H; k++) {
       const a = R.alt[k]; if (a <= 0) continue;
       let r = 0, g = 0, b = 0, al = 0;
-      if (teinte && a > 800) { const t = Math.min(1, (a - 800) / 2600) * .55; r = teinte[0]; g = teinte[1]; b = teinte[2]; al = t; }
-      if (neige && a > 3800) { const n = Math.min(1, (a - 3800) / 1200) * .8; r += (250 - r) * n; g += (252 - g) * n; b += (255 - b) * n; al = al + (1 - al) * n; }
+      // The cartoon's [fort]: the same numbers as the journal's videos (GlobeRenduPc).
+      const t0 = fort ? 600 : 800, tl = fort ? 2400 : 2600, n0 = fort ? 3500 : 3800;
+      if (teinte && a > t0) { const t = Math.min(1, (a - t0) / tl) * (fort ? .75 : .55); r = teinte[0]; g = teinte[1]; b = teinte[2]; al = t; }
+      if (neige && a > n0) { const n = Math.min(1, (a - n0) / 1200) * (fort ? .9 : .8); r += (250 - r) * n; g += (252 - g) * n; b += (255 - b) * n; al = al + (1 - al) * n; }
       const o = R.ombre[k] * force;
-      if (o < 0) { const s = -o * .45; r *= 1 - s; g *= 1 - s; b *= 1 - s; al = al + (1 - al) * s; }
+      if (o < 0) { const s = -o * (fort ? .6 : .45); r *= 1 - s; g *= 1 - s; b *= 1 - s; al = al + (1 - al) * s; }
       else if (o > 0) { const s = o * .3; r += (255 - r) * s; g += (255 - g) * s; b += (255 - b) * s; al = al + (1 - al) * s * .6; }
       p[k * 4] = r; p[k * 4 + 1] = g; p[k * 4 + 2] = b; p[k * 4 + 3] = Math.round(al * 255);
     }
@@ -226,14 +235,15 @@ const Orbites = (function () {
     obs = obs === undefined ? OB.obs : obs;
     const gm = satellite.gstime(new Date(t));
     let eci, vel, lat, lon, alt, ecf;
-    if (s.satrec) {
+    const pp = s.piste ? obPisteA(s.piste, t) : null;
+    if (s.satrec && !pp) {
       const r = satellite.propagate(s.satrec, new Date(t));
       if (!r || !r.position || typeof r.position !== 'object') return null;
       eci = r.position; vel = r.velocity;
       const gd = satellite.eciToGeodetic(eci, gm); lat = gd.latitude * R2D; lon = gd.longitude * R2D; alt = gd.height;
       ecf = satellite.eciToEcf(eci, gm);
     } else {
-      const p = obPisteA(s.piste, t); if (!p) return null;
+      const p = pp; if (!p) return null;
       lat = p.lat; lon = p.lon; alt = p.alt;
       ecf = satellite.geodeticToEcf({ latitude: lat * D2R, longitude: lon * D2R, height: alt });
       eci = satellite.ecfToEci(ecf, gm);
@@ -308,7 +318,7 @@ const Orbites = (function () {
         x.fillStyle = bandes(x, h, [[90, '#ffffff'], [70, '#ffffff'], [64, '#8be06a'], [42, '#7bd85b'], [33, '#f4d77e'], [20, '#f2cf6c'], [11, '#5fc94a'], [-10, '#5fc94a'], [-22, '#f2cf6c'],
           [-32, '#9ddc62'], [-58, '#8be06a'], [-63, '#ffffff'], [-90, '#ffffff']]);
         x.fill(t);
-        reliefSur(x, w, h, [196, 140, 84], true, 1.3);
+        reliefSur(x, w, h, [186, 128, 72], true, 1.3, true);
         x.strokeStyle = '#173f2a'; x.lineWidth = w / 1100; x.stroke(t);
         x.restore();
       } },
@@ -357,7 +367,14 @@ const Orbites = (function () {
     return textures[k];
   }
   /* The cities shown at a detail level: the great ones always, the others as the detail grows. */
-  const villesVues = () => monde().villes.filter(v => v[3] <= OB.detail + 1);
+  /* The cities shown: [nom, lat, lon, rang, pays]; the capitals by population (40, 100 or all as the detail grows). */
+  const villesVues = () => OB.villes === 'aucune' ? [] : OB.villes === 'capitales'
+    ? (monde().capitales || []).slice(0, [40, 100, 999][OB.detail]).map((c, i) => [c[0], c[1], c[2], i < 40 ? 1 : 2, c[3]])
+    : monde().villes.filter(v => v[3] <= OB.detail + 1).map(v => v.concat(['']));
+  /** A country's flag (its ISO code as regional indicators, drawn by the page's « Drapeaux » font). */
+  const drapeau = iso => iso && iso.length === 2 ? String.fromCodePoint(0x1F1E6 + iso.charCodeAt(0) - 65, 0x1F1E6 + iso.charCodeAt(1) - 65) : '';
+  /** A city's label as asked: its name, its flag, or both. */
+  const nomVille = v => { const d = drapeau(v[4]); return OB.etiq === 'drapeau' && d ? d : OB.etiq === 'nomdrapeau' && d ? d + ' ' + v[0] : v[0]; };
 
   /* ------------------------------------------------------------ 3D pieces */
   function eciVers3(p, f) { f = f || 1 / RE; return new THREE.Vector3(p.x * f, p.z * f, -p.y * f); }
@@ -416,7 +433,7 @@ const Orbites = (function () {
   /* A name over the globe. [genre]: 'sat' (a satellite), 'fort' (the satellite chosen), 'ville', 'contact', or nothing (the station). */
   function etiquette(texte, couleur, style, genre) {
     const c = document.createElement('canvas'), x = c.getContext('2d'), fs = genre === 'ville' || genre === 'contact' ? 26 : 30;
-    const police = (genre === 'ville' && style === 'vintage' ? 'italic ' : '') + (genre === 'fort' ? '800 ' : '600 ') + fs + 'px system-ui, -apple-system, "Segoe UI", sans-serif';
+    const police = (genre === 'ville' && style === 'vintage' ? 'italic ' : '') + (genre === 'fort' ? '800 ' : '600 ') + fs + 'px Drapeaux, system-ui, -apple-system, "Segoe UI", sans-serif';
     x.font = police; const w = Math.ceil(x.measureText(texte).width) + 26; c.width = w; c.height = fs + 16; x.font = police;
     const H = c.height;
     if (genre === 'ville' || genre === 'contact') {
@@ -476,7 +493,7 @@ const Orbites = (function () {
 
 """
 
-    private const val FIN = """  /* ------------------------------------------------------------ the cartoon's world: mountains, landmarks, scenery */
+    private const val MILIEU = """  /* ------------------------------------------------------------ the cartoon's world: mountains, landmarks, scenery */
   const cone = (() => { let g0 = null; return () => { if (!g0) { g0 = new THREE.ConeGeometry(1, 1, 9); g0.translate(0, .5, 0); } return g0; }; })();
   const boite = (l, h, p, c, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(l, h, p), mt(c)); m.position.y = (y || 0) + h / 2; return m; };
   const cyl = (r1, r2, h, c, y, seg) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg || 10), mt(c)); m.position.y = (y || 0) + h / 2; return m; };
@@ -628,7 +645,7 @@ const Orbites = (function () {
         const pos = []; vs.forEach(v => { const p = local(v[1], v[2], 1.002); pos.push(p.x, p.y, p.z); });
         const gm = new THREE.BufferGeometry(); gm.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         mondeGp.add(new THREE.Points(gm, new THREE.PointsMaterial({ map: point(), color: S.ville, size: carton ? 7 : 5, sizeAttenuation: false, transparent: true, alphaTest: .3 })));
-        vs.forEach(v => { const s = etiquette(v[0], S.ville, sc.style, 'ville'); s.position.copy(local(v[1], v[2], carton ? 1.012 : 1.006)); s.center.set(-.05, .5); s.userData.ville = v[3]; mondeGp.add(s); });
+        vs.forEach(v => { const s = etiquette(nomVille(v), S.ville, sc.style, 'ville'); s.position.copy(local(v[1], v[2], carton ? 1.012 : 1.006)); s.center.set(-.05, .5); s.userData.ville = v[3]; mondeGp.add(s); });
       }
     };
     /* The log's contacts: dots, dots and callsigns, or the squares worked. */
@@ -684,7 +701,7 @@ const Orbites = (function () {
     function objet(s) {
       const o = { s: s };
       o.engin = engin(s.couleur); o.lueur = lueur(s.couleur);
-      o.orbite = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: s.couleur, transparent: true, opacity: .7 }));
+      o.orbite = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: s.couleur, transparent: true, opacity: .7 }));
       o.tube = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: s.couleur, transparent: true, opacity: .95 }));
       o.cal = new THREE.Mesh(calotte(), new THREE.MeshBasicMaterial({ color: s.couleur, transparent: true, opacity: .14, depthWrite: false, side: THREE.DoubleSide }));
       const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NC * 3), 3));
@@ -702,19 +719,33 @@ const Orbites = (function () {
       if (sc.style) o.restyle();
       return o;
     }
+    /* A journal's recorded track by pass (a session holds several): [[t0, t1]…], and the one at or after [t]. */
+    function morceaux(s) {
+      if (!s.morceaux) { const l = s.piste, m = []; let d = 0; for (let i = 1; i <= l.length; i++) if (i === l.length || l[i][0] - l[i - 1][0] > 600000) { m.push([d, i - 1]); d = i; } s.morceaux = m; }
+      return s.morceaux;
+    }
+    function morceauA(s, t) { const m = morceaux(s), l = s.piste; let k = m.findIndex(q => t <= l[q[1]][0]); if (k < 0) k = m.length - 1; return k; }
     function orbite(o, t, lui) {
-      const s = o.s, pts = [], trace = [], obs = sc.obs();
+      const s = o.s, obs = sc.obs(), paires = [], trace = [];
+      let tube = [];
+      const ligne = pts => { for (let i = 1; i < pts.length; i++) paires.push(pts[i - 1], pts[i]); };
       if (s.piste) {
-        // A journal pass: its recorded track, each point where the satellite was then.
-        const l = s.piste, pas = Math.max(1, Math.floor(l.length / 240));
-        for (let i = 0; i < l.length; i += pas) { const e = etat(s, l[i][0], obs); if (e) { pts.push(eciVers3(e.eci)); trace.push([l[i][0], e.lat, e.lon]); } }
+        // A journal's passes: their recorded track, each point where the satellite was then; the current pass thick.
+        const l = s.piste, ici = morceauA(s, t);
+        morceaux(s).forEach((q, k) => {
+          const pts = [], pas = Math.max(1, Math.floor((q[1] - q[0] + 1) / 160));
+          for (let i = q[0]; i <= q[1]; i += pas) { const e = etat(s, l[i][0], obs); if (e) { pts.push(eciVers3(e.eci)); trace.push([l[i][0], e.lat, e.lon]); } }
+          if (k === ici && lui) tube = pts; else ligne(pts);
+        });
+        o.morceau = ici;
       } else {
-        const P = s.periode, n = 240;
+        const P = s.periode, n = 240, pts = [];
         for (let i = 0; i <= n; i++) { const ti = t - P / 2 + P * i / n, e = etat(s, ti, null); if (!e) continue; pts.push(eciVers3(e.eci)); trace.push([ti, e.lat, e.lon]); }
+        if (lui) tube = pts; else ligne(pts);
       }
-      o.orbite.geometry.dispose(); o.orbite.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      o.orbite.geometry.dispose(); o.orbite.geometry = new THREE.BufferGeometry().setFromPoints(paires);
       o.tube.geometry.dispose();
-      o.tube.geometry = lui && pts.length > 3 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, !s.piste && s.mm > 1.2), pts.length, sc.style === 'cartoon' ? .0045 : .003, 6, false) : new THREE.BufferGeometry();
+      o.tube.geometry = tube.length > 3 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tube, !s.piste && s.mm > 1.2), tube.length, sc.style === 'cartoon' ? .0045 : .003, 6, false) : new THREE.BufferGeometry();
       o.trace = trace; o.tOrbite = t; o.tubeLui = lui;
     }
     sc.orbite = orbite;
@@ -734,6 +765,7 @@ const Orbites = (function () {
       const rj = sc.rj;
       if (rj.marques) rj.marques.forEach(o => o.retire && o.retire());
       rj.marques = [];
+      rj.images = (rj.donnees.marques || []).filter(m => m.k === 'SSTV' && m.f).sort((a, b) => a.a - b.a);
       (rj.donnees.marques || []).forEach(m => {
         const o = { m: m };
         if (m.lat != null && m.lon != null) {
@@ -767,7 +799,7 @@ const Orbites = (function () {
         }
         if (o.carte) {
           // Received: the picture drops to the station and waits there with the others.
-          o.carte.visible = t >= m.a;
+          o.carte.visible = t >= m.a && rj.images.filter(n => t >= n.a).slice(-3).includes(m);
           if (o.carte.visible) {
             const k = Math.min(1, (t - m.a) / 4000), haut = stW.clone().normalize();
             const ici = stW.clone().add(haut.clone().multiplyScalar(.06 + rang * .05));
@@ -783,9 +815,18 @@ const Orbites = (function () {
     const cam = { az: 0, pol: 1, dist: mode === 'suivi' ? 2.8 : 3.4, pos: new THREE.Vector3(0, 0, 4), cible: new THREE.Vector3(), cale: false };
     sc.cam = cam;
     let tir = null;
+    // The journal's globe: dragged, it moves on the screen (room for the picture); a double click puts it back.
+    sc.decal = { x: 0, y: 0 };
+    if (mode === 'rejeu') { try { const d = JSON.parse(lit('ob-decal', 'null')); if (d) sc.decal = d; } catch (x) {} }
+    canvas.addEventListener('dblclick', () => { if (mode === 'rejeu') { sc.decal = { x: 0, y: 0 }; garde('ob-decal', JSON.stringify(sc.decal)); } });
     canvas.addEventListener('pointerdown', e => { tir = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointermove', e => {
       if (!tir) return;
+      if (mode === 'rejeu') {
+        const r = canvas.getBoundingClientRect();
+        sc.decal.x = Math.max(-.45, Math.min(.45, sc.decal.x + (e.clientX - tir.x) / r.width)); sc.decal.y = Math.max(-.45, Math.min(.45, sc.decal.y + (e.clientY - tir.y) / r.height));
+        tir = { x: e.clientX, y: e.clientY }; garde('ob-decal', JSON.stringify(sc.decal)); return;
+      }
       const k = .005 * Math.min(1, cam.dist / 3);
       cam.az -= (e.clientX - tir.x) * k; cam.pol = Math.max(.05, Math.min(Math.PI - .05, cam.pol - (e.clientY - tir.y) * k));
       tir = { x: e.clientX, y: e.clientY }; sc.suit = null;
@@ -807,6 +848,8 @@ const Orbites = (function () {
       const r = canvas.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) return;
       if (canvas.width !== Math.round(r.width * rendu.getPixelRatio()) || canvas.height !== Math.round(r.height * rendu.getPixelRatio())) { rendu.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+      if (sc.decal.x || sc.decal.y) camera.setViewOffset(r.width, r.height, -sc.decal.x * r.width, -sc.decal.y * r.height, r.width, r.height);
+      else if (camera.view && camera.view.enabled) camera.clearViewOffset();
       const dt = Math.min(.1, (now - derniere) / 1000); derniere = now;
       const gm = satellite.gstime(new Date(t));
       terre.rotation.y = gm;
@@ -830,7 +873,7 @@ const Orbites = (function () {
         o.e = e;
         // The others, around the one chosen: quieter (the Suivi's and a pass's: lights and names only).
         const discret = (mode === 'suivi' || passage) && !lui, efface = !lui && plusieurs;
-        if (!discret && (Math.abs(t - o.tOrbite) > (s.piste ? 1e15 : s.periode * .02) || o.tubeLui !== lui)) orbite(o, t, lui);
+        if (!discret && (s.piste ? o.morceau !== morceauA(s, t) || o.tOrbite < -1e14 : Math.abs(t - o.tOrbite) > s.periode * .02 || o.tubeLui !== lui)) orbite(o, t, lui);
         const p = eciVers3(e.eci); o.p = p; if (lui) satP = p;
         o.engin.position.copy(p); o.engin.lookAt(0, 0, 0); o.engin.scale.setScalar(auSol ? .15 : lui ? 1.6 : 1); o.engin.visible = !discret;
         o.lueur.position.copy(p); o.lueur.visible = true;
@@ -845,7 +888,7 @@ const Orbites = (function () {
         o.cal.visible = o.bordCal.visible = !discret && !auSol;
         o.cal.material.opacity = lui ? (sc.style === 'cartoon' ? .26 : .2) : efface ? .05 : .14;
         o.bordCal.material.opacity = lui ? 1 : efface ? .3 : .8;
-        o.orbite.visible = !discret && !lui; o.orbite.material.opacity = efface ? .3 : .7;
+        o.orbite.visible = !discret && (!lui || !!s.piste); o.orbite.material.opacity = efface ? .3 : lui ? .45 : .7;
         o.tube.visible = !discret && lui;
         o.rayon.visible = vu && !discret && !auSol && lieu;
         if (o.rayon.visible) { const a = o.rayon.geometry.attributes.position; a.setXYZ(0, stW.x, stW.y, stW.z); a.setXYZ(1, p.x, p.y, p.z); a.needsUpdate = true; o.rayon.material.opacity = .55 + .4 * Math.sin(now / 160); }
@@ -942,7 +985,9 @@ const Orbites = (function () {
     scenes.forEach(sc => { if (sc.mode !== 'rejeu') sc.synchro(); });
   }
 
-  /* ------------------------------------------------------------ the tab */
+"""
+
+    private const val FIN = """  /* ------------------------------------------------------------ the tab */
   const hh = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const hhs = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const jour = t => new Date(t).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -969,6 +1014,8 @@ const Orbites = (function () {
     el('ob-hauteur').oninput = e => { OB.hauteur = +e.target.value; garde('ob-hauteur', String(OB.hauteur)); };
     el('ob-detail').value = String(OB.detail);
     el('ob-detail').onchange = e => prendDetail(+e.target.value);
+    el('ob-villes').value = OB.villes; el('ob-villes').onchange = e => prendVilles(e.target.value);
+    el('ob-etiq').value = OB.etiq; el('ob-etiq').onchange = e => prendEtiq(e.target.value);
     el('ob-contacts').value = OB.contacts;
     el('ob-contacts').onchange = e => prendContacts(e.target.value);
     el('ob-pause').onclick = () => { recale(); OB.temps.pause = !OB.temps.pause; el('ob-pause').textContent = OB.temps.pause ? '▶' : '⏸'; el('ob-pause').title = OB.temps.pause ? 'Reprendre' : 'Pause'; };
@@ -1001,6 +1048,8 @@ const Orbites = (function () {
     scenes.forEach(sc => sc.appliqueStyle(k)); marqueStyle();
   }
   function prendDetail(n) { OB.detail = n; garde('ob-detail', String(n)); scenes.forEach(sc => sc.monde()); }
+  function prendVilles(v) { OB.villes = v; garde('ob-villes', v); scenes.forEach(sc => sc.monde()); }
+  function prendEtiq(v) { OB.etiq = v; garde('ob-etiq', v); scenes.forEach(sc => sc.monde()); }
   function prendContacts(v) { OB.contacts = v; garde('ob-contacts', v); if (v !== 'aucun' && !OB.carnet) { OB.carnetLu = 0; chargeCarnet(); } scenes.forEach(sc => sc.contacts()); }
   function marqueStyle() { document.querySelectorAll('#ob-styles button, .ob-style-choix option').forEach(b => { if (b.tagName === 'OPTION') b.selected = b.value === OB.style; else b.setAttribute('aria-pressed', b.dataset.style === OB.style); }); }
   function marqueCam() { document.querySelectorAll('[data-ob-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.obCam === OB.cam)); }
@@ -1172,10 +1221,10 @@ const Orbites = (function () {
     x.fillStyle = S.nuit; x.fill();
     x.fillStyle = '#FFD34D'; x.shadowColor = '#FFB300'; x.shadowBlur = 14; x.beginPath(); x.arc(X(so.lon), Y(so.dec), 6, 0, 7); x.fill(); x.shadowBlur = 0;
     // The cities.
-    x.font = (vieux ? 'italic ' : '') + '500 10px system-ui, sans-serif'; x.textAlign = 'left'; x.textBaseline = 'middle';
-    villesVues().forEach(v => { const X0 = X(v[2]), Y0 = Y(v[1]);
+    x.font = (vieux ? 'italic ' : '') + '500 10px Drapeaux, system-ui, sans-serif'; x.textAlign = 'left'; x.textBaseline = 'middle';
+    villesVues().forEach(v => { const X0 = X(v[2]), Y0 = Y(v[1]), n = nomVille(v);
       x.fillStyle = S.ville; x.beginPath(); x.arc(X0, Y0, v[3] === 1 ? 2.6 : 2, 0, 7); x.fill();
-      x.lineWidth = 3; x.strokeStyle = vieux ? 'rgba(239,224,184,.9)' : 'rgba(0,0,0,.7)'; x.strokeText(v[0], X0 + 4, Y0); x.fillText(v[0], X0 + 4, Y0); });
+      x.lineWidth = 3; x.strokeStyle = vieux ? 'rgba(239,224,184,.9)' : 'rgba(0,0,0,.7)'; x.strokeText(n, X0 + 4, Y0); x.fillStyle = S.ville; x.fillText(n, X0 + 4, Y0); });
     // The log's contacts.
     if (OB.contacts !== 'aucun' && OB.carnet) {
       x.fillStyle = 'rgba(255,79,163,.35)'; x.strokeStyle = '#FF4FA3';
@@ -1259,7 +1308,8 @@ const Orbites = (function () {
     },
     /**
      * The journal's globe in [canvas]: the pass [d] = {id, sat, sol: [[t, lat, lon, altKm]…], qth: [lat, lon], indicatif, locator,
-     * marques: [{k, de, a, t, lat?, lon?, f?}], image: m => the picture's address, horloge: () => the replay's time}.
+     * marques: [{k, de, a, t, lat?, lon?, f?}], image: m => the picture's address, horloge: () => the replay's time,
+     * tle?: [line 1, line 2] (a session: the satellite between its passes)}.
      */
     rejeu: async function (canvas, d) {
       try { await chargeLibs(); } catch (x) { return false; }
@@ -1270,8 +1320,9 @@ const Orbites = (function () {
       if (!rejeu.rj || rejeu.rj.donnees.id !== d.id) {
         if (rejeu.rj && rejeu.rj.marques) rejeu.rj.marques.forEach(o => o.retire && o.retire());
         const sol = (d.sol || []).slice().sort((a, b) => a[0] - b[0]);
+        let satrec = null; if (d.tle) { try { satrec = satellite.twoline2satrec(d.tle[0], d.tle[1]); } catch (x) {} }
         rejeu.rj = { donnees: d, station: d.qth ? { lat: d.qth[0], lon: d.qth[1], indicatif: d.indicatif, locator: d.locator } : null,
-          sat: { nom: d.sat, catnum: -1, piste: sol, couleur: '#FF8A1F', periode: 5400000, mm: 15 } };
+          sat: { nom: d.sat, catnum: -1, piste: sol, satrec: satrec, couleur: '#FF8A1F', periode: 5400000, mm: 15 } };
         rejeu.synchro(); rejeu.rejeuPrepare();
       }
       rejeu.rj.donnees = d;
@@ -1280,6 +1331,14 @@ const Orbites = (function () {
     /** The journal's globe: where its satellite shows (px from the canvas's left), null when unknown. */
     satEcranX: () => rejeu ? rejeu.satX : null,
     style: k => prendStyle(k),
+    villes: v => prendVilles(v),
+    etiquettes: v => prendEtiq(v),
+    villesActives: () => OB.villes,
+    etiquettesActives: () => OB.etiq,
+    /** The journal's globe as framed (for its videos): moved by [gdx], [gdy] (shares of the view), scaled by [gz]. */
+    cadrage: () => ({ gdx: rejeu ? +rejeu.decal.x.toFixed(3) : 0, gdy: rejeu ? +rejeu.decal.y.toFixed(3) : 0, gz: +Math.max(.5, Math.min(3, 3.5 / OB.hauteur)).toFixed(2) }),
+    /** The station's elements of [nom] (a session's satellite between its passes), null when unknown. */
+    elements: async nom => { try { const d = await (await fetch(api('api/orbites'))).json(); const s = (d.sats || []).find(x => x.nom === nom); return s ? [s.l1, s.l2] : null; } catch (x) { return null; } },
     detail: n => prendDetail(n),
     contacts: v => prendContacts(v),
     camera: c => { OB.cam = c; garde('ob-cam', c); marqueCam(); },

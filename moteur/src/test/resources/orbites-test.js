@@ -82,5 +82,10 @@ const ecart = (la1, lo1, la2, lo2) => {
   assert(Math.abs(p.lat - 11) < 1e-9 && Math.abs(Math.abs(p.lon) - 180) < 1e-9 && Math.abs(p.alt - 410) < 1e-9, JSON.stringify(p));
   assert(Math.abs(obPisteA(l, 1500).lon + 165) < 1e-9);
   assert.strictEqual(obPisteA(l, -1), null); assert.strictEqual(obPisteA(l, 2001), null); assert.strictEqual(obPisteA([], 0), null);
+  // Two passes of a session, hours apart: nothing between them, each one still found.
+  const s = [[0, 10, 0, 400], [60000, 11, 1, 400], [7200000, 40, 50, 400], [7260000, 41, 51, 400]];
+  assert.strictEqual(obPisteA(s, 3600000), null);
+  assert(Math.abs(obPisteA(s, 30000).lat - 10.5) < 1e-9 && Math.abs(obPisteA(s, 7230000).lat - 40.5) < 1e-9);
+  assert(obPisteA(s, 3600000, 9e6) !== null);
 }
 console.log('ok');
