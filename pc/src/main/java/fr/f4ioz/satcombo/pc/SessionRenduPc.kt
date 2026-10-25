@@ -33,8 +33,10 @@ import kotlin.math.sqrt
  * another on the globe, as the page's « Session » plays them. Each pass
  * from 30 s before to 30 s after, drawn as the pass's own video draws it
  * ([RenduPc.image], its overlays); between two, a short turn of the globe
- * with the next one's card (« passages ») or the time running on, ten
- * times faster outside the passes (« continu »). Under the caption the pass
+ * with the next one's card (« passages ») or the time running on, faster
+ * outside the passes (« continu »). Three paces, eased from one to the
+ * next: outside, in a pass, and slow while a picture is being received (it
+ * is seen being drawn) or a contact is going on. Under the caption the pass
  * and the pictures received so far, a strip of them when asked; the
  * session's card first, the mosaic of its pictures last. No sound.
  */
@@ -45,48 +47,81 @@ object SessionRenduPc {
     const val MARGE_MS = 30_000L
     /** The turn between two passes (« passages »), by default, in seconds. */
     const val TRANSITION_S = 1.5
-    /** Outside the passes (« continu »), time runs this many times faster, by default. */
+    /** The old « entre » by default: outside the passes this many times « vitesse ». */
     const val HORS = 10.0
+    /** A picture being received, a contact going on: slowed from this long before to this long after (ms). */
+    const val AUTOUR_MS = 3_000L
+    /** A contact without a span: this long around its moment (ms). */
+    const val CONTACT_MS = 20_000L
+    /**
+     * How fast the pace may change: by e per this many seconds of video (log-linear) — from a
+     * pass's ×20 to a picture's ×3 in about 1 s, from ×1000 outside to ×20 in about 2 s.
+     */
+    const val EASE = 2.0
 
     /** The turn's frames for [secondes]. */
     fun tourne(secondes: Double) = Math.round(secondes * FPS).toInt().coerceAtLeast(1)
 
+    /** The three paces (real time per video time): outside the passes, in a pass, while a picture or a contact comes. */
+    data class Vitesses(val hors: Double = 1000.0, val passage: Double = 20.0, val image: Double = 3.0)
+
     /**
-     * The request's words: the passes (ids, in the page's order), the mode, the speed, the title,
-     * the strip, how much faster between the passes ([entre], « continu »), the turn's length
-     * ([transition] s, « passages »).
+     * The request's words: the passes (ids, in the page's order), the mode, the paces ([v]), the
+     * title, the strip, the turn's length ([transition] s, « passages »).
      */
-    data class Parametres(val ids: List<String>, val mode: String, val vitesse: Double, val titre: String?, val vignettes: Boolean,
-                          val entre: Double = HORS, val transition: Double = TRANSITION_S)
+    data class Parametres(val ids: List<String>, val mode: String, val v: Vitesses, val titre: String?, val vignettes: Boolean,
+                          val transition: Double = TRANSITION_S)
 
     fun parametres(p: (String) -> String): Parametres {
         val mode = p("mode").trim().takeIf { it in setOf("passages", "continu") } ?: "passages"
+        fun nombre(k: String) = p(k).trim().toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
+        // The old words when the new ones are missing: vPassage = vitesse, vHors = vitesse × entre.
+        val vitesse = nombre("vitesse")
+        val entre = p("entre").trim().toDoubleOrNull()?.takeIf { it.isFinite() }?.coerceIn(1.0, 100.0) ?: HORS
+        val d = Vitesses()
         return Parametres(
             ids = p("ids").split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(1000),
             mode = mode,
-            vitesse = p("vitesse").trim().toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }?.coerceIn(1.0, 100_000.0)
-                ?: if (mode == "continu") 2000.0 else 30.0,
+            v = Vitesses(hors = (nombre("vHors") ?: vitesse?.let { it * entre } ?: d.hors).coerceIn(1.0, 20_000.0),
+                passage = (nombre("vPassage") ?: vitesse ?: d.passage).coerceIn(1.0, 500.0),
+                image = (nombre("vImage") ?: d.image).coerceIn(0.5, 100.0)),
             titre = p("titre").trim().take(80).ifBlank { null },
             vignettes = p("vignettes").trim() == "1",
-            entre = p("entre").trim().toDoubleOrNull()?.takeIf { it.isFinite() }?.coerceIn(1.0, 100.0) ?: HORS,
             transition = p("transition").trim().toDoubleOrNull()?.takeIf { it.isFinite() }?.coerceIn(0.5, 6.0) ?: TRANSITION_S)
     }
 
     /** What a session's video shows: its passes' scenes (sorted by time), how it plays, the cards asked. */
-    class Session(val scenes: List<RenduPc.Scene>, val mode: String, val vitesse: Double, val titre: String? = null, val vignettes: Boolean = false,
-                  val ouverture: Boolean = true, val recap: Boolean = true, val entre: Double = HORS, val transition: Double = TRANSITION_S) {
+    class Session(val scenes: List<RenduPc.Scene>, val mode: String, val v: Vitesses = Vitesses(), val titre: String? = null, val vignettes: Boolean = false,
+                  val ouverture: Boolean = true, val recap: Boolean = true, val transition: Double = TRANSITION_S) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - MARGE_MS)..(it.e.finMs + MARGE_MS) }
         /** The pictures of the session, each once (a picture tied to two passes close together), by the time it was received. */
         val images: List<Pair<Marque, BufferedImage>> = scenes.flatMap { sc ->
             sc.marques.filter { it.type == TypeMarque.SSTV && it.fichier != null }.mapNotNull { m -> sc.images[m.fichier]?.let { m to it } }
         }.distinctBy { it.first.fichier }.sortedBy { it.first.finMs }
+        /** When the pace slows to [Vitesses.image]. */
+        val actifs: List<LongRange> = actifs(scenes)
         val paysage get() = scenes.firstOrNull()?.paysage ?: true
         val resolution get() = scenes.firstOrNull()?.resolution ?: "M"
         init {
-            // A picture shown as long as in a pass's video at this pace (the pace inside the passes).
-            scenes.forEach { it.flashMs = (it.flashS * 1000.0 * vitesse).toLong() }
+            // A picture received stays shown as long as in a pass's video at the pass's pace.
+            scenes.forEach { it.flashMs = (it.flashS * 1000.0 * v.passage).toLong() }
         }
     }
+
+    /**
+     * When something is coming: each SSTV picture being received (3 s before to 3 s after),
+     * each contact of a pass with its sound recorded (its span and 3 s, or 20 s around it).
+     */
+    fun actifs(scenes: List<RenduPc.Scene>): List<LongRange> = scenes.flatMap { sc ->
+        sc.marques.mapNotNull { m ->
+            when {
+                m.type == TypeMarque.SSTV -> (m.debutMs - AUTOUR_MS)..(m.finMs + AUTOUR_MS)
+                m.type == TypeMarque.QSO && sc.e.enregistrements.isNotEmpty() ->
+                    if (m.finMs > m.debutMs) (m.debutMs - AUTOUR_MS)..(m.finMs + AUTOUR_MS) else (m.debutMs - CONTACT_MS / 2)..(m.debutMs + CONTACT_MS / 2)
+                else -> null
+            }
+        }
+    }.sortedBy { it.first }
 
     /** A frame of the session: in a pass ([i], at [t]), between two (« continu », after [i]), or turning to pass [i] (« passages »). */
     sealed class Trame {
@@ -96,37 +131,72 @@ object SessionRenduPc {
         data class Tourne(val i: Int, override val t: Long, val k: Double) : Trame()
     }
 
-    /** Every frame of the session's passes, [fps] a second, at [vitesse] (and [HORS] times that between passes in « continu »). */
-    fun plan(fenetres: List<LongRange>, mode: String, vitesse: Double, fps: Int = FPS, entre: Double = HORS, transition: Double = TRANSITION_S): List<Trame> {
+    /**
+     * The pace at each moment: the timeline cut into stretches each with its pace (outside
+     * the passes — « continu » only —, in a pass, a picture or a contact coming), and the
+     * pace at [t] the lowest of each stretch's plus [EASE] × its distance (s): it slows down
+     * before reaching a slower stretch and speeds up after it, by e every 1/[EASE] s of video.
+     */
+    class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses) {
+        private val morceaux: List<Triple<Long, Long, Double>>
+        init {
+            val bornes = sortedSetOf<Long>()
+            fenetres.forEach { bornes += it.first; bornes += it.last + 1 }
+            actifs.forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
+            val l = ArrayList<Triple<Long, Long, Double>>()
+            val b = bornes.toList()
+            for (k in 0 until b.size - 1) {
+                val m = (b[k] + b[k + 1]) / 2
+                val dans = fenetres.any { m in it }
+                val r = when { dans && actifs.any { m in it } -> v.image; dans -> v.passage; continu -> v.hors; else -> continue }
+                val der = l.lastOrNull()
+                if (der != null && der.third == r && der.second == b[k]) l[l.size - 1] = Triple(der.first, b[k + 1], r) else l += Triple(b[k], b[k + 1], r)
+            }
+            morceaux = l
+        }
+        /** Real time per video time at [t]. */
+        fun a(t: Long): Double {
+            var r = Double.MAX_VALUE
+            for ((de, a, v) in morceaux) {
+                val d = if (t < de) de - t else if (t >= a) t - a + 1 else 0L
+                r = minOf(r, v + EASE * d / 1000.0)
+            }
+            return if (r == Double.MAX_VALUE) v.passage else r
+        }
+    }
+
+    /** Every frame of the session's passes, [fps] a second, each moment at its pace ([Allure]). */
+    fun plan(fenetres: List<LongRange>, actifs: List<LongRange>, mode: String, v: Vitesses, fps: Int = FPS, transition: Double = TRANSITION_S): List<Trame> {
         if (fenetres.isEmpty()) return emptyList()
-        val pas = (1000.0 / fps * vitesse).toLong().coerceAtLeast(1)
+        val allure = Allure(fenetres, actifs, mode == "continu", v)
+        fun pas(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
         val l = ArrayList<Trame>()
         if (mode == "continu") {
             val fin = fenetres.maxOf { it.last }
             var t = fenetres.first().first
             while (true) {
                 val i = fenetres.indexOfFirst { t in it }
-                if (i >= 0) { l += Trame.Passe(i, t); if (t >= fin) break; t = minOf(t + pas, fin); continue }
+                if (i >= 0) { l += Trame.Passe(i, t); if (t >= fin) break; t = minOf(t + pas(t), fin); continue }
                 val avant = fenetres.indexOfLast { it.last < t }
                 val apres = fenetres.indexOfFirst { it.first > t }
                 if (avant < 0 || apres < 0) break
                 val de = fenetres[avant].last; val a = fenetres[apres].first
                 l += Trame.Entre(avant, t, (t - de).toDouble() / (a - de).coerceAtLeast(1))
-                t = minOf(t + (pas * entre).toLong(), a)
+                t = minOf(t + pas(t), a)
             }
         } else {
             fenetres.forEachIndexed { i, f ->
                 val n = tourne(transition)
                 if (i > 0) for (k in 1..n) l += Trame.Tourne(i, f.first, k.toDouble() / (n + 1))
                 var t = f.first
-                while (t < f.last) { l += Trame.Passe(i, t); t += pas }
+                while (t < f.last) { l += Trame.Passe(i, t); t += pas(t) }
                 l += Trame.Passe(i, f.last)
             }
         }
         return l
     }
 
-    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.mode, s.vitesse, FPS, s.entre, s.transition)
+    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition)
 
     // ---------------------------------------------------------------- frames
 

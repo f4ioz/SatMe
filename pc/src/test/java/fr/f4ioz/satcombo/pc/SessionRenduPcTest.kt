@@ -60,42 +60,81 @@ class SessionRenduPcTest {
     }
 
     @Test
-    fun la_demande_dit_les_passages_le_mode_et_la_vitesse() {
+    fun la_demande_dit_les_passages_le_mode_et_les_allures() {
         fun lit(vararg kv: Pair<String, String>) = SessionRenduPc.parametres { k -> kv.toMap()[k].orEmpty() }
         val d = lit()
-        assertEquals(emptyList<String>(), d.ids); assertEquals("passages", d.mode); assertEquals(30.0, d.vitesse, 0.0)
+        assertEquals(emptyList<String>(), d.ids); assertEquals("passages", d.mode)
+        assertEquals(SessionRenduPc.Vitesses(1000.0, 20.0, 3.0), d.v)
         assertNull(d.titre); assertTrue(!d.vignettes)
-        val c = lit("ids" to " 25544_1, 25544_2,,25544_1 ", "mode" to "continu", "vitesse" to "6000", "titre" to "  Ma semaine ", "vignettes" to "1")
-        assertEquals(listOf("25544_1", "25544_2"), c.ids); assertEquals("continu", c.mode); assertEquals(6000.0, c.vitesse, 0.0)
+        val c = lit("ids" to " 25544_1, 25544_2,,25544_1 ", "mode" to "continu", "vHors" to "5000", "vPassage" to "50", "vImage" to "1.5",
+            "titre" to "  Ma semaine ", "vignettes" to "1")
+        assertEquals(listOf("25544_1", "25544_2"), c.ids); assertEquals("continu", c.mode)
+        assertEquals(SessionRenduPc.Vitesses(5000.0, 50.0, 1.5), c.v)
         assertEquals("Ma semaine", c.titre); assertTrue(c.vignettes)
-        assertEquals(2000.0, lit("mode" to "continu", "vitesse" to "abc").vitesse, 0.0)
-        assertEquals(30.0, lit("mode" to "autre", "vitesse" to "-4").vitesse, 0.0)
+        // Held to their bounds.
+        assertEquals(SessionRenduPc.Vitesses(20_000.0, 500.0, 100.0), lit("vHors" to "1e9", "vPassage" to "9999", "vImage" to "400").v)
+        assertEquals(SessionRenduPc.Vitesses(1.0, 1.0, 0.5), lit("vHors" to "0.1", "vPassage" to "0.2", "vImage" to "0.1").v)
+        assertEquals(SessionRenduPc.Vitesses(1000.0, 20.0, 3.0), lit("vHors" to "abc", "vPassage" to "-4", "vImage" to "NaN").v)
+        // The old words when the new ones are missing: vPassage = vitesse, vHors = vitesse × entre (10 by default).
+        assertEquals(SessionRenduPc.Vitesses(300.0, 30.0, 3.0), lit("vitesse" to "30").v)
+        assertEquals(SessionRenduPc.Vitesses(1500.0, 30.0, 3.0), lit("vitesse" to "30", "entre" to "50").v)
+        assertEquals(SessionRenduPc.Vitesses(700.0, 30.0, 3.0), lit("vitesse" to "30", "entre" to "50", "vHors" to "700").v)
+        assertEquals(SessionRenduPc.Vitesses(20_000.0, 500.0, 3.0), lit("vitesse" to "6000").v)
         assertEquals("passages", lit("mode" to "autre").mode)
-        assertEquals(100_000.0, lit("vitesse" to "1e9").vitesse, 0.0)
     }
+
+    /** Real time per video time between each frame and the next, by frame. */
+    private fun allures(plan: List<SessionRenduPc.Trame>) = plan.zipWithNext().map { (a, b) -> (b.t - a.t) * SessionRenduPc.FPS / 1000.0 }
 
     @Test
     fun le_plan_des_images_dans_les_deux_modes() {
-        val f = scenes().map { (it.e.debutMs - 30_000L)..(it.e.finMs + 30_000L) }
-        // « passages » at ×30: each pass's 7 minutes in 14 s, a turn between two.
-        val p = SessionRenduPc.plan(f, "passages", 30.0)
-        val parPasse = (420_000 / (1000 / SessionRenduPc.FPS * 30)) + 1
-        assertEquals(3 * parPasse + 2 * SessionRenduPc.tourne(1.5), p.size)
+        val sc = scenes()
+        val f = sc.map { (it.e.debutMs - 30_000L)..(it.e.finMs + 30_000L) }
+        val actifs = SessionRenduPc.actifs(sc)
+        // The three pictures (the contact has no sound recorded): 3 s around each.
+        assertEquals(3, actifs.size); assertEquals(sc[0].e.debutMs + 57_000L, actifs[0].first)
+        // « passages »: a turn between two, the passes' frames in order.
+        val p = SessionRenduPc.plan(f, actifs, "passages", SessionRenduPc.Vitesses())
         assertEquals(2 * SessionRenduPc.tourne(1.5), p.count { it is SessionRenduPc.Trame.Tourne })
         assertTrue(p.zipWithNext().all { (a, b) -> b.t >= a.t })
-        // « continu » at ×600: the time runs on, ten times faster between the passes.
-        val c = SessionRenduPc.plan(f, "continu", 600.0)
+        // « continu »: the time runs on, from the first pass's start to the last one's end.
+        val c = SessionRenduPc.plan(f, actifs, "continu", SessionRenduPc.Vitesses())
         assertTrue(c.zipWithNext().all { (a, b) -> b.t > a.t })
         assertEquals(f.first().first, c.first().t); assertEquals(f.last().last, c.last().t)
-        val dedans = c.filterIsInstance<SessionRenduPc.Trame.Passe>().size
-        val dehors = c.filterIsInstance<SessionRenduPc.Trame.Entre>().size
-        val minDedans = f.sumOf { it.last - it.first } / 60_000.0
-        val minDehors = (f.last().last - f.first().first) / 60_000.0 - minDedans
-        // Video frames per real minute: outside the passes, about a tenth.
-        val rDedans = dedans / minDedans; val rDehors = dehors / minDehors
-        assertTrue("$rDedans in, $rDehors out", rDehors < rDedans / 5)
-        // Nothing of the passes skipped: each has its frames.
         for (i in f.indices) assertTrue(c.any { it is SessionRenduPc.Trame.Passe && it.i == i })
+        // Frames per real minute: many more while a picture comes than in the rest of the pass, and in the pass than outside.
+        fun parMinute(dans: (Long) -> Boolean): Double {
+            val n = c.count { dans(it.t) }
+            var reel = 0L; var t = f.first().first
+            while (t < f.last().last) { if (dans(t)) reel += 1000; t += 1000 }
+            return n / (reel / 60_000.0)
+        }
+        val image = parMinute { t -> actifs.any { t in it } }
+        val passe = parMinute { t -> f.any { t in it } && actifs.none { t in it } }
+        val dehors = parMinute { t -> f.none { t in it } }
+        assertTrue("image $image, passe $passe", image > passe * 3)
+        assertTrue("passe $passe, dehors $dehors", passe > dehors * 10)
+        // Far from the passes, the pace is vHors: ×1000, 125 s a frame.
+        assertTrue(allures(c).count { Math.abs(it - 1000.0) < 1 } > 10)
+    }
+
+    @Test
+    fun l_allure_change_sans_a_coup() {
+        val sc = scenes()
+        val f = sc.map { (it.e.debutMs - 30_000L)..(it.e.finMs + 30_000L) }
+        for (mode in listOf("continu", "passages")) for (v in listOf(SessionRenduPc.Vitesses(), SessionRenduPc.Vitesses(20_000.0, 500.0, 0.5), SessionRenduPc.Vitesses(50.0, 100.0, 100.0))) {
+            val plan = SessionRenduPc.plan(f, SessionRenduPc.actifs(sc), mode, v)
+            val allure = SessionRenduPc.Allure(f, SessionRenduPc.actifs(sc), mode == "continu", v)
+            // From one frame to the next, the pace changes by about e^(±EASE / FPS) at most (×0.75 … ×1.28), never a jump.
+            val k = Math.exp(SessionRenduPc.EASE / SessionRenduPc.FPS) * 1.02; val kBas = 1 - SessionRenduPc.EASE / SessionRenduPc.FPS - 0.01
+            plan.filter { it !is SessionRenduPc.Trame.Tourne }.zipWithNext().filter { (a, b) -> mode == "continu" || (a as? SessionRenduPc.Trame.Passe)?.i == (b as? SessionRenduPc.Trame.Passe)?.i }
+                .forEach { (a, b) ->
+                    val r = allure.a(b.t) / allure.a(a.t)
+                    assertTrue("$mode $v ${a.t - t0} → ${b.t - t0}: ×$r", r <= k && r >= kBas)
+                }
+            // Each pace is reached.
+            assertTrue(plan.any { Math.abs(allure.a(it.t) - v.image) < 1e-6 })
+        }
     }
 
     private fun proche(c: Int, cible: Color, tol: Int) =
@@ -103,10 +142,10 @@ class SessionRenduPcTest {
 
     @Test
     fun les_images_de_la_session() {
-        val s = SessionRenduPc.Session(scenes(), "passages", 30.0, titre = null, vignettes = true)
+        val s = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(passage = 30.0), titre = null, vignettes = true)
         assertEquals(3, s.images.size)
         val w = 1280; val h = 720
-        val plan = SessionRenduPc.plan(s.fenetres, s.mode, s.vitesse)
+        val plan = SessionRenduPc.plan(s)
         // The last pass, its second picture arriving: the strip holds the two before it.
         val arrive = plan.first { it is SessionRenduPc.Trame.Passe && it.i == 2 && it.t >= s.scenes[2].e.debutMs + 215_000L }
         val img = SessionRenduPc.image(s, arrive, w, h)
@@ -128,12 +167,12 @@ class SessionRenduPcTest {
         val b = SessionRenduPc.image(s, plan.filterIsInstance<SessionRenduPc.Trame.Tourne>().last { it.i == 1 }, w, h)
         assertTrue(a.getRGB(0, 0, w, h, null, 0, w).contentEquals(b.getRGB(0, 0, w, h, null, 0, w)).not())
         // « continu », between two passes: the satellite where its elements put it.
-        val c = SessionRenduPc.Session(scenes(), "continu", 600.0, vignettes = true)
-        val entre = SessionRenduPc.plan(c.fenetres, c.mode, c.vitesse).filterIsInstance<SessionRenduPc.Trame.Entre>().let { it[it.size / 2] }
+        val c = SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(hors = 6000.0, passage = 600.0), vignettes = true)
+        val entre = SessionRenduPc.plan(c).filterIsInstance<SessionRenduPc.Trame.Entre>().let { it[it.size / 2] }
         ImageIO.write(SessionRenduPc.image(c, entre, w, h), "png", File(echantillons, "session-entre.png"))
         ImageIO.write(SessionRenduPc.titre(s, w, h), "png", File(echantillons, "session-titre.png"))
         // Larger texts, the PC's own time: the turn's card and the caption.
-        val s2 = SessionRenduPc.Session(scenes(police = 2f, tz = java.util.TimeZone.getTimeZone("Europe/Paris")), "passages", 30.0, vignettes = true, transition = 3.0)
+        val s2 = SessionRenduPc.Session(scenes(police = 2f, tz = java.util.TimeZone.getTimeZone("Europe/Paris")), "passages", SessionRenduPc.Vitesses(passage = 30.0), vignettes = true, transition = 3.0)
         val p2 = SessionRenduPc.plan(s2)
         assertEquals(2 * 24, p2.count { it is SessionRenduPc.Trame.Tourne })
         ImageIO.write(SessionRenduPc.image(s2, p2.filterIsInstance<SessionRenduPc.Trame.Tourne>().first { it.i == 2 && it.k >= 0.45 }, w, h), "png",
@@ -152,8 +191,8 @@ class SessionRenduPcTest {
     @Test
     fun la_session_en_video_dans_les_deux_modes() {
         val ff = RenduPc.ffmpeg() ?: return
-        for ((mode, vitesse) in listOf("passages" to 100.0, "continu" to 2000.0)) {
-            val s = SessionRenduPc.Session(scenes(), mode, vitesse, titre = "Essai", vignettes = true)
+        for ((mode, v) in listOf("passages" to SessionRenduPc.Vitesses(passage = 100.0, image = 20.0), "continu" to SessionRenduPc.Vitesses(10_000.0, 500.0, 50.0))) {
+            val s = SessionRenduPc.Session(scenes(), mode, v, titre = "Essai", vignettes = true)
             val n = SessionRenduPc.trames(s)
             val mp4 = SessionRenduPc.video(s, File(echantillons, "session-$mode.mp4")) {}
             assertTrue(mode, mp4 != null && mp4.length() > 10_000)
@@ -195,5 +234,26 @@ class SessionRenduPcTest {
             val d = duree(RenduPc.ffmpeg()!!, mp4)
             assertTrue("$d s", d > 8 && d < 12)
         } finally { portee.coroutineContext[kotlinx.coroutines.Job]?.cancel(); dossier.deleteRecursively() }
+    }
+
+    @Test
+    fun une_image_arrive_lentement() {
+        val dossier = File(System.getenv("SATME_SESSION3") ?: "build/session3-echantillons").apply { mkdirs() }
+        val s = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(), vignettes = true)
+        val plan = SessionRenduPc.plan(s)
+        // The last pass's second picture, 36 s received: at ×3 about 12 s of video (with its easing).
+        val m = s.scenes[2].marques.last()
+        val pendant = plan.filter { it is SessionRenduPc.Trame.Passe && it.t in m.debutMs..m.finMs }
+        assertTrue("${pendant.size} frames", pendant.size >= 11 * SessionRenduPc.FPS)
+        // A frame each second of video while it comes, from 1 s before.
+        val de = plan.indexOf(pendant.first()) - SessionRenduPc.FPS
+        var n = 0
+        for (k in de until plan.indexOf(pendant.last()) + SessionRenduPc.FPS step SessionRenduPc.FPS) {
+            ImageIO.write(SessionRenduPc.image(s, plan[k], 1280, 720), "png", File(dossier, "image-lente-%02d.png".format(n++)))
+        }
+        assertTrue(n >= 12)
+        // Not long before it, the pass's pace (×20): it slowed down on the way.
+        val avant = plan.filter { it is SessionRenduPc.Trame.Passe && it.t in (m.debutMs - 60_000L)..(m.debutMs - 40_000L) }
+        assertTrue(avant.size in 3..12)
     }
 }
