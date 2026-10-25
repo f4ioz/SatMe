@@ -29,7 +29,7 @@ class GlobeRenduPcTest {
     private val t0 = 1_792_510_800_000L   // 2026-10-20 15:40 UTC, the Sun low over France
 
     /** A pass over France, NW to SE, 10 minutes, 420 km up. */
-    private fun scene(style: String, paysage: Boolean = true): RenduPc.Scene {
+    private fun scene(style: String, paysage: Boolean = true, o: GlobeRenduPc.Options = GlobeRenduPc.Options()): RenduPc.Scene {
         val sol = (0..40).map { k -> val f = k / 40.0; JournalPassage.Sol(t0 + k * 15_000L, 62.0 - 30 * f, -14.0 + 34 * f, 420.0) }
         val e = JournalPassage.Entree(25544, "ISS", t0, t0 + 600_000L, "JN18DU",
             points = (0..10).map { JournalPassage.Point(t0 + it * 60_000L, (300.0 + it * 15) % 360, if (it <= 5) 5.0 + it * 12 else 65.0 - (it - 5) * 12) })
@@ -37,7 +37,7 @@ class GlobeRenduPcTest {
             Marque(TypeMarque.QSO, t0 + 240_000L, t0 + 240_000L, "F5XYZ", lat = 43.6, lon = 1.4),
             Marque(TypeMarque.APRS, t0 + 270_000L, t0 + 270_000L, "EA3ABC", lat = 41.4, lon = 2.2))
         return RenduPc.Scene(e, emptyList(), marques, "F4IOZ", sol = sol, qth = 48.85 to 2.35, etiquetteQth = "F4IOZ · JN18DU",
-            paysage = paysage, surGlobe = true, styleGlobe = style, ouverture = false, recap = false)
+            paysage = paysage, surGlobe = true, styleGlobe = style, optionsGlobe = o, ouverture = false, recap = false)
     }
 
     private val echantillons = File(System.getenv("SATME_GLOBE") ?: "build/globe-echantillons").apply { mkdirs() }
@@ -179,5 +179,82 @@ class GlobeRenduPcTest {
             resolution = "XS", ouverture = false, recap = false, segments = listOf(JournalPassage.Segment(t0 + 200_000L, t0 + 220_000L, 1)))
         val mp4 = RenduPc.video(sc2, File(echantillons, "globe.mp4"), null, 22_050, echantillons) {}
         assertTrue("ffmpeg $ff", mp4 != null && mp4.length() > 10_000)
+    }
+
+    @Test
+    fun les_choix_du_globe_se_lisent_de_la_demande() {
+        fun lit(vararg kv: Pair<String, String>) = GlobeRenduPc.options { k -> kv.toMap()[k].orEmpty() }
+        assertEquals(GlobeRenduPc.Options(), lit())
+        assertEquals(GlobeRenduPc.Options("toutes", "nom", 1, 0f, 0f, 1f), lit("villes" to "n'importe", "etiquettes" to "x", "detail" to "abc", "gz" to "NaN"))
+        val o = lit("villes" to "capitales", "etiquettes" to "nomdrapeau", "detail" to "2", "gdx" to "0.25", "gdy" to "-0.1", "gz" to "1.5")
+        assertEquals(GlobeRenduPc.Options("capitales", "nomdrapeau", 2, 0.25f, -0.1f, 1.5f), o)
+        // Out of their bounds: held to them.
+        val b = lit("villes" to "aucune", "etiquettes" to "drapeau", "detail" to "7", "gdx" to "-3", "gdy" to "2", "gz" to "9")
+        assertEquals(GlobeRenduPc.Options("aucune", "drapeau", 2, -0.5f, 0.5f, 3f), b)
+        assertEquals(0.5f, lit("gz" to "0.1").gz)
+        assertEquals(40, GlobeRenduPc.nombreCapitales(0)); assertEquals(100, GlobeRenduPc.nombreCapitales(1))
+        assertEquals(fr.f4ioz.satcombo.demo.GlobeDonnees.CAPITALES.size, GlobeRenduPc.nombreCapitales(2))
+    }
+
+    private fun pixels(img: BufferedImage) = img.getRGB(0, 0, img.width, img.height, null, 0, img.width)
+    private fun differents(a: IntArray, b: IntArray) = a.indices.count { a[it] != b[it] }
+
+    @Test
+    fun chaque_choix_du_globe_change_l_image() {
+        val w = 1280; val h = 720; val instant = t0 + 300_000L
+        fun rend(o: GlobeRenduPc.Options, nom: String? = null): BufferedImage {
+            val img = RenduPc.image(w, h, scene("cartoon", o = o), instant)
+            nom?.let { ImageIO.write(img, "png", File(echantillons, it)) }
+            return img
+        }
+        val base = pixels(rend(GlobeRenduPc.Options()))
+        val aucune = pixels(rend(GlobeRenduPc.Options(villes = "aucune")))
+        val capitales = pixels(rend(GlobeRenduPc.Options(villes = "capitales", etiquettes = "nomdrapeau", detail = 2), "globe-capitales-drapeaux.png"))
+        val drapeaux = pixels(rend(GlobeRenduPc.Options(villes = "capitales", etiquettes = "drapeau"), "globe-capitales-codes.png"))
+        val noms = pixels(rend(GlobeRenduPc.Options(villes = "capitales", etiquettes = "nom")))
+        val sans = pixels(rend(GlobeRenduPc.Options(detail = 0)))
+        val tout = pixels(rend(GlobeRenduPc.Options(detail = 2)))
+        for ((n, p) in listOf("aucune" to aucune, "capitales" to capitales, "detail 0" to sans, "detail 2" to tout))
+            assertTrue(n, differents(base, p) > 500)
+        assertTrue(differents(noms, drapeaux) > 500); assertTrue(differents(noms, capitales) > 500)
+
+        // Moved and larger: the globe's middle where asked, the caption below unchanged.
+        val o = GlobeRenduPc.Options(villes = "capitales", etiquettes = "nomdrapeau", gdx = 0.2f, gdy = 0.15f, gz = 1.8f)
+        val sc = scene("cartoon", o = o)
+        val img = rend(o, "globe-decale-zoom.png")
+        val dp = minOf(w / 360f, h / 480f); val haut = h - 100 * dp
+        val cam = GlobeRenduPc.camera(sc, instant, w.toFloat(), haut)
+        assertEquals(w / 2f + 0.2f * w, cam.ox, 0.01f); assertEquals(haut / 2 + 0.15f * haut, cam.oy, 0.01f)
+        assertEquals(0.425f * haut * 1.8f, cam.r, 0.01f)
+        // The top left corner, far from the moved globe: space, not the Earth.
+        assertTrue(Color(img.getRGB(10, 10)).let { it.blue < 140 && it.green < 100 })
+        // The caption is the same as the plain frame's.
+        val bas = haut.toInt() + 2
+        val a = rend(GlobeRenduPc.Options()).getRGB(0, bas, w, h - bas, null, 0, w); val b = img.getRGB(0, bas, w, h - bas, null, 0, w)
+        assertEquals(0, differents(a, b))
+        // The satellite still where the camera puts it.
+        val (s, alt) = GlobeRenduPc.sousSatellite(sc.sol, instant)!!
+        val k = 1 + alt / 6371.0; val p = doubleArrayOf(s[0] * k, s[1] * k, s[2] * k)
+        val sx = cam.x(p).toInt(); val sy = cam.y(p).toInt()
+        var trouve = false
+        for (y in sy - 6..sy + 6) for (x in sx - 6..sx + 6) if (x in 0 until w && y in 0 until h && proche(img.getRGB(x, y), RenduPc.ISS, 40)) trouve = true
+        assertTrue("satellite at ($sx, $sy)", trouve)
+        // Small and to a side too.
+        rend(GlobeRenduPc.Options(gdx = -0.3f, gz = 0.5f), "globe-petit.png")
+    }
+
+    @Test
+    fun le_relief_du_dessin_anime_se_voit() {
+        // The Alps, near the middle of the view at the satellite's moment: browner than the plain around them.
+        val w = 1280; val h = 720; val instant = t0 + 300_000L
+        val o = GlobeRenduPc.Options(villes = "aucune", detail = 0, gz = 3f)
+        val sc = scene("cartoon", o = o)
+        val img = RenduPc.image(w, h, sc, instant)
+        ImageIO.write(img, "png", File(echantillons, "globe-relief.png"))
+        val dp = minOf(w / 360f, h / 480f); val haut = h - 100 * dp
+        val cam = GlobeRenduPc.camera(sc, instant, w.toFloat(), haut)
+        fun c(lat: Double, lon: Double) = cam.ecran(lat, lon).let { Color(img.getRGB(it.first.toInt(), it.second.toInt())) }
+        val alpes = c(46.0, 7.9); val beauce = c(48.3, 1.6)
+        assertTrue("Alpes $alpes vs plaine $beauce", alpes.red - alpes.green > beauce.red - beauce.green + 15)
     }
 }

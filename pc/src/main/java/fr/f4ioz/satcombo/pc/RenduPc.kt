@@ -62,6 +62,8 @@ object RenduPc {
         val etiquetteQth: String? = null,
         /** The globe rather than the sky or the map ([GlobeRenduPc]), in the page's look [styleGlobe]. */
         val surGlobe: Boolean = false, val styleGlobe: String = GlobeRenduPc.DEFAUT,
+        /** The globe's cities, labels, detail, place and size as the page chose them. */
+        val optionsGlobe: GlobeRenduPc.Options = GlobeRenduPc.Options(),
         /** The map as framed on the page, and the width (px) it was shown at; null: framed to the pass. */
         val vueVue: Pair<JournalPassage.VueCarte, Float>? = null,
         /** The screen's 16:9 rather than the phone's 3:4 (its view square above the caption). */

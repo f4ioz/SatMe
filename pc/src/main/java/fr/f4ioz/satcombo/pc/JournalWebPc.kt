@@ -370,7 +370,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes,
             surCarte = p("carte") == "1" && globe == null, sol = j.traceSol(e), qth = Maidenhead.centre(e.locator),
-            surGlobe = globe != null, styleGlobe = globe ?: GlobeRenduPc.DEFAUT,
+            surGlobe = globe != null, styleGlobe = globe ?: GlobeRenduPc.DEFAUT, optionsGlobe = GlobeRenduPc.options(p),
             etiquetteQth = if (opt(p, "locator", s.journalAffLocator)) listOf(s.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null,
             vueVue = run {
                 val cx = p("mcx").toDoubleOrNull(); val cy = p("mcy").toDoubleOrNull(); val z = p("zc").toDoubleOrNull(); val cw = p("cw").toFloatOrNull()
