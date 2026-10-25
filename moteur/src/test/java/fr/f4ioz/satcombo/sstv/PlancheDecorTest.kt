@@ -168,7 +168,7 @@ class PlancheDecorTest {
         assertNotNull(PlancheDecor.integre(""))
         assertNull(PlancheDecor.integre("decor_x.jpg"))
         val images = PlancheDecor.INTEGRES.filter { it.ressource != null }
-        assertTrue(images.size in 3..5)
+        assertTrue(images.size in 3..10)
         images.forEach { d ->
             val o = PlancheDecor.ouvre(d)!!.use { it.readBytes() }
             assertTrue(d.id + ": " + o.size, o.size in 120_000..360_000)

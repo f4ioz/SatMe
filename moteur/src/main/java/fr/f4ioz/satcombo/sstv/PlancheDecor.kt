@@ -23,8 +23,9 @@ object PlancheDecor {
 
     /**
      * A built-in background: a gradient from top to bottom ([couleurs] at
-     * [positions]), stars on it or not — or a picture ([ressource], in this
-     * package's `decors/`), with where it comes from ([source]).
+     * [positions]), soft clouds of colour on it ([nuages]), stars or not, the
+     * Earth's arc at the bottom ([horizon]) — or a picture ([ressource], in
+     * this package's `decors/`), with where it comes from ([source]).
      */
     class Decor(
         val id: String,
@@ -34,8 +35,35 @@ object PlancheDecor {
         val positions: FloatArray = floatArrayOf(),
         val etoiles: Boolean = false,
         val ressource: String? = null,
-        val source: String = ""
+        val source: String = "",
+        val nuages: List<Nuage> = emptyList(),
+        val horizon: Horizon? = null
     )
+
+    /**
+     * A cloud of colour (a nebula's): a disc fading out from its centre
+     * ([x], [y] in fractions of the sheet), [r] in fractions of its width.
+     */
+    class Nuage(val x: Float, val y: Float, val r: Float, val couleur: Int)
+
+    /**
+     * The Earth seen from orbit: a disc of [rayon] sheet widths whose top
+     * reaches [haut] (a fraction of the height) in the middle, [sol] dark
+     * and lit at its edge, a glow of atmosphere [halo] round it.
+     */
+    class Horizon(val haut: Float, val rayon: Float, val sol: Int, val halo: Int) {
+        /** The halo's reach beyond the disc, in its radius. */
+        val epaisseur: Float get() = 0.045f
+        /** The colours of the disc from its centre (the night side) to its lit edge. */
+        fun disque(): Pair<IntArray, FloatArray> = intArrayOf(sol, sol, PlancheStyle.melange(sol, halo, 0.35f), PlancheStyle.melange(halo, 0xFFFFFFFF.toInt(), 0.35f)) to
+            floatArrayOf(0f, 0.93f, 0.985f, 1f)
+        /** The halo's colours from the disc's edge outward. */
+        fun lueur(): Pair<IntArray, FloatArray> {
+            val r = 1f / (1f + epaisseur)
+            return intArrayOf(PlancheStyle.alpha(halo, 0), PlancheStyle.alpha(halo, 0), PlancheStyle.alpha(halo, 230), PlancheStyle.alpha(halo, 90), PlancheStyle.alpha(halo, 0)) to
+                floatArrayOf(0f, r - 0.002f, r, r + (1 - r) * 0.35f, 1f)
+        }
+    }
 
     /** The SatMe starry sky, the background of a generic sheet since the first one. */
     val ETOILES = Decor("", "planche_decor_etoiles",
@@ -50,6 +78,15 @@ object PlancheDecor {
             intArrayOf(0xFF020B12.toInt(), 0xFF07303F.toInt(), 0xFF0C5B66.toInt()), floatArrayOf(0f, 0.65f, 1f)),
         Decor("ardoise", "planche_decor_ardoise",
             intArrayOf(0xFF0C0E12.toInt(), 0xFF1E232B.toInt(), 0xFF2E3540.toInt()), floatArrayOf(0f, 0.6f, 1f)),
+        Decor("nebuleuse", "planche_decor_nebuleuse",
+            intArrayOf(0xFF04030B.toInt(), 0xFF0C0820.toInt(), 0xFF140A28.toInt()), floatArrayOf(0f, 0.6f, 1f), etoiles = true,
+            nuages = listOf(
+                Nuage(0.22f, 0.30f, 0.42f, 0x66C2287F), Nuage(0.72f, 0.24f, 0.46f, 0x5A2E5BFF),
+                Nuage(0.52f, 0.70f, 0.50f, 0x4C7B3CFF), Nuage(0.10f, 0.86f, 0.30f, 0x3C00B8D4),
+                Nuage(0.88f, 0.78f, 0.26f, 0x40FF6A3D), Nuage(0.40f, 0.42f, 0.22f, 0x30FFB0E8))),
+        Decor("orbite", "planche_decor_orbite",
+            intArrayOf(0xFF010309.toInt(), 0xFF041026.toInt(), 0xFF0A2350.toInt()), floatArrayOf(0f, 0.55f, 1f), etoiles = true,
+            horizon = Horizon(0.80f, 1.5f, 0xFF041634.toInt(), 0xFF46B4FF.toInt())),
         Decor("nasa_aurore", "planche_decor_aurore", ressource = "aurore.jpg",
             source = "NASA, iss066e146457 — images.nasa.gov/details/iss066e146457"),
         Decor("nasa_limbe", "planche_decor_limbe", ressource = "limbe.jpg",
@@ -57,7 +94,17 @@ object PlancheDecor {
         Decor("nasa_lever", "planche_decor_lever", ressource = "lever.jpg",
             source = "NASA, iss071e439624 — images.nasa.gov/details/iss071e439624"),
         Decor("nasa_lagune", "planche_decor_lagune", ressource = "lagune.jpg",
-            source = "NASA, ESA — images.nasa.gov/details/GSFC_20171208_Archive_e001955"))
+            source = "NASA, ESA — images.nasa.gov/details/GSFC_20171208_Archive_e001955"),
+        Decor("nasa_iss_espace", "planche_decor_iss_espace", ressource = "iss_espace.jpg",
+            source = "NASA, s131e011050 — images.nasa.gov/details/s131e011050"),
+        Decor("nasa_iss_terre", "planche_decor_iss_terre", ressource = "iss_terre.jpg",
+            source = "NASA, s132e012208 — images.nasa.gov/details/s132e012208"),
+        Decor("nasa_panneaux", "planche_decor_panneaux", ressource = "panneaux.jpg",
+            source = "NASA, s118e07242 — images.nasa.gov/details/s118e07242"),
+        Decor("nasa_nuit", "planche_decor_nuit", ressource = "nuit.jpg",
+            source = "NASA, iss029e012564 — images.nasa.gov/details/iss029e012564"),
+        Decor("nasa_papillon", "planche_decor_papillon", ressource = "papillon.jpg",
+            source = "NASA/JPL-Caltech, PIA23121 — images.nasa.gov/details/PIA23121"))
 
     /** The built-in background [id]; null for a file (or nothing known). */
     fun integre(id: String): Decor? = INTEGRES.firstOrNull { it.id == id }

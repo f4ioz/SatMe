@@ -10,12 +10,24 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.sstv.Planche
 import fr.f4ioz.satcombo.sstv.PlancheDecor
+import fr.f4ioz.satcombo.sstv.PlanchePolices
+import fr.f4ioz.satcombo.sstv.PlancheStyle
 import fr.f4ioz.satcombo.sstv.SstvMeta
+import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.LinearGradientPaint
+import java.awt.MultipleGradientPaint
+import java.awt.Paint
+import java.awt.RadialGradientPaint
+import java.awt.Shape
+import java.awt.font.TextAttribute
+import java.awt.font.TextLayout
+import java.awt.geom.AffineTransform
+import java.awt.geom.GeneralPath
+import java.awt.geom.Point2D
 import java.awt.RenderingHints
 import java.awt.geom.Ellipse2D
 import java.awt.geom.Rectangle2D
@@ -216,22 +228,16 @@ object PlancheRenduPc {
         m.cases.forEachIndexed { i, z ->
             val r = Rectangle2D.Float(z.x * w, z.y * h, z.w * w, z.h * h)
             val img = images[i]
+            if (img != null || fond == null) cadreAvant(g, m, r, k, w, h)
             if (img != null) {
-                // The line under the picture takes its share of the box.
-                val bande = if (m.legende) (r.height * Planche.BANDE).coerceAtLeast(10f * k) else 0f
-                val ri = Rectangle2D.Float(r.x, r.y, r.width, r.height - bande)
-                dessineRempli(g, img.first, ri)
-                if (bande > 0f) {
-                    g.color = Color.WHITE; g.fill(Rectangle2D.Float(r.x, ri.y + ri.height, r.width, bande))
-                    texteAjuste(g, Planche.legende(img.second, v.indicatif, m.marqueTraitees), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
-                }
-                g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r)
-                // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
-                if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
+                if (m.cadre == PlancheStyle.Cadre.ARRONDI) arrondi(g, r, k) { gg, rr -> contenuCase(gg, m, img, rr, v, k) }
+                else contenuCase(g, m, img, r, v, k)
+                cadreApres(g, m, r, k, w, h)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
-                g.color = couleur(0xCC05080D.toInt()); g.fill(r)
-                g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r)
+                if (m.cadre == PlancheStyle.Cadre.ARRONDI) arrondi(g, r, k) { gg, rr -> gg.color = couleur(0xCC05080D.toInt()); gg.fill(rr) }
+                else { g.color = couleur(0xCC05080D.toInt()); g.fill(r) }
+                cadreApres(g, m, r, k, w, h)
             }
             if (m.numeros) {
                 val etiquette = Planche.etiquette(m, i)
@@ -246,7 +252,10 @@ object PlancheRenduPc {
         for (t in m.textes) {
             val r = Rectangle2D.Float(t.zone.x * w, t.zone.y * h, t.zone.w * w, t.zone.h * h)
             if (t.fond != 0) { g.color = couleur(t.fond); g.fill(RoundRectangle2D.Float(r.x, r.y, r.width, r.height, 12 * k, 12 * k)) }
-            texteAjuste(g, v.de(t), Rectangle2D.Float(r.x + r.width * 0.04f, r.y, r.width * 0.92f, r.height), couleur(t.couleur), true)
+            val dedans = Rectangle2D.Float(r.x + r.width * 0.04f, r.y, r.width * 0.92f, r.height)
+            // A text as SatMe always drew it, else in its font and effect.
+            if (PlancheStyle.estSimple(t)) texteAjuste(g, v.de(t), dedans, couleur(t.couleur), true)
+            else texteStyle(g, v.de(t), dedans, t, w, h)
             // The SatMe logo beside the callsign: right of it, else left, else inside — never over a picture.
             if (t.champ == Planche.Champ.INDICATIF && logo != null) {
                 val cote = r.height * 1.1f; val ecart = r.height * 0.15f
@@ -298,16 +307,245 @@ object PlancheRenduPc {
         for (l in lignes) { g.drawString(l, (r.x + r.width / 2) - g.fontMetrics.stringWidth(l) / 2f, y); y += pas }
     }
 
-    /** A drawn background ([PlancheDecor.Decor]): its gradient, its stars — the phone's, stroke for stroke. */
+    /** A drawn background ([PlancheDecor.Decor]): its gradient, its clouds, its stars, the Earth's arc — the phone's, stroke for stroke. */
     private fun fondGenerique(g: Graphics2D, w: Int, h: Int, d: PlancheDecor.Decor = PlancheDecor.ETOILES) {
         g.paint = LinearGradientPaint(0f, 0f, 0f, h.toFloat(), d.positions, d.couleurs.map { Color(it, true) }.toTypedArray())
         g.fillRect(0, 0, w, h)
-        if (!d.etoiles) return
-        val r = Random(73)
-        repeat(w * h / 4000) {
-            g.color = Color(255, 255, 255, r.nextInt(90, 255))
-            val rayon = r.nextFloat() * w / 900f + 0.5f
-            g.fill(Ellipse2D.Float(r.nextFloat() * w - rayon, r.nextFloat() * h * 0.85f - rayon, 2 * rayon, 2 * rayon))
+        for (n in d.nuages) {
+            val rayon = n.r * w
+            g.paint = RadialGradientPaint(Point2D.Float(n.x * w, n.y * h), rayon, floatArrayOf(0f, 0.45f, 1f),
+                arrayOf(Color(n.couleur, true), Color(PlancheStyle.alpha(n.couleur, ((n.couleur ushr 24) and 0xFF) / 2), true), Color(n.couleur and 0xFFFFFF, true)))
+            g.fill(Ellipse2D.Float(n.x * w - rayon, n.y * h - rayon, 2 * rayon, 2 * rayon))
+        }
+        if (d.etoiles) {
+            val r = Random(73)
+            repeat(w * h / 4000) {
+                g.color = Color(255, 255, 255, r.nextInt(90, 255))
+                val rayon = r.nextFloat() * w / 900f + 0.5f
+                g.fill(Ellipse2D.Float(r.nextFloat() * w - rayon, r.nextFloat() * h * 0.85f - rayon, 2 * rayon, 2 * rayon))
+            }
+        }
+        d.horizon?.let { o ->
+            val rayon = o.rayon * w; val cx = w / 2f; val cy = o.haut * h + rayon
+            val halo = rayon * (1 + o.epaisseur)
+            val (lc, lp) = o.lueur()
+            g.paint = RadialGradientPaint(Point2D.Float(cx, cy), halo, lp, lc.map { Color(it, true) }.toTypedArray())
+            g.fill(Ellipse2D.Float(cx - halo, cy - halo, 2 * halo, 2 * halo))
+            val (dc, dp) = o.disque()
+            g.paint = RadialGradientPaint(Point2D.Float(cx, cy), rayon, dp, dc.map { Color(it, true) }.toTypedArray())
+            g.fill(Ellipse2D.Float(cx - rayon, cy - rayon, 2 * rayon, 2 * rayon))
+        }
+    }
+
+    // ------------------------------------------------------------ boxes
+
+    /** A box's picture and the line under it, in [r]. */
+    private fun contenuCase(g: Graphics2D, m: Planche.Modele, img: Pair<BufferedImage, SstvMeta.SstvShot>, r: Rectangle2D.Float, v: Valeurs, k: Float) {
+        // The line under the picture takes its share of the box.
+        val bande = if (m.legende) (r.height * Planche.BANDE).coerceAtLeast(10f * k) else 0f
+        val ri = Rectangle2D.Float(r.x, r.y, r.width, r.height - bande)
+        dessineRempli(g, img.first, ri)
+        if (bande > 0f) {
+            g.color = Color.WHITE; g.fill(Rectangle2D.Float(r.x, ri.y + ri.height, r.width, bande))
+            texteAjuste(g, Planche.legende(img.second, v.indicatif, m.marqueTraitees), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
+        }
+        // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
+        if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
+    }
+
+    /** The side of a box its frame is measured on. */
+    private fun cote(r: Rectangle2D.Float) = minOf(r.width, r.height)
+
+    /** What a box's frame lays under it: the white mat, the rounded box's shadow. */
+    private fun cadreAvant(g: Graphics2D, m: Planche.Modele, r: Rectangle2D.Float, k: Float, w: Int, h: Int) {
+        when (m.cadre) {
+            PlancheStyle.Cadre.FIN -> {
+                val e = maxOf(3f * k, cote(r) * PlancheStyle.CADRE_FIN)
+                flou(g, Rectangle2D.Float(r.x - e, r.y - e + e * 0.6f, r.width + 2 * e, r.height + 2 * e), e * 1.6f, 0x90000000.toInt(), w, h) { it.fill(Rectangle2D.Float(r.x - e, r.y - e + e * 0.6f, r.width + 2 * e, r.height + 2 * e)) }
+                g.color = Color.WHITE; g.fill(Rectangle2D.Float(r.x - e, r.y - e, r.width + 2 * e, r.height + 2 * e))
+            }
+            PlancheStyle.Cadre.ARRONDI -> {
+                val c = cote(r); val a = c * PlancheStyle.CADRE_ARRONDI * 2
+                val ombre = RoundRectangle2D.Float(r.x, r.y + c * 0.035f, r.width, r.height, a, a)
+                flou(g, ombre.bounds2D as Rectangle2D.Float, c * 0.06f, 0xD0000000.toInt(), w, h) { it.fill(ombre) }
+            }
+            else -> {}
+        }
+    }
+
+    /** A box's frame over it: the white line of old, the light edge of a rounded box, a neon tube. */
+    private fun cadreApres(g: Graphics2D, m: Planche.Modele, r: Rectangle2D.Float, k: Float, w: Int, h: Int) {
+        when (m.cadre) {
+            PlancheStyle.Cadre.AUCUN -> { g.color = Color.WHITE; g.stroke = BasicStroke(2.5f * k); g.draw(r) }
+            PlancheStyle.Cadre.FIN -> {}
+            PlancheStyle.Cadre.ARRONDI -> {
+                val a = cote(r) * PlancheStyle.CADRE_ARRONDI * 2
+                g.color = Color(255, 255, 255, 110); g.stroke = BasicStroke(1.5f * k)
+                g.draw(RoundRectangle2D.Float(r.x, r.y, r.width, r.height, a, a))
+            }
+            PlancheStyle.Cadre.NEON -> {
+                val c = m.cadreCouleur
+                val a = cote(r) * 0.03f
+                val tube = RoundRectangle2D.Float(r.x, r.y, r.width, r.height, a, a)
+                val ep = maxOf(2f, 4.5f * k)
+                flou(g, r, 9f * k + ep, c, w, h) { it.stroke = BasicStroke(ep * 1.6f); it.draw(tube) }
+                g.color = Color(c, true); g.stroke = BasicStroke(ep); g.draw(tube)
+                g.color = Color(PlancheStyle.melange(c, 0xFFFFFFFF.toInt(), 0.7f), true); g.stroke = BasicStroke(ep * 0.4f); g.draw(tube)
+            }
+        }
+    }
+
+    /** [dessin] drawn in [r] (a box) with its corners rounded, their edge smooth. */
+    private fun arrondi(g: Graphics2D, r: Rectangle2D.Float, k: Float, dessin: (Graphics2D, Rectangle2D.Float) -> Unit) {
+        val x0 = r.x.toInt(); val y0 = r.y.toInt()
+        val bw = (r.x + r.width).toInt() - x0; val bh = (r.y + r.height).toInt() - y0
+        if (bw <= 2 || bh <= 2) return
+        val tmp = BufferedImage(bw, bh, BufferedImage.TYPE_INT_ARGB)
+        val tg = tmp.createGraphics()
+        lisse(tg)
+        dessin(tg, Rectangle2D.Float(0f, 0f, bw.toFloat(), bh.toFloat()))
+        val a = minOf(bw, bh) * PlancheStyle.CADRE_ARRONDI * 2
+        tg.composite = AlphaComposite.DstIn
+        tg.color = Color.WHITE
+        tg.fill(RoundRectangle2D.Float(0f, 0f, bw.toFloat(), bh.toFloat(), a, a))
+        tg.dispose()
+        g.drawImage(tmp, x0, y0, null)
+    }
+
+    private fun lisse(g: Graphics2D) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+    }
+
+    /**
+     * What [dessin] draws round [r], in [couleur], blurred by [rayon] pixels
+     * ([PlancheStyle.flou]): a glow, a shadow. Kept within the sheet ([w]×[h]).
+     */
+    private fun flou(g: Graphics2D, r: Rectangle2D.Float, rayon: Float, couleur: Int, w: Int, h: Int, dessin: (Graphics2D) -> Unit) {
+        val m = (rayon * 2.2f + 4).toInt()
+        val x0 = maxOf(0, (r.x - m).toInt()); val y0 = maxOf(0, (r.y - m).toInt())
+        val x1 = minOf(w, (r.x + r.width + m).toInt() + 1); val y1 = minOf(h, (r.y + r.height + m).toInt() + 1)
+        val bw = x1 - x0; val bh = y1 - y0
+        if (bw <= 0 || bh <= 0) return
+        val tmp = BufferedImage(bw, bh, BufferedImage.TYPE_INT_ARGB)
+        val tg = tmp.createGraphics()
+        lisse(tg)
+        tg.translate(-x0.toDouble(), -y0.toDouble())
+        tg.color = Color(couleur or 0xFF000000.toInt())
+        dessin(tg)
+        tg.dispose()
+        val px = tmp.getRGB(0, 0, bw, bh, null, 0, bw)
+        PlancheStyle.flou(px, bw, bh, rayon.toInt(), couleur)
+        tmp.setRGB(0, 0, bw, bh, px, 0, bw)
+        g.drawImage(tmp, x0, y0, null)
+    }
+
+    // ------------------------------------------------------------ styled texts
+
+    // The fonts SatMe carries, read once.
+    private val polices = HashMap<String, Font?>()
+
+    /** The bundled font [id] ([PlanchePolices]); null for the default one or one unknown. */
+    fun police(id: String): Font? {
+        val p = PlanchePolices.de(id) ?: return null
+        return synchronized(polices) {
+            polices.getOrPut(id) { runCatching { PlanchePolices.ouvre(p)?.use { Font.createFont(Font.TRUETYPE_FONT, it) } }.getOrNull() }
+        }
+    }
+
+    private fun peinture(c: PlancheStyle.Couche, b: Rectangle2D): Paint =
+        if (c.uni) Color(c.couleurs[0], true)
+        else LinearGradientPaint(Point2D.Float(0f, b.y.toFloat()), Point2D.Float(0f, (b.y + maxOf(1.0, b.height)).toFloat()),
+            c.positions ?: FloatArray(c.couleurs.size) { it / (c.couleurs.size - 1f) }, c.couleurs.map { Color(it, true) }.toTypedArray(),
+            MultipleGradientPaint.CycleMethod.NO_CYCLE)
+
+    /** The outline of [ligne] in [f], its baseline at [x], [y]; [espace] added after each letter; slanted when [pente]. */
+    private fun contour(f: Font, ligne: String, x: Float, y: Float, espace: Float, pente: Boolean, frc: java.awt.font.FontRenderContext): Shape {
+        val p = GeneralPath()
+        if (espace == 0f) p.append(TextLayout(ligne, f, frc).getOutline(AffineTransform.getTranslateInstance(x.toDouble(), y.toDouble())), false)
+        else {
+            var xx = x; var i = 0
+            while (i < ligne.length) {
+                val n = Character.charCount(ligne.codePointAt(i)); val c = ligne.substring(i, i + n); i += n
+                if (c.isNotBlank()) p.append(TextLayout(c, f, frc).getOutline(AffineTransform.getTranslateInstance(xx.toDouble(), y.toDouble())), false)
+                xx += avance(f, c, frc) + espace
+            }
+        }
+        if (pente) p.transform(AffineTransform(1.0, 0.0, -PlancheStyle.PENTE.toDouble(), 1.0, PlancheStyle.PENTE * y.toDouble(), 0.0))
+        return p
+    }
+
+    private fun avance(f: Font, s: String, frc: java.awt.font.FontRenderContext): Float = if (s.isEmpty()) 0f else TextLayout(s, f, frc).advance
+
+    /** A line's width in [f], its letter spacing [espace] added. */
+    private fun largeur(f: Font, l: String, espace: Float, frc: java.awt.font.FontRenderContext): Float {
+        if (espace == 0f) return avance(f, l, frc)
+        var s = 0f; var i = 0; var n = 0
+        while (i < l.length) { val k = Character.charCount(l.codePointAt(i)); s += avance(f, l.substring(i, i + k), frc); i += k; n++ }
+        return s + espace * (n - 1).coerceAtLeast(0)
+    }
+
+    /**
+     * A text in its font and effect ([PlancheStyle]), as large as fits [r]
+     * with its effect round it, lines centred; its rules above and below.
+     */
+    private fun texteStyle(g: Graphics2D, texte: String, zone: Rectangle2D.Float, t: Planche.Texte, w: Int, h: Int) {
+        if (texte.isBlank() || zone.width <= 2 || zone.height <= 2) return
+        var r = zone
+        if (t.filets) {
+            filets(g, zone, t.couleur, w, h)
+            val hh = zone.height * PlancheStyle.FILET_TEXTE
+            r = Rectangle2D.Float(zone.x, zone.y + (zone.height - hh) / 2, zone.width, hh)
+        }
+        val base = police(t.police) ?: Font(Font.SANS_SERIF, Font.BOLD, 1)
+        val txt = PlancheStyle.lisible(texte) { base.canDisplay(it) }
+        if (txt.isBlank()) return
+        val lignes = txt.split('\n')
+        val frc = java.awt.font.FontRenderContext(null, true, true)
+        val ref = base.deriveFont(mapOf(TextAttribute.SIZE to 100f, TextAttribute.KERNING to TextAttribute.KERNING_ON))
+        val marge = PlancheStyle.marge(t)
+        // In sizes: the widest line, its effect each side, the slant of its top.
+        val besoin = lignes.maxOf { largeur(ref, it, t.espacement * 100f, frc) } / 100f + 2 * marge + (if (t.italique) PlancheStyle.PENTE * 0.75f else 0f)
+        var taille = r.height / lignes.size * 0.82f / (1f + marge)
+        if (besoin * taille > r.width) taille = r.width / besoin
+        if (taille < 1f) return
+        val f = ref.deriveFont(taille)
+        val pas = taille * 1.15f
+        var y = (r.y + r.height / 2) - pas * lignes.size / 2 + pas * 0.78f
+        val couches = PlancheStyle.couches(t)
+        for (l in lignes) {
+            val lw = largeur(f, l, t.espacement * taille, frc)
+            val x = (r.x + r.width / 2) - lw / 2 - (if (t.italique) PlancheStyle.PENTE * taille * 0.36f else 0f)
+            val s = contour(f, l, x, y, t.espacement * taille, t.italique, frc)
+            val b = s.bounds2D
+            for (c in couches) {
+                val sc = if (c.dx != 0f || c.dy != 0f) AffineTransform.getTranslateInstance((c.dx * taille).toDouble(), (c.dy * taille).toDouble()).createTransformedShape(s) else s
+                val trait = BasicStroke(maxOf(0.6f, c.trait * taille), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                if (c.flou > 0f) {
+                    val bb = sc.bounds2D; val e = c.trait * taille
+                    flou(g, Rectangle2D.Float((bb.x - e).toFloat(), (bb.y - e).toFloat(), (bb.width + 2 * e).toFloat(), (bb.height + 2 * e).toFloat()),
+                        c.flou * taille, c.couleurs[0], w, h) { gg -> if (c.remplit) gg.fill(sc); if (c.trait > 0f) { gg.stroke = trait; gg.draw(sc) } }
+                } else {
+                    g.paint = peinture(c, b)
+                    if (c.remplit) g.fill(sc)
+                    if (c.trait > 0f) { g.stroke = trait; g.draw(sc) }
+                }
+            }
+            y += pas
+        }
+    }
+
+    /** The glowing rules above and below a text ([PlancheStyle.FILET_PLACE]). */
+    private fun filets(g: Graphics2D, z: Rectangle2D.Float, c: Int, w: Int, h: Int) {
+        val ep = maxOf(1.5f, z.height * PlancheStyle.FILET_EPAISSEUR)
+        val (cs, ps) = PlancheStyle.filet(c)
+        for (yy in listOf(z.y + z.height * PlancheStyle.FILET_PLACE, z.y + z.height * (1 - PlancheStyle.FILET_PLACE) - ep)) {
+            val barre = Rectangle2D.Float(z.x + z.width * 0.02f, yy, z.width * 0.96f, ep)
+            flou(g, barre, z.height * PlancheStyle.FILET_FLOU, c, w, h) { it.fill(Rectangle2D.Float(barre.x + barre.width * 0.12f, barre.y, barre.width * 0.76f, barre.height)) }
+            g.paint = LinearGradientPaint(Point2D.Float(barre.x, 0f), Point2D.Float(barre.x + barre.width, 0f), ps, cs.map { Color(it, true) }.toTypedArray())
+            g.fill(barre)
         }
     }
 }

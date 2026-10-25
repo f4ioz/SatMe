@@ -43,7 +43,21 @@ object Planche {
         /** Box behind the text; 0 = none. */
         val fond: Int = 0,
         /** The text itself, for [Champ.LIBRE]. */
-        val libre: String = ""
+        val libre: String = "",
+        /** Its font ([PlanchePolices]): "" SatMe's own (sans-serif bold). */
+        val police: String = "",
+        /** Its effect: plain, outline, relief, neon, chrome, gold, gradient. */
+        val style: PlancheStyle.Style = PlancheStyle.Style.SIMPLE,
+        /** A second colour: the gradient's end, an outline's filling; 0 = chosen by the effect. */
+        val couleur2: Int = 0,
+        /** Slanted ([PlancheStyle.PENTE]). */
+        val italique: Boolean = false,
+        /** Room added between letters, in fractions of the size (0 … [PlancheStyle.ESPACEMENT_MAX]). */
+        val espacement: Float = 0f,
+        /** Glowing rules above and below it, in its colour (« SERIES » between its lines). */
+        val filets: Boolean = false,
+        /** The styled title it belongs to ([PlancheTitres]): its texts replaced together; "" none. */
+        val groupe: String = ""
     )
 
     data class Modele(
@@ -109,7 +123,11 @@ object Planche {
          */
         val indicatif: String = "",
         val locator: String = "",
-        val dates: String = ""
+        val dates: String = "",
+        /** The frame round each picture ([PlancheStyle.Cadre]); none: the thin white line of old. */
+        val cadre: PlancheStyle.Cadre = PlancheStyle.Cadre.AUCUN,
+        /** The glow's colour of a neon frame. */
+        val cadreCouleur: Int = CYAN
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
@@ -821,7 +839,12 @@ object Planche {
         fun texte(cle: String, t: Texte) {
             append(cle).append('=').append(t.champ.name).append(';').append(z(t.zone)).append(';')
                 .append(t.couleur).append(';').append(t.fond).append(';').append(esc(t.libre).replace(";", ","))
-                .append('\n')
+            // Its dress after it, only when it has one (read by older versions as nothing: the plain text).
+            if (!PlancheStyle.estSimple(t) || t.couleur2 != 0 || t.groupe.isNotEmpty())
+                append(';').append(t.police).append(';').append(t.style.code).append(';').append(t.couleur2).append(';')
+                    .append(if (t.italique) 1 else 0).append(';').append(t.espacement).append(';').append(if (t.filets) 1 else 0)
+                    .append(';').append(t.groupe)
+            append('\n')
         }
         m.textes.forEach { texte("texte", it) }
         m.images.toSortedMap().forEach { (i, f) -> append("image=").append(i).append(';').append(f).append('\n') }
@@ -847,6 +870,8 @@ object Planche {
         if (m.indicatif.isNotBlank()) append("indicatif=").append(esc(m.indicatif)).append('\n')
         if (m.locator.isNotBlank()) append("locator=").append(esc(m.locator)).append('\n')
         if (m.dates.isNotBlank()) append("dates=").append(esc(m.dates)).append('\n')
+        // The pictures' frame (read by older versions as nothing: the white line).
+        if (m.cadre != PlancheStyle.Cadre.AUCUN) append("cadre=").append(m.cadre.code).append(';').append(m.cadreCouleur).append('\n')
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
@@ -856,7 +881,14 @@ object Planche {
         val diapos = HashMap<String, String>(); val versions = HashMap<Int, ChoixCase>()
         fun texte(v: String): Texte {
             val p = v.split(';')
-            return Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
+            val t = Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
+            if (p.size <= 8) return t
+            // Its dress (a later version's font or effect unknown here: the plain text, never a refusal).
+            return t.copy(police = p[8].takeIf { it.matches(Regex("[a-z0-9]{1,20}")) } ?: "",
+                style = PlancheStyle.Style.de(p.getOrElse(9) { "" }), couleur2 = p.getOrNull(10)?.toIntOrNull() ?: 0,
+                italique = p.getOrNull(11) == "1",
+                espacement = p.getOrNull(12)?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(0f, PlancheStyle.ESPACEMENT_MAX) ?: 0f,
+                filets = p.getOrNull(13) == "1", groupe = p.getOrNull(14)?.takeIf { it.matches(Regex("[a-z0-9]{1,20}")) } ?: "")
         }
         texte.lineSequence().forEach { l ->
             val k = l.substringBefore('=', ""); val v = l.substringAfter('=', "")
@@ -883,6 +915,8 @@ object Planche {
                 "indicatif" -> m = m.copy(indicatif = unesc(v).take(SAISIE_MAX))
                 "locator" -> m = m.copy(locator = unesc(v).take(SAISIE_MAX))
                 "dates" -> m = m.copy(dates = unesc(v).take(SAISIE_MAX))
+                "cadre" -> m = m.copy(cadre = PlancheStyle.Cadre.de(v.substringBefore(';')),
+                    cadreCouleur = v.substringAfter(';', "").toIntOrNull() ?: CYAN)
                 "versioncase" -> runCatching { val p = v.split(';')
                     val c = ChoixCase(Version.de(p[1]) ?: Version.AUTO, p.getOrNull(2) == "1")
                     if (!c.auto && versions.size < 200) versions[p[0].toInt()] = c }

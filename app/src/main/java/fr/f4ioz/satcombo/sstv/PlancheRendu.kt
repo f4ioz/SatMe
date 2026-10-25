@@ -13,7 +13,12 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -188,25 +193,16 @@ object PlancheRendu {
         m.cases.forEachIndexed { i, z ->
             val r = RectF(z.x * w, z.y * h, (z.x + z.w) * w, (z.y + z.h) * h)
             val img = images[i]
+            if (img != null || fond == null) cadreAvant(c, m, r, k, w, h)
             if (img != null) {
-                // The line under the picture takes its share of the box.
-                val bande = if (m.legende) (r.height() * Planche.BANDE).coerceAtLeast(10f * k) else 0f
-                val ri = RectF(r.left, r.top, r.right, r.bottom - bande)
-                dessineRempli(c, img.first, ri)
-                if (bande > 0f) {
-                    c.drawRect(RectF(r.left, ri.bottom, r.right, r.bottom), Paint().apply { color = Color.WHITE })
-                    texteAjuste(c, Planche.legende(img.second, v.indicatif, m.marqueTraitees),
-                        RectF(r.left + 3 * k, ri.bottom, r.right - 3 * k, r.bottom), Color.BLACK, gras = false)
-                }
-                c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 2.5f * k })
-                // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
-                if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(c, img.second.traitement, ri, k)
+                if (m.cadre == PlancheStyle.Cadre.ARRONDI) arrondi(c, r) { cc, rr -> contenuCase(cc, m, img, rr, v, k) }
+                else contenuCase(c, m, img, r, v, k)
+                cadreApres(c, m, r, k, w, h)
             } else if (fond == null) {
                 // A generic sheet shows its empty boxes; an imported one has its own.
-                c.drawRect(r, Paint().apply { color = 0xCC05080D.toInt() })
-                c.drawRect(r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE; color = Color.WHITE; strokeWidth = 2.5f * k })
+                if (m.cadre == PlancheStyle.Cadre.ARRONDI) arrondi(c, r) { cc, rr -> cc.drawRect(rr, Paint().apply { color = 0xCC05080D.toInt() }) }
+                else c.drawRect(r, Paint().apply { color = 0xCC05080D.toInt() })
+                cadreApres(c, m, r, k, w, h)
             }
             if (m.numeros) {
                 val etiquette = Planche.etiquette(m, i)
@@ -221,8 +217,10 @@ object PlancheRendu {
         for (t in m.textes) {
             val r = RectF(t.zone.x * w, t.zone.y * h, (t.zone.x + t.zone.w) * w, (t.zone.y + t.zone.h) * h)
             if (t.fond != 0) c.drawRoundRect(r, 6 * k, 6 * k, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = t.fond })
-            texteAjuste(c, v.de(t), RectF(r.left + r.width() * 0.04f, r.top, r.right - r.width() * 0.04f, r.bottom),
-                t.couleur, gras = true)
+            val dedans = RectF(r.left + r.width() * 0.04f, r.top, r.right - r.width() * 0.04f, r.bottom)
+            // A text as SatMe always drew it, else in its font and effect.
+            if (PlancheStyle.estSimple(t)) texteAjuste(c, v.de(t), dedans, t.couleur, gras = true)
+            else texteStyle(c, v.de(t), dedans, t, w, h)
             // The SatMe logo beside the callsign: right of it, else left, else inside.
             if (t.champ == Planche.Champ.INDICATIF && logo != null) {
                 val cote = r.height() * 1.1f
@@ -286,17 +284,256 @@ object PlancheRendu {
         for (l in lignes) { c.drawText(l, r.centerX(), y, p); y += pas }
     }
 
-    /** A drawn background ([PlancheDecor.Decor]): its gradient, its stars (the SatMe night sky by default). */
+    /** A drawn background ([PlancheDecor.Decor]): its gradient, its clouds, its stars, the Earth's arc (the SatMe night sky by default). */
     private fun fondGenerique(c: Canvas, w: Int, h: Int, d: PlancheDecor.Decor = PlancheDecor.ETOILES) {
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply {
             shader = LinearGradient(0f, 0f, 0f, h.toFloat(), d.couleurs, d.positions, Shader.TileMode.CLAMP)
         })
-        if (!d.etoiles) return
-        val r = Random(73)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        repeat(w * h / 4000) {
-            p.color = Color.argb(r.nextInt(90, 255), 255, 255, 255)
-            c.drawCircle(r.nextFloat() * w, r.nextFloat() * h * 0.85f, r.nextFloat() * w / 900f + 0.5f, p)
+        for (n in d.nuages) {
+            val rayon = n.r * w
+            c.drawCircle(n.x * w, n.y * h, rayon, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = RadialGradient(n.x * w, n.y * h, rayon,
+                    intArrayOf(n.couleur, PlancheStyle.alpha(n.couleur, ((n.couleur ushr 24) and 0xFF) / 2), n.couleur and 0xFFFFFF),
+                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+            })
+        }
+        if (d.etoiles) {
+            val r = Random(73)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG)
+            repeat(w * h / 4000) {
+                p.color = Color.argb(r.nextInt(90, 255), 255, 255, 255)
+                c.drawCircle(r.nextFloat() * w, r.nextFloat() * h * 0.85f, r.nextFloat() * w / 900f + 0.5f, p)
+            }
+        }
+        d.horizon?.let { o ->
+            val rayon = o.rayon * w; val cx = w / 2f; val cy = o.haut * h + rayon
+            val halo = rayon * (1 + o.epaisseur)
+            val (lc, lp) = o.lueur()
+            c.drawCircle(cx, cy, halo, Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = RadialGradient(cx, cy, halo, lc, lp, Shader.TileMode.CLAMP) })
+            val (dc, dp) = o.disque()
+            c.drawCircle(cx, cy, rayon, Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = RadialGradient(cx, cy, rayon, dc, dp, Shader.TileMode.CLAMP) })
+        }
+    }
+
+    // ------------------------------------------------------------ boxes
+
+    /** A box's picture and the line under it, in [r]. */
+    private fun contenuCase(c: Canvas, m: Planche.Modele, img: Pair<Bitmap, SstvMeta.SstvShot>, r: RectF, v: Valeurs, k: Float) {
+        // The line under the picture takes its share of the box.
+        val bande = if (m.legende) (r.height() * Planche.BANDE).coerceAtLeast(10f * k) else 0f
+        val ri = RectF(r.left, r.top, r.right, r.bottom - bande)
+        dessineRempli(c, img.first, ri)
+        if (bande > 0f) {
+            c.drawRect(RectF(r.left, ri.bottom, r.right, r.bottom), Paint().apply { color = Color.WHITE })
+            texteAjuste(c, Planche.legende(img.second, v.indicatif, m.marqueTraitees),
+                RectF(r.left + 3 * k, ri.bottom, r.right - 3 * k, r.bottom), Color.BLACK, gras = false)
+        }
+        // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
+        if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(c, img.second.traitement, ri, k)
+    }
+
+    /** The side of a box its frame is measured on. */
+    private fun cote(r: RectF) = minOf(r.width(), r.height())
+
+    /** What a box's frame lays under it: the white mat, the rounded box's shadow. */
+    private fun cadreAvant(c: Canvas, m: Planche.Modele, r: RectF, k: Float, w: Int, h: Int) {
+        when (m.cadre) {
+            PlancheStyle.Cadre.FIN -> {
+                val e = maxOf(3f * k, cote(r) * PlancheStyle.CADRE_FIN)
+                val ombre = RectF(r.left - e, r.top - e + e * 0.6f, r.right + e, r.bottom + e + e * 0.6f)
+                flou(c, ombre, e * 1.6f, 0x90000000.toInt(), w, h) { cc, p -> cc.drawRect(ombre, p) }
+                c.drawRect(RectF(r.left - e, r.top - e, r.right + e, r.bottom + e), Paint().apply { color = Color.WHITE })
+            }
+            PlancheStyle.Cadre.ARRONDI -> {
+                val cc0 = cote(r); val a = cc0 * PlancheStyle.CADRE_ARRONDI
+                val ombre = RectF(r.left, r.top + cc0 * 0.035f, r.right, r.bottom + cc0 * 0.035f)
+                flou(c, ombre, cc0 * 0.06f, 0xD0000000.toInt(), w, h) { cc, p -> cc.drawRoundRect(ombre, a, a, p) }
+            }
+            else -> {}
+        }
+    }
+
+    /** A box's frame over it: the white line of old, the light edge of a rounded box, a neon tube. */
+    private fun cadreApres(c: Canvas, m: Planche.Modele, r: RectF, k: Float, w: Int, h: Int) {
+        val trait = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        when (m.cadre) {
+            PlancheStyle.Cadre.AUCUN -> c.drawRect(r, trait.apply { color = Color.WHITE; strokeWidth = 2.5f * k })
+            PlancheStyle.Cadre.FIN -> {}
+            PlancheStyle.Cadre.ARRONDI -> {
+                val a = cote(r) * PlancheStyle.CADRE_ARRONDI
+                c.drawRoundRect(r, a, a, trait.apply { color = Color.argb(110, 255, 255, 255); strokeWidth = 1.5f * k })
+            }
+            PlancheStyle.Cadre.NEON -> {
+                val col = m.cadreCouleur
+                val a = cote(r) * 0.015f
+                val ep = maxOf(2f, 4.5f * k)
+                flou(c, r, 9f * k + ep, col, w, h) { cc, p -> cc.drawRoundRect(r, a, a, p.apply { style = Paint.Style.STROKE; strokeWidth = ep * 1.6f }) }
+                c.drawRoundRect(r, a, a, trait.apply { color = col; strokeWidth = ep })
+                c.drawRoundRect(r, a, a, trait.apply { color = PlancheStyle.melange(col, Color.WHITE, 0.7f); strokeWidth = ep * 0.4f })
+            }
+        }
+    }
+
+    /** [dessin] drawn in [r] (a box) with its corners rounded, their edge smooth. */
+    private fun arrondi(c: Canvas, r: RectF, dessin: (Canvas, RectF) -> Unit) {
+        val x0 = r.left.toInt(); val y0 = r.top.toInt()
+        val bw = r.right.toInt() - x0; val bh = r.bottom.toInt() - y0
+        if (bw <= 2 || bh <= 2) return
+        val tmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+        val tc = Canvas(tmp)
+        dessin(tc, RectF(0f, 0f, bw.toFloat(), bh.toFloat()))
+        val a = minOf(bw, bh) * PlancheStyle.CADRE_ARRONDI
+        // What lies outside the rounded box taken away, its edge smooth.
+        val masque = Path().apply { fillType = Path.FillType.INVERSE_WINDING; addRoundRect(RectF(0f, 0f, bw.toFloat(), bh.toFloat()), a, a, Path.Direction.CW) }
+        tc.drawPath(masque, Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) })
+        c.drawBitmap(tmp, x0.toFloat(), y0.toFloat(), null)
+        tmp.recycle()
+    }
+
+    /**
+     * What [dessin] draws round [r], in [couleur], blurred by [rayon] pixels
+     * ([PlancheStyle.flou]): a glow, a shadow — the PC's pixels. Kept within the sheet ([w]×[h]).
+     */
+    private fun flou(c: Canvas, r: RectF, rayon: Float, couleur: Int, w: Int, h: Int, dessin: (Canvas, Paint) -> Unit) {
+        val m = (rayon * 2.2f + 4).toInt()
+        val x0 = maxOf(0, (r.left - m).toInt()); val y0 = maxOf(0, (r.top - m).toInt())
+        val x1 = minOf(w, (r.right + m).toInt() + 1); val y1 = minOf(h, (r.bottom + m).toInt() + 1)
+        val bw = x1 - x0; val bh = y1 - y0
+        if (bw <= 0 || bh <= 0) return
+        val tmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+        val tc = Canvas(tmp)
+        tc.translate(-x0.toFloat(), -y0.toFloat())
+        dessin(tc, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = couleur or 0xFF000000.toInt(); strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND })
+        val px = IntArray(bw * bh)
+        tmp.getPixels(px, 0, bw, 0, 0, bw, bh)
+        PlancheStyle.flou(px, bw, bh, rayon.toInt(), couleur)
+        tmp.setPixels(px, 0, bw, 0, 0, bw, bh)
+        c.drawBitmap(tmp, x0.toFloat(), y0.toFloat(), null)
+        tmp.recycle()
+    }
+
+    // ------------------------------------------------------------ styled texts
+
+    // The fonts SatMe carries, copied once to the cache (a typeface reads a file).
+    private val polices = HashMap<String, Typeface?>()
+
+    /** The bundled font [id] ([PlanchePolices]); null for the default one or one unknown. */
+    fun police(id: String): Typeface? {
+        val p = PlanchePolices.de(id) ?: return null
+        return synchronized(polices) {
+            polices.getOrPut(id) {
+                runCatching {
+                    val o = PlanchePolices.octets(p) ?: return@runCatching null
+                    val dossier = File(System.getProperty("java.io.tmpdir") ?: "/data/local/tmp", "satme-polices").apply { mkdirs() }
+                    val f = File(dossier, p.fichier)
+                    if (!f.isFile || f.length() != o.size.toLong()) f.writeBytes(o)
+                    Typeface.createFromFile(f)
+                }.getOrNull()
+            }
+        }
+    }
+
+    private fun peinture(c: PlancheStyle.Couche, b: RectF, p: Paint) {
+        p.shader = null
+        if (c.uni) p.color = c.couleurs[0]
+        else {
+            p.color = Color.BLACK
+            p.shader = LinearGradient(0f, b.top, 0f, b.top + maxOf(1f, b.height()), c.couleurs,
+                c.positions ?: FloatArray(c.couleurs.size) { it / (c.couleurs.size - 1f) }, Shader.TileMode.CLAMP)
+        }
+    }
+
+    /** The outline of [ligne] in [p], its baseline at [x], [y]; [espace] added after each letter; slanted when [pente]. */
+    private fun contour(p: Paint, ligne: String, x: Float, y: Float, espace: Float, pente: Boolean): Path {
+        val out = Path()
+        if (espace == 0f) p.getTextPath(ligne, 0, ligne.length, x, y, out)
+        else {
+            var xx = x; var i = 0
+            while (i < ligne.length) {
+                val n = Character.charCount(ligne.codePointAt(i)); val s = ligne.substring(i, i + n); i += n
+                if (s.isNotBlank()) { val q = Path(); p.getTextPath(s, 0, s.length, xx, y, q); out.addPath(q) }
+                xx += p.measureText(s) + espace
+            }
+        }
+        if (pente) out.transform(Matrix().apply { setSkew(-PlancheStyle.PENTE, 0f, 0f, y) })
+        return out
+    }
+
+    /** A line's width in [p], its letter spacing [espace] added. */
+    private fun largeur(p: Paint, l: String, espace: Float): Float {
+        if (espace == 0f) return p.measureText(l)
+        var s = 0f; var i = 0; var n = 0
+        while (i < l.length) { val k = Character.charCount(l.codePointAt(i)); s += p.measureText(l, i, i + k); i += k; n++ }
+        return s + espace * (n - 1).coerceAtLeast(0)
+    }
+
+    /**
+     * A text in its font and effect ([PlancheStyle]), as large as fits [r]
+     * with its effect round it, lines centred; its rules above and below — the PC's drawing.
+     */
+    private fun texteStyle(c: Canvas, texte: String, zone: RectF, t: Planche.Texte, w: Int, h: Int) {
+        if (texte.isBlank() || zone.width() <= 2 || zone.height() <= 2) return
+        var r = zone
+        if (t.filets) {
+            filets(c, zone, t.couleur, w, h)
+            val hh = zone.height() * PlancheStyle.FILET_TEXTE
+            r = RectF(zone.left, zone.top + (zone.height() - hh) / 2, zone.right, zone.top + (zone.height() + hh) / 2)
+        }
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = police(t.police) ?: Typeface.DEFAULT_BOLD
+            textSize = 100f
+            strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND
+        }
+        val txt = PlancheStyle.lisible(texte) { cp -> p.hasGlyph(String(Character.toChars(cp))) }
+        if (txt.isBlank()) return
+        val lignes = txt.split('\n')
+        val marge = PlancheStyle.marge(t)
+        // In sizes: the widest line, its effect each side, the slant of its top.
+        val besoin = lignes.maxOf { largeur(p, it, t.espacement * 100f) } / 100f + 2 * marge + (if (t.italique) PlancheStyle.PENTE * 0.75f else 0f)
+        var taille = r.height() / lignes.size * 0.82f / (1f + marge)
+        if (besoin * taille > r.width()) taille = r.width() / besoin
+        if (taille < 1f) return
+        p.textSize = taille
+        val pas = taille * 1.15f
+        var y = r.centerY() - pas * lignes.size / 2 + pas * 0.78f
+        val couches = PlancheStyle.couches(t)
+        for (l in lignes) {
+            val lw = largeur(p, l, t.espacement * taille)
+            val x = r.centerX() - lw / 2 - (if (t.italique) PlancheStyle.PENTE * taille * 0.36f else 0f)
+            val s = contour(p, l, x, y, t.espacement * taille, t.italique)
+            val b = RectF().also { s.computeBounds(it, true) }
+            val q = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND }
+            for (k in couches) {
+                val sk = if (k.dx != 0f || k.dy != 0f) Path(s).apply { offset(k.dx * taille, k.dy * taille) } else s
+                val ep = maxOf(0.6f, k.trait * taille)
+                if (k.flou > 0f) {
+                    val bb = RectF().also { sk.computeBounds(it, true) }; val e = k.trait * taille
+                    bb.inset(-e, -e)
+                    flou(c, bb, k.flou * taille, k.couleurs[0], w, h) { cc, pp ->
+                        if (k.remplit) cc.drawPath(sk, pp.apply { style = Paint.Style.FILL })
+                        if (k.trait > 0f) cc.drawPath(sk, pp.apply { style = Paint.Style.STROKE; strokeWidth = ep })
+                    }
+                } else {
+                    peinture(k, b, q)
+                    if (k.remplit) c.drawPath(sk, q.apply { style = Paint.Style.FILL })
+                    if (k.trait > 0f) c.drawPath(sk, q.apply { style = Paint.Style.STROKE; strokeWidth = ep })
+                }
+            }
+            y += pas
+        }
+    }
+
+    /** The glowing rules above and below a text ([PlancheStyle.FILET_PLACE]). */
+    private fun filets(c: Canvas, z: RectF, col: Int, w: Int, h: Int) {
+        val ep = maxOf(1.5f, z.height() * PlancheStyle.FILET_EPAISSEUR)
+        val (cs, ps) = PlancheStyle.filet(col)
+        for (yy in listOf(z.top + z.height() * PlancheStyle.FILET_PLACE, z.top + z.height() * (1 - PlancheStyle.FILET_PLACE) - ep)) {
+            val barre = RectF(z.left + z.width() * 0.02f, yy, z.left + z.width() * 0.98f, yy + ep)
+            val coeur = RectF(barre.left + barre.width() * 0.12f, barre.top, barre.right - barre.width() * 0.12f, barre.bottom)
+            flou(c, barre, z.height() * PlancheStyle.FILET_FLOU, col, w, h) { cc, p -> cc.drawRect(coeur, p) }
+            c.drawRect(barre, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(barre.left, 0f, barre.right, 0f, cs, ps, Shader.TileMode.CLAMP)
+            })
         }
     }
 }
