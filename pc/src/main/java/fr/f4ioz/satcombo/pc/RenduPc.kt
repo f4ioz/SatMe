@@ -36,8 +36,8 @@ import javax.imageio.ImageIO
  * The journal's pictures, GIFs and videos made on the PC: the phone's
  * drawing (`JournalRendu`) redone with Java2D — the sky of the pass, the
  * picture arriving, the stations' cards, the caption with the S-meter, the
- * opening title, each picture full frame and the summary. The sky view
- * only: the map stays the phone's for now. Videos through `ffmpeg`.
+ * opening title, each picture full frame and the summary. The sky, the
+ * map, or the globe ([GlobeRenduPc]). Videos through `ffmpeg`.
  *
  * The report's panels ([ElementsJournal]) when the pass asks for them: laid
  * over the view where the page placed them, or cards of their own — the
@@ -60,6 +60,8 @@ object RenduPc {
         /** The map rather than the sky: the ground track, the footprint, the stations where they are. */
         val surCarte: Boolean = false, val sol: List<JournalPassage.Sol> = emptyList(), val qth: Pair<Double, Double>? = null,
         val etiquetteQth: String? = null,
+        /** The globe rather than the sky or the map ([GlobeRenduPc]), in the page's look [styleGlobe]. */
+        val surGlobe: Boolean = false, val styleGlobe: String = GlobeRenduPc.DEFAUT,
         /** The map as framed on the page, and the width (px) it was shown at; null: framed to the pass. */
         val vueVue: Pair<JournalPassage.VueCarte, Float>? = null,
         /** The screen's 16:9 rather than the phone's 3:4 (its view square above the caption). */
@@ -155,7 +157,7 @@ object RenduPc {
         }
     }
 
-    private fun couleur(m: Marque) = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
+    internal fun couleur(m: Marque) = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
 
     // ------------------------------------------------------------------ the sky
 
@@ -417,7 +419,8 @@ object RenduPc {
         val haut = if (sc.paysage) (h - 100 * dp).toInt() else w
         g.clipRect(0, 0, w, haut)
         val p = JournalPassage.pointA(e, instant)
-        val satX = if (sc.surCarte) { sc.prepare(w, haut); carte(g, w.toFloat(), haut.toFloat(), sc, instant, dp) } else {
+        val satX = if (sc.surGlobe) GlobeRenduPc.dessine(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
+        else if (sc.surCarte) { sc.prepare(w, haut); carte(g, w.toFloat(), haut.toFloat(), sc, instant, dp) } else {
             ciel(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
             if (p == null) 0.5f else 0.5f + ((JournalPassage.ciel(p.az, p.el).first - sc.cadre.cx) * sc.cadre.echelle).toFloat() / 2
         }
