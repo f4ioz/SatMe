@@ -1288,27 +1288,33 @@ function curseurPause() {
   r.oninput = () => { O.transition = +r.value; garde(); montre(); }; montre();
   return el('label', { class: 's-curseur' }, [el('span', { text: T.s_entre_pause }), r, v]);
 }
-/** The speed wanted at [tt]: slow on a picture or a contact, middling in a pass, fast between passes. */
+/**
+ * The speed at [tt]: slow on a picture or a contact, middling in a pass, fast between passes — and already slowing
+ * before a slower stretch (its speed plus 2 per second still to go, as the session's video does), so that however fast
+ * the time runs between passes, no pass and no picture is jumped over.
+ */
 function vitesseSession(tt) {
-  if (S.lentes.some(q => tt >= q[0] && tt <= q[1])) return +O.vImage;
-  if (S.segs.some(q => tt >= q[0] && tt <= q[1])) return +O.vPassage;
-  return +O.vHors;
+  const loin = (q, v) => v + 2 * (tt < q[0] ? (q[0] - tt) / 1000 : tt > q[1] ? (tt - q[1]) / 1000 : 0);
+  let v = S.mode === 'continu' ? +O.vHors : +O.vPassage;
+  S.segs.forEach(q => { v = Math.min(v, loin(q, +O.vPassage)); });
+  S.lentes.forEach(q => { v = Math.min(v, loin(q, +O.vImage)); });
+  return Math.max(.5, v);
 }
 function boucleSession(now) {
   if (!S || !S.joue || !g('sGlobe')) return;
   const dt = now - (S.dernier || now); S.dernier = now;
   const fin = S.segs[S.segs.length - 1][1];
-  // The speed eased towards the one wanted here (about a second, on a log scale): no jump on a picture's start.
-  const voulue = vitesseSession(S.t), k = 1 - Math.exp(-dt / 500);
-  S.f = Math.exp(Math.log(S.f || voulue) + (Math.log(voulue) - Math.log(S.f || voulue)) * k);
+  // The speed here, eased by the distance to the next slower stretch (a slow frame never steps over one).
+  S.f = vitesseSession(S.t);
+  const pas = Math.min(dt, 100);
   if (S.mode === 'continu') {
-    S.t = Math.min(fin, S.t + dt * S.f);
+    S.t = Math.min(fin, S.t + pas * S.f);
     while (S.i < S.segs.length - 1 && S.t > S.segs[S.i][1]) S.i++;
   } else if (S.trans) {
     // Between two passes: a short pause, the days going by, then the next one.
     S.trans -= dt; if (S.trans <= 0) { S.trans = 0; S.i++; S.t = S.segs[S.i][0]; S.f = vitesseSession(S.t); }
   } else {
-    S.t += dt * S.f;
+    S.t += pas * S.f;
     if (S.t >= S.segs[S.i][1]) { S.t = S.segs[S.i][1]; if (S.i < S.segs.length - 1) S.trans = O.transition * 1000; }
   }
   if (S.t >= fin && !S.trans) S.joue = false;

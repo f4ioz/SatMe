@@ -15,6 +15,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Session du Journal** : même très vite hors des passages, la lecture ralentit à l'approche d'un passage ou d'une image ; plus aucun passage ni première image n'est sauté.
+
+### en
+- **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.
+
 ## 2026.10.30
 
 ### fr
