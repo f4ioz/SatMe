@@ -28,6 +28,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Contacts** : les contacts du carnet sur le globe et la carte, en points, en points avec l'indicatif, ou en carrés locators.
 - **Villes** : toutes, seulement les **capitales** (avec leur nom, le **drapeau** de leur pays, ou les deux), ou aucune. Le relief du dessin animé est plus marqué.
 - **Journal › 🌍 Session** : choisis un satellite et deux dates, et tous ses passages s'animent à la suite sur le globe (passages enchaînés ou temps continu, rapide ou non), avec la frise de la session et les images SSTV qui arrivent une à une. Un bouton anime directement la session d'un événement SSTV. Dans le Journal, le globe se **déplace** en le glissant pour laisser de la place à l'image, et la vidéo le garde où il est.
+- **Vitesses de la session** (page et vidéo) : trois curseurs, *Hors passage* (le satellite loin de la station, très vite, dès ×10 en temps continu), *Pendant le passage*, et *Image ou contact* (lent, pour voir l'image SSTV se dessiner ou suivre un contact enregistré). La vitesse passe de l'une à l'autre en douceur. La vidéo de la session affiche l'heure, AOS · TCA · LOS et « AOS + 3:12 », avec une taille de texte réglable.
 - **Journal** : une vue **Globe** à côté de *Ciel* et *Carte* rejoue le passage autour de la Terre ; les contacts s'allument à leur heure avec un trait station → satellite → correspondant, et les images SSTV reçues viennent se poser près de la station.
 - Tout est calculé dans le navigateur, sans Internet.
 
@@ -44,6 +45,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Contacts**: the log's contacts on the globe and the map, as dots, dots with the callsign, or locator squares.
 - **Cities**: all, only the **capitals** (with their name, their country's **flag**, or both), or none. The cartoon's relief shows more.
 - **Journal › 🌍 Session**: choose a satellite and two dates, and all its passes play one after another on the globe (passes in a row or continuous time, fast or not), with the session's timeline and the SSTV pictures arriving one by one. A button plays an SSTV event's session directly. In the Journal, drag the globe to make room for the picture; the video keeps it where it is.
+- **Session speeds** (page and video): three sliders, *Outside the passes* (the satellite far from the station, very fast, from ×10 in continuous time), *During the pass*, and *Picture or contact* (slow, to watch the SSTV picture being drawn or follow a recorded contact). The speed goes from one to the other smoothly. The session video shows the time, AOS · TCA · LOS and « AOS + 3:12 », with an adjustable text size.
 - **Journal**: a **Globe** view beside *Sky* and *Map* replays the pass round the Earth; the contacts light up at their time with a line station → satellite → correspondent, and the SSTV pictures received land beside the station.
 - All worked out in the browser, without the Internet.
 
