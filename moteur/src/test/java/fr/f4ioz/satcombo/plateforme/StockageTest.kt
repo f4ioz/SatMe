@@ -15,6 +15,7 @@ import fr.f4ioz.satcombo.i18n.I18n
 import fr.f4ioz.satcombo.i18n.Lang
 import fr.f4ioz.satcombo.i18n.t
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,6 +62,19 @@ class StockageTest {
         val s = StockageMemoire()
         SettingsStore(s).callsign = "F4IOZ"
         assertEquals("F4IOZ", SettingsStore(s).callsign)
+    }
+
+    @Test
+    fun les_alertes_des_activites_coupees_tant_que_non_reglees_sur_le_telephone() {
+        val pc = SettingsStore(StockageMemoire())
+        assertTrue(pc.activitesNotifNouvelle && pc.activitesNotifPassage && pc.activitesNotifEmet)
+        val st = StockageMemoire()
+        val tel = SettingsStore(st, noticesActivitesParDefaut = false)
+        assertFalse(tel.activitesNotifNouvelle || tel.activitesNotifPassage || tel.activitesNotifEmet)
+        assertTrue(tel.activitesOn)
+        // Turned on by the user: kept on.
+        tel.activitesNotifPassage = true
+        assertTrue(SettingsStore(st, noticesActivitesParDefaut = false).activitesNotifPassage)
     }
 
     @Test

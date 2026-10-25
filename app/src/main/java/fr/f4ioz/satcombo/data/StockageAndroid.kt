@@ -17,7 +17,7 @@ fun stockage(context: Context, nom: String): Stockage =
     StockageAndroid(context.getSharedPreferences(nom, Context.MODE_PRIVATE))
 
 /** The settings on the phone, in the preferences they have always been in. */
-fun SettingsStore(context: Context): SettingsStore = SettingsStore(stockage(context, "satcombo_settings"))
+fun SettingsStore(context: Context): SettingsStore = SettingsStore(stockage(context, "satcombo_settings"), noticesActivitesParDefaut = false)
 
 /** The sources chosen, in their own preferences file. */
 fun SourcesStore(context: Context): SourcesStore = SourcesStore(stockage(context, "satcombo_sources"))

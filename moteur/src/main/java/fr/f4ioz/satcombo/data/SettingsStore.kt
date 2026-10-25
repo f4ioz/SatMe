@@ -16,7 +16,14 @@ enum class LocationMode { AUTO, MANUAL }
  * The station's settings. Where they are kept is the platform's business
  * ([Stockage]): the phone's preferences ("satcombo_settings"), a file on a PC.
  */
-class SettingsStore(private val prefs: Stockage) {
+class SettingsStore(
+    private val prefs: Stockage,
+    /**
+     * Whether the « Activités à venir » notices are on until the user sets them: off on the
+     * phone (no notices forced on after an update), on at the PC station.
+     */
+    private val noticesActivitesParDefaut: Boolean = true
+) {
 
     /**
      * One-off migrations of settings already written.
@@ -1081,8 +1088,8 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("notify_lead", 5)
         set(v) { prefs.edit().putInt("notify_lead", v).apply() }
 
-    // « Activités à venir » (online sources): on by default, each source and
-    // each kind of notice can be turned off.
+    // « Activités à venir » (online sources): on by default, each source can be
+    // turned off; each kind of notice too, on until set only where [noticesActivitesParDefaut].
     var activitesOn: Boolean
         get() = prefs.getBoolean("act_on", true)
         set(v) { prefs.edit().putBoolean("act_on", v).apply() }
@@ -1100,15 +1107,15 @@ class SettingsStore(private val prefs: Stockage) {
         set(v) { prefs.edit().putBoolean("act_rss", v).apply() }
     /** A notice for a new activity announced (once). */
     var activitesNotifNouvelle: Boolean
-        get() = prefs.getBoolean("act_n_nouvelle", true)
+        get() = prefs.getBoolean("act_n_nouvelle", noticesActivitesParDefaut)
         set(v) { prefs.edit().putBoolean("act_n_nouvelle", v).apply() }
     /** A notice before each useful pass during an activity. */
     var activitesNotifPassage: Boolean
-        get() = prefs.getBoolean("act_n_passage", true)
+        get() = prefs.getBoolean("act_n_passage", noticesActivitesParDefaut)
         set(v) { prefs.edit().putBoolean("act_n_passage", v).apply() }
     /** « Ça émet maintenant »: AMSAT reports during an announced SSTV/SSDV activity. */
     var activitesNotifEmet: Boolean
-        get() = prefs.getBoolean("act_n_emet", true)
+        get() = prefs.getBoolean("act_n_emet", noticesActivitesParDefaut)
         set(v) { prefs.edit().putBoolean("act_n_emet", v).apply() }
     /** How long before AOS the pass notice comes (minutes). */
     var activitesAvantMin: Int
