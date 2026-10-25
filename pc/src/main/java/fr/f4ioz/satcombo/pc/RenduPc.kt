@@ -117,15 +117,21 @@ object RenduPc {
         /** The pictures, read once. */
         val images: Map<String, BufferedImage> = marques.mapNotNull { m -> m.fichier?.let { f -> runCatching { ImageIO.read(File(f)) }.getOrNull()?.let { f to it } } }.toMap()
         var flashMs = 0L
+        /** A session's video ([SessionRenduPc]): where the satellite is off its track (null: at its ends; returning null: hidden). */
+        var horsTrace: ((Long) -> JournalPassage.Sol?)? = null
+        /** The globe's centre imposed (a session's turn from one pass to the next); null: its own. */
+        var centreImpose: DoubleArray? = null
+        /** Kept free along the bottom of the view (px): the session's strip of pictures, the cards above it. */
+        var margeBas = 0f
     }
 
-    private fun g2(b: BufferedImage): Graphics2D = b.createGraphics().apply {
+    internal fun g2(b: BufferedImage): Graphics2D = b.createGraphics().apply {
         setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
     }
-    private fun police(px: Float, gras: Boolean = false) = Font(Font.SANS_SERIF, if (gras) Font.BOLD else Font.PLAIN, 1).deriveFont(px)
-    private fun Graphics2D.texte(s: String, x: Float, y: Float, c: Color, f: Font, centre: Boolean = false, droite: Boolean = false) {
+    internal fun police(px: Float, gras: Boolean = false) = Font(Font.SANS_SERIF, if (gras) Font.BOLD else Font.PLAIN, 1).deriveFont(px)
+    internal fun Graphics2D.texte(s: String, x: Float, y: Float, c: Color, f: Font, centre: Boolean = false, droite: Boolean = false) {
         font = f; color = c
         val w = fontMetrics.stringWidth(s)
         drawString(s, if (centre) x - w / 2f else if (droite) x - w else x, y)
@@ -420,7 +426,8 @@ object RenduPc {
         // The view: square above the caption (the phone's 3:4), or the width over the caption (16:9).
         val haut = if (sc.paysage) (h - 100 * dp).toInt() else w
         g.clipRect(0, 0, w, haut)
-        val p = JournalPassage.pointA(e, instant)
+        // A session's video between its passes: no pointing to tell.
+        val p = if (sc.horsTrace != null && instant !in e.debutMs..e.finMs) null else JournalPassage.pointA(e, instant)
         val satX = if (sc.surGlobe) GlobeRenduPc.dessine(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
         else if (sc.surCarte) { sc.prepare(w, haut); carte(g, w.toFloat(), haut.toFloat(), sc, instant, dp) } else {
             ciel(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
@@ -437,7 +444,7 @@ object RenduPc {
         if (sc.affFiches) {
             val lw = minOf(w * 0.58f, 260 * dp)
             val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
-            var bas = haut - 8 * dp
+            var bas = haut - 8 * dp - sc.margeBas
             for (type in listOf(TypeMarque.QSO, TypeMarque.APRS)) {
                 val m = indicatifA(sc.marques, instant, sc.flashMs, type) ?: continue
                 val n = lignesEncart(m, sc.fiches[m.texte], e.locator).size
@@ -595,7 +602,7 @@ object RenduPc {
     // ---------------------------------------------------------------- files
 
     /** One size for everything drawn: the phone's 360 dp across a portrait, 540 dp down a landscape. */
-    private fun echelle(w: Int, h: Int) = minOf(w / 360f, h / 480f)
+    internal fun echelle(w: Int, h: Int) = minOf(w / 360f, h / 480f)
 
     fun png(sc: Scene, instant: Long?, sortie: File): File {
         sc.flashMs = sc.flashS * 1000L
@@ -662,8 +669,7 @@ object RenduPc {
     fun video(sc: Scene, sortie: File, son: SourcePcm?, rate: Int, travail: File, progres: (Float) -> Unit): File? {
         val ff = ffmpeg() ?: return null
         val e = sc.e
-        val (w, h) = if (sc.paysage) when (sc.resolution) { "XS" -> 854 to 480; "HD" -> 1920 to 1080; else -> 1280 to 720 }
-            else when (sc.resolution) { "XS" -> 480 to 640; "HD" -> 1080 to 1440; else -> 720 to 960 }
+        val (w, h) = tailleVideo(sc.paysage, sc.resolution)
         val fps = 5
         val segs = sc.segments
         val vitesse = if (son != null || segs != null) 1 else 10
@@ -676,41 +682,58 @@ object RenduPc {
         // The sound first, into a WAV file ffmpeg reads beside the frames.
         val wav = son?.let { s -> File(travail, "son-" + System.nanoTime() + ".wav").also { ecritWav(s, rate, it) } }
         try {
-            val cmd = arrayListOf(ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$h", "-r", "$fps", "-i", "-")
-            if (wav != null) cmd += listOf("-i", wav.path)
-            cmd += listOf("-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "26")
-            // The length is the pictures': the title, the pass, then each picture and the summary,
-            // after the sound has ended. ("-shortest" stopped at the sound's end, the summary cut
-            // off and the frames still coming refused: a whole pass never came out, 12/10.)
-            if (wav != null) cmd += listOf("-c:a", "aac", "-b:a", "64k")
-            cmd += listOf("-t", "%.2f".format(java.util.Locale.US, total.toDouble() / fps))
-            cmd += sortie.path
-            val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-            val dit = StringBuilder()
-            val journal = Thread { runCatching { dit.append(String(p.inputStream.readBytes())) } }.apply { isDaemon = true; start() }
-            val rgb = ByteArray(w * h * 3)
-            fun ecris(img: BufferedImage) {
+            return encode(ff, w, h, fps, total, wav, sortie) { ecris ->
+                var fait = 0
+                val titreImg = if (nbTitre > 0) titre(w, h, sc) else null
+                repeat(nbTitre) { ecris(titreImg!!); progres(++fait / total.toFloat()) }
+                for ((dessin, k) in ouverture) { val img = dessin(); repeat(k) { ecris(img); progres(++fait / total.toFloat()) } }
+                for (n in 0 until nb) {
+                    val tMs = if (segs != null) JournalPassage.instantALecture(segs, n.toLong() * 1000 / fps) else e.debutMs + n.toLong() * 1000 * vitesse / fps
+                    ecris(image(w, h, sc, tMs)); progres(++fait / total.toFloat())
+                }
+                for ((dessin, k) in fin) { val img = dessin(); repeat(k) { ecris(img); progres(++fait / total.toFloat()) } }
+            }
+        } finally {
+            wav?.delete()
+        }
+    }
+
+    /** A video's frame size for its format (16:9 or the phone's 3:4) and resolution (XS, M, HD). */
+    fun tailleVideo(paysage: Boolean, resolution: String): Pair<Int, Int> =
+        if (paysage) when (resolution) { "XS" -> 854 to 480; "HD" -> 1920 to 1080; else -> 1280 to 720 }
+        else when (resolution) { "XS" -> 480 to 640; "HD" -> 1080 to 1440; else -> 720 to 960 }
+
+    /**
+     * Frames [w]×[h] given to [trames] made into an MP4 (H.264, with [wav]'s
+     * sound as AAC when given) through ffmpeg, [total] frames at [fps]. The
+     * file, or null when ffmpeg failed.
+     */
+    fun encode(ff: String, w: Int, h: Int, fps: Int, total: Int, wav: File?, sortie: File, trames: ((BufferedImage) -> Unit) -> Unit): File? {
+        val cmd = arrayListOf(ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$h", "-r", "$fps", "-i", "-")
+        if (wav != null) cmd += listOf("-i", wav.path)
+        cmd += listOf("-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "26")
+        // The length is the pictures': the title, the pass, then each picture and the summary,
+        // after the sound has ended. ("-shortest" stopped at the sound's end, the summary cut
+        // off and the frames still coming refused: a whole pass never came out, 12/10.)
+        if (wav != null) cmd += listOf("-c:a", "aac", "-b:a", "64k")
+        cmd += listOf("-t", "%.2f".format(java.util.Locale.US, total.toDouble() / fps))
+        cmd += sortie.path
+        val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+        val dit = StringBuilder()
+        val journal = Thread { runCatching { dit.append(String(p.inputStream.readBytes())) } }.apply { isDaemon = true; start() }
+        val rgb = ByteArray(w * h * 3)
+        try {
+            trames { img ->
                 val px = img.getRGB(0, 0, w, h, null, 0, w)
                 for (i in px.indices) { val v = px[i]; rgb[3 * i] = (v shr 16).toByte(); rgb[3 * i + 1] = (v shr 8).toByte(); rgb[3 * i + 2] = v.toByte() }
                 p.outputStream.write(rgb)
             }
-            var fait = 0
-            val titreImg = if (nbTitre > 0) titre(w, h, sc) else null
-            repeat(nbTitre) { ecris(titreImg!!); progres(++fait / total.toFloat()) }
-            for ((dessin, k) in ouverture) { val img = dessin(); repeat(k) { ecris(img); progres(++fait / total.toFloat()) } }
-            for (n in 0 until nb) {
-                val tMs = if (segs != null) JournalPassage.instantALecture(segs, n.toLong() * 1000 / fps) else e.debutMs + n.toLong() * 1000 * vitesse / fps
-                ecris(image(w, h, sc, tMs)); progres(++fait / total.toFloat())
-            }
-            for ((dessin, k) in fin) { val img = dessin(); repeat(k) { ecris(img); progres(++fait / total.toFloat()) } }
             p.outputStream.close()
-            val ok = p.waitFor() == 0
-            journal.join(1000)
-            if (!ok) System.err.println("ffmpeg : " + dit.toString().trim().take(800))
-            return if (ok && sortie.isFile && sortie.length() > 0) sortie else null
-        } finally {
-            wav?.delete()
-        }
+        } catch (x: Exception) { p.destroy(); throw x }
+        val ok = p.waitFor() == 0
+        journal.join(1000)
+        if (!ok) System.err.println("ffmpeg : " + dit.toString().trim().take(800))
+        return if (ok && sortie.isFile && sortie.length() > 0) sortie else null
     }
 
     /** A sound source into a 16-bit mono WAV file. */

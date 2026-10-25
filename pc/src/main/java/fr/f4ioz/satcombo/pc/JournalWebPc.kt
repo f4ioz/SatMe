@@ -293,6 +293,32 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 }
                 json("{\"ok\":true,\"travail\":\"$n\"}")
             }
+            // A session: one satellite's passes one after another on the globe, as an MP4 (no sound).
+            "/fabrique-session" -> {
+                if (RenduPc.ffmpeg() == null) return json("{\"ok\":false,\"raison\":\"ffmpeg\"}")
+                val q = SessionRenduPc.parametres(p)
+                val es = q.ids.mapNotNull { j.passage(it) }.distinctBy { it.id }.sortedBy { it.debutMs }.take(150)
+                if (es.isEmpty()) return json("{\"ok\":false,\"raison\":\"vide\"}")
+                val n = "t" + System.currentTimeMillis().toString(36) + (100..999).random()
+                val t = Travail(); travaux[n] = t
+                if (travaux.size > 20) travaux.keys.sorted().take(travaux.size - 20).forEach { travaux.remove(it) }
+                kotlin.concurrent.thread(name = "JournalWebPc", isDaemon = true) {
+                    val sortie = File(dossier, "exports").apply { mkdirs() }
+                    // Always the globe, the pass whole (the session sets its own pace).
+                    val pg: (String) -> String = { k -> when (k) { "vue" -> "globe"; "carte" -> "0"; "accelere" -> "0"; else -> p(k) } }
+                    t.fichier = runCatching {
+                        val scenes = es.map { e -> scene(e, null, null, false, pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } } }
+                        val session = SessionRenduPc.Session(scenes, q.mode, q.vitesse, q.titre, q.vignettes,
+                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap))
+                        val nom = "SatMe_" + es[0].satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
+                            java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                                .format(java.util.Date(es[0].debutMs)) + "Z_session" + (q.titre?.take(30)?.replace(Regex("[^A-Za-z0-9-]"), "-")?.let { "_$it" } ?: "") + ".mp4"
+                        SessionRenduPc.video(session, File(sortie, nom)) { t.progres = it }
+                    }.onFailure { System.err.println("journal : session de ${es.size} passages : $it"); it.printStackTrace() }.getOrNull()
+                    t.progres = 1f; t.fini = true
+                }
+                json("{\"ok\":true,\"travail\":\"$n\",\"passages\":${es.size}}")
+            }
             "/travail" -> {
                 val t = travaux[p("n")] ?: return NON
                 json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")

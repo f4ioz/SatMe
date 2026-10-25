@@ -245,6 +245,13 @@ class JournalPc(
 
     private fun satellite(e: JournalPassage.Entree) = station.etat.value.satellites.firstOrNull { it.catalogNumber == e.catnum }
 
+    /** Under the satellite at [t] by today's elements (a session's video between its passes); null: unknown. */
+    fun positionA(e: JournalPassage.Entree, t: Long): JournalPassage.Sol? = runCatching {
+        val sat = satellite(e) ?: return null
+        val obs = observateur(e) ?: return null
+        predicteur.positionAt(sat, obs, t).let { JournalPassage.Sol(t, it.latDeg, it.lonDeg, it.altKm) }
+    }.getOrNull()
+
     /** The pass as predicted from today's elements (az, el). */
     fun prevue(e: JournalPassage.Entree): List<Pair<Double, Double>> = runCatching {
         val sat = satellite(e) ?: return emptyList()
