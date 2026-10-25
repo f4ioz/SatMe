@@ -18,6 +18,14 @@ object PagePc {
 
     /** The flags' font (Twemoji, CC BY 4.0), served at `api/police-drapeaux` by SatMe-PC and the phone. */
     val POLICE_DRAPEAUX: ByteArray? by lazy { PagePc::class.java.getResourceAsStream("drapeaux.woff2")?.use { it.readBytes() } }
+
+    private val bibliotheques = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+
+    /** The globes' libraries, bundled beside this page (LICENSE-three.txt, LICENSE-satellite.txt): three.js and satellite.js, both MIT, served at `api/lib/…` by SatMe-PC. */
+    fun bibliotheque(nom: String): ByteArray? {
+        val f = when (nom) { "three.js" -> "three.min.js"; "satellite.js" -> "satellite.min.js"; else -> return null }
+        return bibliotheques[nom] ?: PagePc::class.java.getResourceAsStream(f)?.use { it.readBytes() }?.also { bibliotheques[nom] = it }
+    }
     /**
      * The tabs, in their order, each with its icon — the phone's for the same
      * function (Explore for the station and its aiming, MenuBook for the log,
@@ -39,6 +47,7 @@ object PagePc {
         Onglet("sdr", "SDR", "settings_input_antenna", "Le récepteur SDR : écoute, spectre, cascade"),
         Onglet("sondes", "Sondes", "air", "Les radiosondes"),
         Onglet("carte", "Carte", "map", "La carte commune : satellites, APRS, sondes, avions, DATV, carrés, jour et nuit"),
+        Onglet("orbites", "Orbites", "orbit", "Le globe 3D et la carte des satellites choisis, leurs empreintes, un passage animé"),
         Onglet("avions", "Avions", "flight", "ADS-B 1090 MHz et la diffusion par avions"),
         Onglet("ais", "Navires", "navire", "AIS 162 MHz : les navires et les balises entendus"),
         Onglet("espace", "Météo spatiale", "soleil", "Kp, flux solaire, éruptions, vent solaire, aurore"),
@@ -59,7 +68,7 @@ object PagePc {
      * Keys 1 to 6 open them; each keeps the last tab seen.
      */
     private val ESPACES = listOf(
-        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "avions", "ais", "espace", "meteor", "sondes"),
+        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "orbites", "avions", "ais", "espace", "meteor", "sondes"),
         Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
         Triple("tv", "DATV", "tv") to listOf("datv"),
         Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8", "tlm"),
@@ -1043,6 +1052,70 @@ ${STYLE_JETONS}
   .es-alerte { border-left:3px solid var(--warn); padding:4px 8px; margin:4px 0; background:var(--s1); border-radius:0 var(--r1) var(--r1) 0; }
   .es-alerte.fort { border-left-color:var(--danger); }
   @media (min-width:1101px) and (min-height:600px) { .cg-boite { height:auto; position:absolute; inset:12px 16px; margin:0; } #v-carte { position:relative; } }
+  /* Orbites: the satellites on the left (their passes under them in the Passage view), the stage filling the rest. */
+  .ob-boite { position:relative; display:grid; grid-template-columns:250px minmax(0, 1fr); gap:10px; height:calc(100vh - 110px); min-height:480px; margin:12px 16px; }
+  @media (min-width:1101px) and (min-height:600px) { .ob-boite { height:auto; position:absolute; inset:12px 16px; margin:0; } #v-orbites { position:relative; } }
+  .ob-liste { min-height:0; display:flex; flex-direction:column; gap:8px; margin:0; }
+  .ob-liste .t { margin:0; }
+  .ob-sats { overflow:auto; min-height:60px; flex:1 1 0; display:flex; flex-direction:column; gap:2px; }
+  .ob-sat { display:grid; grid-template-columns:18px 1fr auto; align-items:center; gap:2px 8px; padding:4px 6px; border-radius:var(--r1); cursor:pointer; }
+  .ob-sat:hover, .ob-sat.choisi { background:var(--s3); }
+  .ob-sat input { margin:0; }
+  .ob-nom { font-weight:600; display:flex; align-items:center; gap:6px; min-width:0; }
+  .ob-nom span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ob-nom small { color:var(--texte-3); font-weight:400; }
+  .ob-pastille { width:9px; height:9px; border-radius:50%; flex:none; }
+  .ob-el { font-family:var(--mono); font-size:var(--fs-xs); color:var(--texte-3); text-align:right; }
+  .ob-el.haut { color:var(--warn); font-weight:600; }
+  .ob-det { grid-column:2 / 4; font-family:var(--mono); font-size:var(--fs-xs); color:var(--texte-3); }
+  .ob-det:empty { display:none; }
+  .ob-passages { flex:0 1 auto; max-height:45%; overflow:auto; display:flex; flex-direction:column; gap:3px; border-top:1px solid var(--ligne); padding-top:8px; }
+  .ob-pas { display:grid; grid-template-columns:1fr auto; gap:0 8px; text-align:left; background:transparent; border:1px solid transparent; border-radius:var(--r1); padding:4px 7px; font-family:var(--mono); font-size:var(--fs-s); }
+  .ob-pas:hover { border-color:var(--ligne-forte); }
+  .ob-pas[aria-pressed="true"] { border-color:var(--rx); background:rgba(63,224,200,.08); }
+  .ob-max { color:var(--warn); font-weight:600; }
+  .ob-sous { grid-column:1 / 3; color:var(--texte-3); font-size:var(--fs-xs); }
+  .ob-scene { position:relative; min-height:0; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#000; }
+  .ob-scene > canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .ob-scene > canvas[hidden] { display:none; }
+  #ob-3d { cursor:grab; touch-action:none; }
+  .ob-haut { position:absolute; left:10px; right:10px; top:10px; z-index:3; display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start; pointer-events:none; }
+  .ob-haut > * { pointer-events:auto; }
+  .ob-seg { display:flex; align-items:center; gap:2px; padding:3px; border-radius:var(--r2); background:rgba(15,22,29,.86); border:1px solid var(--ligne); flex-wrap:wrap; }
+  .ob-seg button { border:0; background:transparent; padding:4px 9px; border-radius:var(--r1); font-size:var(--fs-s); font-weight:600; color:var(--texte-2); }
+  .ob-seg button[aria-pressed="true"] { background:var(--s3); color:var(--rx); }
+  .ob-seg label { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
+  .ob-temps { margin-left:auto; font-family:var(--mono); font-size:var(--fs-s); }
+  .ob-temps button, .ob-temps select { padding:3px 8px; font-size:var(--fs-s); }
+  .ob-temps span { padding:0 4px; color:var(--texte); }
+  .ob-cadreur { flex-basis:100%; display:flex; gap:8px; flex-wrap:wrap; }
+  .ob-cadreur[hidden] { display:none; }
+  .ob-bulle { position:absolute; z-index:4; pointer-events:none; background:rgba(14,23,32,.96); border:1px solid var(--ligne-forte); border-radius:6px; padding:4px 8px; font-family:var(--mono); font-size:var(--fs-xs); white-space:nowrap; }
+  .ob-banniere { position:absolute; left:50%; top:22%; transform:translateX(-50%); z-index:2; text-align:center; pointer-events:none; font-size:clamp(22px, 3.2vw, 40px); font-weight:800; letter-spacing:.06em; color:#fff; text-shadow:0 0 18px rgba(63,224,200,.8), 0 2px 0 rgba(0,0,0,.6); white-space:nowrap; }
+  .ob-banniere small { display:block; font-family:var(--mono); font-size:var(--fs-m); font-weight:600; letter-spacing:0; color:var(--texte); text-shadow:0 1px 2px #000; margin-top:6px; }
+  .ob-banniere.ob-flash { animation:ob-flash 1.4s ease-out; }
+  @keyframes ob-flash { 0% { transform:translateX(-50%) scale(1.5); opacity:0; } 25% { opacity:1; } 100% { transform:translateX(-50%) scale(1); } }
+  .ob-instruments { position:absolute; left:10px; right:10px; bottom:10px; z-index:3; display:grid; grid-template-columns:170px minmax(0, 1fr) 200px; gap:10px; }
+  .ob-instruments[hidden] { display:none; }
+  .ob-instruments > div { background:rgba(10,15,20,.82); border:1px solid var(--ligne); border-radius:var(--r3); padding:8px; min-width:0; }
+  .ob-instruments canvas { display:block; width:100%; height:140px; }
+  .ob-lecteur { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  .ob-lecteur button, .ob-lecteur select { padding:3px 9px; font-size:var(--fs-s); }
+  .ob-jouer { background:var(--rx); color:#06131A; border-color:var(--rx); font-weight:600; }
+  .ob-mesures { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-family:var(--mono); font-size:var(--fs-s); margin:0; }
+  .ob-mesures dt { color:var(--texte-3); }
+  .ob-mesures dd { margin:0; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .ob-attente { position:absolute; inset:0; display:grid; place-items:center; color:var(--texte-2); z-index:5; background:rgba(0,0,0,.6); padding:20px; text-align:center; }
+  @media (max-width:900px) {
+    .ob-boite { grid-template-columns:minmax(0, 1fr); height:auto; }
+    .ob-scene { height:72vh; min-height:480px; order:-1; }
+    .ob-liste { max-height:420px; }
+    .ob-temps { margin-left:0; }
+    .ob-instruments { grid-template-columns:1fr 1fr; }
+    .ob-instruments > div:nth-child(2) { grid-column:1 / 3; order:3; }
+    .ob-instruments canvas { height:110px; }
+  }
+  .st-globe-styles { position:absolute; right:8px; top:8px; z-index:2; padding:2px 6px; font-size:12px; }
   .tq { padding:12px 16px 0; }
   .tq .grille { padding-left:0; padding-right:0; }
   .tq-aide { border-color:rgba(63,224,200,.45); }
@@ -2001,9 +2074,11 @@ ${rail()}
         <span class="petit" id="dist"></span>
       </div>
       <div class="ecran" id="s-ecran">
-        <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button></div>
+        <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button><button id="b-globe" onclick="montreEcran('globe')" title="Le globe : le satellite suivi, son orbite et son empreinte, les favoris autour">Globe</button></div>
         <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
+        <canvas id="st-globe" hidden title="Glisser pour tourner, molette pour zoomer"></canvas>
+        <select id="st-globe-styles" class="st-globe-styles" hidden aria-label="Rendu du globe" onchange="Orbites.style(this.value)"><option value="realiste">Réaliste</option><option value="cartoon">Dessin animé</option><option value="holo">Hologramme</option><option value="points">Globe à points</option><option value="radar">Radar rétro</option><option value="vintage">Carte ancienne</option></select>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="petit" id="ciel-plan" style="text-align:center" title="Le plan du rotor pour ce passage. Violet : le rotor prévu ; ambre : retourné (par-dessus le zénith) ; rouge : un changement (retournement, déroulement) et son heure ; gris : les zones cachées"></div>
@@ -3695,6 +3770,41 @@ ${rail()}
   </div>
   <div id="cg-bulle" class="cg-bulle" hidden></div>
   <div id="cg-attrib" class="cg-attrib" hidden>© les contributeurs d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+</div>
+</div>
+<div class="vue" id="v-orbites" hidden>
+<div class="ob-boite">
+  <div class="carte ob-liste">
+    <div class="t">Satellites</div>
+    <div class="ob-seg" role="group" aria-label="Quels satellites"><button type="button" data-ob-filtre="favoris" aria-pressed="true">Favoris</button><button type="button" data-ob-filtre="tous" aria-pressed="false">Tous (filtre)</button></div>
+    <input type="search" id="ob-recherche" placeholder="Filtrer : ISS, RS-44, AO-…" aria-label="Filtrer les satellites" hidden>
+    <div class="ob-sats" id="ob-sats"></div>
+    <div class="ob-passages" id="ob-passages" hidden></div>
+    <button type="button" id="ob-suivre" title="Le satellite choisi devient celui de l'onglet Suivi (Doppler, rotor)">Suivre le satellite choisi</button>
+    <div class="petit aide">Coche pour afficher ; clic sur un nom : le choisir (le globe le suit, la vue Passage montre ses passages). Positions calculées dans ce navigateur (SGP4) avec les éléments orbitaux de la station : rien ne part sur Internet. Glisser pour tourner, molette pour zoomer.</div>
+  </div>
+  <div class="ob-scene">
+    <canvas id="ob-3d" aria-label="Le globe et les satellites"></canvas>
+    <canvas id="ob-2d" hidden aria-label="La carte des satellites et de leurs empreintes"></canvas>
+    <div class="ob-haut">
+      <div class="ob-seg" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
+      <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
+      <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1">×1 réel</option><option value="10">×10</option><option value="60" selected>×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
+      <div class="ob-cadreur" id="ob-cadreur" hidden>
+        <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button></div>
+        <div class="ob-seg"><label title="Plus haut : la caméra s'éloigne et montre plus de Terre (la molette aussi)">Hauteur <input type="range" id="ob-hauteur" min="0.6" max="8" step="0.1"></label></div>
+      </div>
+    </div>
+    <div class="ob-bulle" id="ob-bulle" hidden></div>
+    <div class="ob-banniere" id="ob-banniere" hidden></div>
+    <div class="ob-instruments" id="ob-instruments" hidden>
+      <div><canvas id="ob-ciel" aria-label="Le ciel de la station : la trace du passage"></canvas></div>
+      <div><canvas id="ob-profil" aria-label="L'élévation au cours du passage"></canvas>
+        <div class="ob-lecteur"><button type="button" class="ob-jouer" id="ob-jouer">▶ Jouer le passage</button><select id="ob-pvitesse" aria-label="Vitesse de l'animation"><option value="10">×10</option><option value="20" selected>×20</option><option value="40">×40</option><option value="80">×80</option></select><button type="button" id="ob-rejouer">⟲ Depuis l'AOS</button></div></div>
+      <div><dl class="ob-mesures" id="ob-mesures"></dl></div>
+    </div>
+    <div class="ob-attente" id="ob-attente" hidden></div>
+  </div>
 </div>
 </div>
 <div class="vue" id="v-nonsat" hidden>
@@ -5434,6 +5544,7 @@ function majPassageCarnet() {
 // Points close on the screen (the same square, or a few pixels apart) make one marker with their count,
 // their label one line per station; the labels spread so none covers another, a leader line when moved.
 ${EtiquettesCarteJs.JS}
+${OrbitesJs.JS}
 const ETQ_H = 14;
 function pointsDuPassage(m) {
   const pc = E && E.passageCarnet; if (!pc) return;
@@ -6534,6 +6645,8 @@ function vue(n) {
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
+  if (n === 'orbites') Orbites.montre();
+  if (n === 'station' && ecranStation === 'globe') Orbites.suivi(g('st-globe'));
   if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); }
   if (n === 'datv') ticDatv(true);
   if (n === 'sdr') { ticSdr(); spSale(true); }
@@ -9674,12 +9787,16 @@ attacheCarte(g('k-carte'), KV, dessineSked, cadreSked, 1);
 
 // ------------------------------------------------------------------ the followed satellite's map
 let ecranStation = 'ciel';
-try { ecranStation = localStorage.getItem('ecran-station') === 'carte' ? 'carte' : 'ciel'; } catch (x) {}
+try { const q = localStorage.getItem('ecran-station'); ecranStation = q === 'carte' || (q === 'globe' && !window.SATME_TELEPHONE) ? q : 'ciel'; } catch (x) {}
+// The globe needs SatMe-PC (its libraries are not on the phone).
+if (window.SATME_TELEPHONE) g('b-globe').hidden = true;
 function montreEcran(q) {
   ecranStation = q;
   try { localStorage.setItem('ecran-station', q); } catch (x) {}
   g('ciel').style.display = q === 'ciel' ? '' : 'none'; g('st-carte').hidden = q !== 'carte';
-  g('b-ciel').classList.toggle('actif', q === 'ciel'); g('b-carte').classList.toggle('actif', q === 'carte');
+  g('st-globe').hidden = g('st-globe-styles').hidden = q !== 'globe';
+  g('b-ciel').classList.toggle('actif', q === 'ciel'); g('b-carte').classList.toggle('actif', q === 'carte'); g('b-globe').classList.toggle('actif', q === 'globe');
+  if (q === 'globe') { g('st-globe-styles').value = Orbites.styleActif(); Orbites.suivi(g('st-globe')); }
   dessineCarteStation();
 }
 const SV = { cx: 0.5, cy: 0.4, z: 1, libre: false };

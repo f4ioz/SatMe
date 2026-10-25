@@ -47,6 +47,8 @@ position; it is also the tradition of amateur radio software.
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | UI and lifecycle |
 | AndroidX Media3 (ExoPlayer) | Apache-2.0 | DATV from a SatMe-Node, on the phone |
 | Material Symbols (drawings, in SatMe-PC's page) | Apache-2.0 | SatMe-PC's tab icons, the phone's own |
+| three.js r128 (`three.min.js`, bundled unmodified in `moteur/src/main/resources/…/demo/`, `LICENSE-three.txt` beside it) | MIT | SatMe-PC only: the 3D globes of the Orbites and Suivi tabs, loaded by the page when a globe is first shown |
+| satellite.js 5.0.0 (`satellite.min.js`, bundled unmodified, `LICENSE-satellite.txt` beside it) | MIT | SatMe-PC only: the orbits worked out in the page for the globes, the map and the animated pass |
 | `com.google.android.gms:play-services-code-scanner` | Google proprietary | Scanning SatMe-PC's QR code (no camera permission) |
 | LongMynd (BATC), run as a separate program, not bundled | GPL-3.0 | Driving the MiniTiouner (DATV), SatMe-PC and SatMe-Node |
 | FFmpeg (`ffmpeg`, `ffplay`), separate programs, in the Windows package only | GPL-3.0 | Videos, GIFs, DATV pictures and sound; BtbN/FFmpeg-Builds build, sources named in `outils/SOURCES.txt` |

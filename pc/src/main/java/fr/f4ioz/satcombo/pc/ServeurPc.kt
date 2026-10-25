@@ -820,6 +820,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         when (chemin) {
             "/", "/index.html", "/pc" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
             "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { envoie(sortie, "200 OK", "font/woff2", it) } ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            "/api/lib/three.js", "/api/lib/satellite.js" -> PagePc.bibliotheque(chemin.substringAfterLast('/'))?.let { envoie(sortie, "200 OK", "text/javascript; charset=utf-8", it) }
+                ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             // The built-in manual (F1): the guide's chapters, and its full-text search.
             "/api/manuel" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.Manuel.REPONSE)
             "/api/manuel/cherche" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
@@ -853,6 +855,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     fr.f4ioz.satcombo.demo.ApiRotorPlan.limites(station.stationRotor.etat.value),
                     station.stationRotor.etat.value.rotorMaxError.toDouble()).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
+            "/api/orbites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.orbites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
             "/api/trace" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject()
                 .put("catnum", station.etat.value.suivi?.catalogNumber ?: 0)
@@ -2339,6 +2342,17 @@ object JsonPc {
     fun satellites(st: StationPc) = JSONArray(st.etat.value.satellites.map {
         JSONObject().put("nom", it.name).put("catnum", it.catalogNumber)
     })
+
+    /** The Orbites tab and the Suivi globe: the station, the satellite followed, the favourites, every satellite's elements (worked out in the page). */
+    fun orbites(st: StationPc): JSONObject {
+        val e = st.etat.value
+        val o = JSONObject().put("indicatif", e.indicatif).put("locator", e.locator).put("suivi", e.suivi?.catalogNumber ?: 0).put("favoris", JSONArray(e.favoris))
+        e.observateur?.let { o.put("obs", JSONObject().put("lat", it.latDeg).put("lon", it.lonDeg).put("alt", it.altMeters)) }
+        return o.put("sats", JSONArray(e.satellites.map { s ->
+            JSONObject().put("nom", s.name).put("catnum", s.catalogNumber).put("l1", s.line1).put("l2", s.line2)
+                .also { j -> s.downlinkHz?.let { j.put("dl", it / 1e6) } }
+        }))
+    }
 
     /** Each callsign's flag, worked out once (the log is sent every few seconds). */
     private val drapeaux = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()

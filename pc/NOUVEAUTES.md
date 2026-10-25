@@ -15,6 +15,20 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- Nouvel onglet **Orbites** (espace *Ciel*) : la **Terre en 3D** avec tes satellites favoris (ou ceux que tu coches dans *Tous*) qui tournent sur leur orbite, leur **empreinte** au sol et un trait vers la station quand ils sont levés. Six rendus : *Réaliste*, *Dessin animé*, *Hologramme*, *Globe à points*, *Radar rétro*, *Carte ancienne*. Le temps peut s'accélérer (×1 à ×1200).
+- *Carte 2D* : les mêmes satellites à plat, leurs empreintes, la trace au sol passée et à venir, le jour et la nuit.
+- *Passage* : les passages des 36 prochaines heures ; **▶ Jouer le passage** l'anime en accéléré, avec le compte à rebours de l'AOS, la culmination, le LOS, le ciel de la station, l'élévation, l'azimut, la distance et le Doppler. Trois caméras (*Poursuite*, *Depuis la station*, *Vue d'ensemble*) et une **hauteur** réglable (ou la molette) pour voir plus de Terre.
+- Onglet *Suivi* : un bouton **Globe** à côté de *Ciel* et *Carte* montre le satellite suivi, son orbite et son empreinte, les favoris autour.
+- Tout est calculé dans le navigateur, sans Internet.
+
+### en
+- New **Orbites** tab (*Sky* workspace): the **Earth in 3D** with your favourite satellites (or those ticked in *All*) going round on their orbits, their **footprint** on the ground and a line to the station when they are up. Six looks: *Realistic*, *Cartoon*, *Hologram*, *Dotted globe*, *Retro radar*, *Old map*. Time can run faster (×1 to ×1200).
+- *2D map*: the same satellites flat, their footprints, the ground track past and to come, day and night.
+- *Pass*: the passes of the next 36 hours; **▶ Play the pass** animates it fast, with the countdown to AOS, the culmination, LOS, the station's sky, elevation, azimuth, distance and Doppler. Three cameras (*Chase*, *From the station*, *Overview*) and an adjustable **height** (or the wheel) to see more of the Earth.
+- *Suivi* tab: a **Globe** button beside *Sky* and *Map* shows the satellite followed, its orbit and footprint, the favourites around.
+- All worked out in the browser, without the Internet.
+
 ## 2026.10.29
 
 ### fr
