@@ -37,6 +37,11 @@ import kotlin.concurrent.thread
  * (the tone colour converter first, when installed, then « proche »).
  *
  * At most two overs wait; one heard more than 30 s ago is not said.
+ *
+ * The DATV's overs (its subtitles' sound) have settings of their own, off
+ * by default too: their voice, its volume, the picture's sound lowered while
+ * it speaks. Said where that sound is heard (this PC, a browser listening),
+ * only the latest one waiting, none more than 20 s late.
  */
 class ParolePc(
     private val stockage: Stockage,
@@ -81,7 +86,7 @@ class ParolePc(
 
     var actif: Boolean
         get() = stockage.getBoolean("pc_parole", false)
-        set(v) { stockage.edit().putBoolean("pc_parole", v).apply(); if (v) demarre() else arrete() }
+        set(v) { stockage.edit().putBoolean("pc_parole", v).apply(); if (enService) demarre() else arrete() }
     /** A voice of [ParoleTraduite.VOIX], or "auto" (by the speaker's pitch). */
     var voix: String
         get() = stockage.getString("pc_parole_voix", "auto") ?: "auto"
@@ -104,20 +109,56 @@ class ParolePc(
     private val pc: Boolean get() = sortie != "navigateur"
     private val navigateur: Boolean get() = sortie != "pc"
 
+    // ------------------------------------------------------------------ the DATV's own settings
+
+    /** The DATV's overs said too (its subtitles' sound), apart from the phonie's. */
+    var datvActif: Boolean
+        get() = stockage.getBoolean("datv_parole", false)
+        set(v) { stockage.edit().putBoolean("datv_parole", v).apply(); if (enService) demarre() else arrete() }
+    var datvVoix: String
+        get() = stockage.getString("datv_parole_voix", "auto") ?: "auto"
+        set(v) { if (v == "auto" || ParoleTraduite.voix(v) != null) stockage.edit().putString("datv_parole_voix", v).apply() }
+    var datvVolume: Int
+        get() = stockage.getInt("datv_parole_volume", 80).coerceIn(0, 100)
+        set(v) { stockage.edit().putInt("datv_parole_volume", v.coerceIn(0, 100)).apply() }
+    /** How much the picture's sound is lowered while the voice speaks, in % (0: not at all, 100: silent). */
+    var datvBaisse: Int
+        get() = stockage.getInt("datv_parole_baisse", 70).coerceIn(0, 100)
+        set(v) { stockage.edit().putInt("datv_parole_baisse", v.coerceIn(0, 100)).apply() }
+
+    /** Where the DATV sound is heard now: "pc" (played here), "navigateur" (a browser listens); neither: this PC. */
+    @Volatile var sortiesDatv: () -> Set<String> = { setOf("pc") }
+
+    /** A DATV over being said on this PC: the picture's sound at this gain meanwhile (1 otherwise). */
+    @Volatile private var parleDatv = false
+    val gainDatv: Double get() = if (parleDatv) ParoleTraduite.gainBaisse(datvBaisse) else 1.0
+
+    /** The worker runs for the phonie's overs or the DATV's. */
+    val enService: Boolean get() = actif || datvActif
+
+    private fun sorties(datv: Boolean): Pair<Boolean, Boolean> {
+        if (!datv) return pc to navigateur
+        val s = runCatching { sortiesDatv() }.getOrDefault(emptySet())
+        return ("pc" in s || s.isEmpty()) to ("navigateur" in s)
+    }
+
     // ------------------------------------------------------------------ the overs
 
     /** An over understood: its bubble, its sound (16 kHz), the segments kept, Whisper's whole translation. */
     class Entendu(val bulle: BullePhonie, val pcm: FloatArray, val morceaux: List<ProtocolePhonie.Morceau>, val traductionEntiere: String) {
         val finMs: Long get() = bulle.t + (bulle.dureeS * 1000).toLong()
+        /** Heard on the DATV reception's sound. */
+        val datv: Boolean get() = bulle.source == "datv"
     }
 
     private val file = ParoleTraduite.File<Entendu>(2, PERIME_MS, horloge)
 
     /** From « Phonie → texte », each over kept: queued when it is to be said. */
     fun entendu(e: Entendu) {
-        if (!actif) return
+        if (if (e.datv) !datvActif else !actif) return
         if (aDire(e) == null) return
-        file.ajoute(e, e.finMs)
+        // The DATV's: only the latest is worth saying, and not long after.
+        if (e.datv) file.ajoute(e, e.finMs, seule = true, perime = PERIME_DATV_MS, genre = "datv") else file.ajoute(e, e.finMs)
         demarre()
     }
 
@@ -125,7 +166,8 @@ class ParolePc(
     fun aDire(e: Entendu): List<Pair<IntonationProche.Phrase, String>>? {
         val b = e.bulle
         val c = cible()
-        val dit = ParoleTraduite.aDire(b.langue, c, b.traduction, b.texte, etrangere) ?: return null
+        // The DATV's: its translation only (an over in our own language is heard as it is).
+        val dit = ParoleTraduite.aDire(b.langue, c, b.traduction, b.texte, etrangere || e.datv) ?: return null
         val parSegment = e.morceaux.isNotEmpty() && e.morceaux.all { it.traduction.isNotBlank() } && dit == b.traduction
         return when {
             parSegment -> e.morceaux.map { IntonationProche.Phrase(it.debutS, it.finS, it.texte) to it.traduction.trim() }
@@ -150,7 +192,7 @@ class ParolePc(
     private val debits = HashMap<String, Double>()
 
     @Synchronized fun demarre() {
-        if (!actif || travail?.isAlive == true) return
+        if (!enService || travail?.isAlive == true) return
         val g = ++generation
         etat = "prêt"
         travail = thread(isDaemon = true, name = "satme-parole") { boucle(g) }
@@ -182,16 +224,18 @@ class ParolePc(
         val traduit = e.bulle.traduction.isNotBlank() && e.bulle.langue != cible()
         val langue = if (traduit) e.bulle.langueCible.ifBlank { cible() } else e.bulle.langue
         etat = "synthèse"
-        val r = rends(phrases, langue, e.pcm, ProtocolePhonie.RATE, e.bulle.langue)
-        if (!file.frais(e.finMs)) { etat = "prêt"; return }
+        val r = if (e.datv) rends(phrases, langue, e.pcm, ProtocolePhonie.RATE, e.bulle.langue, datvVoix, datvVolume, sorties(true).first, datv = true)
+            else rends(phrases, langue, e.pcm, ProtocolePhonie.RATE, e.bulle.langue)
+        if (!file.frais(e.finMs, if (e.datv) PERIME_DATV_MS else PERIME_MS)) { etat = "prêt"; return }
         latenceMs = (horloge() - e.finMs).coerceAtLeast(0)
-        publie(e, phrases.joinToString(" ") { it.second }, langue, r)
+        publie(e, phrases.joinToString(" ") { it.second }, langue, r, datv = e.datv)
     }
 
     /** What [rends] made: the sound (null when the PC spoke it itself), the voice, hints for a browser voice. */
     class Rendu(val pcm: ShortArray?, val rate: Int, val voix: String, val moteur: String, val vitesse: Double, val hauteur: Double, val f0Hz: Double, val dejaDit: Boolean = false)
 
-    fun rends(phrases: List<Pair<IntonationProche.Phrase, String>>, langue: String, original: FloatArray?, rateOriginal: Int, langueOriginale: String): Rendu {
+    fun rends(phrases: List<Pair<IntonationProche.Phrase, String>>, langue: String, original: FloatArray?, rateOriginal: Int, langueOriginale: String,
+              choix: String = voix, vol: Int = volume, surPc: Boolean = pc, datv: Boolean = false): Rendu {
         val into = intonation
         // Measured whatever the intonation: « auto » picks the voice nearest the speaker's pitch even when « neutre ».
         val mesure = if (original != null && original.size > rateOriginal / 2)
@@ -201,7 +245,7 @@ class ParolePc(
         val textes = phrases.map { it.second }
         // A browser's voice: its speed and pitch nudged the same way.
         val hauteurNav = if (f0 > 0) (1.0 + (HauteurVoix.demiTons(f0) - HauteurVoix.demiTons(160.0)) / 24.0).coerceIn(0.6, 1.4) else 1.0
-        val v = ParoleTraduite.choisit(voix, langue, install.voixPresentes(), f0)
+        val v = ParoleTraduite.choisit(choix, langue, install.voixPresentes(), f0)
         val s = if (v != null) synthese ?: runCatching { fabriqueSynthese(this) }.getOrNull()?.also { synthese = it } else null
         if (v != null && s != null) {
             val cle = v.id
@@ -219,7 +263,7 @@ class ParolePc(
                 }
             }
             val x = if (a != null) IntonationProche.applique(morceaux, rate, a) else IntonationProche.joint(morceaux, rate)
-            return Rendu(volume(x), rate, v.nom, moteurUtilise, 1.0 / longueur, hauteurNav, f0)
+            return Rendu(volume(x, vol), rate, v.nom, moteurUtilise, 1.0 / longueur, hauteurNav, f0)
         }
         // eSpeak NG: its sound, treated the same.
         val espeak = trouve("espeak-ng")
@@ -229,18 +273,18 @@ class ParolePc(
             val rate = morceaux.firstOrNull { it.second > 0 }?.second ?: 22_050
             moteurUtilise = "eSpeak NG"
             val x = morceaux.map { it.first }.let { m -> if (a != null) IntonationProche.applique(m, rate, a) else IntonationProche.joint(m, rate) }
-            return Rendu(volume(x), rate, "eSpeak NG", moteurUtilise, vitesse, hauteurNav, f0)
+            return Rendu(volume(x, vol), rate, "eSpeak NG", moteurUtilise, vitesse, hauteurNav, f0)
         }
         // speech-dispatcher on this PC: it speaks itself (nothing for a browser but the text).
         val spd = trouve("spd-say")
-        if (spd != null && pc) {
+        if (spd != null && surPc) {
             moteurUtilise = "speech-dispatcher"
             val vitesse = if (a != null) 1.0 / IntonationProche.longueur(a, langueOriginale, langue, 6.0) else 1.0
             etat = "parle"
             val masculine = f0 in 1.0..165.0
-            parleSurPc { lanceur.lance(listOf(spd, "-w", "-l", langue, "-r", ((vitesse - 1) * 100).toInt().coerceIn(-50, 50).toString(),
+            parleSurPc(datv) { lanceur.lance(listOf(spd, "-w", "-l", langue, "-r", ((vitesse - 1) * 100).toInt().coerceIn(-50, 50).toString(),
                 "-p", (((hauteurNav - 1) * 100).toInt()).coerceIn(-40, 40).toString(), "-t", if (masculine) "male1" else "female1",
-                "-i", (volume * 2 - 100).toString(), "--", textes.joinToString(" ").trimStart('-', ' ')), null) }
+                "-i", (vol * 2 - 100).toString(), "--", textes.joinToString(" ").trimStart('-', ' ')), null) }
             return Rendu(null, 0, "speech-dispatcher", moteurUtilise, vitesse, hauteurNav, f0, dejaDit = true)
         }
         moteurUtilise = "navigateur"
@@ -255,7 +299,7 @@ class ParolePc(
         synchronized(debits) { debits[cle] = debits[cle]?.let { it * 0.7 + d * 0.3 } ?: d }
     }
 
-    private fun volume(x: FloatArray): ShortArray = ParoleTraduite.enShorts(x, 0.85f * volume / 100f)
+    private fun volume(x: FloatArray, vol: Int = volume): ShortArray = ParoleTraduite.enShorts(x, 0.85f * vol / 100f)
 
     private fun espeak(chemin: String, langue: String, texte: String, vitesse: Double): Pair<FloatArray, Int> = runCatching {
         val p = ProcessBuilder(chemin, "-v", langue, "-s", (165 * vitesse).toInt().coerceIn(90, 300).toString(), "--stdout", "--", texte.trimStart('-', ' '))
@@ -266,38 +310,44 @@ class ParolePc(
         litWav(b)
     }.getOrDefault(FloatArray(0) to 0)
 
-    private fun parleSurPc(f: () -> Unit) {
+    /** [f] said on this PC: the SDR speaker lowered meanwhile, or the DATV picture's sound for a DATV over. */
+    private fun parleSurPc(datv: Boolean = false, f: () -> Unit) {
+        if (datv) { parleDatv = true; try { f() } finally { parleDatv = false }; return }
         baisse(BAISSE)
         try { f() } finally { baisse(1f) }
     }
 
     // ------------------------------------------------------------------ what was said
 
+    /** A sentence said; [datv]: a DATV over (a browser plays it only when it listens to the DATV), [baisse]: the received sound's gain meanwhile. */
     class Dite(val seq: Long, val ms: Long, val texte: String, val langue: String, val voix: String, val moteur: String,
-               val wav: ByteArray?, val dureeS: Double, val latenceMs: Long, val vitesse: Double, val hauteur: Double, val navigateur: Boolean, val essai: Boolean) {
+               val wav: ByteArray?, val dureeS: Double, val latenceMs: Long, val vitesse: Double, val hauteur: Double, val navigateur: Boolean, val essai: Boolean,
+               val datv: Boolean = false, val baisse: Double = BAISSE.toDouble()) {
+        fun copy(seq: Long) = Dite(seq, ms, texte, langue, voix, moteur, wav, dureeS, latenceMs, vitesse, hauteur, navigateur, essai, datv, baisse)
         fun json(): JSONObject = JSONObject().put("seq", seq).put("ms", ms).put("texte", texte).put("langue", langue).put("voix", voix)
             .put("moteur", moteur).put("audio", wav != null).put("duree", Math.round(dureeS * 10) / 10.0).put("latence", latenceMs)
             .put("vitesse", Math.round(vitesse * 100) / 100.0).put("hauteur", Math.round(hauteur * 100) / 100.0).put("navigateur", navigateur).put("essai", essai)
+            .put("datv", datv).put("baisse", Math.round(baisse * 100) / 100.0)
     }
 
     private val dites = ArrayDeque<Dite>()
     @Volatile var dernierSeq = 0L; private set
 
-    private fun publie(e: Entendu?, texte: String, langue: String, r: Rendu, essai: Boolean = false) {
+    private fun publie(e: Entendu?, texte: String, langue: String, r: Rendu, essai: Boolean = false, datv: Boolean = false) {
         val wav = r.pcm?.let { ParoleTraduite.wav(it, r.rate) }
+        val (surPc, surNavigateur) = sorties(datv)
         val d = Dite(0, e?.finMs ?: horloge(), texte, langue, r.voix, r.moteur, wav, if (r.pcm != null) r.pcm.size / r.rate.toDouble() else 0.0,
-            if (e != null) latenceMs else 0, r.vitesse, r.hauteur, navigateur, essai)
+            if (e != null) latenceMs else 0, r.vitesse, r.hauteur, surNavigateur, essai, datv, if (datv) ParoleTraduite.gainBaisse(datvBaisse) else BAISSE.toDouble())
         synchronized(dites) {
-            val c = Dite(++dernierSeq, d.ms, d.texte, d.langue, d.voix, d.moteur, d.wav, d.dureeS, d.latenceMs, d.vitesse, d.hauteur, d.navigateur, d.essai)
-            dites.addLast(c)
+            dites.addLast(d.copy(seq = ++dernierSeq))
             while (dites.size > 6) dites.removeFirst()
         }
         erreur = ""
-        if (pc && r.pcm != null && !r.dejaDit) {
+        if (surPc && r.pcm != null && !r.dejaDit) {
             etat = "parle"
-            parleSurPc { lecteur.joue(r.pcm, r.rate) }
+            parleSurPc(datv) { lecteur.joue(r.pcm, r.rate) }
         }
-        etat = if (actif) "prêt" else "coupé"
+        etat = if (enService) "prêt" else "coupé"
     }
 
     /** The sentences handed out after [seq] (the live stream, the page). */
@@ -307,14 +357,16 @@ class ParolePc(
     fun son(seq: Long): ByteArray? = synchronized(dites) { dites.firstOrNull { it.seq == seq }?.wav }
 
     /** « Essayer »: a sentence in the voice chosen, now (whatever the queue). */
-    fun essai(): JSONObject {
+    fun essai(datv: Boolean = false): JSONObject {
         val c = cible()
         val texte = ESSAIS[c] ?: ESSAIS.getValue("fr")
         thread(isDaemon = true, name = "satme-parole-essai") {
             runCatching {
                 etat = "synthèse"
-                val r = rends(listOf(IntonationProche.Phrase(0.0, 3.0, texte) to texte), c, null, ProtocolePhonie.RATE, c)
-                publie(null, texte, c, r, essai = true)
+                val p = listOf(IntonationProche.Phrase(0.0, 3.0, texte) to texte)
+                val r = if (datv) rends(p, c, null, ProtocolePhonie.RATE, c, datvVoix, datvVolume, sorties(true).first, datv = true)
+                    else rends(p, c, null, ProtocolePhonie.RATE, c)
+                publie(null, texte, c, r, essai = true, datv = datv)
             }.onFailure { erreur = (it.message ?: it.toString()).take(240); etat = "erreur" }
         }
         return JSONObject().put("ok", true)
@@ -348,6 +400,8 @@ class ParolePc(
             .put("voixDispo", JSONArray(ParoleTraduite.disponibles(c, presentes).map { JSONObject().put("id", it.id).put("nom", it.nom) }))
             .put("piper", presentes.isNotEmpty()).put("espeak", trouve("espeak-ng") != null).put("spd", trouve("spd-say") != null)
             .put("seq", dernierSeq).put("dites", JSONArray(synchronized(dites) { dites.toList().takeLast(4).reversed().map { it.json() } }))
+            .put("datv", JSONObject().put("on", datvActif).put("voix", datvVoix).put("volume", datvVolume).put("baisse", datvBaisse)
+                .put("sorties", JSONArray(runCatching { sortiesDatv() }.getOrDefault(emptySet()).sorted())))
     }
 
     @Volatile private var verificationDemandee = false
@@ -381,7 +435,12 @@ class ParolePc(
         q["sortie"]?.let { sortie = it }
         q["etrangere"]?.let { etrangere = it == "1" }
         q["on"]?.let { actif = it == "1" }
+        q["datvVoix"]?.let { datvVoix = it }
+        q["datvVolume"]?.toIntOrNull()?.let { datvVolume = it }
+        q["datvBaisse"]?.toIntOrNull()?.let { datvBaisse = it }
+        q["datv"]?.let { datvActif = it == "1" }
         if (q["essai"] == "1") return essai()
+        if (q["essaiDatv"] == "1") return essai(datv = true)
         q["installeVoix"]?.let { l ->
             val ids = l.split(",").map { it.trim() }.filter { f -> ParoleTraduite.VOIX.any { it.fichier == f } }
             install.installeVoix(python(), ids) { runCatching { synthese?.arrete() }; synthese = null }
@@ -395,6 +454,8 @@ class ParolePc(
 
     companion object {
         const val PERIME_MS = 30_000L
+        /** A DATV over later than this is not said: the picture has moved on. */
+        const val PERIME_DATV_MS = 20_000L
         /** The SDR speaker while the voice speaks. */
         const val BAISSE = 0.25f
         val SORTIES = setOf("pc", "navigateur", "deux")

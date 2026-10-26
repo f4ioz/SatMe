@@ -68,11 +68,11 @@ class ParolePcTest {
     }
 
     /** A Polish over heard just now: a man at 110 Hz rising, two segments, each translated. */
-    private fun entendu(langue: String = "pl", ilYaMs: Long = 0, traduit: Boolean = true): ParolePc.Entendu {
+    private fun entendu(langue: String = "pl", ilYaMs: Long = 0, traduit: Boolean = true, source: String = "sdr"): ParolePc.Entendu {
         val pcm = voisee(16_000, 3.0) { t -> 105.0 + 15 * t }
         val m = listOf(ProtocolePhonie.Morceau(0.0, 1.4, "dzień dobry wszystkim", -0.2, 0.01, 1.0, if (traduit) "bonjour à tous" else ""),
             ProtocolePhonie.Morceau(1.6, 3.0, "tu SP9ABC", -0.2, 0.01, 1.0, if (traduit) "ici SP9ABC" else ""))
-        val b = BullePhonie(1, horloge - 3000 - ilYaMs, 3.0, "sdr", null, "", langue, 0.98, m.joinToString(" ") { it.texte },
+        val b = BullePhonie(1, horloge - 3000 - ilYaMs, 3.0, source, null, "", langue, 0.98, m.joinToString(" ") { it.texte },
             if (traduit) m.joinToString(" ") { it.traduction } else "", 0.9, 0.3, emptyList(), if (traduit) "fr" else "")
         return ParolePc.Entendu(b, pcm, m, "")
     }
@@ -168,5 +168,95 @@ class ParolePcTest {
     @Test fun `wav relu`() {
         val (x, rate) = ParolePc.litWav(fr.f4ioz.satcombo.phonie.ParoleTraduite.wav(shortArrayOf(0, 16384, -16384), 16_000))
         assertEquals(16_000, rate); assertEquals(3, x.size); assertEquals(0.5f, x[1], 1e-4f)
+    }
+
+    @Test fun `DATV a part, coupee d origine, seulement la traduction`() {
+        val p = parole()
+        p.actif = true
+        assertFalse(p.datvActif)
+        // The phonie's spoken translation on does not say the DATV's.
+        p.arrete()
+        p.entendu(entendu(source = "datv"))
+        assertEquals(0, p.json().getInt("attente"))
+        // Ours, heard in our language, is not said back on the DATV even when « every language » is chosen.
+        p.etrangere = false
+        assertNull(p.aDire(entendu(langue = "fr", traduit = false, source = "datv")))
+        assertNotNull(p.aDire(entendu(langue = "fr", traduit = false)))
+    }
+
+    @Test fun `DATV, sa voix, son volume, la ou passe son son, le son d origine baisse`() {
+        val s = Synthese(); val l = Lecteur()
+        parole(s, l)   // the voices in place
+        val gains = ArrayList<Double>()
+        var p2: ParolePc? = null
+        val l2 = object : ParolePc.Lecteur { override fun joue(pcm: ShortArray, rate: Int) { gains += p2!!.gainDatv; l.joue(pcm, rate) } }
+        p2 = ParolePc(StockageMemoire(), InstallPhoniePc(dossier), { "/bin/false" }, { "fr" }, { horloge }, { null }, { synchronized(niveaux) { niveaux += it } }, l2,
+            fabriqueSynthese = { s }, fabriqueClone = { null }).also { ouverts += it }
+        p2.datvVoix = "fr_FR-siwis-medium"; p2.datvVolume = 40; p2.datvBaisse = 80
+        p2.sortiesDatv = { setOf("pc", "navigateur") }
+        assertEquals(1.0, p2.gainDatv, 0.0)
+        p2.dis(entendu(source = "datv"))
+        // The voice chosen for the DATV, not the phonie's « auto ».
+        assertEquals("fr_FR-siwis-medium", s.demandes.last().first)
+        // Played here, the picture's sound at 20 % meanwhile, back after; the SDR speaker untouched.
+        assertEquals(listOf(0.2), gains.map { Math.round(it * 100) / 100.0 })
+        assertEquals(1.0, p2.gainDatv, 0.0)
+        assertTrue(synchronized(niveaux) { niveaux.isEmpty() })
+        // Its level: 40 % of the phonie's 85 % peak.
+        val crete = l.joues.last().first.maxOf { kotlin.math.abs(it.toInt()) } / 32767.0
+        assertEquals(0.85 * 0.4, crete, 0.02)
+        val d = p2.depuis(0).single()
+        assertTrue(d.getBoolean("datv")); assertTrue(d.getBoolean("navigateur")); assertEquals(0.2, d.getDouble("baisse"), 1e-9)
+        // Heard in a browser only: nothing on this PC.
+        p2.sortiesDatv = { setOf("navigateur") }
+        val n = l.joues.size
+        p2.dis(entendu(source = "datv"))
+        assertEquals(n, l.joues.size)
+        // Heard nowhere (the sound cut): on this PC.
+        p2.sortiesDatv = { emptySet() }
+        p2.dis(entendu(source = "datv"))
+        assertEquals(n + 1, l.joues.size)
+        assertFalse(p2.depuis(0).last().getBoolean("navigateur"))
+    }
+
+    @Test fun `DATV, jamais par-dessus soi, seulement la plus recente, rien au-dela de 20 s`() {
+        val s = Synthese()
+        val enCours = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxEnsemble = java.util.concurrent.atomic.AtomicInteger(0)
+        val joues = java.util.Collections.synchronizedList(ArrayList<Int>())
+        val porte = java.util.concurrent.CountDownLatch(1)
+        val l = object : ParolePc.Lecteur {
+            override fun joue(pcm: ShortArray, rate: Int) {
+                maxEnsemble.accumulateAndGet(enCours.incrementAndGet()) { a, b -> maxOf(a, b) }
+                porte.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                joues += pcm.size
+                enCours.decrementAndGet()
+            }
+        }
+        val install = InstallPhoniePc(dossier).apply { voix.mkdirs(); listOf("fr_FR-siwis-medium").forEach { File(voix, "$it.onnx").writeText(""); File(voix, "$it.onnx.json").writeText("{}") } }
+        val p = ParolePc(StockageMemoire(), install, { "/bin/false" }, { "fr" }, { horloge }, { null }, {}, l, fabriqueSynthese = { s }, fabriqueClone = { null }).also { ouverts += it }
+        p.datvActif = true
+        // Heard 25 s ago: too late for the DATV (it would be for the phonie's 30 s).
+        p.entendu(entendu(source = "datv", ilYaMs = 22_000))
+        val f0 = System.currentTimeMillis() + 3000
+        while (System.currentTimeMillis() < f0 && p.json().getLong("perimees") == 0L) Thread.sleep(20)
+        assertEquals(1L, p.json().getLong("perimees"))
+        // One speaks (held); three more come: only the last waits.
+        p.entendu(entendu(source = "datv"))
+        val f1 = System.currentTimeMillis() + 3000
+        while (System.currentTimeMillis() < f1 && enCours.get() == 0) Thread.sleep(20)
+        assertEquals(1, enCours.get())
+        repeat(3) { p.entendu(entendu(source = "datv")) }
+        assertEquals(1, p.json().getInt("attente"))
+        assertEquals(2L, p.json().getLong("sautees"))
+        porte.countDown()
+        val f2 = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < f2 && joues.size < 2) Thread.sleep(20)
+        Thread.sleep(200)
+        assertEquals(2, joues.size)
+        assertEquals(1, maxEnsemble.get())
+        // Off: the worker stops (the phonie's spoken translation is off too).
+        p.datvActif = false
+        assertEquals("coupé", p.etat)
     }
 }

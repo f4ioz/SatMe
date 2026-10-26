@@ -15,6 +15,16 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **DATV › Sous-titres › Traduction parlée** (coupée d'origine) : la traduction de chaque passage reçu dite par la voix de synthèse de Phonie → texte, avec sa voix, son volume et le **son d'origine baissé** pendant qu'elle parle (réglable). Jamais par-dessus elle-même : seul le passage le plus récent attend, rien après 20 s de retard. Elle passe là où passe le son DATV (haut-parleur du PC, navigateur qui écoute), réception par un SatMe-Node comprise ; sans voix installée, la carte mène à l'installation.
+- **Affichage des sous-titres** : largeur, nombre de lignes (1 à 4), longueur des lignes (≈ mots par sous-titre), taille (auto ou fixe), durée, et **Plus de texte** (4 lignes, 90 % de large, les sous-titres précédents gardés au-dessus). Aperçu immédiat, réglé par navigateur, rien n'est jamais coupé.
+- **Résumé** de la station reçue (et des précédentes) : indicatifs entendus, lus dans l'image ou dans le nom du service, reports (5/9, MER, marge), locators, matériel cité, fréquences, phrases clés, dans ta langue. Fait sur le PC sans Internet ; **Copier** et **Noter le QSO** (préremplit le carnet sans enregistrer).
+
+### en
+- **DATV › Subtitles › Spoken translation** (off by default): each received over's translation said by the voice-to-text synthetic voice, with its own voice, volume and the **original sound lowered** while it speaks (adjustable). Never over itself: only the latest over waits, nothing more than 20 s late. It plays where the DATV sound plays (this PC's speaker, the browser listening), through a SatMe-Node too; with no voice installed, the card leads to the installation.
+- **Subtitle display**: width, number of lines (1 to 4), line length (≈ words per cue), size (auto or fixed), duration, and **More text** (4 lines, 90 % wide, the previous cues kept above). Instant preview, set per browser, nothing is ever cut off.
+- **Summary** of the station received (and the previous ones): callsigns heard, read in the picture or in the service name, reports (5/9, MER, margin), locators, gear named, frequencies, key sentences, in your language. Made on the PC without Internet; **Copy** and **Log the QSO** (fills the log without saving).
+
 ## 2026.10.32
 
 ### fr

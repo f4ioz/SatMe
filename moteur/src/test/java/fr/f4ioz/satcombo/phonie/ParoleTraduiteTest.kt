@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.phonie
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,5 +63,41 @@ class ParoleTraduiteTest {
         assertEquals("RIFF", String(w, 0, 4)); assertEquals("WAVE", String(w, 8, 4))
         val s = ParoleTraduite.enShorts(floatArrayOf(0f, 0.5f, -1f))
         assertEquals((-0.85f * 32767).toInt().toShort(), s[2])
+    }
+
+    @Test fun `la DATV ne garde que la plus recente, avec sa propre limite d age`() {
+        var t = 100_000L
+        val f = ParoleTraduite.File<String>(2, 30_000L) { t }
+        f.ajoute("phonie", t)
+        f.ajoute("datv 1", t, seule = true, perime = 20_000L, genre = "datv")
+        f.ajoute("datv 2", t, seule = true, perime = 20_000L, genre = "datv")
+        assertEquals(2, f.taille()); assertEquals(1L, f.sautees)
+        t += 25_000
+        // The phonie's still fresh at 25 s, the DATV's not.
+        assertEquals("phonie", f.prochaine())
+        assertNull(f.prochaine())
+        assertEquals(1L, f.perimees)
+        assertTrue(f.frais(t - 25_000)); assertFalse(f.frais(t - 25_000, 20_000L))
+    }
+
+    @Test fun `le son d origine glisse vers le niveau demande, sans saut`() {
+        val b = ParoleTraduite.Baisse(rampeMs = 100.0)
+        val rate = 1000
+        // 100 ms at 1000 Hz: 100 frames from 1 to 0.25; stereo, both channels alike.
+        val x = ShortArray(400) { 10_000 }
+        b.applique(x, x.size, 2, rate, 0.25)
+        assertEquals(0.25, b.gain, 1e-9)
+        val g = (0 until 200).map { x[2 * it] / 10_000.0 }
+        assertTrue(g.zipWithNext().all { (a, c) -> a >= c && a - c <= 0.0101 })
+        assertEquals(0.99, g[0], 0.01); assertEquals(0.25, g[150], 0.001)
+        assertTrue((0 until 200).all { x[2 * it] == x[2 * it + 1] })
+        // Back up the same way; at 1 it leaves the sound untouched.
+        val y = ShortArray(400) { 10_000 }
+        b.applique(y, y.size, 2, rate, 1.0)
+        assertEquals(1.0, b.gain, 1e-9)
+        val z = ShortArray(4) { 1234 }
+        b.applique(z, 4, 2, rate, 1.0)
+        assertTrue(z.all { it == 1234.toShort() })
+        assertEquals(0.3, ParoleTraduite.gainBaisse(70), 1e-9); assertEquals(1.0, ParoleTraduite.gainBaisse(-5), 1e-9); assertEquals(0.0, ParoleTraduite.gainBaisse(100), 1e-9)
     }
 }

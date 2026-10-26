@@ -650,6 +650,19 @@ class DatvPc(
 
     // ------------------------------------------------------------ the sound played here, its levels, its volume
 
+    /** The spoken translation's wish for the sound played here (1, or lower while it speaks). */
+    @Volatile var gainParole: () -> Double = { 1.0 }
+
+    /**
+     * Where the DATV sound is heard now: "pc" (played here, by ffplay or
+     * SatMe), "navigateur" (a browser listens); "pcFixe" when ffplay plays
+     * it (its level cannot be lowered while a voice speaks).
+     */
+    fun sorties(): Set<String> = buildSet {
+        if (reglage.son && lecteursLocaux) { add("pc"); if (!sonReglable) add("pcFixe") }
+        if (diffusion?.ecoute("datv") == true) add("navigateur")
+    }
+
     /** The browsers listening to the DATV sound (« Écouter ici »), fed by the decoder here. */
     @Volatile var diffusion: DiffusionSon? = null
 
@@ -688,7 +701,7 @@ class DatvPc(
         essaiSonLocalMs = t
         sonLocal?.arrete()
         val ff = RenduPc.ffmpeg() ?: return
-        sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son }, diffusion, horloge).takeIf { it.demarre() }
+        sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son }, diffusion, horloge) { gainParole() }.takeIf { it.demarre() }
     }
 
     private fun arreteSonLocal() { sonLocal?.arrete(); sonLocal = null; essaiSonLocalMs = 0L }

@@ -496,6 +496,10 @@ fun main(args: Array<String>) {
     val parole = ParolePc(station.stockage, phonie.install, { phonie.install.python(phonie.python) }, { if (phonie.cible == PhoniePc.WHISPER) "en" else phonie.cible },
         baisse = { baisseSdr.regle("parole", it) })
     phonie.ecouteParole = { parole.entendu(it) }
+    // The DATV's overs said where its sound is heard, that sound lowered here meanwhile.
+    parole.sortiesDatv = { datv.sorties() }
+    datv.gainParole = { parole.gainDatv }
+    textesDatv.parole = { parole.datvActif }
     if (parole.actif) parole.demarre()
     serveur.parole = parole
     portee.launch { while (true) { runCatching { annonces.tic() }; kotlinx.coroutines.delay(1000) } }
