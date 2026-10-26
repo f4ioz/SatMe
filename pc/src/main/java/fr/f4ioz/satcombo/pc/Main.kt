@@ -474,7 +474,8 @@ fun main(args: Array<String>) {
                 "une émission est en cours : l'arrêter d'abord" else null
         },
         motDePasse = { acces.defini },
-        exeWindows = ProcessHandle.current().info().command().orElse(null)?.takeIf { it.lowercase().endsWith(".exe") && !it.lowercase().endsWith("java.exe") && !it.lowercase().endsWith("javaw.exe") })
+        exeWindows = ProcessHandle.current().info().command().orElse(null)?.takeIf { it.lowercase().endsWith(".exe") && !it.lowercase().endsWith("java.exe") && !it.lowercase().endsWith("javaw.exe") },
+        portable = dossierPortable()?.takeIf { it.absoluteFile == dossier.absoluteFile })
     demarrage.auDemarrage(neuf)
     serveur.demarrage = demarrage
     portee.launch(kotlinx.coroutines.Dispatchers.IO) { while (true) { runCatching { demarrage.maj.tic() }; kotlinx.coroutines.delay(10_000) } }

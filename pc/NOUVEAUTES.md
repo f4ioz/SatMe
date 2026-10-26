@@ -19,12 +19,16 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Session du Journal** : même très vite hors des passages, la lecture ralentit à l'approche d'un passage ou d'une image ; plus aucun passage ni première image n'est sauté.
 - **Session : deux zooms**, un de loin hors des passages, un de près pendant le passage ; la caméra passe de l'un à l'autre en douceur (la molette règle celui du moment).
 - **Session : satellites en plus** : coche des favoris, ils tournent aussi autour du globe (leurs taches au sol en option), sur la page et dans la vidéo.
+- **Nouvelle version** : quand une version plus récente est publiée, sa fenêtre (nouveautés, téléchargement) s'ouvre d'elle-même, une fois par version ; le badge ⬆ reste dans le bandeau.
+- **SatMe-PC portable** : le bandeau affiche **Portable** (au survol, le dossier des données).
 - **Session : exports comme un passage** : vidéo MP4 (avec le son des contacts entendus, passés en temps réel), GIF animé, image du moment, son WAV ; mêmes incrustations que le Journal.
 
 ### en
 - **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.
 - **Session: two zooms**, one from afar outside the passes, one near in a pass; the camera eases from one to the other (the wheel sets the one of the moment).
 - **Session: more satellites**: tick favourites, they go round the globe too (their footprints as an option), on the page and in the video.
+- **New version**: when a newer version is published, its window (notes, download) opens by itself, once per version; the ⬆ badge stays in the header.
+- **Portable SatMe-PC**: the header shows **Portable** (hover: the data folder).
 - **Session: exports as a pass's**: MP4 video (with the sound of the contacts heard, played in real time), animated GIF, picture of the moment, WAV sound; the same overlays as the Journal.
 
 ## 2026.10.30

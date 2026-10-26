@@ -43,6 +43,8 @@ class DemarragePc(
     private val motDePasse: () -> Boolean = { false },
     /** The Windows launcher (SatMe-PC.exe) when known, for « Lancer avec Windows ». */
     private val exeWindows: String? = null,
+    /** The portable folder (a « donnees » folder beside the program), null when installed. */
+    private val portable: java.io.File? = null,
 ) {
     private val stockage get() = station.stockage
 
@@ -92,6 +94,7 @@ class DemarragePc(
                     f.reseau?.let { it != l.reseau && l.sourceReseau != LanceurPc.Source.LIGNE } == true ||
                     f.dossier?.let { java.io.File(it).absoluteFile != l.dossier && l.sourceDossier != LanceurPc.Source.LIGNE } == true))
             .put("motDePasse", motDePasse())
+            .put("portable", portable?.path ?: JSONObject.NULL)
             .put("redemarrage", JSONObject().put("possible", refus == null).put("raison", refus.orEmpty()))
             .put("configRapide", configRapideAFaire)
             .put("quoiDeNeuf", notesJson(quoiDeNeuf()))

@@ -22,6 +22,7 @@ object DemarragePagePc {
   /* ---------------------------------------------------------------- start-up: quick setup, what's new, update badge */
   .h-maj { border-color:rgba(255,180,84,.55); color:var(--ambre); cursor:pointer; }
   .h-maj:hover { background:rgba(255,180,84,.12); }
+  .h-portable { border-color:rgba(63,224,200,.5); color:var(--rx); font-size:var(--fs-xs); font-weight:700; letter-spacing:.4px; }
   .dlg-dem { width:min(620px,94vw); max-height:88vh; overflow:auto; padding:14px 18px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   .dlg-dem h3 { margin:14px 0 4px; font-size:14px; color:var(--rx); }
   .dlg-dem h3:first-child { margin-top:0; }
@@ -46,7 +47,7 @@ object DemarragePagePc {
 """
 
     /** The badge in the header, before « ? ». */
-    const val ENTETE = """<button id="h-maj" class="h-puce h-maj" hidden onclick="mjOuvre()" title="Une version plus récente de SatMe-PC est publiée : ses nouveautés et le téléchargement">⬆<span class="h-m" id="h-maj-t">Nouvelle version</span></button>"""
+    const val ENTETE = """<span id="h-portable" class="h-puce h-portable" hidden>Portable</span><button id="h-maj" class="h-puce h-maj" hidden onclick="mjOuvre()" title="Une version plus récente de SatMe-PC est publiée : ses nouveautés et le téléchargement">⬆<span class="h-m" id="h-maj-t">Nouvelle version</span></button>"""
 
     /** The windows: the update, « Quoi de neuf », « Configuration rapide ». */
     const val DIALOGUES = """
@@ -180,6 +181,9 @@ async function demCharge() {
   const nav = document.querySelector('#reg-nav button[data-cat="demarrage"]'); if (nav) nav.hidden = !ok;
   if (!ok) return null;
   demMontre(); mjMontre(DEM.maj); depEtat();
+  // A portable SatMe-PC (its « donnees » folder beside the program): said in the header.
+  const po = g('h-portable');
+  if (po) { po.hidden = !DEM.portable; po.title = DEM.portable ? 'SatMe-PC portable : réglages et fichiers dans ' + DEM.portable + ', rien ailleurs sur ce PC' : ''; }
   return DEM;
 }
 function demSource(o) { return '<span class="dem-src ' + o.source + '" title="D’où vient cette valeur">' + esc(o.sourceTexte) + '</span>'; }
@@ -279,6 +283,15 @@ function mjOuvre() {
   txt('mj-comment', /\.msi$/.test(M.fichier || '') ? 'Windows : fermer SatMe-PC (icône près de l’horloge), lancer l’installateur ; les réglages restent.' :
     'Linux : relancer le script d’installation (bash installe-satme.sh), ou décompresser satme-pc.tar à la place de l’ancien ; les réglages restent dans le dossier des données.');
   g('mj-dlg').showModal();
+}
+/* A newer version, once per version in this browser: its window opens by itself (not over another window, not when hidden with « Masquer »). */
+function mjAuto(M) {
+  if (!M || !M.disponible || !M.version) return;
+  let vue = '', masquee = ''; try { vue = localStorage.getItem('maj-vue') || ''; masquee = localStorage.getItem('maj-masquee') || ''; } catch (x) {}
+  if (vue === M.version || masquee === M.version) return;
+  if (document.querySelector('dialog[open]')) { setTimeout(() => mjAuto(M), 5000); return; }
+  try { localStorage.setItem('maj-vue', M.version); } catch (x) {}
+  mjOuvre();
 }
 function mjMasque() { try { localStorage.setItem('maj-masquee', DEM.maj.version); } catch (x) {} g('mj-dlg').close(); mjMontre(DEM.maj); }
 async function mjRegle(on) { const j = await demPost('api/maj/reglage?on=' + (on ? 1 : 0)); if (j) { DEM.maj = j; mjMontre(j); } }
@@ -428,7 +441,11 @@ demCharge().then(d => {
   else if (q.has('nouveautes')) setTimeout(() => qdnOuvre(true), 400);
   else if (d.quoiDeNeuf && d.quoiDeNeuf.length) setTimeout(() => qdnOuvre(false), 600);
   if (q.has('nouvelle-version')) setTimeout(mjOuvre, 500);
+  else setTimeout(() => mjAuto(d.maj), 1500);
 });
-setInterval(() => { if (!document.hidden) fetch('api/maj').then(r => r.ok ? r.json() : null).then(j => { if (j && DEM) { DEM.maj = j; mjMontre(j); } }).catch(() => {}); }, 600000);
+// The check (GitHub, once a day) may answer after the page opened: asked again in a minute, then every 10 minutes.
+function mjSuit() { if (!document.hidden) fetch('api/maj').then(r => r.ok ? r.json() : null).then(j => { if (j && DEM) { DEM.maj = j; mjMontre(j); mjAuto(j); } }).catch(() => {}); }
+setTimeout(mjSuit, 60000);
+setInterval(mjSuit, 600000);
 """
 }
