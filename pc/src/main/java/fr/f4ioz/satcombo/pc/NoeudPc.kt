@@ -152,7 +152,8 @@ class NoeudPc(
                 fun khz(k: String) = q[k]?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1000.0) }
                 val r0 = datv.reglage
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
-                    entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "", son = false)
+                    entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "", son = false,
+                    balayage = fr.f4ioz.satcombo.datv.Datv.balayageDe(q["balayage"]))
                 // The receiver asked (an older client asks none: the MiniTiouner).
                 datv.recepteur = q["recepteur"]?.takeIf { it in fr.f4ioz.satcombo.datv.Datv.RECEPTEURS } ?: fr.f4ioz.satcombo.datv.Datv.MINITIOUNER
                 val e = datv.demarre(r)

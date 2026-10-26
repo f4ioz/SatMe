@@ -295,4 +295,98 @@ class VoteIndicatifs(private val requis: Int = 2, private val garde: Int = 5) {
     @Synchronized fun confirmes(): List<Lu> = confirmes.toList()
 
     @Synchronized fun oublie() { suite.clear(); confirmes.clear() }
+
+    /** [indicatifs] no longer shown (their counts start again). */
+    @Synchronized fun retire(indicatifs: Collection<String>) { confirmes.removeAll { it.indicatif in indicatifs }; suite.keys.removeAll(indicatifs.toSet()) }
+}
+
+/**
+ * The callsigns read in the picture, kept to the station received now: a
+ * new station (another frequency, another service name in the stream's
+ * SDT, a lost lock) puts them away in a short [historique], and one not
+ * read again for [oubliMs] goes there too. Each says how long ago it was
+ * last read ([recentMs]: « just now »).
+ */
+class SuiviIndicatifs(
+    val recentMs: Long = RECENT_MS,
+    val oubliMs: Long = OUBLI_MS,
+    private val historiqueMax: Int = 12,
+    private val vote: VoteIndicatifs = VoteIndicatifs(),
+) {
+    /** One callsign put away: when last read, on which frequency and service. */
+    data class Ancien(val indicatif: String, val premierMs: Long, val dernierMs: Long, val lectures: Int, val cielKhz: Long, val service: String)
+
+    /** What tells one station from the next: the frequency tuned and the service name (empty until the SDT comes). */
+    data class Contexte(val cielKhz: Long, val service: String)
+
+    private var contexte: Contexte? = null
+    private val historique = ArrayList<Ancien>()
+
+    /** Changes with each new station: a read started before it is for the previous one ([lecture] drops it). */
+    @Volatile var generation = 0L
+        private set
+
+    /**
+     * The reception now: [c] null when not locked. A new frequency, or a
+     * service name other than the one known (the first one coming is the
+     * same station's), puts the callsigns away. True when they were.
+     */
+    @Synchronized
+    fun contexte(c: Contexte?, t: Long): Boolean {
+        val avant = contexte
+        val meme = c != null && avant != null && c.cielKhz == avant.cielKhz &&
+            (c.service.isEmpty() || avant.service.isEmpty() || c.service.equals(avant.service, ignoreCase = true))
+        if (meme) {
+            if (avant!!.service.isEmpty() && c!!.service.isNotEmpty()) contexte = c
+            return false
+        }
+        if (c == null && avant == null) return false
+        rangeTout()
+        contexte = c
+        generation++
+        return true
+    }
+
+    /** One read made for the station [gen] at [t]: dropped when the station changed meanwhile. */
+    @Synchronized
+    fun lecture(candidats: Collection<String>, t: Long, surs: Collection<String> = emptySet(), gen: Long = generation): List<String> {
+        if (gen != generation) return emptyList()
+        return vote.lecture(candidats, t, surs)
+    }
+
+    /** The callsigns of the station received now, last read first; those not read for [oubliMs] put away first. */
+    @Synchronized
+    fun actuels(t: Long): List<VoteIndicatifs.Lu> {
+        val vieux = vote.confirmes().filter { t - it.dernierMs > oubliMs }
+        if (vieux.isNotEmpty()) { vieux.forEach { range(it) }; vote.retire(vieux.map { it.indicatif }) }
+        return vote.confirmes()
+    }
+
+    /** The callsigns put away, last read first (none of those read now). */
+    @Synchronized
+    fun historique(t: Long): List<Ancien> {
+        val maintenant = actuels(t).map { it.indicatif }.toSet()
+        return historique.filter { it.indicatif !in maintenant }
+    }
+
+    /** All forgotten, the history too. */
+    @Synchronized
+    fun oublie() { vote.oublie(); historique.clear(); generation++ }
+
+    private fun rangeTout() { vote.confirmes().forEach { range(it) }; vote.oublie() }
+
+    private fun range(l: VoteIndicatifs.Lu) {
+        val c = contexte
+        historique.removeAll { it.indicatif == l.indicatif }
+        historique.add(0, Ancien(l.indicatif, l.premierMs, l.dernierMs, l.lectures, c?.cielKhz ?: 0L, c?.service.orEmpty()))
+        historique.sortByDescending { it.dernierMs }
+        while (historique.size > historiqueMax) historique.removeAt(historique.size - 1)
+    }
+
+    companion object {
+        /** Read again within this: « just now ». */
+        const val RECENT_MS = 20_000L
+        /** Not read again for this: put away. */
+        const val OUBLI_MS = 300_000L
+    }
 }

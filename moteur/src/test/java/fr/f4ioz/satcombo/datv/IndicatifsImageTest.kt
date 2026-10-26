@@ -165,4 +165,79 @@ class IndicatifsImageTest {
         assertFalse(SourcePhonie.admise("sdr", "carte", datv = false, sdrRecent = true))
         assertFalse(SourcePhonie.admise("carte", "sdr", datv = false, sdrRecent = false))
     }
+
+    // ------------------------------------------------------------------ their life: the station now, then the history
+
+    private val ici = SuiviIndicatifs.Contexte(10_494_750L, "")
+
+    @Test fun `un indicatif part avec sa station`() {
+        val s = SuiviIndicatifs()
+        s.contexte(ici, 0)
+        s.lecture(listOf("EA4ABC"), 1000); s.lecture(listOf("EA4ABC"), 4000)
+        assertEquals(listOf("EA4ABC"), s.actuels(5000).map { it.indicatif })
+        // The SDT comes: the same station named, nothing forgotten.
+        assertFalse(s.contexte(ici.copy(service = "EA4ABC"), 6000))
+        assertEquals(1, s.actuels(6000).size)
+        // Its name read again in another case: the same.
+        assertFalse(s.contexte(ici.copy(service = "ea4abc"), 7000))
+        // Another service on the same frequency: put away, in the history.
+        assertTrue(s.contexte(ici.copy(service = "G4XYZ"), 8000))
+        assertTrue(s.actuels(8000).isEmpty())
+        assertEquals(listOf("EA4ABC"), s.historique(8000).map { it.indicatif })
+        assertEquals("EA4ABC", s.historique(8000).single().service)
+        assertEquals(10_494_750L, s.historique(8000).single().cielKhz)
+        // Another frequency.
+        s.lecture(listOf("G4XYZ"), 9000, surs = listOf("G4XYZ"))
+        assertEquals(listOf("G4XYZ"), s.actuels(9000).map { it.indicatif })
+        assertTrue(s.contexte(SuiviIndicatifs.Contexte(10_497_000L, "G4XYZ"), 10_000))
+        assertTrue(s.actuels(10_000).isEmpty())
+        assertEquals(listOf("G4XYZ", "EA4ABC"), s.historique(10_000).map { it.indicatif })
+    }
+
+    @Test fun `le decrochage range les indicatifs`() {
+        val s = SuiviIndicatifs()
+        s.contexte(ici, 0)
+        s.lecture(listOf("F4IOZ"), 1000, surs = listOf("F4IOZ"))
+        assertEquals(1, s.actuels(1000).size)
+        assertTrue(s.contexte(null, 2000))
+        assertTrue(s.actuels(2000).isEmpty())
+        assertEquals(listOf("F4IOZ"), s.historique(2000).map { it.indicatif })
+        // Still unlocked: nothing more happens.
+        assertFalse(s.contexte(null, 3000))
+        // Locked again (the same frequency): a new station as far as we know; read again, it leaves the history.
+        assertTrue(s.contexte(ici, 4000))
+        s.lecture(listOf("F4IOZ"), 5000, surs = listOf("F4IOZ"))
+        assertEquals(listOf("F4IOZ"), s.actuels(5000).map { it.indicatif })
+        assertTrue(s.historique(5000).isEmpty())
+    }
+
+    @Test fun `une lecture commencee pour la station precedente est jetee`() {
+        val s = SuiviIndicatifs()
+        s.contexte(ici, 0)
+        val gen = s.generation
+        s.contexte(ici.copy(cielKhz = 10_498_000L), 1000)
+        assertTrue(s.lecture(listOf("EA4ABC"), 2000, surs = listOf("EA4ABC"), gen = gen).isEmpty())
+        assertTrue(s.actuels(2000).isEmpty())
+        assertEquals(listOf("EA4ABC"), s.lecture(listOf("EA4ABC"), 2000, surs = listOf("EA4ABC")))
+    }
+
+    @Test fun `un indicatif pas relu vieillit puis part`() {
+        val s = SuiviIndicatifs(recentMs = 20_000, oubliMs = 300_000)
+        s.contexte(ici, 0)
+        s.lecture(listOf("EA4ABC"), 1000, surs = listOf("EA4ABC"))
+        s.lecture(listOf("G4XYZ"), 100_000, surs = listOf("G4XYZ"))
+        // Both still the station's, the latest first; EA4ABC no longer « just now ».
+        assertEquals(listOf("G4XYZ", "EA4ABC"), s.actuels(110_000).map { it.indicatif })
+        assertTrue(110_000 - s.actuels(110_000)[1].dernierMs > s.recentMs)
+        // Five minutes unread: put away, G4XYZ stays.
+        assertEquals(listOf("G4XYZ"), s.actuels(302_000).map { it.indicatif })
+        assertEquals(listOf("EA4ABC"), s.historique(302_000).map { it.indicatif })
+        // The history is kept short.
+        val h = SuiviIndicatifs()
+        for (i in 0 until 20) { h.contexte(SuiviIndicatifs.Contexte(10_491_500L + i, ""), i * 10L); h.lecture(listOf("G${i}ABC"), i * 10L + 1, surs = listOf("G${i}ABC")) }
+        h.contexte(null, 1000)
+        assertEquals(12, h.historique(1000).size)
+        assertEquals("G19ABC", h.historique(1000).first().indicatif)
+        h.oublie(); assertTrue(h.historique(1000).isEmpty())
+    }
 }

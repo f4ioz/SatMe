@@ -115,6 +115,7 @@ class DatvPc(
                 Thread.sleep(1000)
                 if (generation != gen) break
                 runCatching { mesureQualite() }
+                runCatching { gardeImage(gen) }
             }
         }
     }
@@ -122,9 +123,38 @@ class DatvPc(
     /** One second of quality: the stream's analysis, the decoders' logs, the receiver's words. */
     fun mesureQualite(): JSONObject {
         journalImages.lis(); journalSon.lis()
-        return suivi.seconde(horloge(), etat, reglage.srKs, analyse.bilan(), journalImages.video + journalSon.video,
+        return suivi.seconde(horloge(), etat, reglage.debitAccroche(etat.srTrouveKs), analyse.bilan(), journalImages.video + journalSon.video,
             journalImages.audio + journalSon.audio, journalImages.flux + journalSon.flux, lecteursLocaux)
     }
+
+    // ------------------------------------------------------------ the guards: a frozen picture, LongMynd gone by itself
+
+    private val gardeFige = fr.f4ioz.satcombo.datv.GardeImage()
+    @Volatile private var derniereImageMs = 0L
+    @Volatile private var lecteursDepuisMs: Long? = null
+
+    /** Times the players were started again on a frozen picture (this reception). */
+    val relancesImage: Int get() = gardeFige.relances
+
+    /** The picture frozen while locked and the stream flows: the players started again with the next packets. */
+    private fun gardeImage(gen: Int) {
+        if (!lecteursLocaux || generation != gen) return
+        val e = etat
+        if (!gardeFige.tic(horloge(), e.verrouille, e.kbps, derniereImageMs, lecteursDepuisMs.takeIf { ffmpeg != null })) return
+        synchronized(this) {
+            if (generation != gen) return
+            listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
+            ffmpeg = null; ffplay = null; lecteursDepuisMs = null
+            arreteSonTexte(); arreteSonLocal()
+        }
+    }
+
+    /** LongMynd started again when it stops by itself in the middle of a reception (on unless unticked). */
+    var relanceAuto: Boolean
+        get() = stockage.getBoolean("datv_relance", true)
+        set(v) { stockage.edit().putBoolean("datv_relance", v).apply() }
+    private val relance = fr.f4ioz.satcombo.datv.RelanceLongMynd()
+    @Volatile private var parRelance = false
 
     // ------------------------------------------------------------ settings
 
@@ -134,11 +164,12 @@ class DatvPc(
         olKhz = stockage.getLong("datv_ol_khz", 9_750_000L),
         entreeB = stockage.getBoolean("datv_entree_b", false),
         lnb = "",   // never kept: the supply is asked for each time
-        son = stockage.getBoolean("datv_son", true))
+        son = stockage.getBoolean("datv_son", true),
+        balayage = Datv.balayageDe(stockage.getString("datv_balayage", "")))
 
     private fun garde(r: ReglageDatv) {
         stockage.edit().putLong("datv_ciel_khz", r.cielKhz).putInt("datv_sr", r.srKs).putLong("datv_ol_khz", r.olKhz)
-            .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).apply()
+            .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).putString("datv_balayage", r.balayage.joinToString(",")).apply()
     }
 
     /** The receiver: [Datv.MINITIOUNER] (LongMynd), [Datv.PLUTO] or [Datv.BLADERF] (SatMe's demodulator); taken at the next start. */
@@ -182,6 +213,7 @@ class DatvPc(
         // LongMynd is Linux's: on Windows the MiniTiouner is driven through a SatMe-Node.
         if (OutilsPc.windows) return "sous Windows, le MiniTiouner se pilote par un SatMe-Node (Raspberry Pi) : donner son adresse et son code ci-dessous"
         val prog = programme() ?: return "LongMynd introuvable : le compiler (github.com/BritishAmateurTelevisionClub/longmynd) et donner son chemin"
+        if (!parRelance) relance.raz()
         reglage = r; garde(r)
         val gen = ++generation
         val sEtat = DatagramSocket(0, InetAddress.getLoopbackAddress()).also { socketEtat = it }
@@ -199,10 +231,21 @@ class DatvPc(
         thread(isDaemon = true, name = "satme-datv-ts") { litTs(sTs, gen) }
         thread(isDaemon = true, name = "satme-datv-garde") {
             // LongMynd gone by itself (no MiniTiouner, no access to it): say why, from its own words.
+            val debut = horloge()
             p.waitFor()
             if (generation == gen) {
-                etat = etat.copy(actif = false, erreur = pourquoiArret())
+                val pourquoi = pourquoiArret()
+                etat = etat.copy(actif = false, erreur = pourquoi)
                 arreteFlux()
+                // Gone in the middle of a reception: started again after a pause, as the operator would.
+                val pause = if (relanceAuto) relance.apres(horloge() - debut, pourquoi) else null
+                if (pause != null) {
+                    etat = etat.copy(erreur = pourquoi + " · nouvel essai dans " + (pause / 1000) + " s")
+                    Thread.sleep(pause)
+                    synchronized(this) {
+                        if (generation == gen) { parRelance = true; try { demarre(r) } finally { parRelance = false } }
+                    }
+                }
             }
         }
         return null
@@ -579,6 +622,7 @@ class DatvPc(
             "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1")
             .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffmpeg.log")).start()
         ffmpeg = p
+        lecteursDepuisMs = horloge()
         thread(isDaemon = true, name = "satme-datv-images") { litImages(p.inputStream, gen) }
         if (reglage.son && !sonReglable) demarreSon(ff)
     }
@@ -660,7 +704,7 @@ class DatvPc(
         while (generation == gen) {
             val n = runCatching { e.read(b) }.getOrDefault(-1)
             if (n < 0) break
-            d.ajoute(b, n) { img -> image = img; etat = etat.copy(images = etat.images + 1); journalImages.enAttente = false; journalSon.enAttente = false }
+            d.ajoute(b, n) { img -> image = img; derniereImageMs = horloge(); etat = etat.copy(images = etat.images + 1); journalImages.enAttente = false; journalSon.enAttente = false }
         }
     }
 
@@ -841,10 +885,13 @@ class DatvPc(
         private val JOURNAL = File(System.getProperty("java.io.tmpdir"), "satme-longmynd.log")
 
         /** LongMynd's command line for [r]: TS and status to us on UDP, retried every 5 s without packets. */
-        fun commande(prog: String, r: ReglageDatv, portTs: Int, portEtat: Int): List<String> =
-            listOf(prog, "-i", "127.0.0.1", portTs.toString(), "-I", "127.0.0.1", portEtat.toString(), "-r", "5000") +
+        fun commande(prog: String, r: ReglageDatv, portTs: Int, portEtat: Int): List<String> {
+            // Scanning: LongMynd tries each rate in turn ("1500,1000,500"), each for the timeout.
+            val debits = Datv.debitsEssayes(r)
+            return listOf(prog, "-i", "127.0.0.1", portTs.toString(), "-I", "127.0.0.1", portEtat.toString(), "-r", Datv.delaiTsMs(debits).toString()) +
                 (if (r.entreeB) listOf("-w") else emptyList()) +
                 (if (r.lnb == "v" || r.lnb == "h") listOf("-p", r.lnb) else emptyList()) +
-                listOf(r.fiKhz.toString(), r.srKs.toString())
+                listOf(r.fiKhz.toString(), debits.joinToString(","))
+        }
     }
 }
