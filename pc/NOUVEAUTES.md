@@ -22,6 +22,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Nouvelle version** : quand une version plus récente est publiée, sa fenêtre (nouveautés, téléchargement) s'ouvre d'elle-même, une fois par version ; le badge ⬆ reste dans le bandeau.
 - **SatMe-PC portable** : le bandeau affiche **Portable** (au survol, le dossier des données).
 - **Session : exports comme un passage** : vidéo MP4 (avec le son des contacts entendus, passés en temps réel), GIF animé, image du moment, son WAV ; mêmes incrustations que le Journal.
+- **Modules** (Réglages › Modules) : coche ce qui t'intéresse — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, avions, navires… — ou prends un profil (Satellites FM/SSB, SSTV ARISS, Parabole QO-100 / DATV, Météo et non-sat, Tout). Un module décoché quitte le menu, ses réglages et la barre d'état ; ce qui reçoit ne démarre plus. Rien ne change à la mise à jour : tout reste coché. La configuration rapide propose les profils.
 
 ### en
 - **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.
@@ -30,6 +31,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **New version**: when a newer version is published, its window (notes, download) opens by itself, once per version; the ⬆ badge stays in the header.
 - **Portable SatMe-PC**: the header shows **Portable** (hover: the data folder).
 - **Session: exports as a pass's**: MP4 video (with the sound of the contacts heard, played in real time), animated GIF, picture of the moment, WAV sound; the same overlays as the Journal.
+- **Modules** (Réglages › Modules): tick what interests you — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, planes, ships… — or pick a profile (Satellites FM/SSB, SSTV ARISS, QO-100 dish / DATV, weather and non-sat, everything). A module unticked leaves the menu, its settings and the status bar; what receives no longer starts. Nothing changes on updating: everything stays ticked. The quick setup offers the profiles.
 
 ## 2026.10.30
 

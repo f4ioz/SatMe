@@ -84,7 +84,7 @@ object PagePc {
     private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock", "campaign", "history")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "view_quilt", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock", "campaign", "history")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart). */
@@ -163,6 +163,8 @@ object PagePc {
     /** The frame: rail, header strip, status bar (on this page and the journal's and the sheet's). */
     val STYLE_CADRE = """
   /* ---------------------------------------------------------------- the frame: rail, header strip, status bar */
+  /* What only concerns a module switched off (Réglages › Modules). */
+  .mod-off { display:none !important; }
   * { scrollbar-width:thin; scrollbar-color:var(--ligne-forte) transparent; }
   body { padding-left:var(--rail); }
   body.rail-ouvert { --rail:176px; }
@@ -410,6 +412,10 @@ object PagePc {
     document.querySelectorAll('#onglets .ws-l a').forEach(a => { const h = a.getAttribute('href').replace('pc#', ''); a.hidden = !j.onglets.includes(h); });
     document.querySelectorAll('#onglets .ws').forEach(w => { w.hidden = ![...w.querySelectorAll('.ws-l > a')].some(a => !a.hidden); });
     const m = g('sb-mt'); if (m && !j.onglets.includes('montage')) m.hidden = true;
+    (j.masques || []).forEach(q => { try { document.querySelectorAll(q).forEach(e => e.classList.add('mod-off')); } catch (x) {} });
+    // This page's module switched off (the sheet, SSTV): the main page says so.
+    const ici = document.querySelector('#onglets a.actif');
+    if (ici && !j.onglets.includes(ici.getAttribute('href'))) location.replace('pc#' + ici.getAttribute('href'));
   });
 })();"""
 
@@ -455,6 +461,9 @@ ${STYLE_JETONS}
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   .ns-avis { max-width:620px; margin:40px auto; }
+  .mod-profils { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 4px; }
+  .mod-l { display:block; margin-top:7px; }
+  .mod-l .mod-avis { display:block; margin-left:24px; color:var(--texte-3, var(--texte-2)); }
   #visionneuse { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; max-width:96vw; }
   #c-liste td.act button { padding:3px 5px; }
   .c-quiligne { min-height:20px; margin-top:4px; display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; }
@@ -3814,8 +3823,8 @@ ${rail()}
 </div>
 <div class="vue" id="v-nonsat" hidden>
   <div class="carte ns-avis">
-    <div class="t">Fonction non satellite désactivée — l'activer dans Réglages</div>
-    <div class="ligne"><span id="ns-nom"></span><button class="primaire" onclick="vue('reglages'); montreReglages('station')">Ouvrir Réglages › Ma station</button></div>
+    <div class="t">Ce module est désactivé · Réglages › Modules</div>
+    <div class="ligne"><span id="ns-nom"></span><button class="primaire" onclick="vue('reglages'); montreReglages('modules')">Ouvrir Réglages › Modules</button></div>
   </div>
 </div>
 <div class="vue" id="v-avions" hidden>
@@ -4193,12 +4202,12 @@ ${DemarragePagePc.CARTES}
         <div id="hz-champs" style="display:grid;grid-template-columns:repeat(2, auto 64px);gap:4px 8px;align-items:center"></div></div>
       <div class="ligne"><button class="primaire" onclick="enregistreHorizon()">Enregistrer</button><button onclick="hzSecteurs(HZ.length, true)">Tout à 0</button><span class="petit" id="hz-etat"></span></div>
     </div>
-    <div class="carte" id="ns-carte" hidden>
-      <div class="t">Fonctions non satellite</div>
-      <div class="petit aide">Les onglets qui n'écoutent pas les satellites. Décoché : l'onglet quitte le menu, la palette (Ctrl+K) et la carte, et la fonction ne démarre pas ; décochée pendant qu'elle reçoit, elle s'arrête (après confirmation) et rend son récepteur. Coché : l'onglet revient aussitôt. Le choix est gardé par SatMe-PC : le même menu pour tous les navigateurs.</div>
-      <label style="display:block;margin-top:8px"><input type="checkbox" id="ns-avions" onchange="nsCoche('avions', this)"> <b>Avions</b> <span class="petit">— ADS-B 1090 MHz, diffusion par avions</span></label>
-      <label style="display:block;margin-top:6px"><input type="checkbox" id="ns-ais" onchange="nsCoche('ais', this)"> <b>Navires</b> <span class="petit">— AIS 162 MHz</span></label>
-      <label style="display:block;margin-top:6px"><input type="checkbox" id="ns-sondes" onchange="nsCoche('sondes', this)"> <b>Sondes</b> <span class="petit">— radiosondes 400 à 406 MHz</span></label>
+    <div class="carte" id="mod-carte" hidden>
+      <div class="t">Modules</div>
+      <div class="petit aide">Les parties de SatMe-PC qui t’intéressent. Décoché : ses onglets, ses réglages et ses voyants quittent la page, et ce qui reçoit ou émet ne démarre pas ; décoché pendant qu’il reçoit ou émet, il s’arrête (après confirmation). Coché : il revient aussitôt. Le choix est gardé par SatMe-PC : la même page pour tous les navigateurs.</div>
+      <div class="mod-profils" id="mod-profils"></div>
+      <div id="mod-liste"></div>
+      <div class="petit" style="margin-top:10px"><b>Toujours là :</b> <span id="mod-coeur"></span></div>
     </div>
     <div class="carte">
       <div class="t">Skeds annoncés (hams.at)</div>
@@ -5332,7 +5341,8 @@ async function xsArrete() {
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
-  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon, fonctions non satellite', cartes: ['Station', 'Horizon', 'Fonctions non satellite'] },
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
+  { id: 'modules', nom: 'Modules', ico: 'view_quilt', desc: 'Ce qui t’intéresse : QO-100, DATV, SSTV, SDR, avions, navires… et les profils', cartes: ['Modules'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
@@ -5351,11 +5361,7 @@ let SAUV = null;
 async function majSauvegarde() {
   try { SAUV = await (await fetch('api/sauvegarde')).json(); } catch (x) { SAUV = null; }
   g('sv-carte').hidden = !(SAUV && SAUV.present);
-  // A category whose cards are all hidden here (the page served by the phone) leaves the list.
-  document.querySelectorAll('#reg-corps .reg-sec').forEach(sec => {
-    const vide = ![...sec.querySelectorAll('.reg-cartes > .carte')].some(k => !k.hidden || k.id === 'thd72-carte');
-    const b = document.querySelector('#reg-nav button[data-cat="' + sec.dataset.cat + '"]'); if (b) b.hidden = vide;
-  });
+  regNavMaj();
   if (!SAUV || !SAUV.present) return;
   const m = g('sv-medias').checked;
   g('sv-lien').href = 'sauvegarde.zip' + (m ? '?medias=1' : '');
@@ -5371,6 +5377,13 @@ async function restaureSauvegarde(input) {
     txt('sv-etat', j.ok ? j.fichiers + ' fichier(s) reçus. Arrête puis relance SatMe-PC pour les reprendre.' : 'Refusée : ' + j.erreur);
   } catch (x) { txt('sv-etat', 'Envoi impossible.'); }
   input.value = ''; majSauvegarde();
+}
+// A category whose cards are all hidden here (the page served by the phone, a module switched off) leaves the list.
+function regNavMaj() {
+  document.querySelectorAll('#reg-corps .reg-sec').forEach(sec => {
+    const vide = ![...sec.querySelectorAll('.reg-cartes > .carte')].some(k => (!k.hidden || k.id === 'thd72-carte') && !k.classList.contains('mod-off'));
+    const b = document.querySelector('#reg-nav button[data-cat="' + sec.dataset.cat + '"]'); if (b) b.hidden = vide;
+  });
 }
 let catReg = 'station';
 try { catReg = localStorage.getItem('reglages') || 'station'; } catch (x) {}
@@ -6644,7 +6657,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   navMaj(n);
-  if (ns) { txt('ns-nom', (NS_NOMS[n] || n) + ' n’est pas dans le menu.'); g('aff-pop').hidden = true; g('mem-pop').hidden = true; return; }
+  if (ns) { txt('ns-nom', 'Le module « ' + (ETEINTS[n] || NS_NOMS[n] || n) + ' » n’est pas dans le menu.'); g('aff-pop').hidden = true; g('mem-pop').hidden = true; return; }
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); ticCw(); }
   if (n === 'carnet' || n === 'sdr' || n === 'qo100') ticPhonie(true);
   if (n === 'reglages') chargePhonieReglages();
@@ -6685,7 +6698,7 @@ function stMaj() {
   document.querySelectorAll('.st').forEach(st => {
     let actif = null;
     st.querySelectorAll('.st-nav button').forEach(b => {
-      const pan = g(b.dataset.p), plein = [].some.call(pan.children, c => !c.hidden);
+      const pan = g(b.dataset.p), plein = !b.classList.contains('mod-off') && [].some.call(pan.children, c => !c.hidden);
       if (b.hidden === plein) b.hidden = !plein;
       if (b.classList.contains('actif')) actif = b;
     });
@@ -15473,7 +15486,12 @@ var TITRE0 = document.title, wsDernier = {}, HX = { t: {} };
 /** The functions not about satellites, ticked or not (api/capacites; null where the server does not offer the choice). */
 var NS = null;
 var NS_NOMS = { avions: 'Avions (ADS-B)', ais: 'Navires (AIS)', sondes: 'Sondes (radiosondes)' };
-function nsOff(n) { return !!(NS && NS[n] === false); }
+/** The tabs of the modules switched off → the module's name (api/capacites; empty where the server has no modules). */
+var ETEINTS = {};
+/** Réglages › Modules as the server says (api/capacites), null where it has none. */
+var MOD = null;
+function nsOff(n) { return !!(ETEINTS[n] || (NS && NS[n] === false)); }
+function modOn(id) { return !MOD || !MOD.modules.some(m => m.id === id && !m.on); }
 const ESPACES_WS = [...document.querySelectorAll('#onglets .ws')].map(w => w.dataset.ws);
 try { wsDernier = JSON.parse(localStorage.getItem('ws-dernier') || '{}') || {}; } catch (x) {}
 function railRegle(ouvert, garde) {
@@ -16518,9 +16536,9 @@ function palSources() {
     A('Agenda › SSTV : campagnes', 'auto-pilote, importer une affiche', apOuvre);
     if (AP.enCours) A('■ Arrêter le passage de l’auto-pilote', AP.enCours.nom, apStop, 'arret');
   }
-  A('Agenda › Activités à venir', 'SSTV, contacts ARISS, SSDV, METEOR annoncés en ligne', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-act"]'); if (b) b.click(); acVu = ''; acCharge(); });
-  A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
-  A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
+  if (modOn('activites')) A('Agenda › Activités à venir', 'SSTV, contacts ARISS, SSDV, METEOR annoncés en ligne', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-act"]'); if (b) b.click(); acVu = ''; acCharge(); });
+  if (modOn('sdr')) A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
+  if (modOn('sdr')) A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);
   A('Couper le son', 'haut-parleur SDR et écoute dans ce navigateur, muet',() => { rRegle('son=0'); if (!g('ec-stop').hidden) arreteEcoute(); annonce('Son coupé'); });
   A('Rétablir le son', 'haut-parleur SDR', () => { rRegle('son=1'); annonce('Haut-parleur SDR rétabli'); });
@@ -16603,16 +16621,18 @@ setInterval(ticTete, 2000); setInterval(rendTete, 1000); ticTete();
 lienRotor(); irMontre();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
 // The tabs the server offers (the phone serves some of them): the others hidden, and left if open.
-// The functions not about satellites (SatMe-PC only): unticked, their tab leaves the menu, its address shows a notice.
+// The modules (SatMe-PC only): switched off, their tabs leave the menu (an address shows a notice), and so do
+// what only concerns them (settings cards, sub-tabs, status-bar items: the selectors in masques).
 function appliqueCapacites(j) {
   if (!j || !j.onglets) return;
-  NS = j.nonSat || null;
+  NS = j.nonSat || null; ETEINTS = j.eteints || {}; MOD = j.modules ? j : null;
   document.querySelectorAll('#onglets button[data-v]').forEach(b => { b.hidden = !j.onglets.includes(b.dataset.v); });
   document.querySelectorAll('#onglets a').forEach(a => { a.hidden = !j.onglets.includes(a.getAttribute('href')); });
   // A workspace with none of its tabs here leaves the rail.
   document.querySelectorAll('#onglets .ws').forEach(w => { w.hidden = ![...w.querySelectorAll('.ws-l > *')].some(x => !x.hidden); });
-  g('ns-carte').hidden = !NS;
-  if (NS) Object.keys(NS_NOMS).forEach(k => { const c = g('ns-' + k); if (c && document.activeElement !== c) c.checked = !!NS[k]; });
+  document.querySelectorAll('.mod-off').forEach(e => e.classList.remove('mod-off'));
+  (j.masques || []).forEach(q => { try { document.querySelectorAll(q).forEach(e => e.classList.add('mod-off')); } catch (x) {} });
+  stMaj(); regNavMaj(); modRend();
   [['sonde', 'sondes'], ['avions', 'avions'], ['navires', 'ais'], ['diff', 'avions']].forEach(([c, n]) => {
     const i = document.querySelector('[data-cg="' + c + '"]'); if (i) i.closest('label').hidden = nsOff(n);
   });
@@ -16620,16 +16640,43 @@ function appliqueCapacites(j) {
   const ouvert = document.querySelector('#onglets button.actif');
   if (ouvert && ouvert.hidden) { if (!nsOff(ouvert.dataset.v)) vue('station'); else if (g('v-nonsat').hidden) vue(ouvert.dataset.v); }
   else if (ouvert && !g('v-nonsat').hidden) vue(ouvert.dataset.v);
+  // The sheet's page sent here (pc#planche) while SSTV is off: the notice, once.
+  if (PLANCHE0) { PLANCHE0 = false; if (ETEINTS.planche) vue('planche'); }
 }
 function chargeCapacites() { return fetch('api/capacites').then(r => r.ok ? r.json() : null).then(appliqueCapacites).catch(() => {}); }
-async function nsCoche(id, c) {
-  let j = await post('api/nonsat?o=' + id + '&on=' + (c.checked ? 1 : 0));
-  if (j && j.enMarche) {
-    if (!confirm(j.nom + ' reçoit en ce moment : l’arrêter (le récepteur est rendu) et retirer l’onglet du menu ?')) { c.checked = true; return; }
-    j = await post('api/nonsat?o=' + id + '&on=0&force=1');
-  }
-  if (j && j.onglets) appliqueCapacites(j); else chargeCapacites();
+// Réglages › Modules: the profiles, a box per module (its hint, what it works through when that is off), the core.
+var modVu = '';
+function modRend() {
+  const k = g('mod-carte'); if (!k) return;
+  k.hidden = !MOD;
+  if (!MOD) return;
+  const cle = JSON.stringify([MOD.modules.map(m => m.on), MOD.profil]);
+  if (cle === modVu) return;
+  modVu = cle;
+  const on = {}, nom = {}; MOD.modules.forEach(m => { on[m.id] = m.on; nom[m.id] = m.nom; });
+  g('mod-profils').innerHTML = MOD.profils.map(p => '<button type="button" class="' + (MOD.profil === p.id ? 'primaire' : '') + '" title="' + esc(p.quoi) + '" onclick="modProfil(\'' + p.id + '\')">' + esc(p.nom) + '</button>').join('');
+  g('mod-liste').innerHTML = MOD.modules.map(m => {
+    const manque = m.utilise.filter(u => !on[u]).map(u => nom[u] || u);
+    const avis = (m.avis ? esc(m.avis) : '') + (m.on && manque.length ? (m.avis ? ' · ' : '') + '<span class="ambre">' + esc(manque.join(', ')) + ' décoché</span>' : '');
+    return '<label class="mod-l"><input type="checkbox" data-m="' + m.id + '"' + (m.on ? ' checked' : '') + ' onchange="modCoche(this)"> <b>' + esc(m.nom) + '</b> <span class="petit">— ' + esc(m.quoi) + '</span>' +
+      (avis ? '<span class="petit mod-avis">' + avis + '</span>' : '') + '</label>';
+  }).join('');
+  txt('mod-coeur', MOD.coeur || '');
 }
+/** A change of modules; what it would stop asked first. */
+async function modPost(q) {
+  let j = await post('api/modules?' + q);
+  if (j && j.enMarche) {
+    if (!confirm(j.nom + ' reçoit ou émet en ce moment : l’arrêter (le récepteur est rendu) et le désactiver ?')) { modVu = ''; modRend(); return null; }
+    j = await post('api/modules?' + q + '&force=1');
+  }
+  modVu = '';
+  if (j && j.onglets) appliqueCapacites(j); else chargeCapacites();
+  return j;
+}
+function modCoche(c) { return modPost('m=' + c.dataset.m + '&on=' + (c.checked ? 1 : 0)); }
+function modProfil(id) { return modPost('profil=' + id); }
+var PLANCHE0 = location.hash === '#planche';
 chargeCapacites();
 setInterval(() => { if (!document.hidden) chargeCapacites(); }, 30000);
 if (document.querySelector('#onglets button[data-v="' + location.hash.slice(1).replace(/[^a-z0-9]/g, '') + '"]')) vue(location.hash.slice(1));

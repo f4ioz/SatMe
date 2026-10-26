@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.demo.ApiQo100
 import fr.f4ioz.satcombo.demo.ApiSon
 import fr.f4ioz.satcombo.demo.FonctionsNonSat
+import fr.f4ioz.satcombo.demo.ModulesStation
 import fr.f4ioz.satcombo.demo.PagePc
 
 import fr.f4ioz.satcombo.datv.Datv
@@ -725,10 +726,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             else fr.f4ioz.satcombo.demo.ApiEtalonnageRotor.etat(station.stationRotor)
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
-        // A function not about satellites left unticked in Réglages: nothing of it starts.
-        if (r.methode == "POST") nonSatRefuse(chemin)?.let { id ->
-            envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", false).put("nonSat", id)
-                .put("erreur", "Fonction non satellite désactivée — l'activer dans Réglages › Ma station").toString().toByteArray()); return
+        // A module switched off in Réglages › Modules: nothing of it starts.
+        if (r.methode == "POST") moduleRefuse(chemin)?.let { id ->
+            val o = JSONObject().put("ok", false).put("module", id).put("erreur", "Module « ${ModulesStation.module(id)?.nom ?: id} » désactivé — l'activer dans Réglages › Modules")
+            if (id in FonctionsNonSat.ONGLETS) o.put("nonSat", id)
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         // ADS-B (receive only) and the shared map's layers.
         if (chemin == "/api/adsb" || chemin.startsWith("/api/adsb/")) {
@@ -822,6 +824,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val cl = fr.f4ioz.satcombo.datv.ControleEmission.Client(q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress },
                 !local, c.inetAddress?.hostAddress.orEmpty())
             envoie(sortie, "200 OK", "application/json; charset=utf-8", controleTx(chemin, r.methode, q, cl).toString().toByteArray()); return
+        }
+        // The modules switched from another site's page open in the same browser: refused, as Démarrage's settings are.
+        if (r.methode == "POST" && (chemin == "/api/modules" || chemin == "/api/nonsat") && !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"])) {
+            envoie(sortie, "403 Forbidden", "application/json; charset=utf-8", JSONObject().put("ok", false).put("erreur", "origine refusée").toString().toByteArray()); return
         }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
@@ -1218,28 +1224,71 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (proposee) fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE else fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN
 
     /** What a POST asks; the answer says whether it was done. */
-    /** The tabs offered (those not about satellites only when ticked) and which of these are ticked. */
+    /**
+     * The tabs offered (those of the modules switched off left out), the
+     * modules and the profiles, what the page hides; [FonctionsNonSat]'s
+     * choice as before (the phone's page and the montage read it).
+     */
     private fun capacites(): JSONObject {
-        val c = FonctionsNonSat.choisis(station.stockage).orEmpty()
-        return JSONObject().put("onglets", JSONArray(FonctionsNonSat.onglets(PagePc.TOUS, c))).put("serveur", "pc")
-            .put("nonSat", JSONObject(FonctionsNonSat.ONGLETS.keys.associateWith { it in c }))
+        val c = ModulesStation.coupes(station.stockage)
+        val modules = JSONArray()
+        ModulesStation.MODULES.forEach { m ->
+            modules.put(JSONObject().put("id", m.id).put("nom", m.nom).put("quoi", m.quoi).put("avis", m.avis)
+                .put("onglets", JSONArray(m.onglets)).put("utilise", JSONArray(m.utilise)).put("on", m.id !in c))
+        }
+        val profils = JSONArray()
+        ModulesStation.PROFILS.forEach { p -> profils.put(JSONObject().put("id", p.id).put("nom", p.nom).put("quoi", p.quoi).put("modules", JSONArray(p.modules.toList()))) }
+        val eteints = JSONObject()
+        ModulesStation.MODULES.filter { it.id in c }.forEach { m -> m.onglets.forEach { eteints.put(it, m.nom) } }
+        return JSONObject().put("onglets", JSONArray(ModulesStation.onglets(PagePc.TOUS, c))).put("serveur", "pc")
+            .put("nonSat", JSONObject(FonctionsNonSat.ONGLETS.keys.associateWith { it !in c }))
+            .put("modules", modules).put("profils", profils).put("profil", ModulesStation.profilDe(c) ?: JSONObject.NULL)
+            .put("coeur", ModulesStation.COEUR).put("eteints", eteints).put("masques", JSONArray(ModulesStation.masques(c)))
     }
 
-    /** Whether the function behind [id] holds a receiver now. */
-    private fun nonSatTourne(id: String): Boolean = when (id) {
+    /** Whether the module [id] holds a receiver or a transmitter now (what switching it off would stop). */
+    private fun moduleTourne(id: String): Boolean = when (id) {
         "avions" -> adsb?.actif == true
         "ais" -> ais?.actif == true
         "sondes" -> sdr?.let { it.pourSonde && it.etat.value.actif } == true
+        "meteor" -> sdr?.let { it.pourMeteor && it.etat.value.actif } == true
+        "datv" -> datv?.etat?.actif == true || emission?.etat?.emet == true
         else -> false
     }
 
-    /** The unticked function a POST to [chemin] would start, else null. */
-    private fun nonSatRefuse(chemin: String): String? = when (chemin) {
+    private fun moduleArrete(id: String) {
+        when (id) {
+            "avions" -> adsb?.arrete()
+            "ais" -> ais?.arrete()
+            "sondes", "meteor" -> sdr?.arrete()
+            "datv" -> { emission?.arrete(); datv?.arrete() }
+        }
+    }
+
+    /** The module switched off that a POST to [chemin] would start, else null. */
+    private fun moduleRefuse(chemin: String): String? = when (chemin) {
         "/api/adsb/demarre", "/api/adsb/essai" -> "avions"
         "/api/ais/demarre", "/api/ais/essai" -> "ais"
         "/api/sondes/demarrer" -> "sondes"
+        "/api/meteor/demarrer" -> "meteor"
+        "/api/datv/demarre", "/api/datv/emission/demarre" -> "datv"
         else -> null
-    }?.takeIf { !FonctionsNonSat.actif(station.stockage, it) }
+    }?.takeIf { !ModulesStation.actif(station.stockage, it) }
+
+    /**
+     * [coupes] stored. Modules being switched off that receive or transmit
+     * now: nothing changed, their names answered (enMarche), unless [force]
+     * — then they are stopped first (the receiver given back).
+     */
+    private fun posModules(coupes: Set<String>, force: Boolean): JSONObject {
+        val avant = ModulesStation.coupes(station.stockage)
+        val tournent = (coupes - avant).filter { moduleTourne(it) }
+        if (tournent.isNotEmpty() && !force) return JSONObject().put("ok", false).put("enMarche", true)
+            .put("nom", tournent.joinToString(", ") { ModulesStation.module(it)?.nom ?: it })
+        tournent.forEach { moduleArrete(it) }
+        ModulesStation.pose(station.stockage, coupes)
+        return capacites().put("ok", true)
+    }
 
     /**
      * The decoders' source in one gesture: a card (started, receive only), the
@@ -1457,14 +1506,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // A function not about satellites ticked or not; unticked while it runs: stopped once confirmed (the receiver given back).
             "/api/nonsat" -> {
                 val id = q["o"].orEmpty().takeIf { it in FonctionsNonSat.ONGLETS } ?: return JSONObject().put("ok", false).put("erreur", "fonction inconnue")
-                if (q["on"] == "1") FonctionsNonSat.pose(station.stockage, id, true)
-                else {
-                    val tourne = nonSatTourne(id)
-                    if (tourne && q["force"] != "1") return JSONObject().put("ok", false).put("enMarche", true).put("nom", FonctionsNonSat.ONGLETS[id])
-                    FonctionsNonSat.pose(station.stockage, id, false)
-                    if (tourne) when (id) { "avions" -> adsb?.arrete(); "ais" -> ais?.arrete(); "sondes" -> sdr?.arrete() }
-                }
-                return capacites().put("ok", true)
+                return posModules(ModulesStation.bascule(ModulesStation.coupes(station.stockage), id, q["on"] == "1"), q["force"] == "1")
+            }
+            // Réglages › Modules: one module on or off (m, on), or a profile (profil); switching off what runs: stopped once confirmed.
+            "/api/modules" -> {
+                val c = ModulesStation.coupes(station.stockage)
+                val apres = q["profil"]?.let { ModulesStation.profil(it) ?: return JSONObject().put("ok", false).put("erreur", "profil inconnu") }
+                    ?: q["m"]?.takeIf { ModulesStation.module(it) != null }?.let { ModulesStation.bascule(c, it, q["on"] == "1") }
+                    ?: return JSONObject().put("ok", false).put("erreur", "module inconnu")
+                return posModules(apres, q["force"] == "1")
             }
             "/api/sondes/demarrer" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)

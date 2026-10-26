@@ -353,6 +353,8 @@ fun main(args: Array<String>) {
             else -> false
         }
     }
+    // The modules (Réglages › Modules): decided once too, everything on but the functions above left unticked.
+    fr.f4ioz.satcombo.demo.ModulesStation.migre(station.stockage)
     // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
     // The pass report (Journal › Rapport): read from the data folder, the levels and the space weather kept.
