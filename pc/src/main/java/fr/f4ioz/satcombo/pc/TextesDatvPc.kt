@@ -77,7 +77,10 @@ class TextesDatvPc(
         get() = stockage.getBoolean("datv_ocr", false)
         set(v) { stockage.edit().putBoolean("datv_ocr", v).apply(); if (!v) { suivi.oublie(); garants.clear() } }
 
-    /** The subtitles applied now (on, and the reception running). */
+    /** The spoken translation of the DATV is on: the sound is written out for it too, subtitles shown or not. */
+    @Volatile var parole: () -> Boolean = { false }
+
+    /** The subtitles applied now (on, or the spoken translation; the reception running). */
     @Volatile var sousTitresActifs = false
         private set
 
@@ -85,7 +88,7 @@ class TextesDatvPc(
 
     @Synchronized
     fun tic() {
-        val veut = sousTitres && phonie != null && source.actif()
+        val veut = (sousTitres || runCatching(parole).getOrDefault(false)) && phonie != null && source.actif()
         if (veut != sousTitresActifs) {
             sousTitresActifs = veut
             source.sousTitres(veut)

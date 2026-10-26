@@ -127,4 +127,55 @@ class SousTitresJsTest {
             assert.ok(total <= Math.max(4000, c3.length * 1500) + 5, total);
         """)
     }
+
+    @Test
+    fun `reglages lignes, longueur, duree, plus de texte`() {
+        lance("""
+            const fr = ${org.json.JSONObject.quote(fr)}, en = ${org.json.JSONObject.quote(en)};
+            const mots = t => t.replace(/\s+/g, ' ').trim();
+            const long = fr + ' ' + fr + ' ' + fr;
+            for (const L of [1, 2, 3, 4]) for (const n of [24, 42, 60, 90]) {
+              for (const [o, t] of [[long, en + ' ' + en], [fr, '']]) {
+                const c = stCues(o, t, n, false, L, 1);
+                // Nothing lost, in order, whatever the setting.
+                assert.strictEqual(c.map(x => x.o.join(' ')).join(' '), mots(o));
+                if (t) assert.strictEqual(c.map(x => x.t.join(' ')).join(' '), mots(t));
+                for (const x of c) {
+                  assert.ok(x.o.length <= L, L + ' ' + n + ' ' + JSON.stringify(x));
+                  x.o.forEach(l => assert.ok(l.length <= n, l));
+                  assert.ok(x.ms >= 1500 && x.ms <= 3500 * L, x.ms);
+                }
+              }
+            }
+            // More lines, longer lines: fewer cues, so more shown at once.
+            assert.ok(stCues(long, '', 60, false, 4).length < stCues(long, '', 42, false, 2).length);
+            // One line: each cue on a single line.
+            assert.ok(stCues(fr, '', 42, false, 1).every(x => x.o.length === 1));
+            // Three lines or more: lines of even length.
+            const l3 = stLignes(fr.slice(0, 110), 42, 4);
+            assert.ok(l3.length === 3, JSON.stringify(l3));
+            assert.ok(Math.max(...l3.map(x => x.length)) - Math.min(...l3.map(x => x.length)) <= 14, JSON.stringify(l3));
+            // Longer or shorter: the time × the factor.
+            assert.strictEqual(stDuree('Une phrase de taille moyenne.', 2), 2 * stDuree('Une phrase de taille moyenne.'));
+            assert.strictEqual(stDuree('Une phrase de taille moyenne.', 0.5), Math.round(stDuree('Une phrase de taille moyenne.') / 2));
+            // The settings bounded; « plus de texte » brings 4 lines, 90 % at least, longer lines, 3 cues stacked.
+            const d = stReglages({});
+            assert.deepStrictEqual([d.lignes, d.largeur, d.car, d.taille, d.duree, d.pile], [2, 96, 42, 0, 1, 1]);
+            const b = stReglages({ lignes: 9, largeur: 5, car: 'x', duree: 9 });
+            assert.deepStrictEqual([b.lignes, b.largeur, b.car, b.duree], [4, 40, 42, 2.5]);
+            const p = stReglages({ plus: true, largeur: 60, car: 40 });
+            assert.deepStrictEqual([p.lignes, p.largeur, p.car, p.pile], [4, 90, 56, 3]);
+            // The cues before the one shown, kept above it.
+            const f = new FileSousTitres({ tenue: 5000 });
+            const c = stCues(long, '', 42, false, 2);
+            f.ajoute(c, 0, 0);
+            let t = c[0].ms + c[1].ms + c[2].ms + 1;
+            const pl = f.pile(t, 3);
+            assert.strictEqual(pl.length, 3);
+            assert.strictEqual(pl[2].o.join(' '), c[3].o.join(' '));
+            assert.strictEqual(pl[0].o.join(' '), c[1].o.join(' '));
+            assert.strictEqual(f.pile(t, 1).length, 1);
+            assert.deepStrictEqual(f.pile(10000000, 3), []);
+        """)
+    }
 }

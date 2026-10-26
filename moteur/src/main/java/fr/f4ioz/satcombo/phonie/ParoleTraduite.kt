@@ -76,18 +76,21 @@ object ParoleTraduite {
 
     /**
      * The overs waiting to be said: [max] at most (the oldest goes), and one
-     * heard more than [perimeMs] ago is not said any more.
+     * heard more than [perimeMs] ago is not said any more. One added
+     * [seule] (the DATV's: only the latest is worth saying) puts away those
+     * of its [genre] still waiting; each may have its own limit of age.
      */
     class File<T>(private val max: Int = 2, private val perimeMs: Long = 30_000L, private val horloge: () -> Long = System::currentTimeMillis) {
-        private class Element<T>(val x: T, val entenduMs: Long)
+        private class Element<T>(val x: T, val entenduMs: Long, val perimeMs: Long, val genre: String)
         private val file = ArrayDeque<Element<T>>()
-        /** Dropped because the queue was full. */
+        /** Dropped because the queue was full (or a later one of the same kind came). */
         @Volatile var sautees = 0L; private set
         /** Dropped because too old. */
         @Volatile var perimees = 0L; private set
 
-        @Synchronized fun ajoute(x: T, entenduMs: Long) {
-            file.addLast(Element(x, entenduMs))
+        @Synchronized fun ajoute(x: T, entenduMs: Long, seule: Boolean = false, perime: Long = perimeMs, genre: String = "") {
+            if (seule) { val avant = file.size; file.removeAll { it.genre == genre }; sautees += avant - file.size }
+            file.addLast(Element(x, entenduMs, perime, genre))
             while (file.size > max) { file.removeFirst(); sautees++ }
             (this as Object).notifyAll()
         }
@@ -96,7 +99,7 @@ object ParoleTraduite {
         @Synchronized fun prochaine(): T? {
             while (file.isNotEmpty()) {
                 val e = file.removeFirst()
-                if (horloge() - e.entenduMs > perimeMs) { perimees++; continue }
+                if (horloge() - e.entenduMs > e.perimeMs) { perimees++; continue }
                 return e.x
             }
             return null
@@ -113,12 +116,39 @@ object ParoleTraduite {
             return prochaine()
         }
 
-        /** Whether one heard at [entenduMs] is still worth saying. */
-        fun frais(entenduMs: Long): Boolean = horloge() - entenduMs <= perimeMs
+        /** Whether one heard at [entenduMs] is still worth saying (within [perime]). */
+        fun frais(entenduMs: Long, perime: Long = perimeMs): Boolean = horloge() - entenduMs <= perime
 
         @Synchronized fun taille(): Int = file.size
         @Synchronized fun vide() { file.clear() }
     }
+
+    /**
+     * The received sound lowered while the voice speaks (« ducking »): its
+     * gain glides to the level asked ([cible], 0…1) at most [rampeMs] from
+     * full to nothing, so it neither clicks nor jumps; [applique] scales a
+     * block of interleaved frames.
+     */
+    class Baisse(private val rampeMs: Double = 150.0) {
+        /** The gain reached at the end of the last block. */
+        @Volatile var gain = 1.0; private set
+
+        fun applique(pcm: ShortArray, n: Int, canaux: Int, rate: Int, cible: Double) {
+            val c = cible.coerceIn(0.0, 1.0)
+            if (gain == 1.0 && c == 1.0) return
+            val pas = 1.0 / (rampeMs / 1000.0 * rate).coerceAtLeast(1.0)
+            var g = gain
+            val trames = n / canaux.coerceAtLeast(1)
+            for (i in 0 until trames) {
+                g = if (g < c) minOf(c, g + pas) else maxOf(c, g - pas)
+                for (k in 0 until canaux) { val j = i * canaux + k; pcm[j] = (pcm[j] * g).toInt().coerceIn(-32768, 32767).toShort() }
+            }
+            gain = g
+        }
+    }
+
+    /** « baisser le son d'origine de [pct] % » as a gain (0 % → 1, 100 % → 0). */
+    fun gainBaisse(pct: Int): Double = 1.0 - pct.coerceIn(0, 100) / 100.0
 
     /** A sound as a WAV file (16-bit mono). */
     fun wav(pcm: ShortArray, rate: Int): ByteArray {

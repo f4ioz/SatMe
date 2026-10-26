@@ -20,7 +20,9 @@ import javax.sound.sampled.SourceDataLine
  * gives it as 48 kHz stereo PCM ([SonDatvPc]); its levels are measured
  * ([niveaux]), it is played on this PC's output at [volume] while [joue]
  * says so, and handed to the browsers listening ([diffusion], "datv").
- * The volume changes at once: nothing restarts.
+ * The volume changes at once: nothing restarts. While the spoken
+ * translation speaks here, the sound played here glides down to [baisse]
+ * (the browsers lower theirs themselves, as they play the voice).
  */
 class SonLocalDatvPc(
     ffmpeg: String,
@@ -29,7 +31,9 @@ class SonLocalDatvPc(
     private val joue: () -> Boolean,
     private val diffusion: DiffusionSon?,
     private val horloge: () -> Long = System::currentTimeMillis,
+    private val baisse: () -> Double = { 1.0 },
 ) {
+    private val ducking = fr.f4ioz.satcombo.phonie.ParoleTraduite.Baisse()
     private val decodeur = SonDatvPc(ffmpeg, RATE, 2, 50, "satme-datv-son-pc.log") { pcm, n, _ -> bloc(pcm, n) }
     private var ligne: SourceDataLine? = null
     private var ligneEssaiMs = 0L
@@ -56,6 +60,7 @@ class SonLocalDatvPc(
         }
         if (!joue()) { synchronized(this) { ligne?.let { runCatching { it.flush() } } }; return }
         NiveauxSon.applique(pcm, n, volume())
+        ducking.applique(pcm, n, 2, RATE, runCatching(baisse).getOrDefault(1.0))
         val l = ligne(t) ?: return
         val b = ByteArray(n * 2)
         for (i in 0 until n) { val v = pcm[i].toInt(); b[2 * i] = v.toByte(); b[2 * i + 1] = (v shr 8).toByte() }

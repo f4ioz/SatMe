@@ -549,6 +549,24 @@ ${STYLE_JETONS}
   .dt-lu b { font-size:20px; letter-spacing:2px; }
   .dt-lu.sur { border-left-color:var(--vert); }
   .dt-lu.ancien { opacity:.6; } .dt-age { font-size:12px; color:var(--gris); } .dt-age.vif { color:var(--vert); font-weight:600; }
+  .dt-aff { margin-top:6px; } .dt-aff summary { cursor:pointer; } .dt-aff-res { color:var(--gris); }
+  .dt-aff-plus { display:block; margin:6px 0 4px; }
+  .dt-aff-g { display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; }
+  .dt-aff-g label { display:flex; align-items:center; gap:6px; } .dt-aff-g input[type=range] { width:96px; min-width:0; flex:none; }
+  .dt-aff-g select { flex:none; }
+  .dt-pa { margin-top:8px; padding-top:6px; border-top:1px solid #1E2C38; }
+  .dt-pa-corps { display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; margin:4px 0 2px 22px; }
+  .dt-pa-corps label { display:flex; align-items:center; gap:6px; } .dt-pa-corps input[type=range] { width:84px; min-width:0; flex:none; } .dt-pa-corps select { flex:none; max-width:100%; }
+  .d-st .d-st-avant { color:#B8C4CC; font-size:.86em; font-weight:500; }
+  .dr-st { margin-top:8px; padding:8px 10px; background:#0E1720; border-radius:10px; border-left:3px solid var(--cyan); }
+  .dr-st.ancien { border-left-color:#3A4A58; }
+  .dr-st h4 { margin:0 0 4px; font-size:14px; font-weight:600; }
+  .dr-l { display:flex; gap:8px; padding:2px 0; font-size:13px; line-height:1.45; } .dr-l > span:first-child { color:var(--gris); min-width:86px; flex:none; }
+  .dr-c { display:inline-block; margin:0 6px 2px 0; padding:0 7px; border-radius:8px; background:#16242F; font-weight:600; letter-spacing:.5px; }
+  .dr-c i { font-style:normal; font-weight:400; color:var(--gris); font-size:11px; margin-left:4px; letter-spacing:0; }
+  .dr-ph { margin:2px 0 0; padding-left:18px; font-size:13px; line-height:1.45; } .dr-ph li { margin:1px 0; }
+  .dr-avant summary { cursor:pointer; margin-top:8px; }
+  @media (max-width:520px) { .dr-l { flex-direction:column; gap:0; } .dr-l > span:first-child { min-width:0; } }
   .dt-hist { margin-top:6px; } .dt-hist summary { cursor:pointer; } .dt-hist #dt-hist-l div { padding:1px 0; } .dt-hist button { padding:0 4px; }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   .ad-initial { margin:8px 0 4px; padding:8px 10px; border-radius:var(--r2); background:rgba(255,180,84,.1); border:1px solid rgba(255,180,84,.45); }
@@ -3497,11 +3515,39 @@ ${rail()}
       <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (<span id="dt-cible">français</span>)</label>
       <label class="petit" style="display:block;margin-left:44px"><input type="checkbox" id="dt-st-tr" onchange="dtStTraduction(this.checked)"> <span id="dt-st-tr-nom">sous-titres en français</span> : la traduction seule sur l’image</label>
       <div class="petit" id="dt-st-etat"></div>
+      <details id="dt-aff" class="dt-aff"><summary class="petit">Affichage des sous-titres <span id="dt-aff-res" class="dt-aff-res"></span></summary>
+        <label class="petit dt-aff-plus"><input type="checkbox" id="dt-plus" onchange="dtAff('plus', this.checked)"> <b>Plus de texte</b> : 4 lignes, 90 % de large, les sous-titres précédents gardés au-dessus</label>
+        <div class="dt-aff-g">
+          <label class="petit">Largeur <input type="range" id="dt-larg" min="40" max="100" step="2" oninput="dtAff('largeur', +this.value)"><span id="dt-larg-v"></span></label>
+          <label class="petit">Lignes <select id="dt-lignes" onchange="dtAff('lignes', +this.value)"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+          <label class="petit">Longueur des lignes <input type="range" id="dt-car" min="20" max="90" step="2" oninput="dtAff('car', +this.value)"><span id="dt-car-v"></span></label>
+          <label class="petit">Taille <select id="dt-taille" onchange="dtAff('taille', +this.value)"><option value="0">auto (ajustée à l’image)</option><option value="2.4">petite</option><option value="3">moyenne</option><option value="3.6">grande</option><option value="4.6">très grande</option></select></label>
+          <label class="petit">Durée <select id="dt-duree" onchange="dtAff('duree', +this.value)"><option value="0.7">plus courte</option><option value="1">normale</option><option value="1.4">plus longue</option><option value="2">très longue</option></select></label>
+          <button style="padding:3px 10px" onclick="dtAffDefaut()">Par défaut</button>
+        </div>
+        <div class="petit aide">Réglé pour ce navigateur ; un aperçu s’affiche sur l’image à chaque changement. Rien n’est jamais coupé : si le texte ne tient pas, il est rapetissé, puis passe à la ligne.</div>
+      </details>
+      <div class="dt-pa">
+        <label class="petit" style="display:block"><input type="checkbox" id="dt-pa" onchange="dtPaRegle('datv=' + (this.checked ? 1 : 0))"> 🔊 Traduction parlée : la traduction dite par une voix de synthèse</label>
+        <div class="dt-pa-corps" id="dt-pa-corps" hidden>
+          <select id="dt-pa-voix" onchange="dtPaRegle('datvVoix=' + enc(this.value))" title="La voix de synthèse"></select>
+          <label class="petit">Voix <input type="range" id="dt-pa-vol" min="0" max="100" step="5" onchange="dtPaRegle('datvVolume=' + this.value)" oninput="txt('dt-pa-vol-v', this.value + ' %')"><span id="dt-pa-vol-v"></span></label>
+          <label class="petit" title="Le son de la station baissé pendant que la voix parle, puis remis">Son d’origine baissé de <input type="range" id="dt-pa-baisse" min="0" max="100" step="5" onchange="dtPaRegle('datvBaisse=' + this.value)" oninput="txt('dt-pa-baisse-v', this.value + ' %')"><span id="dt-pa-baisse-v"></span></label>
+          <button style="padding:3px 10px" onclick="dtPaRegle('essaiDatv=1')" title="Une phrase dans la voix choisie, là où passe le son DATV">Essayer</button>
+        </div>
+        <div class="petit" id="dt-pa-etat"></div>
+      </div>
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
       <div class="petit" id="dt-ocr-etat"></div>
       <div id="dt-lus"></div>
       <details id="dt-hist" class="dt-hist" hidden><summary class="petit" id="dt-hist-n">Vus avant</summary><div id="dt-hist-l" class="petit"></div></details>
       <div id="dt-fil" class="ph-fil" style="max-height:min(62vh,560px)" title="Le plus récent en haut ; l’historique en dessous"></div>
+    </div>
+    <div class="carte" id="dr-carte" hidden>
+      <div class="ligne" style="margin:0"><div class="t" style="margin:0">Résumé</div><span class="petit" id="dr-etat"></span>
+        <span style="margin-left:auto;display:flex;gap:6px"><button id="dr-qso" style="padding:3px 10px" onclick="drNote()" hidden title="Préremplit le contact DATV dans le carnet (rien n’est enregistré tant que tu ne valides pas)">Noter le QSO</button><button style="padding:3px 10px" onclick="drCopie()">Copier</button></span></div>
+      <div id="dr-corps"></div>
+      <div class="petit aide">Tiré de ce qui s’est dit (les passages écrits, traduits quand la traduction est en marche), des indicatifs lus dans l’image et du nom du service, sur ce PC, sans Internet. À vérifier avant de noter : la transcription peut se tromper.</div>
     </div>
       </div>
     </div>
@@ -5567,18 +5613,22 @@ function paRecoit(a) {
   if (!a || a.seq <= paSeq) return;
   paSeq = a.seq;
   if (!a.navigateur) return;
+  // The DATV's: only in a page listening to the DATV sound (« Écouter ici »), the latest one only.
+  if (a.datv && !paEcouteDatv()) return;
   a.recu = Date.now();
+  if (a.datv) paFile = paFile.filter(x => !x.datv);
   paFile.push(a);
   while (paFile.length > 2) paFile.shift();
   paSuivante();
 }
+function paEcouteDatv() { return !!(ecCtx || ecWs) && ecSource() === 'datv'; }
 function paSuivante() {
   if (paJoue || !paFile.length) return;
   const a = paFile.shift();
-  if (Date.now() - a.recu > 30000) return paSuivante();
+  if (Date.now() - a.recu > (a.datv ? 20000 : 30000)) return paSuivante();
   paJoue = true;
   const fin = () => { if (!paJoue) return; paJoue = false; paBaisse(false); paSuivante(); };
-  paBaisse(true);
+  paBaisse(true, a.baisse);
   if (a.audio) {
     const au = new Audio('api/phonie/parole/son?seq=' + a.seq);
     au.onended = fin; au.onerror = fin;
@@ -5594,7 +5644,12 @@ function paSuivante() {
   } else fin();
 }
 /** The receiver heard here (« Écouter ici ») lowered while the voice speaks. */
-function paBaisse(on) { if (ecGain) ecGain.gain.value = v('ec-vol') / 100 * (on ? 0.25 : 1); }
+function paBaisse(on, k) {
+  if (!ecGain) return;
+  const x = v('ec-vol') / 100 * (on ? (k != null ? k : 0.25) : 1);
+  // Glided (about 150 ms), not switched: no click.
+  try { ecGain.gain.setTargetAtTime(x, ecGain.context.currentTime, 0.05); } catch (e) { ecGain.gain.value = x; }
+}
 // Its installation (Réglages › Phonie → texte).
 let PAI = null;
 async function chargeParoleReglages() {
@@ -9622,7 +9677,7 @@ async function ticTextesDatv() {
   if (document.activeElement !== g('dt-ocr')) g('dt-ocr').checked = j.ocr;
   g('dt-st').disabled = !j.phonie;
   // The overs heard on the DATV sound (the phonie's, from this source only).
-  if (j.phonie && (j.soustitres || !dtPh)) {
+  if (j.phonie && (j.soustitres || j.soustitresActifs || !dtPh)) {
     let p = null;
     try { p = await (await fetch('api/phonie?depuis=' + dtDernier)).json(); } catch (x) {}
     if (p && p.present) {
@@ -9631,7 +9686,7 @@ async function ticTextesDatv() {
       const premier = !dtDernier, nv = p.bulles.filter(b => b.src === 'datv');
       if (p.bulles.length) dtDernier = p.bulles[p.bulles.length - 1].id;
       if (nv.length) {
-        dtListe = dtListe.concat(nv).slice(-60); dtFil();
+        dtListe = dtListe.concat(nv).slice(-120); dtFil();
         // On the picture: each new over cued; the page just opened, only the last one if it is recent.
         (premier ? nv.slice(-1).filter(b => Date.now() - (b.t + b.duree * 1000) < 60000) : nv).forEach(b => dtStAjoute(b));
       }
@@ -9652,7 +9707,9 @@ async function ticTextesDatv() {
     !ph ? '' : ({ 'démarrage': 'chargement du modèle…', 'prêt': 'à l’écoute' + (ph.voix ? ' · voix' : ''), 'erreur': 'en panne' }[ph.etat] || ph.etat) +
     (ph.erreur ? ' · ' + ph.erreur : '') + (ph.on && ph.source !== 'datv' ? ' · Phonie → texte écoute le DATV (sa source revient ensuite)' : '');
   txt('dt-st-etat', etat);
-  dtSousTitres(j.soustitresActifs);
+  dtSousTitres(j.soustitresActifs && j.soustitres);
+  dtPaTic(j);
+  drRend();
   // The callsigns read in the picture.
   txt('dt-ocr-etat', !j.ocr ? '' : !j.outil ? 'tesseract introuvable : ' + j.conseil :
     (j.occupe ? 'lecture… · ' : '') + j.lectures + ' lecture(s)' + (j.texte ? ' · lu : « ' + j.texte + ' »' : '') + (j.erreur ? ' · ' + j.erreur : ''));
@@ -9688,28 +9745,61 @@ function dtVuIl(age, recent) {
 // each shown for a time that grows with its length, the translation under it in as many cues (SousTitresJs).
 ${SousTitresJs.CODE}
 const dtFile = new FileSousTitres();
-let dtStOn = false, dtStCle = '', dtStDernier = null;
+let dtStOn = false, dtStCle = '', dtStDernier = null, dtApercuJusque = 0;
+// The display settings, per browser (a phone and the shack's screen differ): width, lines, line length, size, time, « plus de texte ».
+let dtAffR = {};
+try { dtAffR = JSON.parse(localStorage.getItem('satme.datvSt') || '{}') || {}; } catch (x) { dtAffR = {}; }
+let DST = stReglages(dtAffR);
+function dtAff(k, x) {
+  dtAffR[k] = x; DST = stReglages(dtAffR);
+  try { localStorage.setItem('satme.datvSt', JSON.stringify(dtAffR)); } catch (e) {}
+  dtAffRend(); dtApercu();
+}
+function dtAffDefaut() { dtAffR = {}; DST = stReglages({}); try { localStorage.removeItem('satme.datvSt'); } catch (e) {} dtAffRend(); dtApercu(); }
+function dtAffRend() {
+  const r = stReglages(dtAffR), val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
+  g('dt-plus').checked = r.plus;
+  val('dt-larg', DST.largeur); val('dt-lignes', DST.lignes); val('dt-car', DST.car); val('dt-taille', r.taille); val('dt-duree', r.duree);
+  ['dt-larg', 'dt-lignes', 'dt-car'].forEach(id => { g(id).disabled = r.plus; });
+  txt('dt-larg-v', DST.largeur + ' %'); txt('dt-car-v', DST.car + ' signes ≈ ' + Math.round(DST.car / 6) + ' mots');
+  txt('dt-aff-res', '· ' + (r.plus ? 'plus de texte' : DST.lignes + ' ligne' + (DST.lignes > 1 ? 's' : '') + ', ' + DST.largeur + ' %'));
+}
+/** A setting changed: the last over cued again the new way, or an example shown a few seconds when none is recent. */
+function dtApercu() {
+  dtApercuJusque = Date.now() + 8000;
+  const b = dtStDernier && Date.now() - (dtStDernier.t + dtStDernier.duree * 1000) < 60000 ? dtStDernier : null;
+  dtFile.vide(); dtStCle = '';
+  if (b) dtStAjoute(b);
+  else dtStAjoute({ t: Date.now(), duree: 0, langue: 'fr', texte: 'Aperçu des sous-titres : ici F4ABC depuis Rouen, je vous reçois très bien sur QO-100. ' +
+    'La parabole fait un mètre vingt et l’émetteur est un Pluto. Merci pour le rapport, soixante-treize !', traduction: '' }, Date.now(), true);
+  dtStAffiche();
+}
 function dtStMode() { const trad = g('dt-trad').checked; return { trad: trad, seule: trad && g('dt-st-tr').checked }; }
-function dtStAjoute(b, t) {
+function dtStAjoute(b, t, exemple) {
   const m = dtStMode();
-  dtStDernier = b;
-  const cues = stCues(b.texte, m.trad ? b.traduction : '', ST_CAR, m.seule);
+  if (!exemple) dtStDernier = b;
+  const cues = stCues(b.texte, m.trad ? b.traduction : '', DST.car, m.seule, DST.lignes, DST.duree);
   const dr = PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '';
   cues.forEach((c, i) => { c.drapeau = i ? '' : dr; });
   dtFile.ajoute(cues, t || Date.now(), (b.duree || 0) * 1000);
 }
 /** Translation on or off, the translation alone or not: the last over cued again the new way. */
 function dtStRefait() { dtFile.vide(); if (dtStDernier && Date.now() - (dtStDernier.t + dtStDernier.duree * 1000) < 60000) dtStAjoute(dtStDernier); dtStAffiche(); }
-function dtSousTitres(on) { dtStOn = !!on; if (!on) dtFile.vide(); dtStAffiche(); }
+function dtSousTitres(on) { dtStOn = !!on; if (!on && Date.now() > dtApercuJusque) dtFile.vide(); dtStAffiche(); }
 function dtStAffiche() {
-  const o = g('d-st'), c = dtStOn ? dtFile.actuel(Date.now()) : null;
-  const cle = c ? c.debut + '|' + c.o.join('|') : '';
+  const o = g('d-st'), t = Date.now(), voit = dtStOn || t < dtApercuJusque;
+  // « Plus de texte »: the cues before the one shown kept above it, paler.
+  const pile = voit ? dtFile.pile(t, DST.pile) : [], c = pile[pile.length - 1];
+  const cle = c ? pile.map(x => x.debut).join(',') + '|' + c.o.join('|') + '|' + DST.largeur + '|' + DST.taille : '';
   if (cle === dtStCle) return;
   dtStCle = cle;
   o.hidden = !c;
   if (!c) { o.innerHTML = ''; return; }
-  const lignes = l => l.map((x, i) => '<span class="l">' + (i ? '' : c.drapeau || '') + esc(x) + '</span>').join('');
-  o.innerHTML = '<div>' + lignes(c.o) + '</div>' + (c.t && c.t.length ? '<div class="d-st-tr">' + lignes(c.t) + '</div>' : '');
+  // The language's flag before the words heard only (the translation is ours).
+  const lignes = (x, l, dr) => l.map((y, i) => '<span class="l">' + (i || !dr ? '' : x.drapeau || '') + esc(y) + '</span>').join('');
+  o.style.left = o.style.right = ((100 - DST.largeur) / 2) + '%';
+  o.innerHTML = pile.map((x, i) => { const av = i < pile.length - 1 ? ' d-st-avant' : '';
+    return '<div class="' + av + '">' + lignes(x, x.o, true) + '</div>' + (x.t && x.t.length ? '<div class="d-st-tr' + av + '">' + lignes(x, x.t) + '</div>' : ''); }).join('');
   dtStAjuste();
 }
 /**
@@ -9721,16 +9811,20 @@ function dtStAjuste() {
   const o = g('d-st'), cadre = g('d-cadre');
   if (o.hidden || !cadre.clientWidth) return;
   const W = cadre.clientWidth, H = cadre.clientHeight || W * 9 / 16;
-  const base = Math.max(14, Math.min(46, W * 0.036)), min = Math.max(11, Math.min(15, W * 0.024));
+  // A fixed size: a share of the picture's width (full screen too); auto: the largest that fits.
+  const fixe = DST.taille > 0, base = fixe ? Math.max(11, W * DST.taille / 100) : Math.max(14, Math.min(46, W * 0.036)), min = Math.max(11, Math.min(15, W * 0.024));
+  // The room it may take: 40 % of the picture's height for two lines, more for more lines or the cues stacked.
+  const haut = Math.min(0.8, DST.pile > 1 ? 0.7 : DST.lignes > 2 ? 0.55 : 0.4);
   o.classList.remove('enroule');
   o.style.fontSize = base + 'px';
   const dispo = o.clientWidth - 2 * 14;
   let large = 0;
   o.querySelectorAll('.l').forEach(x => { large = Math.max(large, x.scrollWidth); });
   let f = base;
-  if (large > dispo && large > 0) f = Math.floor(base * dispo / large * 10) / 10;
+  // Too wide: smaller (auto), or wrapped at its size (fixed); never cut.
+  if (large > dispo && large > 0) { if (fixe) o.classList.add('enroule'); else f = Math.floor(base * dispo / large * 10) / 10; }
   o.style.fontSize = Math.max(min, f) + 'px';
-  if (o.scrollHeight > H * 0.4) f = Math.min(f, Math.floor(Math.max(min, f) * H * 0.4 / o.scrollHeight * 10) / 10);
+  if (o.scrollHeight > H * haut) f = Math.min(f, Math.floor(Math.max(min, f) * H * haut / o.scrollHeight * 10) / 10);
   if (f < min) { f = min; o.classList.add('enroule'); }
   o.style.fontSize = f + 'px';
 }
@@ -9765,6 +9859,103 @@ function dNote(call, loc, rep) {
   if (!a.dataset.avant) a.dataset.avant = a.textContent;
   a.textContent = 'Contact DATV · ' + (DT && DT.qo100 ? 'QO-100 ' : 'terrestre ') + mhz3(k) + ' MHz : enregistré en mode DATV.';
 }
+
+// « Traduction parlée » of the DATV: the phonie's voice (ParolePc), with settings of its own; said where the DATV sound is heard.
+let dtPa = null, dtPaMs = 0;
+async function dtPaTic(j) {
+  const t = Date.now();
+  if (t - dtPaMs >= 2000) { dtPaMs = t; try { const x = await (await fetch('api/phonie/parole')).json(); dtPa = x && x.present ? x : null; } catch (e) {} }
+  dtPaRend(j);
+}
+function dtVaVoix() {
+  vue('reglages'); montreReglages('phonie');
+  setTimeout(() => { const e = g('phr-pa'); (e && !e.hidden ? e : g('phr-carte')).scrollIntoView({ block: 'center' }); }, 400);
+}
+function dtPaRend(j) {
+  const a = dtPa, d = a && a.datv, ph = dtPh;
+  g('dt-pa').disabled = !j.phonie || !d;
+  if (d && document.activeElement !== g('dt-pa')) g('dt-pa').checked = d.on;
+  g('dt-pa-corps').hidden = !(d && d.on);
+  if (!d) { dPose('dt-pa-etat', ''); return; }
+  const s = g('dt-pa-voix'), h = '<option value="auto">voix : selon la voix entendue</option>' + a.voixDispo.map(x => '<option value="' + esc(x.id) + '">' + esc(x.nom) + '</option>').join('');
+  if (s.dataset.h !== h) { s.innerHTML = h; s.dataset.h = h; }
+  if (document.activeElement !== s) s.value = a.voixDispo.some(x => x.id === d.voix) ? d.voix : 'auto';
+  if (document.activeElement !== g('dt-pa-vol')) { g('dt-pa-vol').value = d.volume; txt('dt-pa-vol-v', d.volume + ' %'); }
+  if (document.activeElement !== g('dt-pa-baisse')) { g('dt-pa-baisse').value = d.baisse; txt('dt-pa-baisse-v', d.baisse + ' %'); }
+  if (!d.on) { dPose('dt-pa-etat', ''); return; }
+  const lien = t => ' <a href="#" onclick="dtVaVoix();return false">' + t + '</a>';
+  const so = d.sorties || [], l = [];
+  if (ph && !ph.installe) l.push('<span style="color:var(--ambre)">Le moteur Phonie → texte n’est pas installé.</span>' + lien('L’installer (Réglages › Phonie → texte)'));
+  else {
+    if (ph && !ph.traduire) l.push('<span style="color:var(--ambre)">La traduction est coupée : cocher « avec la traduction » ci-dessus (seule la traduction est dite).</span>');
+    if (!a.piper) l.push('<span style="color:var(--ambre)">Voix Piper non installées</span>' + (a.espeak ? ' : eSpeak NG parle en attendant' : a.spd ? ' : speech-dispatcher parle en attendant' : ' : la voix du navigateur en attendant') + ' ·' + lien('installer les voix (Réglages › Phonie → texte)'));
+    else if (!a.voixDispo.length) l.push('Aucune voix Piper pour « ' + esc(PH_CIBLES[a.cible] || a.cible) + ' » ·' + lien('en installer une'));
+  }
+  l.push('Dite sur ' + (so.indexOf('pc') >= 0 && so.indexOf('navigateur') >= 0 ? 'le haut-parleur du PC et le navigateur qui écoute le son DATV' :
+    so.indexOf('navigateur') >= 0 ? 'le navigateur qui écoute le son DATV (« Écouter ici »)' : so.indexOf('pc') >= 0 ? 'le haut-parleur du PC' : 'le haut-parleur du PC (le son DATV est coupé)') + '.');
+  if (so.indexOf('pcFixe') >= 0) l.push('Le son DATV passe par ffplay : il ne peut pas être baissé pendant la voix ; cocher « Vumètre et volume » (onglet Réception) pour qu’il le soit.');
+  const et = { 'synthèse': 'synthèse…', parle: 'parle…', erreur: 'en panne' }[a.etat];
+  if (et || a.erreur) l.push([et, esc(a.erreur || '')].filter(x => x).join(' · '));
+  if (!j.soustitresActifs) l.push('En attente de la réception.');
+  const dd = (a.dites || []).find(x => x.datv && !x.essai);
+  if (dd) l.push('Dernière : « ' + esc(dd.texte.slice(0, 90)) + (dd.texte.length > 90 ? '…' : '') + ' »' + (dd.latence ? ', prête ' + (dd.latence / 1000).toFixed(1).replace('.', ',') + ' s après le passage' : ''));
+  dPose('dt-pa-etat', l.join('<br>'));
+}
+async function dtPaRegle(q) {
+  const j = await post('api/phonie/parole?' + q);
+  if (j && j.ok === false && j.erreur) toast(j.erreur);
+  dtPaMs = 0; setTimeout(ticTextesDatv, 150);
+  if (q === 'essaiDatv=1') { setTimeout(() => { dtPaMs = 0; }, 1500); }
+}
+// « Résumé »: what was said on the station received, and the ones before (ResumeDatvJs), read here without Internet.
+${ResumeDatvJs.CODE}
+let drS = [], drCle = '';
+function drCtx() {
+  const lit = DT && DT.ocr;
+  return { ciel: (DT && DT.ciel) || 0, service: (D && D.actif && D.service) || (DT && DT.service) || '', lus: lit && D && D.verrouille ? (DT.lus || []).map(l => l.c) : [],
+    vus: lit ? (DT.historique || []) : [], moi: (E && E.indicatif) || '' };
+}
+function drIlYa(ms) { return ms < 60000 ? 'à l’instant' : ms < 3600000 ? 'il y a ' + Math.floor(ms / 60000) + ' min' : 'il y a ' + Math.floor(ms / 3600000) + ' h'; }
+function drStation(s, i) {
+  const ou = { entendu: '🎙', image: '🖼', service: '📡' }, nom = { entendu: 'entendu', image: 'lu dans l’image', service: 'nom du service' };
+  const ligne = (n, h) => h ? '<div class="dr-l"><span>' + n + '</span><span>' + h + '</span></div>' : '';
+  const liste = l => l.map(esc).join(' · ');
+  return '<div class="dr-st' + (s.actuel ? '' : ' ancien') + '"><h4>' + (s.ciel ? mhz3(s.ciel) + ' MHz' : 'DATV') + (s.service ? ' « ' + esc(s.service) + ' »' : '') +
+    ' <span class="petit">· ' + s.n + ' passage' + (s.n > 1 ? 's' : '') + (s.n ? ' · ' + drIlYa(Date.now() - s.fin) : '') + '</span></h4>' +
+    ligne('Qui', s.indicatifs.map(x => '<span class="dr-c" title="' + x.ou.map(o => nom[o]).join(', ') + '">' + esc(x.c) + '<i>' + x.ou.map(o => ou[o]).join('') + '</i></span>').join('')) +
+    ligne('Reports', liste(s.reports)) + ligne('Locators', liste(s.carres)) + ligne('Matériel', liste(s.materiel)) + ligne('Fréquences', liste(s.frequences)) +
+    (s.phrases.length ? '<div class="dr-l"><span>Phrases clés</span><ul class="dr-ph">' + s.phrases.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
+    (i ? '<div style="margin-top:4px;display:flex;gap:6px">' + (rsQso(s, E && E.indicatif).call ? '<button class="discret" onclick="drNote(' + i + ')">Noter le QSO</button>' : '') +
+      '<button class="discret" onclick="drCopie(' + i + ')">Copier</button></div>' : '') + '</div>';
+}
+function drRend() {
+  g('dr-carte').hidden = g('dt-carte').hidden;
+  const ctx = drCtx(), l = dtListe;
+  const cle = l.length + '|' + (l.length ? l[l.length - 1].id : 0) + '|' + ctx.lus.join() + '|' + ctx.service + '|' + ctx.ciel + '|' + ctx.vus.map(a => a.c).join() + '|' + Math.floor(Date.now() / 30000);
+  if (cle === drCle) return;
+  drCle = cle;
+  drS = rsStations(l, ctx);
+  const ici = drS[0] && drS[0].actuel ? drS[0] : null, avant = drS.filter(x => x !== ici);
+  const ouvert = g('dr-avant') ? g('dr-avant').open : false;
+  const q = ici ? rsQso(ici, ctx.moi) : null;
+  g('dr-qso').hidden = !(q && q.call);
+  g('dr-corps').innerHTML = (ici ? drStation(ici, 0) : '<div class="petit" style="padding:6px 0">' + (l.length ? 'Rien encore sur la station reçue.' :
+      'Le résumé se remplit au fil des passages (sous-titres ou traduction parlée en marche) et des indicatifs lus dans l’image.') + '</div>') +
+    (avant.length ? '<details class="dr-avant" id="dr-avant"' + (ouvert ? ' open' : '') + '><summary class="petit">Stations précédentes (' + avant.length + ')</summary>' +
+      avant.map(s => drStation(s, drS.indexOf(s))).join('') + '</details>' : '');
+}
+function drNote(i) {
+  const s = drS[i || 0]; if (!s) return;
+  const q = rsQso(s, E && E.indicatif);
+  if (q.call) dNote(q.call, q.loc, q.rep);
+}
+async function drCopie(i) {
+  const s = drS[i || 0];
+  if (!s) { txt('dr-etat', 'rien à copier'); return; }
+  txt('dr-etat', await ckCopieTexte(rsTexte(s)) ? 'résumé copié' : 'copie refusée par le navigateur');
+  setTimeout(() => txt('dr-etat', ''), 4000);
+}
+dtAffRend();
 
 // ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO, HackRF One)
 let EM = null, eVieW = null, ePremier = true;
