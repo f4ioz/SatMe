@@ -131,9 +131,29 @@ class LegendePcTest {
     }
 
     @Test
+    fun la_bande_du_16_9_reste_basse() {
+        // Everything on (TX, S-meter, frequency, a session's words): the band at most 22 % of a 16:9 frame,
+        // 28 % with the largest texts; the upright phone's as before.
+        val instant = t0 + 242_000L
+        for (res in listOf("XS", "M", "HD")) for (k in listOf(0.6f, 1f, 1.6f, 2.5f)) {
+            val (w, h) = RenduPc.tailleVideo(true, res)
+            val part = 1f - RenduPc.hautVue(w, h, scene(true, k, res = res)).toFloat() / h
+            println("bande 16:9 $res ×$k : %.1f %%".format(part * 100))
+            assertTrue("$res ×$k: ${part * 100} %", part <= (if (k <= 1f) 0.22f else 0.28f) + 0.002f)
+            val m = RenduPc.legende(w, h, scene(true, k, res = res), instant)
+            if (k == 1f) assertTrue("$res: everything at the usual size", m.places.size >= 14)
+        }
+        for (k in listOf(0.6f, 1f, 1.6f, 2f, 2.5f)) {
+            val (w, h) = RenduPc.tailleVideo(false, "M", vertical = true)
+            println("bande 9:16 ×$k : %.1f %%".format(100 - RenduPc.hautVue(w, h, scene(false, k).let { RenduPc.Scene(it.e, it.prevue, it.marques, it.indicatif,
+                vertical = true, frequences = it.frequences, police = k) }) * 100f / h))
+        }
+    }
+
+    @Test
     fun les_images_d_exemple() {
         val instant = t0 + 242_000L
-        for (paysage in listOf(true, false)) for (k in listOf(1f, 2f)) for (utc in listOf(true, false)) {
+        for (paysage in listOf(true, false)) for (k in listOf(1f, 1.6f, 2f)) for (utc in listOf(true, false)) {
             val (w, h) = RenduPc.tailleVideo(paysage, "M")
             val sc = scene(paysage, k, if (utc) LegendePc.UTC else TimeZone.getTimeZone("Europe/Paris"))
             val img = RenduPc.image(w, h, sc, instant)

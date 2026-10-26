@@ -161,6 +161,9 @@ object PageJournal {
   #cadreF .legF { position:absolute; background:#0A0F18; border-top:1px solid #22303B; padding:6px 10px; overflow:hidden; }
   #cadreF .legF b { display:block; font-size:15px; color:#fff; }
   #cadreF .legF span { font-size:11px; color:#A0AFC3; }
+  #cadreF .legF.col { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #cadreF .legF.col span, #cadreF .legF .dr span { display:block; }
+  #cadreF .legF .dr { text-align:right; }
   #cadreF .fmtF { position:absolute; right:8px; top:8px; font-size:11px; color:var(--cyan); background:rgba(5,10,16,.8); padding:2px 6px; border-radius:5px; }
   /* The SSTV picture where the video puts it: dragged, resized by its corner or the wheel. */
   #cadreSstv { position:absolute; z-index:3; display:none; cursor:move; touch-action:none; user-select:none; }
@@ -623,9 +626,11 @@ function cadreFichier() {
   const W = e.clientWidth, H = e.clientHeight; if (!W || !H) return null;
   const tel = O.format === 'telephone', A = tel ? 9 / 16 : 16 / 9;
   const fw = Math.min(W, H * A), fh = fw / A;
-  // The caption's share of the frame at the texts' size (the station's: about 23 % in 16:9, 20 % upright).
+  // The caption's share of the frame at the texts' size: in 16:9 three rows (27 + 65 × size units of 1/480 of the
+  // height, at most 28 %, as RenduPc and LegendePc.hauteurLarge draw it); upright about as high as its rows ask.
   const k = Math.max(.6, Math.min(2.5, +O.police || 1));
-  return { fx: (W - fw) / 2, fy: (H - fh) / 2, fw: fw, fh: fh, vh: fh * Math.max(.5, 1 - (tel ? .2 : .23) * k), W: W, H: H, vertical: tel };
+  const part = tel ? Math.min(.45, .045 + .2 * k) : Math.min(.28, (27 + 65 * k) / 480);
+  return { fx: (W - fw) / 2, fy: (H - fh) / 2, fw: fw, fh: fh, vh: fh * (1 - part), W: W, H: H, vertical: tel };
 }
 function dessineCadre() {
   let o = g('cadreF'); const c = P && onglet === 'fabriquer' ? cadreFichier() : null;
@@ -635,8 +640,13 @@ function dessineCadre() {
   const [v, l, f] = o.children;
   Object.assign(v.style, { left: c.fx + 'px', top: c.fy + 'px', width: c.fw + 'px', height: c.vh + 'px' });
   Object.assign(l.style, { left: c.fx + 'px', top: (c.fy + c.vh) + 'px', width: c.fw + 'px', height: (c.fh - c.vh) + 'px' });
-  l.innerHTML = ''; l.appendChild(el('b', { text: P.sat })); l.appendChild(el('span', { text: jour(t) + (P.loc ? ' · ' + P.loc : '') +
-    (S.ps.length > 1 ? ' · ' + tf('s_passage', S.i + 1, S.ps.length) : '') }));
+  l.innerHTML = ''; l.classList.toggle('col', !c.vertical);
+  // 16:9: the satellite and the time on the left, the station and the session's pass on the right, as in the file.
+  if (c.vertical) { l.appendChild(el('b', { text: P.sat })); l.appendChild(el('span', { text: jour(t) + (P.loc ? ' · ' + P.loc : '') +
+    (S.ps.length > 1 ? ' · ' + tf('s_passage', S.i + 1, S.ps.length) : '') })); }
+  else { l.appendChild(el('div', {}, [el('b', { text: P.sat }), el('span', { text: jour(t) })]));
+    l.appendChild(el('div', { class: 'dr' }, [el('span', { text: (S.ps.length > 1 ? tf('s_passage', S.i + 1, S.ps.length) + ' · ' : '') + 'SatMe' }),
+      el('span', { text: [P.indicatif, P.loc].filter(v => v).join(' · ') })])); }
   f.textContent = c.vertical ? T.format_portrait : T.format_paysage;
   // The sky and the globe as the file draws them: in its view.
   vues.forEach(x => Object.assign(x.style, { left: c.fx + 'px', top: c.fy + 'px', width: c.fw + 'px', height: c.vh + 'px' }));

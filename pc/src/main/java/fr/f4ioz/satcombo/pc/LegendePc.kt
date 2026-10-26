@@ -20,7 +20,8 @@ import java.util.TimeZone
 /**
  * The caption under the journal's videos laid out: its texts in rows,
  * a row too long for the width going on below, the least useful ones left
- * out when the band has no room — never one over another. Its size
+ * out when the band has no room — never one over another; in 16:9 in three
+ * columns on a low band ([disposeColonnes]). Its size
  * ([police]) and its time zone ([fuseau]) as the page asks; the pass's times
  * (AOS, TCA, LOS) and where the frame is in it.
  */
@@ -100,23 +101,26 @@ object LegendePc {
         }
     }
 
-    private fun essai(g: Graphics2D, rangs: List<List<Element>>, largeur: Float, dp: Float, k: Float): Pair<List<Place>, Float> {
-        val marge = 14 * dp; val ecart = 12 * dp * k; val interligne = 3 * dp * k; val pad = 8 * dp * k
+    /** What [el] takes in a line [dispo] wide: its text (cut with « … » when too long), its width, its height. */
+    private fun mesure(g: Graphics2D, el: Element, dispo: Float, dp: Float, k: Float): Triple<String, Float, Float> = when (el.sorte) {
+        Sorte.TX -> Triple(el.texte, 40 * dp * k, 22 * dp * k)
+        Sorte.SMETRE -> Triple("", dispo, 24 * dp * k)
+        Sorte.MARQUE -> { val u = marque(dp, k); Triple("", MarquePc.largeur(g, u), 6.4f * u) }
+        Sorte.TEXTE -> {
+            val fm = g.getFontMetrics(el.font)
+            var s = el.texte
+            var l = maxOf(fm.stringWidth(s), el.gabarit?.let { fm.stringWidth(it) } ?: 0).toFloat()
+            if (l > dispo) { while (s.length > 1 && fm.stringWidth("$s…") > dispo) s = s.dropLast(1); s = "$s…"; l = fm.stringWidth(s).toFloat() }
+            Triple(s, l, (fm.ascent + fm.descent).toFloat())
+        }
+    }
+
+    private fun essai(g: Graphics2D, rangs: List<List<Element>>, largeur: Float, dp: Float, k: Float,
+                      marge: Float = 14 * dp, pad: Float = 8 * dp * k): Pair<List<Place>, Float> {
+        val ecart = 12 * dp * k; val interligne = 3 * dp * k
         val dispo = largeur - 2 * marge
         val places = ArrayList<Place>()
         var y = pad
-        fun mesure(el: Element): Triple<String, Float, Float> = when (el.sorte) {
-            Sorte.TX -> Triple(el.texte, 40 * dp * k, 22 * dp * k)
-            Sorte.SMETRE -> Triple("", dispo, 24 * dp * k)
-            Sorte.MARQUE -> { val u = marque(dp, k); Triple("", MarquePc.largeur(g, u), 6.4f * u) }
-            Sorte.TEXTE -> {
-                val fm = g.getFontMetrics(el.font)
-                var s = el.texte
-                var l = maxOf(fm.stringWidth(s), el.gabarit?.let { fm.stringWidth(it) } ?: 0).toFloat()
-                if (l > dispo) { while (s.length > 1 && fm.stringWidth("$s…") > dispo) s = s.dropLast(1); s = "$s…"; l = fm.stringWidth(s).toFloat() }
-                Triple(s, l, (fm.ascent + fm.descent).toFloat())
-            }
-        }
         for (rang in rangs) {
             if (rang.isEmpty()) continue
             var ligne = ArrayList<Pair<Element, Triple<String, Float, Float>>>()
@@ -131,13 +135,76 @@ object LegendePc {
                 ligne = ArrayList()
             }
             for (el in rang) {
-                val m = mesure(el)
+                val m = mesure(g, el, dispo, dp, k)
                 if (el.sorte == Sorte.SMETRE) { pose(); ligne += el to m; pose(); continue }
                 val l = ligne.sumOf { it.second.second.toDouble() }.toFloat() + ecart * ligne.size
                 if (ligne.isNotEmpty() && l + m.second > dispo) pose()
                 ligne += el to m
             }
             pose()
+        }
+        return places to (y - interligne + pad)
+    }
+
+    /**
+     * The 16:9's band [hauteur] high: its height for texts at scale [k] in a frame
+     * whose unit is [dp] — three rows' worth (the satellite's name and two lines),
+     * at most 28 % of the frame [h]. The same on the page (PageJournal's cadreFichier).
+     */
+    fun hauteurLarge(h: Int, dp: Float, k: Float): Float = minOf(h * 0.28f, (27f + 65f * k) * dp)
+
+    /**
+     * The 16:9's caption: [colonnes] side by side across the width (each its rows,
+     * row n of each on the same line), each column as wide as its texts ask, the
+     * room left shared out; within [hauteur] by leaving out the least useful (the
+     * columns widening as they empty), the rows centred in the band.
+     */
+    fun disposeColonnes(g: Graphics2D, colonnes: List<List<List<Element>>>, largeur: Float, dp: Float, k: Float, hauteur: Float): Mise {
+        val retires = LinkedHashSet<Element>()
+        val tous = colonnes.flatten().flatten()
+        fun essai() = grille(g, colonnes.map { c -> c.map { r -> r.filter { it !in retires } } }, largeur, dp, k)
+        while (true) {
+            if (essai().second <= hauteur) break
+            val pire = tous.filter { it !in retires && it.prio > 0 }.withIndex().maxWithOrNull(compareBy({ it.value.prio }, { it.index }))?.value
+                ?: return essai().let { (places, h) -> Mise(places, hauteur, h) }
+            retires += pire
+        }
+        // Then back, the most useful first, those whose leaving did not help (the room was wanted elsewhere).
+        for (el in retires.reversed().sortedBy { it.prio }) { retires -= el; if (essai().second > hauteur) retires += el }
+        val (places, h) = essai()
+        val dy = (hauteur - h) / 2
+        return Mise(places.map { p -> Place(p.el, p.texte, p.x, p.y + dy, p.l, p.h) }, hauteur, h)
+    }
+
+    private fun grille(g: Graphics2D, colonnes: List<List<List<Element>>>, largeur: Float, dp: Float, k: Float): Pair<List<Place>, Float> {
+        val marge = 14 * dp; val gouttiere = 22 * dp; val ecart = 12 * dp * k; val interligne = 3 * dp * k; val pad = 6 * dp
+        val cols = colonnes.filter { c -> c.any { it.isNotEmpty() } }
+        if (cols.isEmpty()) return emptyList<Place>() to 0f
+        val dispo = largeur - 2 * marge - gouttiere * (cols.size - 1)
+        // Each column's width: its widest line (the S-meter not less than a short bar), not under its widest thing.
+        fun l(el: Element) = if (el.sorte == Sorte.SMETRE) 150 * dp * k else mesure(g, el, Float.MAX_VALUE, dp, k).second
+        val nat = cols.map { c -> c.maxOf { r -> if (r.isEmpty()) 0f else r.sumOf { l(it).toDouble() }.toFloat() + ecart * (r.size - 1) } }
+        val min = cols.map { c -> c.flatten().maxOf { if (it.sorte == Sorte.SMETRE) 100 * dp * k else l(it) } }
+        val larg = when {
+            nat.sum() <= dispo -> nat.map { it + (dispo - nat.sum()) / cols.size }
+            min.sum() < dispo -> { val reste = dispo - min.sum(); val sup = nat.zip(min).sumOf { (a, b) -> (a - b).toDouble() }.toFloat()
+                nat.zip(min).map { (a, b) -> b + if (sup > 0) reste * (a - b) / sup else reste / cols.size } }
+            else -> min.map { it * dispo / min.sum() }
+        }
+        // Each column's rows laid out on its own, then the rows lined up across the columns.
+        val cases = cols.mapIndexed { j, c -> c.map { r -> if (r.isEmpty()) emptyList<Place>() to 0f else essai(g, listOf(r), larg[j], dp, k, 0f, 0f) } }
+        val n = cols.maxOf { it.size }
+        val places = ArrayList<Place>()
+        var y = pad
+        for (i in 0 until n) {
+            val hr = cases.maxOf { it.getOrNull(i)?.second ?: 0f }
+            if (hr <= 0f) continue
+            var x = marge
+            for ((j, c) in cases.withIndex()) {
+                c.getOrNull(i)?.let { (p, h) -> for (q in p) places += Place(q.el, q.texte, x + q.x, y + (hr - h) / 2 + q.y, q.l, q.h) }
+                x += larg[j] + gouttiere
+            }
+            y += hr + interligne
         }
         return places to (y - interligne + pad)
     }

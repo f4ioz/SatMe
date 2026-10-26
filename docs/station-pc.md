@@ -272,7 +272,7 @@ Opening a pass from the list is the editor on that pass; **🌍 Session** (or **
 
 - **Its choices**, at the top right: the look, the camera (*Vue d'ensemble*, *Poursuite*, *Depuis la station*), the cities (*toutes*, *capitales*, *aucune*), their name, their flag or both, the details.
 - **Drag** moves the globe on the screen (room for the SSTV picture), **double-click** puts it back in the centre, the **wheel** sets the height. The picture, the GIF and the video (*Fabriquer › Vue: Globe*) show it where it is.
-- **The videos' caption**: **Taille des textes de la vidéo** (text size; a slider, ×0.6 to ×2.5); the pass's AOS, TCA and LOS and the time relative to it (« AOS + 4:02 »); local time or UTC, like the journal.
+- **The videos' caption**: **Taille des textes de la vidéo** (text size; a slider, ×0.6 to ×2.5); the pass's AOS, TCA and LOS and the time relative to it (« AOS + 4:02 »); local time or UTC, like the journal. In 16:9 the caption sits in three columns on a low band (about 19 % of the picture, 28 % at most with the largest texts, leaving out the least useful if needed); in 9:16, in rows under the view.
 
 ### Session: several passes animated
 

@@ -273,7 +273,7 @@ Ouvrir un passage de la liste, c'est l'éditeur sur ce passage ; **🌍 Session*
 
 - **Ses choix**, en haut à droite : le rendu, la caméra (*Vue d'ensemble*, *Poursuite*, *Depuis la station*), les villes (*toutes*, *capitales*, *aucune*), leur nom, leur drapeau ou les deux, les détails.
 - **Glisser** déplace le globe sur l'écran (de la place pour l'image SSTV), **double-clic** le remet au centre, la **molette** règle la hauteur. L'image, le GIF et la vidéo (*Fabriquer › Vue : Globe*) le montrent là où il est.
-- **La légende des vidéos** : **Taille des textes de la vidéo** (un curseur, ×0,6 à ×2,5) ; l'AOS, la TCA et le LOS du passage et l'heure par rapport à lui (« AOS + 4:02 ») ; l'heure locale ou UTC, comme le journal.
+- **La légende des vidéos** : **Taille des textes de la vidéo** (un curseur, ×0,6 à ×2,5) ; l'AOS, la TCA et le LOS du passage et l'heure par rapport à lui (« AOS + 4:02 ») ; l'heure locale ou UTC, comme le journal. En 16:9, la légende tient en trois colonnes sur une bande basse (environ 19 % de l'image, 28 % au plus avec les plus grands textes, quitte à laisser de côté le moins utile) ; en 9:16, en lignes sous la vue.
 
 ### Session : plusieurs passages animés
 
