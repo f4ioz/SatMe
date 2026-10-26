@@ -1269,6 +1269,13 @@ class StationPc(
     /** The S-meter read less than 3 s ago, else null. */
     fun smetreRecent(): Int? = smetre.takeIf { _etat.value.catConnecte && horloge() - smetreMs <= 3_000L }
 
+    /** The last S-meter reading and when it was made (a probe takes only those after its switch), null when none lately. */
+    fun smetreLu(): Pair<Int, Long>? {
+        val v = smetre ?: return null
+        val ms = smetreMs
+        return if (_etat.value.catConnecte && horloge() - ms <= 3_000L) v to ms else null
+    }
+
     companion object {
         /** The rigs the PC drives: the Icom family on CI-V, the pairs (TS-2000, FT-817 / IC-705, TH-D72), and simulators. */
         val MODELES = listOf("IC9700", "IC9100", "IC910", "TS2000", "PAIRE", "THD72", "SIM", "TS2000SIM")

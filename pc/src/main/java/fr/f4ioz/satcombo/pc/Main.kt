@@ -381,6 +381,20 @@ fun main(args: Array<String>) {
     val emissionPoste = EmissionPostePc(station, { son.carteDuPoste() })
     emissionPoste.demarre()
     serveur.emissionPoste = emissionPoste
+    // The antenna polarisation switch (an ESP32 on USB, or the virtual one): nothing opened until a port is chosen;
+    // never a command to an antenna SatMe transmits through (the band from the frequency, both when unknown).
+    val polarisation = PolarisationPc(station, dossier)
+    polarisation.emissions = {
+        buildList {
+            if (emissionPoste.poste.etat.emet) add(station.stationCat.etat.value.monteeHz)
+            if (emissionSstv.etat.emet) add(emissionSstv.etat.frequenceHz.takeIf { it > 0 })
+            if (emission.etat.emet) add(emission.etat.frequenceKhz.takeIf { it > 0 }?.let { it * 1000L })
+        }
+    }
+    polarisation.sstvEnCours = { son.sstv.etat.value.mode.isNotEmpty() }
+    polarisation.niveauSdr = { sdr.etat.value.takeIf { it.actif && !sdr.fictif && sdr.suitSatellite }?.niveauDb?.toDouble() }
+    polarisation.demarre()
+    serveur.polarisation = polarisation
     // HTTPS for the remote page (its microphone needs it): off unless chosen on this PC.
     serveur.certificat = CertificatPc(dossier)
     // The station's frequency for logging programs (rigctld protocol): off unless chosen in Réglages › Interfaces.
@@ -515,6 +529,7 @@ fun main(args: Array<String>) {
         runCatching { spectreJournal.ferme() }
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }
+        runCatching { polarisation.arrete() }
         runCatching { sdr.arrete() }
         // Nor any bladeRF-cli (the receiver's stopped just above, gently).
         runCatching { fr.f4ioz.satcombo.sdr.Bladerf.arreteTout() }

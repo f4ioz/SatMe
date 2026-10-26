@@ -91,6 +91,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** The USB volume knob as a VFO, Linux (set before [demarre]). */
     @Volatile var molette: MoletteUsbPc? = null
+    /** The antenna polarisation switch (module « Polarisation »). */
+    @Volatile var polarisation: PolarisationPc? = null
     /** This PC relaying its knob to another station. */
     @Volatile var relaisMolette: RelaisMolettePc? = null
 
@@ -734,6 +736,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             if (id in FonctionsNonSat.ONGLETS) o.put("nonSat", id)
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
+        // The antenna polarisation switch: a GET reads, a POST acts (relays only, never a transmission).
+        if (chemin == "/api/polar" || chemin.startsWith("/api/polar/")) {
+            val o = polarisation?.let { p -> runCatching { p.sert(chemin, r.methode, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } }
+                ?: JSONObject().put("ok", false).put("absent", true)
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         // ADS-B (receive only) and the shared map's layers.
         if (chemin == "/api/adsb" || chemin.startsWith("/api/adsb/")) {
             val rep = adsb?.sert(chemin, r.methode) { q[it].orEmpty() }
@@ -1286,6 +1294,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/sondes/demarrer" -> "sondes"
         "/api/meteor/demarrer" -> "meteor"
         "/api/datv/demarre", "/api/datv/emission/demarre" -> "datv"
+        // Its settings stay open (to tick it again is elsewhere); every gesture on the box is refused.
+        "/api/polar/pol", "/api/polar/test", "/api/polar/sim", "/api/polar/sonde" -> "polar"
         else -> null
     }?.takeIf { !ModulesStation.actif(station.stockage, it) }
 

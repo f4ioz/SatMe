@@ -74,15 +74,17 @@ object ModulesStation {
         Module("montage", "Montage", "La chaîne de la station : antennes, convertisseurs, câbles", listOf("montage"), listOf("#sb-mt")),
         Module("noeud", "SatMe-Node", "Le Raspberry Pi près de l’antenne", listOf("noeud"), listOf("#sb-noeud")),
         Module("telephone", "Téléphone", "SatMe sur le téléphone : réglages et contacts", masques = listOf("#carteTelephone")),
+        Module("polar", "Polarisation", "Le commutateur de polarisation d’antenne (V, H, circulaires) : boîtier ESP32 en USB", masques = listOf("#pol-carte", "#polr-carte"),
+            avis = "Un boîtier ESP32 et un WiMo ; ne fait rien tant qu’aucun port n’est choisi (l’ESP32 virtuel pour essayer)"),
     )
 
     private val PAR_ID = MODULES.associateBy { it.id }
 
     val PROFILS: List<Profil> = listOf(
         Profil("fm", "Satellites FM/SSB", "Les satellites en phonie, CW et numérique",
-            setOf("ft8", "cw", "phonie", "annonces", "aprs", "tlm", "orbites", "espace", "activites", "telephone")),
+            setOf("ft8", "cw", "phonie", "annonces", "aprs", "tlm", "orbites", "espace", "activites", "telephone", "polar")),
         Profil("sstv", "SSTV ARISS", "Les images de l’ISS et des satellites SSTV (le SDR peut être décoché)",
-            setOf("sstv", "sdr", "orbites", "activites", "annonces", "telephone")),
+            setOf("sstv", "sdr", "orbites", "activites", "annonces", "telephone", "polar")),
         Profil("qo100", "Parabole QO-100 / DATV", "Le transpondeur géostationnaire et la télévision numérique",
             setOf("sdr", "qo100", "datv", "ft8", "cw", "phonie", "annonces", "noeud", "montage", "telephone")),
         Profil("meteo", "Météo et non-sat", "Images METEOR, radiosondes, avions, navires, météo spatiale",

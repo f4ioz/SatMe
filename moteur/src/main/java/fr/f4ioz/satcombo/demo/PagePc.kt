@@ -723,6 +723,29 @@ ${STYLE_JETONS}
   .avert { color:var(--ambre); font-size:12px; margin-top:6px; }
   .diag { font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--gris); white-space:pre-wrap; margin-top:6px; max-height:90px; overflow:auto; }
   .bouton-gr { display:flex; gap:6px; flex-wrap:wrap; }
+  /* Antenna polarisation: one line per band (its buttons, its real state), the probes' table. */
+  .pol-b { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .pol-b .pol-nom { min-width:48px; font-weight:600; }
+  .pol-b .bouton-gr button { min-width:36px; padding:4px 8px; }
+  .pol-b .bouton-gr button.actif { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  .pol-etat { font-size:var(--fs-s); }
+  .pol-tag { display:inline-block; padding:0 7px; border-radius:10px; font-size:var(--fs-xs); font-weight:600; background:rgba(255,180,84,.16); color:var(--warn); }
+  .pol-tag.err { background:rgba(229,72,77,.16); color:var(--danger); }
+  .pol-msg { margin-top:6px; min-height:16px; }
+  .pol-msg.err { color:var(--danger); }
+  .pol-prof-t { margin-top:8px; }
+  .pol-prof-l { margin-top:4px; }
+  .pol-prof-l select { max-width:230px; }
+  #pol-carte .t .pastille { white-space:nowrap; }
+  .pol-tw { overflow-x:auto; }
+  .pol-t { width:100%; border-collapse:collapse; font-size:var(--fs-s); margin-top:6px; }
+  .pol-t th { text-align:left; font-weight:600; color:var(--texte-2); padding:2px 6px 2px 0; }
+  .pol-t td { padding:3px 6px 3px 0; border-top:1px solid var(--ligne); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .pol-barre { display:inline-block; width:44px; height:7px; border-radius:4px; background:rgba(120,160,255,.35); vertical-align:middle; overflow:hidden; }
+  .pol-barre i { display:block; height:100%; background:var(--cyan); }
+  .pol-sim { margin-top:8px; padding:6px 8px; border:1px dashed var(--ligne); border-radius:8px; }
+  .pol-sim .bouton-gr button { min-width:44px; padding:3px 8px; }
+  .pol-sim .bouton-gr button.actif { background:var(--ambre); color:#06131A; border-color:var(--ambre); }
   .pastille { display:inline-block; padding:1px 8px; border-radius:20px; font-size:var(--fs-s); font-weight:600; background:var(--s3); }
   /* What is running or connected, at a glance: a green pill and edge; stopped, a red one. */
   .pastille.marche { background:rgba(91,214,138,.20); color:var(--vert); }
@@ -2374,6 +2397,22 @@ ${rail()}
       <div class="paire" style="margin:0">
         <span onclick="if (!window.SATME_TELEPHONE) { event.stopPropagation(); catPop(this); }" title="Connecter ou déconnecter le poste (le modèle et le port de Réglages › Poste)"><span class="petit">Poste</span> <b id="st-poste">—</b> <span id="st-poste-ok" class="coche"></span></span>
         <span><span class="petit">Rotor</span> <b id="st-rotor">—</b> <span id="st-rotor-ok" class="coche"></span></span>
+      </div>
+    </div>
+
+    <div class="carte pol" id="pol-carte" hidden data-pli="polar" data-pli-nom="Polarisation d'antenne">
+      <div class="t">Polarisation <span id="pol-pastille" class="pastille coupe">—</span> <span class="petit" id="pol-sel"></span><span class="h-esp"></span></div>
+      <div id="pol-bandes"></div>
+      <div class="petit pol-msg" id="pol-msg"></div>
+      <div id="pol-prof"></div>
+      <div class="ligne pol-sonde-l"><label class="petit" title="Sur l'antenne de réception seulement, en AUTO : H puis V, chacun mesuré après la stabilisation ; la meilleure gardée (hystérésis). Jamais pendant une émission ni une image SSTV en cours"><input type="checkbox" id="pol-sonde" onchange="polRegle('sonde=' + (this.checked ? 1 : 0))"> Sonder H/V</label>
+        <span class="petit" id="pol-sonde-e"></span><button class="discret" id="pol-sonde-b" onclick="polPost('api/polar/sonde')" title="Un sondage H/V tout de suite">Sonder maintenant</button></div>
+      <details id="pol-stats-d"><summary class="petit">Ce que les sondages ont appris <span id="pol-stats-n"></span></summary><div id="pol-stats"></div></details>
+      <div class="pol-sim" id="pol-sim" hidden>
+        <div class="petit"><b>ESP32 virtuel</b> — la façade du boîtier, pour essayer :</div>
+        <div class="ligne"><span class="petit">Sélecteur</span><div class="bouton-gr" id="pol-sim-sel"></div></div>
+        <div class="ligne"><label class="petit" title="L'entrée SEND du poste à la masse : le boîtier refuse toute commutation"><input type="checkbox" id="pol-sim-send" onchange="polPost('api/polar/sim?send=' + (this.checked ? 1 : 0))"> SEND (émission)</label>
+          <label class="petit" title="Un passage inventé de 6 min (élévation jusqu'à 62°) et un niveau inventé, pour voir le sondage et les statistiques"><input type="checkbox" id="pol-sim-pass" onchange="polPost('api/polar/sim?passage=' + (this.checked ? 1 : 0))"> passage simulé</label></div>
       </div>
     </div>
 
@@ -4693,6 +4732,27 @@ ${DemarragePagePc.CARTES}
         <div class="aide">Le plan du passage est fait avant l'AOS, pour tout le passage : de quel côté de la butée, droit ou retourné, et s'il le faut le seul moment où le rotor change (retournement ou déroulement), joué à la vitesse mesurée du rotor. Il garde le plus de passage, compté selon l'élévation (une minute à 60° vaut bien plus qu'à 5°), puis la plus petite course, puis le moins de changements. Avec 90° au plus, un passage qui franchit la butée demande un déroulement (un tour, ~1 min sans réception) : le plan le place quand le satellite est bas ou caché. Avec 180°, le rotor se retourne et suit par-dessus le zénith, sans tour. Le rotor attend au départ du plan quelques minutes avant l'AOS. Violet : le rotor prévu ; ambre : retourné ; rouge : un changement en cours et son heure ; gris : les zones cachées.</div>
       </details>
     </div>
+    <div class="carte" id="polr-carte">
+      <div class="t">Polarisation d'antenne <span id="polr-pastille" class="pastille coupe">aucun boîtier</span></div>
+      <div class="petit aide">Le boîtier ESP32 en USB qui commande les commutateurs WiMo (V, H, circulaire droite, circulaire gauche). Le sélecteur en façade garde le dernier mot : en AUTO SatMe commande, sur V, H, D ou G il commande lui-même et SatMe ne fait que lire. Jamais de commutation sur l'antenne qui émet. Rien n'est ouvert tant qu'aucun port n'est choisi ; l'<b>ESP32 virtuel</b> suit les mêmes règles, pour essayer avant de construire le boîtier.</div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Boîtier</span><select id="polr-port" style="flex:1;min-width:0;max-width:360px" onchange="polRegle('port=' + enc(this.value)).then(() => setTimeout(polCharge, 2000))"></select>
+        <button onclick="polPorts()" title="Relire les ports">↻</button><button onclick="polTeste()" title="Demander à l'ESP32 qui il est et où en est le sélecteur">Tester la liaison</button></div>
+      <div class="petit" id="polr-msg"></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">UHF</span><select id="polr-uhf" onchange="polRegle('uhf=' + this.value)"><option value="WIMO">WiMo 4 positions (18082 / 18083)</option><option value="AUCUN">rien à commuter</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">VHF</span><select id="polr-vhf" onchange="polRegle('vhf=' + this.value)"><option value="AUCUN">rien à commuter (circulaire fixe)</option><option value="WIMO">WiMo 4 positions (18080 / 18081)</option><option value="HV">un relais H / V</option></select></div>
+      <label class="petit" style="display:block;margin-top:6px" title="Le sens droite / gauche dépend du câblage et du côté où regarde l'antenne : si SatMe dit droite quand l'antenne est à gauche, cocher"><input type="checkbox" id="polr-inverse" onchange="polRegle('inverse=' + (this.checked ? 1 : 0))"> Inverser droite et gauche</label>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="polr-aos" onchange="polRegle('aos=' + (this.checked ? 1 : 0))"> À l'AOS, mettre la polarisation du profil du satellite (Suivi)</label>
+      <div class="t" style="margin-top:12px">Sonder H/V</div>
+      <div class="petit aide">En AUTO, sur l'antenne de réception seulement : H puis V, chacun mesuré après la stabilisation (relais, CAG) par le S-mètre du poste ou le niveau du SDR ; la meilleure gardée si elle bat l'autre d'au moins l'hystérésis. Encore à chaque période, et tout de suite si le signal chute. Jamais pendant une émission ni une image SSTV en cours. Chaque mesure est gardée (<code>polarisation/mesures.jsonl</code>) : satellite, mode, élévation, azimut, moment du passage, gagnante, écart.</div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="polr-sonde" onchange="polRegle('sonde=' + (this.checked ? 1 : 0))"> Sonder H/V</label>
+        <span class="petit">toutes les</span><select id="polr-periode" onchange="polRegle('periode=' + this.value)"><option value="20">20 s</option><option value="30">30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
+        <span class="petit">hystérésis</span><select id="polr-hyst" onchange="polRegle('hyst=' + this.value)"><option value="1.5">1,5 dB</option><option value="2">2 dB</option><option value="2.5">2,5 dB</option><option value="3">3 dB</option></select>
+        <span class="petit">mesure</span><select id="polr-source" onchange="polRegle('source=' + this.value)"><option value="AUTO">S-mètre, sinon SDR</option><option value="SMETRE">S-mètre du poste</option><option value="SDR">niveau du SDR</option></select></div>
+      <div class="t" style="margin-top:12px">Meilleure polarisation par satellite <span class="petit" id="polr-n"></span></div>
+      <div id="polr-stats"></div>
+      <div class="ligne"><button class="discret" id="polr-efface-sim" onclick="polEfface(false)" hidden>Oublier les mesures simulées</button><button class="discret" onclick="polEfface(true)">Tout oublier</button></div>
+      <details style="margin-top:6px"><summary class="petit">Échanges avec le boîtier</summary><pre class="diag" id="polr-journal" style="max-height:160px;overflow:auto"></pre></details>
+    </div>
     <div class="carte">
       <div class="t">QRZ.com</div>
       <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
@@ -5594,7 +5654,7 @@ const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'modules', nom: 'Modules', ico: 'view_quilt', desc: 'Ce qui t’intéresse : QO-100, DATV, SSTV, SDR, avions, navires… et les profils', cartes: ['Modules'] },
-  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
+  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, polarisation d’antenne, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Polarisation', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
@@ -5665,6 +5725,7 @@ function montreReglages(id) {
   if (id === 'emission') { chargeIq(); pxLit(); pxCartes(); }
   if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); majHttps(); }
   if (id === 'demarrage' || id === 'sauvegarde') demCharge();
+  if (id === 'materiel') { polPorts(); polCharge(); polStats(); }
 }
 // Réglages › Accès à distance: the password other machines are asked, set from this PC or a session.
 var AD = null;
@@ -8203,6 +8264,148 @@ async function relaisMol() {
 async function coupeRelais() { await post('api/molette/relais/coupe'); chargeMol(); }
 async function regleMol(q) { const j = await post('api/molette?' + q); if (j && j.dispo !== undefined) rendMol(j); else chargeMol(); HX.t.mol = 0; }
 setInterval(() => { if (ouverte('reglages') && !g('mol-carte').hidden && g('mol-carte').offsetParent) chargeMol(); }, 1000);
+// ------------------------------------------------------------------ antenna polarisation (module « Polarisation »)
+let POL = null, POL_ERR = '', POL_N = 0;
+const POL_NOMS = { V: 'verticale', H: 'horizontale', D: 'circulaire droite', G: 'circulaire gauche' };
+const POL_CNX = { coupe: 'aucun boîtier', attente: 'en attente', connecte: 'connecté', erreur: 'erreur' };
+const POL_PHASES = { montee: 'montée', culmination: 'culmination', descente: 'descente' };
+async function polCharge() {
+  try { POL = await (await fetch('api/polar')).json(); } catch (x) { POL = null; }
+  polRend();
+}
+// No alert: what the box or SatMe refused is said in the card.
+async function polPost(u) {
+  let j = null;
+  try { j = await (await fetch(u, { method: 'POST' })).json(); } catch (x) {}
+  POL_ERR = j && j.ok === false ? (j.erreur || 'refusé') : '';
+  if (j && j.connexion !== undefined) POL = j;
+  polRend();
+  return j;
+}
+const polRegle = q => polPost('api/polar/reglage?' + q);
+async function polPorts() {
+  let j = null;
+  try { j = await (await fetch('api/polar/ports')).json(); } catch (x) {}
+  if (!j || !j.ports) return;
+  const s = g('polr-port');
+  s.innerHTML = '<option value="">— aucun (rien n’est ouvert) —</option>' + j.ports.map(p => '<option value="' + esc(p.cle).replace(/"/g, '&quot;') + '">' + esc(p.nom) + '</option>').join('') +
+    (j.port && !j.ports.some(p => p.cle === j.port) ? '<option value="' + esc(j.port).replace(/"/g, '&quot;') + '">' + esc(j.port) + ' (absent)</option>' : '');
+  s.value = j.port || '';
+}
+async function polTeste() {
+  txt('polr-msg', 'test de la liaison…');
+  const j = await polPost('api/polar/test');
+  txt('polr-msg', j ? (j.ok ? 'Liaison : ' + j.texte : 'Liaison : ' + (j.erreur || 'pas de réponse')) : 'Liaison : pas de réponse de SatMe-PC');
+  polCharge();
+}
+async function polStats() {
+  let j = null;
+  try { j = await (await fetch('api/polar/stats')).json(); } catch (x) {}
+  if (!j || !j.ok) return;
+  txt('polr-n', j.n ? '(' + j.n + ' sondage' + (j.n > 1 ? 's' : '') + ')' : '');
+  g('polr-stats').innerHTML = j.tableau.length ? polTable(j.tableau, true) : '<div class="petit">Pas encore de sondage : cocher « Sonder H/V », en AUTO, pendant un passage.</div>';
+  g('polr-efface-sim').hidden = !j.simulees;
+}
+async function polEfface(tout) {
+  if (tout && !confirm('Oublier toutes les mesures de polarisation ?')) return;
+  await polPost('api/polar/efface?tout=' + (tout ? 1 : 0));
+  polStats(); polCharge();
+}
+// One line per satellite and elevation band: who won how often, the mean gap, a bar of H's share.
+function polTable(l, avecSat) {
+  return '<div class="pol-tw"><table class="pol-t"><thead><tr>' + (avecSat ? '<th>Satellite</th>' : '') + '<th>Bande</th><th>Élévation</th><th>Sondages</th><th>H / V</th><th>H − V</th><th>Meilleure</th></tr></thead><tbody>' +
+    l.map(k => {
+      const ph = k.n ? Math.round(100 * k.h / k.n) : 50;
+      return '<tr>' + (avecSat ? '<td>' + esc(k.sat) + '</td>' : '') + '<td>' + (k.bande === 'U' ? 'UHF' : 'VHF') + '</td><td>' + esc(k.tranche) + '</td><td>' + k.n + '</td>' +
+        '<td><span class="pol-barre" title="H gagne ' + ph + ' % des sondages"><i style="width:' + ph + '%"></i></span> ' + polNb(k.h) + ' / ' + polNb(k.v) + '</td>' +
+        '<td>' + (k.ecart > 0 ? '+' : '') + String(k.ecart).replace('.', ',') + ' dB</td>' +
+        '<td>' + (k.meilleure ? '<b>' + k.meilleure + '</b> <span class="petit">' + k.confiance + ' %</span>' : '<span class="petit">pas clair</span>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+const polNb = x => String(x).replace('.', ',');
+function polEtatBande(b) {
+  const e = POL.etat;
+  if (!e) return '—';
+  const p = e[b.b];
+  const s = '<b>' + p + '</b> <span class="petit">' + POL_NOMS[p] + '</span>';
+  if (e.manuel && b.b === 'U') return s + ' <span class="pol-tag">manuel (sélecteur)</span>';
+  if (e.manuel) return s + ' <span class="pol-tag">manuel : relais au repos</span>';
+  if (b.bloquee) return s + ' <span class="pol-tag err">bloqué : SatMe émet</span>';
+  if (e.tx) return s + ' <span class="pol-tag err">bloqué : émission</span>';
+  return s;
+}
+function polRend() {
+  const j = POL;
+  // A refused command answers ok:false with the whole state: still drawn.
+  const ok = !!(j && j.connexion !== undefined && j.module);
+  g('pol-carte').hidden = !(ok && j.port);
+  if (!j || j.connexion === undefined) return;
+  // Réglages
+  const pas = g('polr-pastille');
+  pas.className = 'pastille ' + (j.connexion === 'connecte' ? 'marche' : 'coupe');
+  txt('polr-pastille', (POL_CNX[j.connexion] || j.connexion) + (j.virtuel && j.connexion === 'connecte' ? ' (virtuel)' : ''));
+  if (document.activeElement !== g('polr-port') && j.port !== undefined && [].some.call(g('polr-port').options, o => o.value === j.port)) g('polr-port').value = j.port;
+  [['polr-uhf', j.uhf], ['polr-vhf', j.vhf], ['polr-periode', j.sonde.periode], ['polr-hyst', j.sonde.hyst], ['polr-source', j.sonde.source]].forEach(([id, x]) => {
+    const e = g(id); if (document.activeElement !== e && x != null) e.value = String(x);
+  });
+  g('polr-inverse').checked = !!j.inverse; g('polr-aos').checked = !!j.aos; g('polr-sonde').checked = !!j.sonde.on;
+  g('polr-journal').textContent = (j.journal || []).join('\n');
+  if (!g('polr-msg').textContent.startsWith('Liaison') || j.connexion !== 'connecte') txt('polr-msg', j.message || '');
+  if (j.nMesures !== POL_N) { POL_N = j.nMesures; if (ouverte('reglages')) polStats(); }
+  // Suivi
+  if (g('pol-carte').hidden) return;
+  const e = j.etat;
+  const pp = g('pol-pastille');
+  pp.className = 'pastille ' + (j.connexion === 'connecte' ? (e && (e.manuel || e.tx) ? 'warn' : 'marche') : 'coupe');
+  txt('pol-pastille', j.connexion !== 'connecte' ? (POL_CNX[j.connexion] || j.connexion) : !e ? 'connecté' : e.manuel ? 'manuel' : e.tx ? 'émission' : 'AUTO');
+  txt('pol-sel', e ? 'sélecteur ' + e.sel + (j.virtuel ? ' · virtuel' : '') : '');
+  g('pol-bandes').innerHTML = j.bandes.map(b => {
+    const cur = e ? e[b.b] : '';
+    return '<div class="pol-b"><span class="pol-nom">' + b.nom + (j.sat && j.sat.rx === b.b ? ' <span class="petit" title="Antenne de réception du satellite suivi">RX</span>' : '') + '</span>' +
+      '<div class="bouton-gr">' + b.pols.map(p => '<button type="button" class="' + (p === cur ? 'actif' : '') + '"' + (b.refus ? ' disabled title="' + esc(b.refus).replace(/"/g, '&quot;') + '"' : ' title="' + POL_NOMS[p] + '"') +
+        ' onclick="polPost(\'api/polar/pol?b=' + b.b + '&p=' + p + '\')">' + p + '</button>').join('') + '</div>' +
+      '<span class="pol-etat">' + polEtatBande(b) + '</span></div>';
+  }).join('') || '<div class="petit">Aucune bande équipée (Réglages › Poste et rotor › Polarisation d’antenne).</div>';
+  const msg = POL_ERR || j.aosTexte || j.message || '';
+  txt('pol-msg', msg);
+  g('pol-msg').classList.toggle('err', !!POL_ERR);
+  // The followed satellite's profile at AOS, and what the probes predict.
+  const s = j.sat;
+  const pr = g('pol-prof');
+  if (s && j.bandes.length) {
+    const cle = s.catnum + '|' + j.bandes.map(b => b.b + b.pols.join('') + s.profil[b.b]).join('|') + '|' + JSON.stringify(s.prediction || {});
+    if (pr.dataset.cle !== cle && !(document.activeElement && pr.contains(document.activeElement))) {
+      pr.dataset.cle = cle;
+      pr.innerHTML = '<div class="petit pol-prof-t">À l’AOS de <b>' + esc(s.nom) + '</b>' + (j.aos ? '' : ' <span class="pol-tag">coupé dans Réglages</span>') + '</div>' +
+        j.bandes.map(b => '<div class="ligne pol-prof-l"><span class="petit" style="min-width:36px">' + b.nom + '</span><select onchange="polPost(\'api/polar/profil?cat=' + s.catnum + '&b=' + b.b + '&p=\' + this.value)">' +
+          [['PREDITE', 'la meilleure connue (sondages)'], ['RIEN', 'ne rien changer']].concat(b.pols.map(p => [p, p + ' — ' + POL_NOMS[p]]))
+            .map(o => '<option value="' + o[0] + '"' + (s.profil[b.b] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
+          '<span class="petit">' + (s.prediction && s.prediction[b.b] ? 'prédite : ' + esc(s.prediction[b.b]) : '') + '</span></div>').join('');
+    }
+  } else if (pr.innerHTML) { pr.innerHTML = ''; pr.dataset.cle = ''; }
+  g('pol-sonde').checked = !!j.sonde.on;
+  const so = j.sonde, d = so.dernier;
+  txt('pol-sonde-e', !so.on ? '' : so.phase !== 'REPOS' ? 'sondage en cours…' :
+    so.pourquoi ? so.pourquoi : d ? 'dernier : H ' + polNb(d.h) + ' · V ' + polNb(d.v) + ' dB → ' + d.gagnante + ' (' + hm(d.t, true) + ')' : 'en attente du prochain sondage');
+  g('pol-sonde-b').hidden = !so.on;
+  const st = s && s.stats || [];
+  txt('pol-stats-n', s ? '(' + esc(s.nom) + (s.horsPassage ? '' : ', ' + s.el + '°, ' + (POL_PHASES[s.phase] || s.phase)) + (s.simule ? ', passage simulé' : '') + ')' : '');
+  const html = st.length ? polTable(st, false) : '<div class="petit">Pas encore de sondage pour ce satellite.</div>';
+  if (g('pol-stats').dataset.h !== html) { g('pol-stats').dataset.h = html; g('pol-stats').innerHTML = html; }
+  // The virtual ESP32's front panel.
+  g('pol-sim').hidden = !j.sim;
+  if (j.sim) {
+    g('pol-sim-sel').innerHTML = ['AUTO', 'V', 'H', 'D', 'G'].map(k => '<button type="button" class="' + (j.sim.sel === k ? 'actif' : '') + '" onclick="polPost(\'api/polar/sim?sel=' + k + '\')">' + k + '</button>').join('');
+    g('pol-sim-send').checked = !!j.sim.send; g('pol-sim-pass').checked = !!j.sim.passage;
+  }
+}
+let polTour = 0;
+setInterval(() => {
+  if (typeof modOn === 'function' && !modOn('polar')) return;
+  polTour++;
+  const st = ouverte('station'), rg = ouverte('reglages') && !g('polr-carte').hidden && g('polr-carte').offsetParent;
+  if ((st && !g('pol-carte').hidden) || rg || (st && polTour % 5 === 0)) polCharge();
+}, 1000);
 // ------------------------------------------------------------------ spoken announcements
 // SatMe-PC chooses what to say and when; the sentences come by the live stream, said here with a French voice of this browser.
 let ANN = null, annSeq = -1;

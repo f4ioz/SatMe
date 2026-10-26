@@ -15,6 +15,18 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Polarisation d'antenne** (nouveau module) : un boîtier ESP32 en USB commande un commutateur WiMo — V, H, circulaire droite, circulaire gauche. Réglages › Poste et rotor › Polarisation d'antenne : le port, **Tester la liaison**, ce qui est équipé en UHF et en VHF (WiMo ou relais H/V), droite et gauche inversées si le câblage le veut. Rien n'est ouvert tant qu'aucun port n'est choisi ; le firmware et le schéma sont dans `materiel/esp32-polarisation`.
+- **Suivi › Polarisation** : les boutons V / H / D / G, l'état réel (y compris « manuel (sélecteur) » et « bloqué : émission »), et la polarisation de chaque satellite **à l'AOS** (fixe, ou la meilleure connue). Le sélecteur en façade garde le dernier mot, et jamais de commutation sur l'antenne qui émet.
+- **Sonder H/V** : en AUTO, l'antenne de réception essaie H puis V, mesurés au S-mètre du poste ou au SDR, et garde la meilleure (hystérésis). Chaque mesure est gardée : par satellite et par élévation, SatMe apprend la meilleure polarisation et en démarre le passage suivant.
+- **ESP32 virtuel** : les mêmes règles sans le boîtier, sa façade à l'écran et un passage simulé, pour tout essayer avant de souder.
+
+### en
+- **Antenna polarisation** (new module): an ESP32 box on USB drives a WiMo switch — V, H, right-hand circular, left-hand circular. Réglages › Poste et rotor › Polarisation d'antenne: the port, **Tester la liaison** (test the link), what is fitted on UHF and VHF (WiMo or an H/V relay), right and left swapped if the wiring wants it. Nothing is opened until a port is chosen; the firmware and the drawing are in `materiel/esp32-polarisation`.
+- **Suivi › Polarisation**: the V / H / D / G buttons, the real state (including « manuel (sélecteur) » and « bloqué : émission »), and each satellite's polarisation **at AOS** (fixed, or the best known). The front panel selector has the last word, and never a switch on the antenna that transmits.
+- **Sonder H/V** (probe H/V): in AUTO, the receiving antenna tries H then V, measured by the rig's S-meter or the SDR, and keeps the best (hysteresis). Every measurement is kept: per satellite and elevation, SatMe learns the best polarisation and starts the next pass with it.
+- **Virtual ESP32**: the same rules without the box, its front panel on screen and a simulated pass, to try everything before soldering.
+
 ## 2026.10.31
 
 ### fr

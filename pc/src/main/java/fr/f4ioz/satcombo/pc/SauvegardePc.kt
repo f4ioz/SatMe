@@ -147,8 +147,8 @@ class SauvegardePc(private val dossier: File, private val horloge: () -> Long = 
         const val ATTENTE = "restauration"
         /** The settings (the phone's stores), the log, APRS's trophies, the SSTV campaigns. */
         val FICHIERS = listOf("reglages.properties", "satellites.properties", "agenda.properties", CARNET, "aprs-trophees.txt", "sstv-campagnes.json")
-        /** The pass journal, APRS heard, the SSTV sheets. */
-        val DOSSIERS = listOf("journal", "aprs", "planches")
+        /** The pass journal, APRS heard, the SSTV sheets, the polarisation probes. */
+        val DOSSIERS = listOf("journal", "aprs", "planches", "polarisation")
         /** Heavy: only when asked. */
         val MEDIAS = listOf("enregistrements", "sstv", "meteor", "sondes")
         const val MAX_OCTETS = 8L * 1024 * 1024 * 1024
