@@ -24,8 +24,17 @@ data class ReglageDatv(
     /** LNB supply: "" off, "v" 13 V, "h" 18 V. */
     val lnb: String = "",
     val son: Boolean = true,
+    /**
+     * Other symbol rates to try in turn when the first finds nothing
+     * (LongMynd cycles through them, [Datv.debitsEssayes]); empty: the one rate.
+     */
+    val balayage: List<Int> = emptyList(),
 ) {
     val fiKhz: Long get() = cielKhz - olKhz
+
+    /** The rate locked on when scanning: the one tried nearest to the measured [srTrouveKs]; else [srKs]. */
+    fun debitAccroche(srTrouveKs: Int): Int =
+        if (balayage.isEmpty() || srTrouveKs <= 0) srKs else Datv.debitsEssayes(this).minByOrNull { Math.abs(it - srTrouveKs) } ?: srKs
 
     /** Why this cannot be received, or null. */
     fun refus(): String? = when {
@@ -129,7 +138,30 @@ object Datv {
      * tuning elsewhere keeps the LNB supply as it is (an older node does not
      * say it: [ici]'s kept).
      */
+    /**
+     * The symbol rates LongMynd tries, in this order: [r]'s own, then its
+     * [ReglageDatv.balayage] (4 at most, as LongMynd takes them), each tried
+     * for [delaiTsMs] before the next.
+     */
+    fun debitsEssayes(r: ReglageDatv): List<Int> = (listOf(r.srKs) + r.balayage.filter { it in 33..27_500 }).distinct().take(4)
+
+    /**
+     * How long LongMynd waits without packets before trying again (and the
+     * next rate when scanning): 5 s, longer when scanning low rates, slower
+     * to lock (twice at 250 kS/s and below, four times at 125 and below, as
+     * BATC's receivers do); one rate alone keeps 5 s.
+     */
+    fun delaiTsMs(debits: List<Int>): Int {
+        if (debits.size <= 1) return 5000
+        val m = debits.minOrNull() ?: return 5000
+        return when { m <= 125 -> 20_000; m <= 250 -> 10_000; else -> 5000 }
+    }
+
+    /** "333,500" as rates (kS/s), the wrong ones left out. */
+    fun balayageDe(t: String?): List<Int> = t.orEmpty().split(',', ';', ' ').mapNotNull { it.trim().toIntOrNull() }.filter { it in 33..27_500 }.distinct().take(3)
+
     fun reglageDe(j: JSONObject, ici: ReglageDatv): ReglageDatv = ici.copy(
+        balayage = if (j.has("balayage")) balayageDe(j.optString("balayage")) else ici.balayage,
         cielKhz = j.optLong("ciel", ici.cielKhz).takeIf { it > 0 } ?: ici.cielKhz,
         srKs = j.optInt("sr", ici.srKs).takeIf { it > 0 } ?: ici.srKs,
         olKhz = j.optLong("ol", ici.olKhz).takeIf { it > 0 } ?: ici.olKhz,
@@ -140,6 +172,7 @@ object Datv {
     fun json(e: EtatDatv, r: ReglageDatv, points: List<Pair<Int, Int>>): JSONObject =
         JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
             .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son).put("lnb", r.lnb)
+            .put("balayage", r.balayage.joinToString(","))
             .put("fiTrouvee", e.fiTrouveeKhz).put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
             .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
             .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)

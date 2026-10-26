@@ -1679,7 +1679,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 fun khz(k: String) = q[k]?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1000.0) }
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
                     entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "",
-                    son = q["son"]?.let { it == "1" } ?: r0.son)
+                    son = q["son"]?.let { it == "1" } ?: r0.son, balayage = q["balayage"]?.let { Datv.balayageDe(it) } ?: r0.balayage)
+                q["relance"]?.let { d.relanceAuto = it == "1" }
                 q["recepteur"]?.takeIf { it in Datv.RECEPTEURS }?.let { d.recepteur = it }
                 large?.veilleArrete()
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
@@ -1830,6 +1831,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
             "/api/datv/udp" -> datv?.regleUdp(q["on"]?.let { it == "1" }, q["dest"])?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/son" -> datv?.coupeSon(q["on"] == "1")
+            "/api/datv/relance" -> datv?.let { it.relanceAuto = q["on"] == "1" }
             "/api/datv/son/local" -> datv?.regleSonLocal(q["reglable"]?.let { it == "1" }, q["volume"]?.trim()?.toIntOrNull())
             "/api/datv/accord-udp" -> {
                 val a = accordUdp ?: return JSONObject().put("ok", false).put("erreur", "indisponible")
@@ -2254,7 +2256,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val e = d.etat
         if (!e.actif || !e.verrouille) return ""
         val marge = d.qualite()?.opt("marge")?.let { (it as? Number)?.toDouble() }
-        return fr.f4ioz.satcombo.datv.ChatLarge.rapport(large?.nomRecu() ?: e.service, marge, e.merDb, d.reglage.srKs, d.reglage.cielKhz)
+        return fr.f4ioz.satcombo.datv.ChatLarge.rapport(large?.nomRecu() ?: e.service, marge, e.merDb, d.reglage.debitAccroche(e.srTrouveKs), d.reglage.cielKhz)
     }
 
     private fun carteDatv(d: DatvPc): JSONObject = d.carte.json(System.currentTimeMillis(), station.etat.value.observateur,
@@ -2559,7 +2561,7 @@ object JsonPc {
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud).put("noeudMateriel", noeudMateriel()?.takeIf { d.noeud.isNotBlank() } ?: JSONObject.NULL)
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
-        .put("sonReglable", d.sonReglable).put("volume", d.volume)
+        .put("sonReglable", d.sonReglable).put("volume", d.volume).put("relance", d.relanceAuto).put("relancesImage", d.relancesImage)
         .put("udp", JSONObject().put("on", d.udpOn).put("dest", d.udpDestination).put("datagrammes", d.udpDatagrammes).put("erreur", d.udpErreur))
         .put("recepteur", d.recepteur).put("sdrTenu", d.sdrTenu ?: "").put("s2", d.logiciel?.let { l ->
             val e = l.etatS2()

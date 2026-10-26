@@ -172,5 +172,11 @@ class BandeLargeTest {
         // An older node says no supply: the one known here is kept.
         j.remove("lnb")
         assertEquals("v", Datv.reglageDe(j, ReglageDatv(lnb = "v")).lnb)
+        // The rates scanned go to the node and come back; an older node says none: kept.
+        val b = node.copy(balayage = listOf(500, 250))
+        assertEquals(listOf(500, 250), Datv.reglageDe(Datv.json(EtatDatv(), b, emptyList()), ReglageDatv()).balayage)
+        j.remove("balayage")
+        assertEquals(listOf(500), Datv.reglageDe(j, ReglageDatv(balayage = listOf(500))).balayage)
+        assertEquals(listOf(333, 66, 500), Datv.balayageDe("333, 66;x,500,2,333,1000"))
     }
 }

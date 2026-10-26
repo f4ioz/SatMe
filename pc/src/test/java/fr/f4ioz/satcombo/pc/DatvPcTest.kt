@@ -28,6 +28,16 @@ class DatvPcTest {
         // The bottom input and the LNB supply only when asked; anything else for the supply is ignored.
         assertEquals(listOf("-w", "-p", "v"), DatvPc.commande("l", r.copy(entreeB = true, lnb = "v"), 1, 2).drop(9).take(3))
         assertTrue("-p" !in DatvPc.commande("l", r.copy(lnb = "24"), 1, 2))
+        // Scanning: the rates in turn, the chosen one first, the timeout longer for low rates.
+        val b = DatvPc.commande("l", r.copy(srKs = 333, balayage = listOf(500, 250, 333, 1000, 125)), 1, 2)
+        assertEquals(listOf("-r", "10000"), b.subList(7, 9))
+        assertEquals("333,500,250,1000", b.last())
+        assertEquals("20000", DatvPc.commande("l", r.copy(balayage = listOf(125)), 1, 2)[8])
+        assertEquals(listOf("5000", "1500,1000"), DatvPc.commande("l", r.copy(balayage = listOf(1000)), 1, 2).let { listOf(it[8], it.last()) })
+        // The rate locked on, for the quality and the stations heard.
+        val s = r.copy(srKs = 333, balayage = listOf(500, 250))
+        assertEquals(500, s.debitAccroche(499)); assertEquals(250, s.debitAccroche(251)); assertEquals(333, s.debitAccroche(0))
+        assertEquals(1500, r.debitAccroche(499))
     }
 
     @Test

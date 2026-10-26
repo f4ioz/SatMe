@@ -168,7 +168,7 @@ class SpectreLargePc(
         val maintenant = horloge()
         val r = datv.reglage
         if (e.actif && e.verrouille) nomRecu().takeIf { it.isNotEmpty() }?.let { n ->
-            val nouveau = entendus.note(n, r.cielKhz, r.srKs, e.merDb, maintenant)
+            val nouveau = entendus.note(n, r.cielKhz, r.debitAccroche(e.srTrouveKs), e.merDb, maintenant)
             if (nouveau || maintenant - entendusGardesMs >= 60_000L) { entendusGardesMs = maintenant; stockage.edit().putString(CLE_ENTENDUS, entendus.texte()).apply() }
         }
         if (e.actif && e.verrouille && r.cielKhz in BandeLarge.DEBUT_KHZ..BandeLarge.DEBUT_KHZ + BandeLarge.LARGEUR_KHZ) {

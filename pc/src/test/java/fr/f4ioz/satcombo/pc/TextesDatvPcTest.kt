@@ -286,6 +286,31 @@ class TextesDatvPcTest {
         assertEquals(0, t.json().getJSONArray("lus").length())
     }
 
+    @Test fun `une nouvelle station attend sa propre image`() {
+        val jpeg = image("EA4ABC")
+        var ciel = 10_494_750L; var numero = 40L; var verrou = true
+        val src = TextesDatvPc.Source({ true }, { verrou }, { jpeg }, { "" }, { ciel }, {}, numero = { numero })
+        val t = TextesDatvPc(StockageMemoire(), src, null, { horloge }, outil = { "/bin/false" }, periodeMs = 3000)
+        t.ocr = true
+        // Locked: the picture shown at that moment is not read, the next one is.
+        t.tic(); Thread.sleep(150)
+        assertEquals(0L, t.lectures)
+        numero = 41L; horloge += 3000; t.tic()
+        assertTrue(attend(5000) { t.lectures == 1L && !t.json().getBoolean("occupe") })
+        // Another frequency: the picture still there is the previous station's, not read.
+        ciel = 10_497_750L; horloge += 3000; t.tic(); Thread.sleep(150)
+        assertEquals(1L, t.lectures)
+        // The new station's first picture (a new start counts from zero): read.
+        numero = 0L; horloge += 3000; t.tic(); Thread.sleep(150)
+        assertEquals(1L, t.lectures)
+        numero = 1L; horloge += 3000; t.tic()
+        assertTrue(attend(5000) { t.lectures == 2L && !t.json().getBoolean("occupe") })
+        // Not locked: nothing read, the history is what is left.
+        verrou = false; numero = 5L; horloge += 3000; t.tic(); Thread.sleep(150)
+        assertEquals(2L, t.lectures)
+        assertEquals(0, t.json().getJSONArray("lus").length())
+    }
+
     @Test fun `le vrai tesseract quand il est la`() {
         val prog = OutilsPc.trouve("tesseract")
         assumeTrue(prog != null)

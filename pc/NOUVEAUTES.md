@@ -8,8 +8,18 @@ et la publication GitHub prend la section de sa version.
 Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
-Une section par version, la plus récente en haut, une partie « ### fr » et une
-partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.
+Une section par version, la plus récente en haut, une partie « ### fr
+- **DATV, sous-titres comme à la télé** : chaque passage découpé en sous-titres de deux lignes au plus (par phrase), chacun affiché un temps proportionnel à sa longueur, la traduction dessous ; **plus rien de coupé** — la police s'ajuste à l'image (plein écran compris) jusqu'à tout faire tenir, avec un minimum lisible.
+- **DATV, indicatifs lus dans l'image** : ils suivent la station — rangés au changement de fréquence ou de service et au décrochage, et après 5 min sans être relus ; « vu à l'instant » ou « vu il y a 3 min », les anciens à part sous **Vus avant**.
+- **DATV, listes de textes le plus récent en haut** : passages sous-titrés et traduits, salon de la bande large, chat de la carte de visite et du flux émis — plus besoin de faire défiler, l'historique reste dessous.
+- **DATV, réception plus sûre** : **Essayer aussi** d'autres débits de symboles (LongMynd les essaie à tour de rôle, plus longtemps pour les bas débits) ; **Relance automatique** de LongMynd s'il s'arrête seul en pleine réception, et du décodeur si l'image fige alors que le flux passe ; la marge s'appelle **Marge (D)** comme sur Ryde.
+» et une
+partie « ### en
+- **DATV, TV-style subtitles**: each over cut into cues of two lines at most (by sentence), each shown for a time proportional to its length, the translation under it; **nothing cut off any more** — the font fits the picture (full screen too) until everything shows, with a readable minimum.
+- **DATV, callsigns read in the picture**: they follow the station — put away on a new frequency or service and on a lost lock, and after 5 min without being read again; "seen just now" or "seen 3 min ago", older ones apart under **Vus avant**.
+- **DATV, text lists latest on top**: subtitled and translated overs, the wide-band chat, the station card's and transmitted stream's chat — no more scrolling, the history stays below.
+- **DATV, steadier reception**: **Essayer aussi** other symbol rates (LongMynd tries them in turn, longer for low rates); **automatic restart** of LongMynd when it stops by itself mid-reception, and of the decoder when the picture freezes while the stream flows; the margin is called **Marge (D)** as on Ryde.
+». Des listes courtes : ce que l'utilisateur voit, où cliquer.
 Markdown simple (gras, italique, `code`, listes, liens https).
 -->
 

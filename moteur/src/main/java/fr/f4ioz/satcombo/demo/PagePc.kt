@@ -538,15 +538,18 @@ ${STYLE_JETONS}
   #q-pids td, #q-pids th { padding:2px 6px; text-align:right; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
   #q-pids th { color:var(--gris); font-weight:400; }
   #q-pids td:nth-child(2), #q-pids th:nth-child(2) { text-align:left; font-family:inherit; }
-  .d-st { position:absolute; left:3%; right:3%; bottom:4%; display:flex; flex-direction:column; align-items:center; gap:4px; pointer-events:none; }
-  .d-st div { background:rgba(0,0,0,.74); color:#fff; font-size:clamp(15px,2.3vw,27px); font-weight:600; line-height:1.3; padding:3px 12px; border-radius:6px; text-align:center; text-shadow:0 1px 2px #000; }
-  .d-st .d-st-tr { font-size:clamp(13px,1.8vw,21px); font-style:italic; font-weight:500; color:#CFF6EE; }
-  .d-st .vieux { opacity:.6; }
+  .d-st { position:absolute; left:2%; right:2%; bottom:4%; display:flex; flex-direction:column; align-items:center; gap:.25em; pointer-events:none; font-size:18px; z-index:2; }
+  .d-st div { background:rgba(0,0,0,.76); color:#fff; font-size:1em; font-weight:600; line-height:1.25; padding:.12em 14px; border-radius:6px; text-align:center; text-shadow:0 1px 2px #000; max-width:100%; box-sizing:border-box; }
+  .d-st .l { display:block; white-space:nowrap; }
+  .d-st.enroule .l { white-space:normal; overflow-wrap:anywhere; }
+  .d-st .d-st-tr { font-size:.86em; font-style:italic; font-weight:500; color:#CFF6EE; }
   .d-lu { position:absolute; top:8px; right:8px; background:rgba(0,0,0,.72); color:#fff; font-weight:800; letter-spacing:1px; padding:4px 10px; border-radius:6px; font-size:15px; pointer-events:none; }
   .d-lu.sur { box-shadow:0 0 0 2px var(--vert); }
   .dt-lu { margin-top:6px; padding:6px 9px; background:#0E1720; border-radius:10px; border-left:3px solid var(--cyan); }
   .dt-lu b { font-size:20px; letter-spacing:2px; }
   .dt-lu.sur { border-left-color:var(--vert); }
+  .dt-lu.ancien { opacity:.6; } .dt-age { font-size:12px; color:var(--gris); } .dt-age.vif { color:var(--vert); font-weight:600; }
+  .dt-hist { margin-top:6px; } .dt-hist summary { cursor:pointer; } .dt-hist #dt-hist-l div { padding:1px 0; } .dt-hist button { padding:0 4px; }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   .ad-initial { margin:8px 0 4px; padding:8px 10px; border-radius:var(--r2); background:rgba(255,180,84,.1); border:1px solid rgba(255,180,84,.45); }
   .ad-initial b { font-family:var(--mono); font-size:var(--fs-l); color:var(--warn); user-select:all; }
@@ -3238,12 +3241,14 @@ ${rail()}
         <button onclick="dBalise()" title="Balise large bande : 10491,500 MHz à 1500 kS/s">Balise</button></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Canal</span><select id="d-canal" onchange="if (this.value) g('d-ciel').value = this.value"></select></div>
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><div id="d-debits" class="o-puces" style="flex:1"></div></div>
+      <div class="ligne" id="d-balayage-l"><span class="petit" style="min-width:86px" title="Si rien n’est trouvé au débit choisi, LongMynd essaie ceux-ci à tour de rôle (3 au plus), chacun 5 s (10 s à 250 kS/s et moins, 20 s à 125 kS/s et moins), puis revient au premier ; il reste sur celui qui accroche. Pris au prochain « Recevoir ». MiniTiouner seulement.">Essayer aussi</span><div id="d-balayage" class="o-puces" style="flex:1"></div></div>
       <div class="ligne"><span class="petit" style="min-width:86px">OL du LNB (MHz)</span><input id="d-ol" style="max-width:130px">
         <button onclick="dCale()" title="Accrocher la balise, puis : l'oscillateur est corrigé pour qu'elle tombe à sa fréquence">Caler sur le signal</button></div>
       <div class="ligne" id="d-ligne-entree"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
         <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
       <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
       <div class="ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Coupé ou remis tout de suite, pendant la réception aussi"><input type="checkbox" id="d-son" onchange="dPost('son?on=' + (this.checked ? 1 : 0))"> Son sur ce PC</label>
+        <label class="petit" title="LongMynd arrêté de lui-même en pleine réception (USB, MiniTiouner réinitialisé) : relancé après 3 s, puis 10 s, puis 30 s ; jamais s’il dit ne pas trouver le MiniTiouner ou ne pas y avoir accès. L’image figée alors que le flux passe : le décodeur est relancé (20 s au moins entre deux)."><input type="checkbox" id="d-relance" onchange="dPost('relance?on=' + (this.checked ? 1 : 0))"> Relance automatique</label>
         <label class="petit" title="Le flux de transport reçu, tel quel, vers un autre lecteur (VLC, ffplay…) : ce PC ou le réseau local seulement, rien vers Internet"><input type="checkbox" id="d-udp" onchange="dUdp()"> Flux TS en UDP vers</label>
         <input id="d-udp-dest" style="max-width:140px" placeholder="127.0.0.1:9080" onchange="dUdp()"><span class="petit" id="d-udp-etat"></span></div>
       <div class="ligne" id="d-vu-ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Le son décodé par SatMe plutôt que par ffplay : son niveau gauche et droite (ou mono) avec la crête tenue, et un volume réglable tout de suite. Sert aussi « Écouter ici » › Son DATV."><input type="checkbox" id="d-vu-on" onchange="dSonLocal('reglable=' + (this.checked ? 1 : 0))"> Vumètre et volume</label>
@@ -3268,10 +3273,10 @@ ${rail()}
         <label class="petit" style="text-transform:none;letter-spacing:0" title="Le salon public de la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert. Rien n’y est envoyé sans un clic sur « Envoyer » ; le pseudo est l’indicatif de la station, posé au premier message."><input type="checkbox" id="d-chat-on" onchange="dChatRegle(this.checked)"> afficher</label>
         <span class="petit" id="d-chat-etat" style="text-transform:none;letter-spacing:0"></span></div>
       <div id="d-chat-zone" hidden>
-        <div id="d-chat-liste" class="d-chat-liste"></div>
-        <div class="ligne" style="margin-top:4px"><input id="d-chat-texte" maxlength="300" placeholder="Message (envoyé seulement par « Envoyer »)" onkeydown="if (event.key === 'Enter') dChatEnvoie()">
+        <div class="ligne" style="margin:2px 0 4px"><input id="d-chat-texte" maxlength="300" placeholder="Message (envoyé seulement par « Envoyer »)" onkeydown="if (event.key === 'Enter') dChatEnvoie()">
           <button id="d-chat-envoie" onclick="dChatEnvoie()">Envoyer</button>
           <button id="d-chat-rapport" onclick="dChatRapport()" title="Écrit dans la case le rapport de réception d’usage dans le salon (indicatif reçu, marge D, MER, débit, fréquence), à relire puis envoyer. Aucun service de rapports de réception DATV n’est joignable aujourd’hui : seul le salon les reçoit.">Rapport</button></div>
+        <div id="d-chat-liste" class="d-chat-liste" title="Le plus récent en haut"></div>
         <div class="petit" id="d-chat-qui"></div>
         <div class="petit" id="d-rapport-service" title="Aucun service de rapports de réception DATV en ligne n’a été trouvé joignable : les rapports se donnent dans ce salon.">Service de rapports de réception : indisponible</div>
       </div>
@@ -3411,7 +3416,8 @@ ${rail()}
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
       <div class="petit" id="dt-ocr-etat"></div>
       <div id="dt-lus"></div>
-      <div id="dt-fil" class="ph-fil" style="max-height:none"></div>
+      <details id="dt-hist" class="dt-hist" hidden><summary class="petit" id="dt-hist-n">Vus avant</summary><div id="dt-hist-l" class="petit"></div></details>
+      <div id="dt-fil" class="ph-fil" style="max-height:min(62vh,560px)" title="Le plus récent en haut ; l’historique en dessous"></div>
     </div>
       </div>
     </div>
@@ -8623,7 +8629,9 @@ function marqueHorizon(p) {
     hm(p.geoAos) + ' à ' + hm(p.geoLos) + '"> ✱</span>' : '';
 }
 // ------------------------------------------------------------------ DATV (MiniTiouner, through LongMynd)
-let D = null, dSr = 0;
+let D = null, dSr = 0, dBal = [];
+/** A rate added to or taken from the ones tried in turn (3 at most besides the chosen one). */
+function dBalBascule(s) { dBal = dBal.includes(s) ? dBal.filter(x => x !== s) : dBal.concat([s]).slice(-3); ticDatv(); }
 const mhz3 = k => (k / 1000).toFixed(3).replace('.', ',');
 let dLnbVu = null;
 async function ticDatv(premier) {
@@ -8636,12 +8644,17 @@ async function ticDatv(premier) {
     dLnbVu = D.actif ? D.lnb : null;
     if (premier) {
       g('d-ciel').value = mhz3(D.ciel); g('d-ol').value = mhz3(D.ol); g('d-entree').value = D.entree; g('d-son').checked = D.son; dSr = D.sr;
+      dBal = String(D.balayage || '').split(',').map(Number).filter(x => x > 0);
       g('d-recepteur').value = D.recepteur || 'minitiouner'; dRecepteurVu();
       g('d-canal').innerHTML = '<option value="">—</option><option value="' + mhz3(D.balise) + '">Balise ' + mhz3(D.balise) + '</option>' +
         D.canaux.map(k => '<option value="' + mhz3(k) + '">' + mhz3(k) + '</option>').join('');
     }
   }
   g('d-debits').innerHTML = D.debits.map(s => '<button class="' + (s === dSr ? 'ici' : '') + '" onclick="dSr=' + s + ';ticDatv()">' + s + '</button>').join('');
+  // Scanning other rates (LongMynd's list): the MiniTiouner only.
+  g('d-balayage-l').hidden = g('d-recepteur').value !== 'minitiouner';
+  dPose('d-balayage', D.debits.filter(s => s !== dSr).map(s => '<button class="' + (dBal.includes(s) ? 'ici' : '') + '" onclick="dBalBascule(' + s + ')">' + s + '</button>').join(''));
+  if (document.activeElement !== g('d-relance')) g('d-relance').checked = D.relance !== false;
   const e = g('d-etat'); e.textContent = D.actif ? D.libelle : 'arrêté';
   etatMarche('d', D.actif, 'aucune');
   e.style.background = D.verrouille ? 'rgba(91,214,138,.2)' : (D.actif ? 'rgba(255,180,84,.2)' : ''); e.style.color = D.verrouille ? 'var(--vert)' : (D.actif ? 'var(--ambre)' : 'var(--gris)');
@@ -8761,7 +8774,7 @@ function qualiteDatv() {
   g('q-resume').hidden = b.hidden;
   if (b.hidden) return;
   const m = Q.marge, mm = g('q-marge');
-  txt('q-marge', m == null ? 'Marge —' : 'Marge ' + (m >= 0 ? '+' : '−') + fr1(Math.abs(m)) + ' dB');
+  txt('q-marge', m == null ? 'Marge (D) —' : 'Marge (D) ' + (m >= 0 ? '+' : '−') + fr1(Math.abs(m)) + ' dB');
   mm.style.color = m == null ? 'var(--gris)' : m < 1 ? 'var(--rose)' : m < 3 ? 'var(--ambre)' : 'var(--vert)';
   const vd = Q.verdict || {};
   txt('q-verdict', vd.texte || ''); g('q-verdict').style.color = vd.niveau === 0 ? 'var(--vert)' : vd.niveau === 1 ? 'var(--ambre)' : 'var(--rose)';
@@ -8846,7 +8859,8 @@ function dessineConstellation() {
 setInterval(() => ticDatv(), 500);
 function dParams() {
   return 'ciel=' + enc(v('d-ciel').replace(',', '.')) + '&sr=' + dSr + '&ol=' + enc(v('d-ol').replace(',', '.')) + '&entree=' + g('d-entree').value +
-    '&lnb=' + g('d-lnb').value + '&son=' + (g('d-son').checked ? 1 : 0) + '&recepteur=' + g('d-recepteur').value;
+    '&lnb=' + g('d-lnb').value + '&son=' + (g('d-son').checked ? 1 : 0) + '&recepteur=' + g('d-recepteur').value +
+    '&balayage=' + dBal.filter(x => x !== dSr).join(',');
 }
 // The receiver chosen: the MiniTiouner's own settings (input, LNB supply) only for it.
 function dRecepteurVu() {
@@ -9211,11 +9225,12 @@ async function ticChat(force) {
   txt('d-chat-qui', j.nicks.length ? 'Présents : ' + j.nicks.join(', ') : '');
   if (j.messages) {
     dChN = j.n;
-    const l = g('d-chat-liste'), enBas = l.scrollTop + l.clientHeight >= l.scrollHeight - 8;
-    l.innerHTML = j.messages.slice(-120).map(m => { const d = new Date(m.t);
+    // The latest on top, under the input line.
+    const l = g('d-chat-liste');
+    if (force) l.scrollTop = 0;
+    dAntichrono(l, j.messages.slice(-120).reverse().map(m => { const d = new Date(m.t);
       return '<div><span class="h">' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + '</span><b>' + esc(m.nom) + '</b>' + esc(m.texte) + '</div>'; }).join('') ||
-      '<div class="petit">aucun message</div>';
-    if (enBas || force) l.scrollTop = l.scrollHeight;
+      '<div class="petit">aucun message</div>');
   }
 }
 setInterval(ticChat, 1000);
@@ -9284,9 +9299,13 @@ async function ticTextesDatv() {
     if (p && p.present) {
       dtPh = p;
       if (p.dernier < dtDernier) { dtDernier = 0; dtListe = []; }
-      const nv = p.bulles.filter(b => b.src === 'datv');
+      const premier = !dtDernier, nv = p.bulles.filter(b => b.src === 'datv');
       if (p.bulles.length) dtDernier = p.bulles[p.bulles.length - 1].id;
-      if (nv.length) { dtListe = dtListe.concat(nv).slice(-60); dtFil(); }
+      if (nv.length) {
+        dtListe = dtListe.concat(nv).slice(-60); dtFil();
+        // On the picture: each new over cued; the page just opened, only the last one if it is recent.
+        (premier ? nv.slice(-1).filter(b => Date.now() - (b.t + b.duree * 1000) < 60000) : nv).forEach(b => dtStAjoute(b));
+      }
       else if (!g('dt-fil').innerHTML) dtFil();
     }
   }
@@ -9309,43 +9328,103 @@ async function ticTextesDatv() {
   txt('dt-ocr-etat', !j.ocr ? '' : !j.outil ? 'tesseract introuvable : ' + j.conseil :
     (j.occupe ? 'lecture… · ' : '') + j.lectures + ' lecture(s)' + (j.texte ? ' · lu : « ' + j.texte + ' »' : '') + (j.erreur ? ' · ' + j.erreur : ''));
   if (!j.ocr && !j.outil) txt('dt-ocr-etat', 'tesseract (facultatif) : ' + j.conseil);
-  // Only what was read since the current lock: the previous station's callsign goes with it.
-  const lus = j.ocr && D && D.verrouille ? j.lus.filter(l => !D.verrouDepuis || l.t >= D.verrouDepuis) : [];
-  g('dt-lus').innerHTML = lus.map((l, i) => '<div class="dt-lu' + (l.accord || l.garant ? ' sur' : '') + '"' + (i ? ' style="opacity:.7"' : '') + '>' +
+  // The station received now only (SatMe-PC puts them away at a new frequency or service, a lost lock, 5 min unread).
+  const lus = j.ocr && D && D.verrouille ? j.lus : [];
+  dPose('dt-lus', lus.map((l, i) => '<div class="dt-lu' + (l.accord || l.garant ? ' sur' : '') + (l.recent ? '' : ' ancien') + '">' +
     (i ? '' : '<span class="petit">Indicatif lu dans l’image : </span>') + '<b>' + esc(l.c) + '</b> ' + (l.drapeau ? f8Drapeau(l.drapeau) + ' ' : '') +
+    '<span class="dt-age' + (l.recent ? ' vif' : '') + '">' + dtVuIl(l.age, j.recentMs) + '</span> ' +
     '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.mot ? ' (écrit « ' + esc(l.mot) + ' » par la lecture)' : '') +
     (l.accord || l.garant ? ' · <span style="color:var(--vert)">' + ({ carte: '= carte de la station', carnet: 'déjà au carnet', moi: '= ton indicatif' }[l.garant] || '= nom du service') + ', très probable</span>' : '') + '</span> ' +
     '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button>' +
-    (dQrz(l.c) && !dQrz(l.c).attente ? '<div class="dc-qrz">' + dQrzHtml(l.c, true) + '</div>' : '') + '</div>').join('');
-  const b = g('d-lu'), l0 = lus[0];
+    (dQrz(l.c) && !dQrz(l.c).attente ? '<div class="dc-qrz">' + dQrzHtml(l.c, true) + '</div>' : '') + '</div>').join(''));
+  // Seen before (other stations, or not read for 5 min): apart and discreet.
+  const h = j.ocr ? (j.historique || []) : [];
+  g('dt-hist').hidden = !h.length;
+  txt('dt-hist-n', 'Vus avant (' + h.length + ')');
+  dPose('dt-hist-l', h.map(a => '<div><b>' + esc(a.c) + '</b> ' + (a.drapeau ? f8Drapeau(a.drapeau) + ' ' : '') + dtVuIl(a.age, 0) +
+    (a.ciel ? ' · ' + mhz3(a.ciel) + ' MHz' : '') + (a.service ? ' · « ' + esc(a.service) + ' »' : '') +
+    ' <button class="discret" onclick="dNote(\'' + esc(a.c) + '\',\'\',\'\')" title="Noter le QSO">✎</button></div>').join(''));
+  // On the picture: only a callsign read just now.
+  const b = g('d-lu'), l0 = lus.find(l => l.recent);
   b.hidden = !(l0 && D && D.actif && D.verrouille);
   if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord || l0.garant ? ' sur' : ''); }
 }
 setInterval(() => ticTextesDatv(), 1000);
-// Under the picture: the last two overs (a minute at most), big, with their language's flag.
-function dtSousTitres(on) {
-  const o = g('d-st'), maintenant = Date.now();
-  const l = on ? dtListe.filter(b => maintenant - (b.t + b.duree * 1000) < 60000).slice(-2) : [];
-  o.hidden = !l.length;
-  const trad = g('dt-trad').checked, seule = trad && g('dt-st-tr').checked;
-  // A long over: its end only, two lines or so each.
-  const fin = (t, n) => { if (t.length <= n) return t; const c = t.slice(-n); return '…' + c.slice(c.indexOf(' ') + 1); };
-  o.innerHTML = l.map((b, i) => { const ancien = i < l.length - 1, n = ancien ? 90 : 130;
-    // « Sous-titres en français »: the translation in the original's place (the original when there is none).
-    if (seule && b.traduction) return '<div' + (ancien ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(fin(b.traduction, n)) + '</div>';
-    return '<div' + (ancien ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(fin(b.texte, n)) + '</div>' +
-      (trad && b.traduction && b.traduction !== b.texte ? '<div class="d-st-tr' + (ancien ? ' vieux' : '') + '">' + esc(fin(b.traduction, n)) + '</div>' : ''); }).join('');
+/** « vu à l’instant », « vu il y a 40 s », « vu il y a 3 min » (by tens of seconds: the list is not redrawn every second). */
+function dtVuIl(age, recent) {
+  if (age <= recent) return 'vu à l’instant';
+  return age < 60000 ? 'vu il y a ' + Math.max(10, Math.floor(age / 10000) * 10) + ' s' : age < 3600000 ? 'vu il y a ' + Math.floor(age / 60000) + ' min' : 'vu il y a ' + Math.floor(age / 3600000) + ' h';
 }
+// Under the picture, as television subtitles: each over in cues of two lines at most (by sentence, then by clause),
+// each shown for a time that grows with its length, the translation under it in as many cues (SousTitresJs).
+${SousTitresJs.CODE}
+const dtFile = new FileSousTitres();
+let dtStOn = false, dtStCle = '', dtStDernier = null;
+function dtStMode() { const trad = g('dt-trad').checked; return { trad: trad, seule: trad && g('dt-st-tr').checked }; }
+function dtStAjoute(b, t) {
+  const m = dtStMode();
+  dtStDernier = b;
+  const cues = stCues(b.texte, m.trad ? b.traduction : '', ST_CAR, m.seule);
+  const dr = PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '';
+  cues.forEach((c, i) => { c.drapeau = i ? '' : dr; });
+  dtFile.ajoute(cues, t || Date.now(), (b.duree || 0) * 1000);
+}
+/** Translation on or off, the translation alone or not: the last over cued again the new way. */
+function dtStRefait() { dtFile.vide(); if (dtStDernier && Date.now() - (dtStDernier.t + dtStDernier.duree * 1000) < 60000) dtStAjoute(dtStDernier); dtStAffiche(); }
+function dtSousTitres(on) { dtStOn = !!on; if (!on) dtFile.vide(); dtStAffiche(); }
+function dtStAffiche() {
+  const o = g('d-st'), c = dtStOn ? dtFile.actuel(Date.now()) : null;
+  const cle = c ? c.debut + '|' + c.o.join('|') : '';
+  if (cle === dtStCle) return;
+  dtStCle = cle;
+  o.hidden = !c;
+  if (!c) { o.innerHTML = ''; return; }
+  const lignes = l => l.map((x, i) => '<span class="l">' + (i ? '' : c.drapeau || '') + esc(x) + '</span>').join('');
+  o.innerHTML = '<div>' + lignes(c.o) + '</div>' + (c.t && c.t.length ? '<div class="d-st-tr">' + lignes(c.t) + '</div>' : '');
+  dtStAjuste();
+}
+/**
+ * The subtitles' size: from the picture's width (fullscreen too), made smaller until the widest line fits on one line
+ * and the whole within 40 % of the picture's height; never under a readable minimum, where lines wrap rather than
+ * being cut.
+ */
+function dtStAjuste() {
+  const o = g('d-st'), cadre = g('d-cadre');
+  if (o.hidden || !cadre.clientWidth) return;
+  const W = cadre.clientWidth, H = cadre.clientHeight || W * 9 / 16;
+  const base = Math.max(14, Math.min(46, W * 0.036)), min = Math.max(11, Math.min(15, W * 0.024));
+  o.classList.remove('enroule');
+  o.style.fontSize = base + 'px';
+  const dispo = o.clientWidth - 2 * 14;
+  let large = 0;
+  o.querySelectorAll('.l').forEach(x => { large = Math.max(large, x.scrollWidth); });
+  let f = base;
+  if (large > dispo && large > 0) f = Math.floor(base * dispo / large * 10) / 10;
+  o.style.fontSize = Math.max(min, f) + 'px';
+  if (o.scrollHeight > H * 0.4) f = Math.min(f, Math.floor(Math.max(min, f) * H * 0.4 / o.scrollHeight * 10) / 10);
+  if (f < min) { f = min; o.classList.add('enroule'); }
+  o.style.fontSize = f + 'px';
+}
+setInterval(dtStAffiche, 200);
+if (window.ResizeObserver) new ResizeObserver(() => dtStAjuste()).observe(g('d-cadre'));
 function dtFil() {
-  const f = g('dt-fil'), bas = f.scrollTop + f.clientHeight >= f.scrollHeight - 8;
-  // The phonie's overs, their chips noting a DATV contact.
-  f.innerHTML = dtListe.map(b => phBulle(b).replace(/onclick="phNote\(/g, 'onclick="dNote(')).join('') ||
-    '<div class="petit" style="padding:6px">Les passages de voix reçus en DATV s’écriront ici.</div>';
-  if (bas) f.scrollTop = f.scrollHeight;
+  // The phonie's overs, the latest on top, their chips noting a DATV contact.
+  dAntichrono(g('dt-fil'), dtListe.slice().reverse().map(b => phBulle(b).replace(/onclick="phNote\(/g, 'onclick="dNote(')).join('') ||
+    '<div class="petit" style="padding:6px">Les passages de voix reçus en DATV s’écriront ici.</div>');
+}
+/**
+ * A list of texts in the DATV tab, the latest on top: read without scrolling. Someone reading further down the history
+ * keeps the same lines in view while new ones come on top.
+ */
+function dAntichrono(f, html) {
+  if (f.dataset.vu === html) return;
+  const haut = f.scrollTop, avant = f.scrollHeight;
+  f.dataset.vu = html; f.innerHTML = html;
+  f.scrollTop = haut > 8 ? haut + f.scrollHeight - avant : 0;
 }
 async function dtRegle(q) { try { await fetch('api/datv/textes?' + q, { method: 'POST' }); } catch (x) {} setTimeout(ticTextesDatv, 200); }
-async function dtTrad(on) { try { await fetch('api/phonie?traduire=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; setTimeout(ticTextesDatv, 200); }
-async function dtStTraduction(on) { try { await fetch('api/phonie?stTraduction=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; dtSousTitres(DT && DT.soustitresActifs); setTimeout(ticTextesDatv, 200); }
+async function dtTrad(on) { try { await fetch('api/phonie?traduire=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; dtStRefait(); setTimeout(ticTextesDatv, 200); }
+async function dtStTraduction(on) { try { await fetch('api/phonie?stTraduction=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; dtStRefait(); setTimeout(ticTextesDatv, 200); }
 // A DATV contact: the log's form filled, saved in mode DATV on QO-100 or terrestrial (by the frequency received).
 function dNote(call, loc, rep) {
   const k = (D && D.ciel) || (DT && DT.ciel) || 0;
@@ -9576,7 +9655,7 @@ async function eArrete() {
 // Looked up by SatMe-PC once per callsign (kept 7 days, one request every 5 s at most): D.qrz.
 function dLuActuel() {
   if (!DT || !DT.ocr || !DT.lus || !D) return null;
-  return DT.lus.find(l => !D.verrouDepuis || l.t >= D.verrouDepuis) || null;
+  return DT.lus.find(l => l.recent) || null;
 }
 function dQrz(c) { return D && D.qrz && D.qrz.fiches && c ? D.qrz.fiches[c] : null; }
 function dQrzHtml(c, court) {
@@ -9630,17 +9709,14 @@ function ticCarteDatv() {
         '<button onclick="dcEcouteRetour(' + k.retourHz + ',\'' + (k.retourMode === 'CW' ? 'CW' : 'USB') + '\')" title="Le cockpit QO-100 accordé sur ce retour (le récepteur bande étroite), Phonie → texte allumé s’il est installé">Écouter le retour</button>') : '';
     rt.hidden = !rh; rt.classList.toggle('urgence', !!k.retourUrgence);
     if (rt.dataset.vu !== rh) { rt.dataset.vu = rh; rt.innerHTML = rh; }
-    const html = k.chat.map(l => dcBulle(l.c, l.texte, l.t, l.c === moi)).join('');
-    const f = g('dc-chat');
-    if (f.dataset.vu !== html) { f.dataset.vu = html; f.innerHTML = html; f.scrollTop = f.scrollHeight; }
+    // The station's chat lines, the latest on top.
+    dAntichrono(g('dc-chat'), k.chat.slice().reverse().map(l => dcBulle(l.c, l.texte, l.t, l.c === moi)).join(''));
   }
   if (!EM) return;
   // Transmitting: the chat rides on it; our lines ticked once the MiniTiouner sees them come back.
   g('e-chat-l').hidden = !EM.emet;
   const vus = new Set(k ? k.chat.filter(l => l.c === EM.indicatif).map(l => l.seq) : []);
-  const fil = EM.chat.map(d => dcBulle(EM.indicatif, d.texte, d.t, true, vus.has(d.seq))).join('');
-  const ef = g('e-chat-fil');
-  if (ef.dataset.vu !== fil) { ef.dataset.vu = fil; ef.innerHTML = fil; ef.scrollTop = ef.scrollHeight; }
+  dAntichrono(g('e-chat-fil'), EM.chat.slice().reverse().map(d => dcBulle(EM.indicatif, d.texte, d.t, true, vus.has(d.seq))).join(''));
   const libre = !document.activeElement || !['ec-qth', 'e-puissance', 'e-antenne', 'e-message', 'e-retour', 'e-retour-mode'].includes(document.activeElement.id);
   if (eCartePremier || libre) {
     g('e-carte-on').checked = EM.carteOn; g('ec-qth').value = EM.qth; g('e-puissance').value = EM.puissance; g('e-antenne').value = EM.antenne; g('e-message').value = EM.message;

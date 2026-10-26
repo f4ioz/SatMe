@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.IndicatifsImage
+import fr.f4ioz.satcombo.datv.SuiviIndicatifs
 import fr.f4ioz.satcombo.datv.VoteIndicatifs
 import fr.f4ioz.satcombo.domain.Dxcc
 import fr.f4ioz.satcombo.plateforme.Stockage
@@ -33,7 +34,9 @@ import kotlin.concurrent.thread
  * - **Callsigns in the picture**: every few seconds while locked, the
  *   latest picture read by tesseract (an optional program), the plausible
  *   callsigns shown once read twice in a row (at once when the service
- *   name, the station's card, the log or our own callsign vouches for them).
+ *   name, the station's card, the log or our own callsign vouches for them);
+ *   put away with the station (another frequency or service, a lost lock)
+ *   or after five minutes unread, in a short history of their own.
  */
 class TextesDatvPc(
     private val stockage: Stockage,
@@ -58,10 +61,12 @@ class TextesDatvPc(
         val sousTitres: (Boolean) -> Unit,
         /** The callsign on the station's card in the stream, or "". */
         val carte: () -> String = { "" },
+        /** The pictures made so far (counted from each start): one made before a new station is not read for it. */
+        val numero: (() -> Long)? = null,
     ) {
         companion object {
             fun de(d: DatvPc) = Source({ d.etat.actif }, { d.etat.verrouille }, { d.image }, { d.etat.service }, { d.reglage.cielKhz },
-                { d.sousTitres = it }, { d.carte.carte?.indicatif.orEmpty() })
+                { d.sousTitres = it }, { d.carte.carte?.indicatif.orEmpty() }, { d.etat.images.toLong() })
         }
     }
 
@@ -70,7 +75,7 @@ class TextesDatvPc(
         set(v) { stockage.edit().putBoolean("datv_soustitres", v).apply(); tic() }
     var ocr: Boolean
         get() = stockage.getBoolean("datv_ocr", false)
-        set(v) { stockage.edit().putBoolean("datv_ocr", v).apply(); if (!v) { vote.oublie(); garants.clear() } }
+        set(v) { stockage.edit().putBoolean("datv_ocr", v).apply(); if (!v) { suivi.oublie(); garants.clear() } }
 
     /** The subtitles applied now (on, and the reception running). */
     @Volatile var sousTitresActifs = false
@@ -87,20 +92,30 @@ class TextesDatvPc(
             phonie?.prendsDatv(veut)
         }
         val t = horloge()
-        if (ocr && source.verrouille() && t - derniereMs >= periodeMs && !occupe.get()) {
+        // The station received now: its callsigns go with it.
+        val c = if (runCatching { source.verrouille() }.getOrDefault(false))
+            SuiviIndicatifs.Contexte(runCatching { source.cielKhz() }.getOrDefault(0L), runCatching { source.service() }.getOrDefault("").trim()) else null
+        val numero = source.numero
+        val n = numero?.let { runCatching { it() }.getOrDefault(0L) } ?: Long.MAX_VALUE
+        if (suivi.contexte(c, t) && numero != null) numeroChangement = n
+        // The picture still shown may be the previous station's: read from the next one made.
+        if (n < numeroChangement) numeroChangement = 0L
+        if (ocr && source.verrouille() && n > numeroChangement && t - derniereMs >= periodeMs && !occupe.get()) {
             val img = source.image() ?: return
             val prog = outil() ?: return
             derniereMs = t
             occupe.set(true)
-            thread(isDaemon = true, name = "satme-datv-ocr") { try { lisImage(prog, img) } finally { occupe.set(false) } }
+            val gen = suivi.generation
+            thread(isDaemon = true, name = "satme-datv-ocr") { try { lisImage(prog, img, gen) } finally { occupe.set(false) } }
         }
     }
 
     // ------------------------------------------------------------------ callsigns in the picture
 
-    private val vote = VoteIndicatifs()
+    private val suivi = SuiviIndicatifs()
     private val occupe = AtomicBoolean(false)
     @Volatile private var derniereMs = 0L
+    @Volatile private var numeroChangement = -1L
     @Volatile var dernierTexte = ""
         private set
     @Volatile var erreur = ""
@@ -116,8 +131,12 @@ class TextesDatvPc(
         runCatching { source.service() }.getOrDefault(""), runCatching { source.carte() }.getOrDefault(""),
         runCatching { carnet() }.getOrDefault(emptyList()), runCatching { moi() }.getOrDefault(""))
 
-    /** One read of [jpeg] (one tesseract at a time): its candidates, voted (one vouched for shown at once). */
-    fun lisImage(prog: String, jpeg: ByteArray): List<String> {
+    /**
+     * One read of [jpeg] (one tesseract at a time) for the station [gen]: its
+     * candidates, voted (one vouched for shown at once); none kept when the
+     * station changed while it read.
+     */
+    fun lisImage(prog: String, jpeg: ByteArray, gen: Long = suivi.generation): List<String> {
         val img = runCatching { ImageIO.read(ByteArrayInputStream(jpeg)) }.getOrNull() ?: return emptyList()
         val texte = lis(prog, img)
         erreur = if (texte == null) "tesseract ne répond pas" else ""
@@ -127,11 +146,12 @@ class TextesDatvPc(
         lectures++
         lus.forEach { garants[it.indicatif] = it }
         val c = lus.map { it.indicatif }
-        vote.lecture(c, horloge(), lus.filter { it.garant != null }.map { it.indicatif })
+        suivi.lecture(c, horloge(), lus.filter { it.garant != null }.map { it.indicatif }, gen)
         return c
     }
 
-    fun confirmes(): List<VoteIndicatifs.Lu> = vote.confirmes()
+    /** The callsigns of the station received now, last read first. */
+    fun confirmes(): List<VoteIndicatifs.Lu> = suivi.actuels(horloge())
 
     // ------------------------------------------------------------------ the page
 
@@ -139,14 +159,21 @@ class TextesDatvPc(
         val service = runCatching { source.service() }.getOrDefault("")
         val prog = outil()
         val ciel = runCatching { source.cielKhz() }.getOrDefault(0L)
+        val t = horloge()
         return JSONObject().put("ok", true).put("soustitres", sousTitres).put("soustitresActifs", sousTitresActifs)
             .put("phonie", phonie != null).put("ocr", ocr).put("outil", prog.orEmpty())
             .put("conseil", if (prog == null) OutilsPc.conseil("tesseract") else "").put("occupe", occupe.get())
             .put("lectures", lectures).put("texte", dernierTexte).put("erreur", erreur).put("service", service)
             .put("ciel", ciel).put("qo100", IndicatifsImage.qo100(ciel))
+            .put("recentMs", suivi.recentMs).put("oubliMs", suivi.oubliMs)
+            .put("historique", JSONArray(suivi.historique(t).map { a ->
+                JSONObject().put("c", a.indicatif).put("t", a.dernierMs).put("age", (t - a.dernierMs).coerceAtLeast(0L)).put("lectures", a.lectures)
+                    .put("ciel", a.cielKhz).put("service", a.service).also { j -> Dxcc.entite(a.indicatif)?.let { d -> j.put("pays", d.nom).put("drapeau", d.drapeau) } }
+            }))
             .put("lus", JSONArray(confirmes().map { l ->
                 val g = garants[l.indicatif]
-                JSONObject().put("c", l.indicatif).put("lectures", l.lectures).put("t", l.dernierMs)
+                JSONObject().put("c", l.indicatif).put("lectures", l.lectures).put("t", l.dernierMs).put("age", (t - l.dernierMs).coerceAtLeast(0L))
+                    .put("recent", t - l.dernierMs <= suivi.recentMs)
                     .put("accord", IndicatifsImage.accord(l.indicatif, service)).put("garant", g?.garant?.code.orEmpty())
                     .put("mot", g?.mot?.takeIf { it != l.indicatif }.orEmpty()).also { j ->
                         Dxcc.entite(l.indicatif)?.let { d -> j.put("pays", d.nom).put("drapeau", d.drapeau) }
@@ -158,7 +185,7 @@ class TextesDatvPc(
     fun action(q: Map<String, String>): JSONObject {
         q["soustitres"]?.let { sousTitres = it == "1" }
         q["ocr"]?.let { ocr = it == "1" }
-        if (q["oublie"] == "1") { vote.oublie(); garants.clear() }
+        if (q["oublie"] == "1") { suivi.oublie(); garants.clear() }
         return JSONObject().put("ok", true)
     }
 
