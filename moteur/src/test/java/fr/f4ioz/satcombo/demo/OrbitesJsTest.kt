@@ -49,7 +49,7 @@ class OrbitesJsTest {
         try {
             // The pure functions only: the globes' module needs a page.
             val pur = OrbitesJs.JS.substringBefore("/* ------------------------------------------------------------ the globes */")
-            val js = File(d, "orbites.js").apply { writeText(pur + "\nmodule.exports = { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA };\n") }
+            val js = File(d, "orbites.js").apply { writeText(pur + "\nmodule.exports = { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour };\n") }
             val essai = File(d, "essai.js").apply { writeText(OrbitesJsTest::class.java.getResource("/orbites-test.js")!!.readText()) }
             val p = ProcessBuilder(node, essai.path, js.path).redirectErrorStream(true).start()
             val sortie = p.inputStream.bufferedReader().readText()

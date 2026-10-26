@@ -24,8 +24,8 @@ package fr.f4ioz.satcombo.demo
  */
 object OrbitesJs {
 
-    /** The page's script, in three parts (a constant holds at most 64 KB). */
-    val JS: String get() = DEBUT + MILIEU + FIN
+    /** The page's script, in four parts (a constant holds at most 64 KB). */
+    val JS: String get() = DEBUT + MILIEU + MONUMENTS + FIN
 
     private const val DEBUT = """
 /* ------------------------------------------------------------ pure part (OrbitesJsTest) */
@@ -93,6 +93,61 @@ function obSoleil(t, gmst) {
   lon = ((lon % 360) + 540) % 360 - 180;
   return { eci: { x: x, y: y, z: z }, dec: Math.asin(z) / r, lon: lon };
 }
+/** The sidereal angle at [t] (ms), radians: close enough to satellite.js's for the Sun and the Moon. */
+function obGmst(t) {
+  const d = t / 86400000 + 2440587.5 - 2451545.0;
+  return (((280.46061837 + 360.98564736629 * d) % 360) + 360) % 360 * Math.PI / 180;
+}
+/**
+ * The Moon at [t] (ms), to a few tenths of a degree (the main terms of its longitude): its declination and right ascension,
+ * the longitude below it (degrees), its distance (km), its phase [phase] 0 new … 0.5 full … 1, the share lit [lumiere] 0 … 1, its age in days.
+ */
+function obLune(t) {
+  const r = Math.PI / 180, d = t / 86400000 + 2440587.5 - 2451545.0;
+  const L = 218.316 + 13.176396 * d, M = (134.963 + 13.064993 * d) * r, F = (93.272 + 13.229350 * d) * r;
+  const D = (297.850 + 12.190749 * d) * r, Ms = (357.529 + 0.98560028 * d) * r;
+  const lam = (L + 6.289 * Math.sin(M) + 1.274 * Math.sin(2 * D - M) + 0.658 * Math.sin(2 * D) + 0.214 * Math.sin(2 * M) - 0.186 * Math.sin(Ms) - 0.114 * Math.sin(2 * F)) * r;
+  const bet = (5.128 * Math.sin(F) + 0.281 * Math.sin(M + F) + 0.278 * Math.sin(M - F)) * r, eps = 23.439 * r;
+  const x = Math.cos(bet) * Math.cos(lam), y = Math.cos(eps) * Math.cos(bet) * Math.sin(lam) - Math.sin(eps) * Math.sin(bet);
+  const z = Math.sin(eps) * Math.cos(bet) * Math.sin(lam) + Math.cos(eps) * Math.sin(bet);
+  const ra = Math.atan2(y, x) / r, dec = Math.asin(z) / r;
+  // The Sun's ecliptic longitude, as obSoleil works it out: the phase is the Moon's lead on it.
+  const Ls = 280.460 + 0.9856474 * d, gs = (357.528 + 0.9856003 * d) * r, lamS = Ls + 1.915 * Math.sin(gs) + 0.020 * Math.sin(2 * gs);
+  const phase = ((((lam / r - lamS) % 360) + 360) % 360) / 360;
+  const elong = Math.acos(Math.cos(bet) * Math.cos(lam - lamS * r));
+  let lon = ra - obGmst(t) / r; lon = ((lon % 360) + 540) % 360 - 180;
+  return { ra: ((ra % 360) + 360) % 360, dec: dec, lon: lon, dist: 385001 - 20905 * Math.cos(M), phase: phase, lumiere: (1 - Math.cos(elong)) / 2, age: phase * 29.530588 };
+}
+/** The Moon's lit part as an SVG path in a disc of radius [r] centred on 0, 0 (north up, as seen from the northern half). */
+function obLunePath(phase, r) {
+  const c = Math.cos(2 * Math.PI * phase), croit = phase < .5, rx = (r * Math.abs(c)).toFixed(2), R = r.toFixed(2);
+  const parDroite = croit ? c > 0 : c < 0;
+  return 'M0,-' + R + 'A' + R + ',' + R + ' 0 0 ' + (croit ? 1 : 0) + ' 0,' + R + 'A' + rx + ',' + R + ' 0 0 ' + (parDroite ? 0 : 1) + ' 0,-' + R + 'Z';
+}
+/** The Sun's elevation (degrees) at [t] (ms) seen from [lat], [lon]. */
+function obHauteurSoleil(t, lat, lon) {
+  const s = obSoleil(t, obGmst(t)), r = Math.PI / 180, f = lat * r, dc = s.dec * r;
+  return Math.asin(Math.sin(f) * Math.sin(dc) + Math.cos(f) * Math.cos(dc) * Math.cos((lon - s.lon) * r)) / r;
+}
+/**
+ * The station's next sunrise and sunset (the Sun's top edge on the horizon, −0.833°), dawn and dusk (civil, −6°) within the
+ * 24 hours from [t]: {lever, coucher, aube, crepuscule} (ms, null when none: polar day or night).
+ */
+function obSoleilJour(t, lat, lon) {
+  const h = u => obHauteurSoleil(u, lat, lon), o = { lever: null, coucher: null, aube: null, crepuscule: null };
+  const bord = (a, b, seuil) => { const monte = h(b) > seuil; for (let i = 0; i < 14; i++) { const m = (a + b) / 2; if ((h(m) > seuil) === monte) b = m; else a = m; } return Math.round(b); };
+  const pas = 600000;
+  let prec = h(t);
+  for (let u = t + pas; u <= t + 86400000 + pas; u += pas) {
+    const e = h(u);
+    [[-0.833, 'lever', 'coucher'], [-6, 'aube', 'crepuscule']].forEach(q => {
+      if (prec <= q[0] && e > q[0] && o[q[1]] == null) o[q[1]] = bord(u - pas, u, q[0]);
+      if (prec > q[0] && e <= q[0] && o[q[2]] == null) o[q[2]] = bord(u - pas, u, q[0]);
+    });
+    prec = e;
+  }
+  return o;
+}
 /** A Maidenhead locator (2, 4 or 6 characters): its square's centre and size in degrees {lat, lon, dlat, dlon}, null when it is not one. */
 function obLocator(l) {
   l = String(l || '').trim().toUpperCase();
@@ -131,10 +186,11 @@ const Orbites = (function () {
   const api = p => (window.SATME_RACINE || '') + p;
   const monde = () => typeof GLOBE_MONDE !== 'undefined' ? GLOBE_MONDE : { villes: [], sommets: [], monuments: [], decor: [] };
   const OB = { donnees: null, sats: [], obs: null, terres: null, style: lit('ob-style2', 'cartoon'), vue: lit('ob-vue', 'globe'), filtre: 'favoris',
-    choisi: null, temps: { base: Date.now(), reel: performance.now(), vitesse: 60, pause: false }, anim: null, passages: [], passage: null,
+    choisi: null, temps: { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false }, anim: null, passages: [], passage: null,
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
     detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0,
-    villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom') };
+    villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null };
+  try { OB.monOff = JSON.parse(lit('ob-montypes-off', '[]')) || []; } catch (x) {}
   let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null;
 
   /* Libraries and the coastline: fetched once, when a globe is first shown; the station's elements for the tab and the Suivi. */
@@ -587,8 +643,8 @@ const Orbites = (function () {
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(42, 1, .0002, 200);
     const terre = new THREE.Group(); scene.add(terre);
     const soleil = new THREE.DirectionalLight(0xffffff, 1.25), amb = new THREE.AmbientLight(0x9fb0d0, .18); scene.add(soleil, amb);
-    let sol = null, extras = [], mondeGp = new THREE.Group(), contactsGp = new THREE.Group(), rejeuGp = new THREE.Group(), animes = [];
-    terre.add(mondeGp, contactsGp, rejeuGp);
+    let sol = null, extras = [], mondeGp = new THREE.Group(), contactsGp = new THREE.Group(), rejeuGp = new THREE.Group(), monGp = new THREE.Group(), animes = [];
+    terre.add(mondeGp, contactsGp, rejeuGp, monGp);
     const etoiles = (() => {
       const n = 2500, p = new Float32Array(n * 3);
       for (let i = 0; i < n; i++) { const v = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1); if (v.lengthSq() < 1e-4) v.set(1, 0, 0); v.normalize().multiplyScalar(80 + Math.random() * 40); p.set([v.x, v.y, v.z], i * 3); }
@@ -634,8 +690,9 @@ const Orbites = (function () {
           mondeGp.add(pose(m, p[0], p[1], hasard() * 3, .999));
         });
       }
+      // The landmarks: as chosen (any look); the journal's globe its videos' own, on the cartoon.
+      monumentsMonde(monGp, sc.style, mode !== 'rejeu' ? '' : carton && OB.detail >= 1 ? 'rejeu' : 'aucun', animes);
       if (carton && OB.detail >= 1) {
-        M.monuments.forEach(m => { const o = monument(m[0]); mondeGp.add(pose(o, m[2], m[3], 0, .999)); o.traverse(c => { if (c.userData.anime) animes.push(c); }); });
         M.decor.forEach((d, i) => {
           if (d[0] !== 'bateau' && OB.detail < 2) return;
           const o = decor(d[0]); o.userData.phase = i * 1.7; mondeGp.add(pose(o, d[1], d[2], i, d[0] === 'bateau' || d[0] === 'baleine' ? 1.001 : .999)); if (o.userData.anime) animes.push(o);
@@ -821,7 +878,7 @@ const Orbites = (function () {
     sc.decal = { x: 0, y: 0 };
     if (mode === 'rejeu') { try { const d = JSON.parse(lit('ob-decal', 'null')); if (d) sc.decal = d; } catch (x) {} }
     canvas.addEventListener('dblclick', () => { if (mode === 'rejeu') { sc.decal = { x: 0, y: 0 }; garde('ob-decal', JSON.stringify(sc.decal)); } });
-    canvas.addEventListener('pointerdown', e => { tir = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointerdown', e => { tir = { x: e.clientX, y: e.clientY }; sc.geste = performance.now(); canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointermove', e => {
       if (!tir) return;
       if (mode === 'rejeu') {
@@ -835,7 +892,7 @@ const Orbites = (function () {
     });
     canvas.addEventListener('pointerup', () => { tir = null; });
     canvas.addEventListener('wheel', e => {
-      e.preventDefault();
+      e.preventDefault(); sc.geste = performance.now();
       // A session: its own zooms, the wheel changing the one shown.
       if (mode === 'rejeu' && sc.rj && sc.rj.donnees.molette) sc.rj.donnees.molette(Math.sign(e.deltaY));
       else if (sc.enPassage) { OB.hauteur = Math.max(.6, Math.min(8, OB.hauteur * (1 + Math.sign(e.deltaY) * .1))); garde('ob-hauteur', OB.hauteur.toFixed(2)); document.querySelectorAll('.ob-hauteur-r').forEach(h => { h.value = OB.hauteur; }); }
@@ -860,7 +917,9 @@ const Orbites = (function () {
       soleil.position.copy(eciVers3(obSoleil(t, gm).eci, 10));
       extras.forEach(e => { if (e.userData.tourne && !reduit) e.rotation.y += e.userData.tourne * dt; });
       if (!reduit) animes.forEach(o => o.userData.anime(o, now));
+      if (mode === 'tab') astresScene(sc, terre, t);
       terre.updateMatrixWorld(true);
+      monumentsImage(monGp, terre, cam.pos, sc.style, mode !== 'rejeu');
       const stW = terre.localToWorld(posStation.clone()), obs = sc.obs();
       const passage = !!sc.enPassage, auSol = passage && OB.cam === 'sol', lieu = !!sc.lieu();
       const choisi = sc.choisi();
@@ -940,6 +999,8 @@ const Orbites = (function () {
         else {
           const l = sc.lieu();
           if (!cam.cale && l) { cam.az = l.lon * D2R + .3; cam.pol = (90 - l.lat + 12) * D2R; cam.cale = true; }
+          // The dashboard's fun looks: the Earth turns slowly by itself, until a hand or the wheel takes it (and again 12 s after).
+          if (mode === 'tab' && OB.tb && OB.tb.tourne && !tir && !reduit && now - (sc.geste || 0) > 12000) cam.az += dt * .06;
           base = new THREE.Vector3(Math.sin(cam.pol) * Math.cos(cam.az), Math.cos(cam.pol), -Math.sin(cam.pol) * Math.sin(cam.az)).multiplyScalar(cam.dist);
           base.applyAxisAngle(new THREE.Vector3(0, 1, 0), gm); // turning with the Earth
         }
@@ -948,6 +1009,7 @@ const Orbites = (function () {
       }
       camera.position.copy(cam.pos); camera.lookAt(cam.cible);
       rendu.render(scene, camera);
+      if (mode === 'tab' && OB.tb && OB.tb.pedago) reperes3d(sc, camera, cam, terre, r.width, r.height, satP, oc, lieu ? stW : null, soleil.position.clone().normalize());
       // Where the satellite chosen shows (the journal's SSTV frame keeps away from it).
       if (satP) { const v = satP.clone().project(camera); sc.satX = (v.x + 1) / 2 * r.width; } else sc.satX = null;
     };
@@ -994,6 +1056,204 @@ const Orbites = (function () {
 
 """
 
+    private const val MONUMENTS = """  /* ------------------------------------------------------------ landmarks by family, the Sun and the Moon, the dashboard's marks */
+  /* Each family's colour (its 2D sign, the filter's swatch). */
+  const COUL_MON = { tour: '#E8743B', pont: '#D64541', chateau: '#9B7BD8', religieux: '#F2B134', ancien: '#D9A55B', statue: '#36B38F', naturel: '#4CAF50', moderne: '#4A9BE8', espace: '#B8C4D0' };
+  /** The landmarks shown: none, the most famous, or all of them, of the families ticked; the journal's globe ([q] 'rejeu') the videos' own (main ones with their own drawing). */
+  function monumentsVus(q) {
+    const l = monde().monuments || [];
+    if (q === 'rejeu') return l.filter(m => m[7] && m[6] === 1);
+    if (q === 'aucun' || OB.monuments === 'aucun') return [];
+    return l.filter(m => (OB.monuments === 'tous' || m[6] === 1) && !OB.monOff.includes(m[4]));
+  }
+  let matDouble = null;
+  const matFil = {};
+  /* A family's drawing, small and simple like the others (about 0.02 of the Earth's radius high); made once, then cloned. */
+  const gabarits = {};
+  function monumentType(type) {
+    if (gabarits[type]) return gabarits[type].clone();
+    const g = new THREE.Group(), k = .001, add = (...l) => l.forEach(o => g.add(o)), a = (o, x, z) => { o.position.x = x * k; o.position.z = z * k; return o; };
+    switch (type) {
+      case 'tour': add(cyl(2 * k, 3.6 * k, 20 * k, 0xeee4d0), cyl(3.2 * k, 3.2 * k, 2 * k, 0xE8743B, 13 * k), pointe(2.6 * k, 7 * k, 0xE8743B, 20 * k)); break;
+      case 'pont':
+        [-9, 9].forEach(x => add(a(boite(1.8 * k, 15 * k, 1.8 * k, 0xb0bac4), x, 0), a(boite(1.8 * k, 1.2 * k, 3.6 * k, 0xb0bac4, 13 * k), x, 0)));
+        add(boite(32 * k, 1.4 * k, 3.4 * k, 0xD64541, 5 * k)); break;
+      case 'chateau':
+        add(boite(14 * k, 7 * k, 10 * k, 0xe2d4b8));
+        [[-7, -5], [7, -5], [-7, 5], [7, 5]].forEach(q => add(a(cyl(2 * k, 2 * k, 11 * k, 0xd4c3a2), q[0], q[1]), a(pointe(2.7 * k, 5 * k, 0x6a5acd, 11 * k), q[0], q[1]))); break;
+      case 'religieux':
+        add(boite(12 * k, 8 * k, 12 * k, 0xf6eedc), boule(5 * k, 0xF2B134, 9 * k), pointe(.8 * k, 4 * k, 0xF2B134, 13.6 * k),
+          a(cyl(1 * k, 1.3 * k, 17 * k, 0xf6eedc), 8.5, 0), a(pointe(1.5 * k, 3.4 * k, 0xF2B134, 17 * k), 8.5, 0)); break;
+      case 'ancien': {
+        add(boite(17 * k, 1.6 * k, 10 * k, 0xe6cf98));
+        for (let i = 0; i < 4; i++) [-3.5, 3.5].forEach(z => add(a(cyl(.9 * k, .9 * k, 8 * k, 0xf3e6c4, 1.6 * k, 8), (i - 1.5) * 4.8, z)));
+        const t = new THREE.Mesh(new THREE.ConeGeometry(10 * k, 4 * k, 4), mt(0xD9A55B)); t.rotation.y = Math.PI / 4; t.scale.z = .62; t.position.y = 11.6 * k; add(t); break; }
+      case 'statue': {
+        add(boite(6 * k, 6 * k, 6 * k, 0xc9bfae), cyl(1.8 * k, 2.6 * k, 10 * k, 0x36B38F, 6 * k), boule(1.9 * k, 0x36B38F, 17.8 * k));
+        const b = cyl(.6 * k, .6 * k, 7 * k, 0x36B38F, 13 * k); b.position.x = 2.2 * k; b.rotation.z = -.35; add(b, a(boule(1.2 * k, 0xffc21a, 21 * k), 3.6, 0)); break; }
+      case 'naturel':
+        add(pointe(9 * k, 13 * k, 0x9a7650, 0, 7), pointe(3.6 * k, 5 * k, 0xffffff, 8.2 * k, 7), a(boule(3.2 * k, 0x4CAF50, 2 * k), 8, 4), a(boule(2.6 * k, 0x3d9440, 2 * k), -7, 5)); break;
+      case 'moderne':
+        add(boite(6 * k, 24 * k, 6 * k, 0x7cc0f5), boite(4 * k, 7 * k, 4 * k, 0xa8d6fa, 24 * k), cyl(.3 * k, .3 * k, 6 * k, 0xdddddd, 31 * k), a(boite(5 * k, 13 * k, 5 * k, 0x4A9BE8), 7, 1)); break;
+      case 'espace': {
+        if (!matDouble) matDouble = new THREE.MeshToonMaterial({ color: 0xf4f7fa, gradientMap: toon(), side: THREE.DoubleSide });
+        add(cyl(1 * k, 1.8 * k, 8 * k, 0xc4ccd6));
+        const d = new THREE.Mesh(new THREE.SphereGeometry(8 * k, 18, 6, 0, Math.PI * 2, 0, Math.PI / 3.2), matDouble);
+        d.rotation.x = Math.PI + .5; d.position.y = 16 * k; add(d); break; }
+    }
+    gabarits[type] = g; return g.clone();
+  }
+  /** The landmarks on a globe ([gp]); [q]: as monumentsVus. */
+  function monumentsMonde(gp, style, q, animes) {
+    while (gp.children.length) gp.remove(gp.children[0]);
+    gp.userData.items = [];
+    const terne = style === 'holo' || style === 'radar' || style === 'points';
+    if (terne && !matFil[style]) matFil[style] = new THREE.MeshBasicMaterial({ color: STYLES[style].encre || STYLES[style].ville, wireframe: true, transparent: true, opacity: .8 });
+    monumentsVus(q).forEach(m => {
+      const o = m[7] ? monument(m[7]) : monumentType(m[4]);
+      if (terne) o.traverse(c => { if (c.isMesh) c.material = matFil[style]; });
+      pose(o, m[2], m[3], 0, .999); gp.add(o);
+      o.traverse(c => { if (c.userData.anime) animes.push(c); });
+      gp.userData.items.push({ o: o, m: m, dir: local(m[2], m[3], 1), nom: null, taille: m[7] ? 1 : 1.6 });
+    });
+  }
+  /**
+   * Each frame: the landmarks smaller as the camera comes near (growing less than the Earth does), the ones behind
+   * the Earth hidden, their names once the camera is close (made when first needed, a few a frame).
+   */
+  function monumentsImage(gp, terre, camPos, style, noms) {
+    const l = gp.userData.items; if (!l || !l.length) return;
+    const camL = terre.worldToLocal(camPos.clone()), d = camPos.length(), ech = Math.max(.6, Math.min(1, .45 + .55 * (d - 1) / 2.4));
+    const proche = noms && d < (OB.tb && OB.tb.pedago ? 2.6 : 2.25);
+    let neufs = 0;
+    l.forEach(it => {
+      const devant = it.dir.dot(camL) > 1.01;
+      it.o.visible = devant; it.o.scale.setScalar(ech * it.taille);
+      const montre = devant && proche && (it.m[6] === 1 || d < 1.9);
+      if (montre && !it.nom && neufs < 6) {
+        neufs++;
+        it.nom = etiquette(it.m[1], style === 'vintage' ? '#5A2D0C' : '#FFE08A', style, 'ville');
+        it.nom.position.copy(local(it.m[2], it.m[3], 1 + .03 * ech)); it.nom.center.set(.5, 0); gp.add(it.nom);
+      }
+      if (it.nom) {
+        it.nom.visible = montre;
+        if (montre) { const z = .017 * Math.max(.55, Math.min(1.1, 3.2 / Math.max(1.2, d))) * (OB.tb && OB.tb.pedago ? 1.3 : 1); it.nom.scale.set(z * it.nom.userData.ratio, z, 1); it.nom.position.copy(local(it.m[2], it.m[3], 1 + .03 * ech * it.taille)); }
+      }
+    });
+  }
+  /** A family's sign on the flat map, [s] px high, standing on [x], [y]. */
+  function signeMon(x, type, fusee, X, Y, s) {
+    const c = COUL_MON[type] || '#ccc', u = s / 10;
+    x.save(); x.translate(X, Y); x.fillStyle = c; x.strokeStyle = 'rgba(10,18,40,.85)'; x.lineWidth = Math.max(1, u * .9); x.lineJoin = 'round';
+    const p = new Path2D();
+    const r = (a, b, w, h) => p.rect(a * u, b * u, w * u, h * u);
+    switch (fusee ? 'fusee' : type) {
+      case 'tour': p.moveTo(-2 * u, 0); p.lineTo(-1 * u, -8 * u); p.lineTo(0, -10 * u); p.lineTo(1 * u, -8 * u); p.lineTo(2 * u, 0); p.closePath(); break;
+      case 'pont': r(-6, -4, 12, 1.6); r(-4.4, -8, 1.4, 8); r(3, -8, 1.4, 8); break;
+      case 'chateau': p.moveTo(-5 * u, 0); p.lineTo(-5 * u, -7 * u); p.lineTo(-3.5 * u, -7 * u); p.lineTo(-3.5 * u, -5 * u); p.lineTo(3.5 * u, -5 * u); p.lineTo(3.5 * u, -7 * u); p.lineTo(5 * u, -7 * u); p.lineTo(5 * u, 0); p.closePath(); break;
+      case 'religieux': r(-4, -4, 8, 4); p.moveTo(-3.4 * u, -4 * u); p.arc(0, -4 * u, 3.4 * u, Math.PI, 0); p.closePath(); r(4.6, -8, 1.2, 8); break;
+      case 'ancien': p.moveTo(-5.5 * u, -6 * u); p.lineTo(0, -9 * u); p.lineTo(5.5 * u, -6 * u); p.closePath(); r(-5, -6, 1.4, 5); r(-.7, -6, 1.4, 5); r(3.6, -6, 1.4, 5); r(-5.5, -1.2, 11, 1.2); break;
+      case 'statue': r(-2.4, -2.6, 4.8, 2.6); r(-1, -7.5, 2, 5); r(1, -10.5, 1, 4.5); p.moveTo(1.3 * u, -8.6 * u); p.arc(0, -8.6 * u, 1.3 * u, 0, 7); break;
+      case 'naturel': p.moveTo(-6 * u, 0); p.lineTo(-1 * u, -9 * u); p.lineTo(1.5 * u, -5 * u); p.lineTo(3 * u, -7 * u); p.lineTo(6 * u, 0); p.closePath(); break;
+      case 'moderne': r(-3.5, -10, 3.2, 10); r(.6, -7, 3, 7); break;
+      case 'fusee': p.moveTo(0, -10 * u); p.lineTo(1.6 * u, -7 * u); p.lineTo(1.6 * u, -2 * u); p.lineTo(3 * u, 0); p.lineTo(-3 * u, 0); p.lineTo(-1.6 * u, -2 * u); p.lineTo(-1.6 * u, -7 * u); p.closePath(); break;
+      // A dish on its mast (observatories, space centres).
+      default: r(-.8, -5, 1.6, 5); p.moveTo(-5 * u, -9.5 * u); p.quadraticCurveTo(-1 * u, -2 * u, 5 * u, -7 * u); p.closePath();
+    }
+    x.fill(p); x.stroke(p);
+    if (type === 'naturel') { x.fillStyle = '#fff'; x.beginPath(); x.moveTo(-2.4 * u, -6.5 * u); x.lineTo(-1 * u, -9 * u); x.lineTo(.4 * u, -6.6 * u); x.closePath(); x.fill(); }
+    x.restore();
+  }
+  /** The landmarks on the flat map: their signs, their names where the map is big enough and they find room. */
+  function monuments2d(x, X, Y, mw, S, vieux, boites) {
+    const l = monumentsVus(''); if (!l.length) return;
+    const s = Math.max(9, Math.min(18, mw / 110)), pedago = !!(OB.tb && OB.tb.pedago);
+    l.forEach(m => signeMon(x, m[4], m[7] === 'fusee', X(m[3]), Y(m[2]), s));
+    if (mw < 1300) return;
+    x.font = (vieux ? 'italic ' : '') + '600 ' + (pedago ? 13 : 11) + 'px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'top';
+    l.filter(m => m[6] === 1 || mw > 2600).forEach(m => {
+      const X0 = X(m[3]), Y0 = Y(m[2]) + 2, w = x.measureText(m[1]).width, b = [X0 - w / 2 - 2, Y0, w + 4, 14];
+      if (boites.some(q => b[0] < q[0] + q[2] && q[0] < b[0] + b[2] && b[1] < q[1] + q[3] && q[1] < b[1] + b[3])) return;
+      boites.push(b);
+      x.lineWidth = 3; x.strokeStyle = vieux ? 'rgba(239,224,184,.9)' : 'rgba(0,0,0,.7)'; x.strokeText(m[1], X0, Y0);
+      x.fillStyle = vieux ? '#5A2D0C' : '#FFE08A'; x.fillText(m[1], X0, Y0);
+    });
+  }
+
+  /* The night on the flat map, shaded by the Sun's height: the twilight (the grey line) a gradient, full night past −12°. */
+  let nuitCache = null;
+  function nuit2d(x, S, so, mx, my, mw, mh) {
+    const cle = so.dec.toFixed(2) + '|' + so.lon.toFixed(1) + '|' + S.nuit;
+    if (!nuitCache || nuitCache.cle !== cle) {
+      const W = 240, H = 120, c = nuitCache ? nuitCache.c : document.createElement('canvas'); c.width = W; c.height = H;
+      const cx = c.getContext('2d'), d = cx.createImageData(W, H), p = d.data, m = String(S.nuit).match(/[\d.]+/g) || [0, 0, 0, 0];
+      const A = +m[3] ? Math.max(.42, +m[3]) : 0, r = Math.PI / 180, sd = Math.sin(so.dec * r), cd = Math.cos(so.dec * r);
+      const ch = []; for (let j = 0; j < W; j++) ch.push(Math.cos(((j + .5) / W * 360 - 180 - so.lon) * r));
+      for (let i = 0; i < H; i++) {
+        const f = (90 - (i + .5) / H * 180) * r, a1 = Math.sin(f) * sd, b1 = Math.cos(f) * cd;
+        for (let j = 0; j < W; j++) {
+          const el = Math.asin(Math.max(-1, Math.min(1, a1 + b1 * ch[j]))) / r;
+          let k = Math.max(0, Math.min(1, (0.8 - el) / 12.8)); k = k * k * (3 - 2 * k);
+          const q = (i * W + j) * 4; p[q] = +m[0]; p[q + 1] = +m[1]; p[q + 2] = +m[2]; p[q + 3] = Math.round(255 * A * k);
+        }
+      }
+      cx.putImageData(d, 0, 0); nuitCache = { cle: cle, c: c };
+    }
+    x.save(); x.imageSmoothingEnabled = true; x.drawImage(nuitCache.c, mx, my, mw, mh); x.restore();
+  }
+  /** The Moon's face, [phase] as obLune gives it, in a disc of radius [r] at [X], [Y]. */
+  function lune2d(x, phase, X, Y, r) {
+    x.save(); x.translate(X, Y);
+    x.fillStyle = '#2b2f3a'; x.beginPath(); x.arc(0, 0, r, 0, 7); x.fill();
+    x.fillStyle = '#F2F0E6'; x.shadowColor = 'rgba(240,240,220,.8)'; x.shadowBlur = r; x.fill(new Path2D(obLunePath(phase, r)));
+    x.shadowBlur = 0; x.strokeStyle = 'rgba(0,0,0,.5)'; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r, 0, 7); x.stroke();
+    x.restore();
+  }
+  /** Elevation and azimuth (degrees) of a body at declination [dec] over longitude [lonSous], seen from [lat], [lon]. */
+  function azEl(lat, lon, dec, lonSous) {
+    const f = lat * D2R, dc = dec * D2R, H = (lon - lonSous) * D2R;
+    const e = Math.asin(Math.sin(f) * Math.sin(dc) + Math.cos(f) * Math.cos(dc) * Math.cos(H));
+    const a = Math.atan2(-Math.cos(dc) * Math.sin(H), Math.sin(dc) * Math.cos(f) - Math.cos(dc) * Math.sin(f) * Math.cos(H));
+    return { el: e * R2D, az: ((a * R2D) + 360) % 360 };
+  }
+  /* The dashboard's globe: the Sun and the Moon over the places they stand above (behind the Earth when it hides them). */
+  function astresScene(sc, terre, t) {
+    const on = !!(OB.tb && OB.tb.astres);
+    if (!sc.astres) {
+      if (!on) return;
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const lu = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, sizeAttenuation: false }));
+      const so = lueur('#FFD34D'); so.material.depthTest = true;
+      sc.astres = { so: so, lu: lu, c: c, phase: -1 }; terre.add(so, lu);
+    }
+    const A = sc.astres; A.so.visible = A.lu.visible = on; if (!on) return;
+    const s = obSoleil(t, satellite.gstime(new Date(t))), l = obLune(t);
+    A.so.position.copy(local(s.dec, s.lon, 1.03)); A.so.scale.set(.09, .09, 1);
+    A.lu.position.copy(local(l.dec, l.lon, 1.03)); A.lu.scale.set(.045, .045, 1);
+    if (Math.abs(l.phase - A.phase) > .005) {
+      A.phase = l.phase; const x = A.c.getContext('2d'); x.clearRect(0, 0, 64, 64); lune2d(x, l.phase, 32, 32, 26); A.lu.material.map.needsUpdate = true;
+    }
+  }
+  /** Where the explained things show on the globe's canvas (px): the satellite chosen, its footprint's edge, the station, the day–night line. */
+  function reperes3d(sc, camera, cam, terre, w, h, satP, oc, stW, solDir) {
+    const vu = p => p.dot(cam.pos.clone().sub(p)) > 0, ecran = p => { const v = p.clone().project(camera); return Math.abs(v.x) < 1 && Math.abs(v.y) < 1 ? [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h] : null; };
+    const R = {};
+    if (satP) R.sat = ecran(satP);
+    if (oc && oc.bordCal.visible) {
+      const a = oc.bordCal.geometry.attributes.position, l = [];
+      for (let i = 0; i < a.count; i += 6) { const p = terre.localToWorld(new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i))); if (vu(p)) l.push(p); }
+      // The edge's point the nearest the camera's line of sight: well in view.
+      l.sort((p, q) => q.dot(cam.pos) - p.dot(cam.pos));
+      if (l.length) R.emp = ecran(l[Math.min(l.length - 1, 2)]);
+    }
+    if (stW && sc.lieu() && vu(stW)) R.station = ecran(stW);
+    const c = cam.pos.clone().normalize(), q = c.clone().sub(solDir.clone().multiplyScalar(c.dot(solDir)));
+    if (q.lengthSq() > 1e-4) { const p = q.normalize(); if (vu(p)) R.nuit = ecran(p); }
+    sc.reperes = R;
+  }
+
+"""
+
     private const val FIN = """  /* ------------------------------------------------------------ the tab */
   const hh = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const hhs = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1025,6 +1285,12 @@ const Orbites = (function () {
     el('ob-etiq').value = OB.etiq; el('ob-etiq').onchange = e => prendEtiq(e.target.value);
     el('ob-contacts').value = OB.contacts;
     el('ob-contacts').onchange = e => prendContacts(e.target.value);
+    el('ob-monuments').value = OB.monuments; el('ob-monuments').onchange = e => prendMonuments(e.target.value);
+    el('ob-montypes-b').onclick = ev => {
+      ev.stopPropagation(); const m = el('ob-montypes'), ouvre = m.hidden;
+      m.hidden = !ouvre; el('ob-montypes-b').setAttribute('aria-expanded', ouvre); if (ouvre) { typesMon(m); const c = m.querySelector('input'); if (c) c.focus(); }
+    };
+    document.addEventListener('pointerdown', ev => { const m = el('ob-montypes'); if (!m.hidden && !m.contains(ev.target) && ev.target !== el('ob-montypes-b')) { m.hidden = true; el('ob-montypes-b').setAttribute('aria-expanded', false); } });
     el('ob-pause').onclick = () => { recale(); OB.temps.pause = !OB.temps.pause; el('ob-pause').textContent = OB.temps.pause ? '▶' : '⏸'; el('ob-pause').title = OB.temps.pause ? 'Reprendre' : 'Pause'; };
     el('ob-vitesse').onchange = e => recale(+e.target.value);
     el('ob-maint').onclick = () => { OB.anim = null; OB.temps.base = Date.now(); OB.temps.reel = performance.now(); boutonJouer(); };
@@ -1057,9 +1323,28 @@ const Orbites = (function () {
   function prendDetail(n) { OB.detail = n; garde('ob-detail', String(n)); scenes.forEach(sc => sc.monde()); }
   function prendVilles(v) { OB.villes = v; garde('ob-villes', v); scenes.forEach(sc => sc.monde()); }
   function prendEtiq(v) { OB.etiq = v; garde('ob-etiq', v); scenes.forEach(sc => sc.monde()); }
+  function prendMonuments(v) { OB.monuments = v; garde('ob-monuments', v); document.querySelectorAll('.ob-mon-choix').forEach(s => { s.value = v; }); scenes.forEach(sc => sc.monde()); }
+  function prendTypeMon(k, on) {
+    OB.monOff = OB.monOff.filter(x => x !== k).concat(on ? [] : [k]); garde('ob-montypes-off', JSON.stringify(OB.monOff));
+    clearTimeout(OB.monT); OB.monT = setTimeout(() => scenes.forEach(sc => sc.monde()), 250);
+  }
+  /** The landmarks' families as boxes to tick in [box], each with its colour. */
+  function typesMon(box) {
+    box.innerHTML = '';
+    (monde().typesMonuments || []).forEach(q => {
+      const l = document.createElement('label'), c = document.createElement('input'), i = document.createElement('i');
+      c.type = 'checkbox'; c.checked = !OB.monOff.includes(q[0]); c.onchange = () => prendTypeMon(q[0], c.checked);
+      i.className = 'ob-mon-pastille'; i.style.background = COUL_MON[q[0]] || '#ccc';
+      l.append(c, i, document.createTextNode(q[1])); box.appendChild(l);
+    });
+  }
   function prendContacts(v) { OB.contacts = v; garde('ob-contacts', v); if (v !== 'aucun' && !OB.carnet) { OB.carnetLu = 0; chargeCarnet(); } scenes.forEach(sc => sc.contacts()); }
   function marqueStyle() { document.querySelectorAll('#ob-styles button, .ob-style-choix option').forEach(b => { if (b.tagName === 'OPTION') b.selected = b.value === OB.style; else b.setAttribute('aria-pressed', b.dataset.style === OB.style); }); }
   function marqueCam() { document.querySelectorAll('[data-ob-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.obCam === OB.cam)); }
+  function temps1() {
+    OB.anim = null; OB.temps = { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false };
+    if (tab) { el('ob-vitesse').value = '1'; el('ob-pause').textContent = '⏸'; el('ob-pause').title = 'Pause'; boutonJouer(); }
+  }
   function boutonJouer() { if (tab) el('ob-jouer').textContent = OB.anim && OB.anim.joue ? '⏸ Pause' : (OB.anim && OB.anim.t >= OB.anim.p.los + 60000 ? '▶ Rejouer' : '▶ Jouer le passage'); }
   function gardeCoches() { garde('ob-coches', JSON.stringify(OB.sats.filter(s => s.on).map(s => s.catnum))); }
 
@@ -1093,7 +1378,8 @@ const Orbites = (function () {
     if (OB.vue === 'passage') calculePassages();
   }
   function montreVue(v) {
-    OB.vue = v; garde('ob-vue', v);
+    // The dashboard keeps its look's own view; the tab's comes back when it closes.
+    OB.vue = v; if (OB.tb) { if (OB.tb.surVue) OB.tb.surVue(v); } else garde('ob-vue', v);
     tab.v.querySelectorAll('[data-ob-vue]').forEach(b => b.setAttribute('aria-pressed', b.dataset.obVue === v));
     tab.c3d.hidden = v === 'carte'; tab.c2d.hidden = v !== 'carte';
     ['ob-cadreur', 'ob-passages', 'ob-instruments', 'ob-banniere'].forEach(id => { el(id).hidden = v !== 'passage'; });
@@ -1224,14 +1510,16 @@ const Orbites = (function () {
       x.fillStyle = '#8e5a2e'; x.beginPath(); x.moveTo(X0 - k, Y0); x.lineTo(X0 + k, Y0); x.lineTo(X0 + k * .6, Y0 + k * .5); x.lineTo(X0 - k * .6, Y0 + k * .5); x.closePath(); x.fill();
       x.fillStyle = '#fff'; x.beginPath(); x.moveTo(X0, Y0 - k * 1.4); x.lineTo(X0, Y0 - k * .1); x.lineTo(X0 + k * .8, Y0 - k * .1); x.closePath(); x.fill(); });
     const so = obSoleil(t, satellite.gstime(new Date(t)));
-    x.beginPath(); obNuit(so.dec, so.lon).forEach((q, i) => { if (i) x.lineTo(X(q[1]), Y(q[0])); else x.moveTo(X(q[1]), Y(q[0])); }); x.closePath();
-    x.fillStyle = S.nuit; x.fill();
-    x.fillStyle = '#FFD34D'; x.shadowColor = '#FFB300'; x.shadowBlur = 14; x.beginPath(); x.arc(X(so.lon), Y(so.dec), 6, 0, 7); x.fill(); x.shadowBlur = 0;
+    nuit2d(x, S, so, mx, my, mw, mh);
+    const gros = OB.tb ? Math.max(1, mw / 1400) : 1;
+    x.fillStyle = '#FFD34D'; x.shadowColor = '#FFB300'; x.shadowBlur = 14; x.beginPath(); x.arc(X(so.lon), Y(so.dec), 6 * gros, 0, 7); x.fill(); x.shadowBlur = 0;
+    if (OB.tb && OB.tb.astres) { const l = obLune(t); lune2d(x, l.phase, X(l.lon), Y(l.dec), 7 * gros); }
     // The cities.
     x.font = (vieux ? 'italic ' : '') + '500 10px Drapeaux, system-ui, sans-serif'; x.textAlign = 'left'; x.textBaseline = 'middle';
     villesVues().forEach(v => { const X0 = X(v[2]), Y0 = Y(v[1]), n = nomVille(v);
       x.fillStyle = S.ville; x.beginPath(); x.arc(X0, Y0, v[3] === 1 ? 2.6 : 2, 0, 7); x.fill();
       x.lineWidth = 3; x.strokeStyle = vieux ? 'rgba(239,224,184,.9)' : 'rgba(0,0,0,.7)'; x.strokeText(n, X0 + 4, Y0); x.fillStyle = S.ville; x.fillText(n, X0 + 4, Y0); });
+    monuments2d(x, X, Y, mw, S, vieux, []);
     // The log's contacts.
     if (OB.contacts !== 'aucun' && OB.carnet) {
       x.fillStyle = 'rgba(255,79,163,.35)'; x.strokeStyle = '#FF4FA3';
@@ -1293,6 +1581,15 @@ const Orbites = (function () {
     });
     x.restore();
     tab.points = pts;
+    // The dashboard's explanations point at these.
+    if (OB.tb && OB.tb.pedago) {
+      const q = pts.find(p => p.lui), R = {};
+      if (q) { R.sat = [q.x, q.y]; const e2 = obEmpreinte(q.e.lat, q.e.lon, Math.acos(RE / (RE + q.e.alt)), 8); R.emp = [X(e2[2][1]), Y(e2[2][0])]; }
+      if (d && d.obs) R.station = [X(d.obs.lon), Y(d.obs.lat)];
+      let ln = so.lon + 90; if (ln > 180) ln -= 360; if (Math.abs(ln) > 150) ln = so.lon - 90;
+      R.nuit = [X(ln), Y(0)];
+      tab.reperes2d = R;
+    }
   }
 
   return {
@@ -1300,6 +1597,8 @@ const Orbites = (function () {
     montre: async function () {
       const v = el('v-orbites'), att = el('ob-attente');
       att.hidden = false; att.textContent = 'Chargement du globe…';
+      // Each time the tab opens: the present time at its real pace (the speed can be raised again).
+      if (!OB.tb) temps1();
       try { await charge(); } catch (x) { att.textContent = 'Le globe n’a pas pu se charger : ' + (x && x.message ? x.message : 'erreur') + '. Recharge la page.'; return; }
       if (v.hidden) return;
       prepareTab(); att.hidden = true;
@@ -1374,8 +1673,12 @@ const Orbites = (function () {
         soleil = { el: el * R2D, az: ((az * R2D) + 360) % 360 };
       }
       if (e && s.dl && OB.obs) { const e2 = etat(s, t + 1000); if (e2) dop = s.dl * (1 - (e2.dist - e.dist) / CL); }
-      return { t: t, indicatif: d.indicatif || '', locator: d.locator || '', obs: o || null, soleil: soleil, sat: s ? { nom: s.nom, couleur: s.couleur, dl: s.dl } : null,
-        e: e ? { az: e.az, el: e.el, dist: e.dist, alt: e.alt, lat: e.lat, lon: e.lon } : null, vu: !!OB.obs, dop: dop };
+      // For the explanations: its orbit's tilt, its speed, one turn, how far it hears, how far west its next track falls.
+      const v = e && e.vel ? Math.hypot(e.vel.x, e.vel.y, e.vel.z) : null;
+      return { t: t, indicatif: d.indicatif || '', locator: d.locator || '', obs: o || null, soleil: soleil, sat: s ? { nom: s.nom, couleur: s.couleur, dl: s.dl,
+          incl: s.satrec ? s.satrec.inclo * R2D : null, periode: s.periode / 60000, geo: s.mm < 1.2 } : null,
+        e: e ? { az: e.az, el: e.el, dist: e.dist, alt: e.alt, lat: e.lat, lon: e.lon, vitesse: v, rayon: RE * Math.acos(RE / (RE + e.alt)) } : null, vu: !!OB.obs, dop: dop,
+        decalage: s ? 360 * s.periode / 86164091 : null };
     },
     /**
      * The next passes, present time, of the satellites shown on the globe (else the favourites), up to [n]: [{nom, couleur, aos, los, max}],
@@ -1399,11 +1702,37 @@ const Orbites = (function () {
       return out.sort((a, b) => a.aos - b.aos).slice(0, n || 6);
     },
     /** The tab's time back to the present, at its real pace (the dashboard shows now). */
-    tempsReel: () => {
-      if (OB.vue === 'passage') return;
-      OB.anim = null; OB.temps = { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false };
-      if (tab) { el('ob-vitesse').value = '1'; el('ob-pause').textContent = '⏸'; el('ob-pause').title = 'Pause'; boutonJouer(); }
+    tempsReel: () => { if (OB.vue !== 'passage') temps1(); },
+    /**
+     * The dashboard open ([o]: {style, vue, tourne, astres, pedago, surVue(v)}) or closed (null): its look and view taken without
+     * being kept, the tab's own given back when it closes.
+     */
+    tableauMode: o => {
+      const avant = OB.tb; OB.tb = o || null;
+      const style = o ? o.style : lit('ob-style2', 'cartoon'), vue = o ? o.vue : lit('ob-vue', 'globe');
+      if (style && STYLES[style] && style !== OB.style) { OB.style = style; scenes.forEach(sc => sc.appliqueStyle(style)); marqueStyle(); }
+      else if (!avant !== !o) scenes.forEach(sc => { if (sc.mode === 'tab') sc.monde(); });
+      if (tab && vue && vue !== OB.vue) montreVue(vue);
+      if (tab) { tab.scene.reperes = null; tab.reperes2d = null; tab.scene.geste = 0; }
     },
+    /** Where the things explained show over the tab's globe or map (px): {sat, emp, station, nuit} → [x, y]; null when not drawn. */
+    reperes: () => !tab ? null : OB.vue === 'carte' ? tab.reperes2d : OB.vue === 'globe' ? tab.scene.reperes : null,
+    /**
+     * The Sun and the Moon at the present time: where they stand above, their height at the station, the Moon's phase, the station's
+     * next sunrise, sunset, dawn and dusk (worked out again every ten minutes).
+     */
+    astres: () => {
+      const t = Date.now(), s = obSoleil(t, obGmst(t)), l = obLune(t), o = OB.donnees && OB.donnees.obs;
+      if (o && (!OB.jour || t - OB.jour.t > 600000 || OB.jour.lat !== o.lat || OB.jour.lon !== o.lon)) OB.jour = { t: t, lat: o.lat, lon: o.lon, j: obSoleilJour(t, o.lat, o.lon) };
+      return { soleil: { lat: s.dec, lon: s.lon, ici: o ? azEl(o.lat, o.lon, s.dec, s.lon) : null }, lune: Object.assign({ ici: o ? azEl(o.lat, o.lon, l.dec, l.lon) : null }, l),
+        jour: o ? OB.jour.j : null };
+    },
+    monuments: v => prendMonuments(v),
+    monumentsActifs: () => OB.monuments,
+    /** The landmarks' families to tick, in [box]. */
+    typesMonuments: box => typesMon(box),
+    /** The landmarks shown now [[nom, type, pays]], for the dashboard's ticker. */
+    monumentsListe: () => monumentsVus('').map(m => [m[1], m[4], m[5], m[2], m[3]]),
     style: k => prendStyle(k),
     villes: v => prendVilles(v),
     etiquettes: v => prendEtiq(v),
