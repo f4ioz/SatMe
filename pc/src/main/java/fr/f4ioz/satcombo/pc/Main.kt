@@ -357,6 +357,8 @@ fun main(args: Array<String>) {
     fr.f4ioz.satcombo.demo.ModulesStation.migre(station.stockage)
     // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
+    // The satellites' cards (Orbites): their photo and summary asked from Wikipedia when first shown, then kept.
+    serveur.fiches = FichesSatPc(File(dossier, "fiches-sat"), emetteurs = { station.emetteursDe(it) })
     // The pass report (Journal › Rapport): read from the data folder, the levels and the space weather kept.
     journalWeb.rapport = RapportPc(journal, station, dossier,
         niveaux = { niveaux.series.getValue(NiveauxPc.CANAL).points(86_400_000L, System.currentTimeMillis()).map { it.t to it.moy } },

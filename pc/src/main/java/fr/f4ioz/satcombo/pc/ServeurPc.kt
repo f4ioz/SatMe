@@ -130,6 +130,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var adsb: AdsbPc? = null
     @Volatile var ais: AisPc? = null
     @Volatile var espace: MeteoSpatialePc? = null
+    /** The satellites' cards: a photo and a summary (Wikipedia, Commons, kept on disk), SatMe's facts. */
+    @Volatile var fiches: FichesSatPc? = null
     /** « Journal détaillé » (spectra and decodes per pass, for the report). */
     @Volatile var spectreJournal: SpectreJournalPc? = null
     @Volatile var carte: CartePc? = null
@@ -743,6 +745,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val rep = ais?.sert(chemin, r.methode) { q[it].orEmpty() }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if ((chemin == "/api/satfiche" || chemin == "/api/satfiche/photo") && r.methode != "POST") {
+            val rep = fiches?.sert(chemin) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // A QR code of a short text (the Vitrine's link to the club), drawn here: nothing asked elsewhere.
+        if (chemin == "/api/qr" && r.methode != "POST") {
+            val t = q["t"].orEmpty().take(300)
+            if (t.isBlank()) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            else envoie(sortie, "200 OK", "image/svg+xml", AppairagePc.svg(t).toByteArray())
+            return
         }
         if (chemin == "/api/espace" || chemin.startsWith("/api/espace/")) {
             val rep = espace?.sert(chemin, r.methode) { q[it].orEmpty() }
