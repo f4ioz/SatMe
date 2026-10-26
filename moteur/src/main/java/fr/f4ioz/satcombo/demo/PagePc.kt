@@ -17000,7 +17000,7 @@ async function pxTrace(input) {
 }
 
 // ------------------------------------------------------------------ QO-100's narrow band by the Pluto (api/be/emission): the PTT held, the microphone or a card, CW; the uplink profiles
-var BX = null, bxTenu = false, bxVerrouille = false, bxVieW = null, bxConfirme = false, bxCleTient = false, bxCwAuto = false;
+var BX = null, bxTenu = false, bxVerrouille = false, bxVieW = null, bxConfirme = false, bxCleTient = false, bxCwAuto = false, bxCwMs = 0;
 var bxMic = null, bxWs = null, bxPic = 0, bxSeq = 0, bxGainN = null, bxGT = null;
 const bxPluto = () => !!(BX && BX.ok && !BX.absent && (BX.profils || []).some(p => p.nom === BX.profil && p.chaine === 'pluto'));
 async function bxLit() {
@@ -17070,7 +17070,7 @@ function bxRend() {
   txt('btx-info', l.filter(x => x).join(' · '));
   g('btx-info').classList.toggle('avert', !!(j.erreur || (!j.pret && !j.emet) || j.plutoVu === false));
   // The CW text sent with its own PTT: released once out.
-  if (bxCwAuto && bxTenu && j.emet && !j.cwOccupe && !bxCleTient) { bxCwAuto = false; bxRelache(); }
+  if (bxCwAuto && bxTenu && j.emet && !j.cwOccupe && !bxCleTient && Date.now() - bxCwMs > 1500) { bxCwAuto = false; bxRelache(); }
   bxReglagesRend();
 }
 function bxReglagesRend() {
@@ -17281,7 +17281,9 @@ function bxVie(on) {
 })();
 async function bxCwEnvoie() {
   const t = v('btx-cw-t'); if (!t) return;
+  bxCwMs = Date.now();
   if (!bxTenu) { if (!await bxAppuie(true)) return; bxCwAuto = true; }
+  bxCwMs = Date.now();
   try { await fetch('api/be/cw?client=' + TX_CLIENT + '&texte=' + enc(t), { method: 'POST' }); } catch (x) {}
   g('btx-cw-t').value = '';
 }
