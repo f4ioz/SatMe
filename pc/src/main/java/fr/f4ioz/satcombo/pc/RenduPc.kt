@@ -432,19 +432,24 @@ object RenduPc {
         return CadreSstv.Place(if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp, 8 * dp, lw, lh)
     }
 
+    /** The screen's 16:9 (not the phone's upright 9:16 nor its 3:4): the caption in three columns, its band low. */
+    private fun large(sc: Scene) = sc.paysage && !sc.vertical
+
     /**
-     * The view's height in a frame [w]×[h]: the frame less the caption band, as
-     * high as its texts need at their scale (the same all along the video) —
-     * in the phone's 3:4 the view square above it, unless larger texts need more.
+     * The view's height in a frame [w]×[h]: the frame less the caption band, the
+     * same all along the video. In 16:9 the band is three rows high at the texts'
+     * scale ([LegendePc.hauteurLarge], at most 28 %); else as high as its texts
+     * need — in the phone's 3:4 the view square above it, unless larger texts need more.
      */
     fun hautVue(w: Int, h: Int, sc: Scene): Int {
         sc.bande?.let { (t, v) -> if (t == (w to h)) return v }
-        val b = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB); val g = g2(b)
         val dp = echelle(w, h)
-        val large = sc.paysage || sc.vertical
-        val bande = LegendePc.dispose(g, rangs(sc, sc.e.debutMs, null, dp), w.toFloat(), dp, sc.police, h * if (large) 0.45f else 0.5f).naturelle
-        g.dispose()
-        val v = (h - kotlin.math.ceil(bande)).toInt().let { if (large) it else minOf(w, it) }
+        val v = if (large(sc)) h - kotlin.math.ceil(LegendePc.hauteurLarge(h, dp, sc.police)).toInt() else {
+            val b = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB); val g = g2(b)
+            val bande = LegendePc.dispose(g, rangs(sc, sc.e.debutMs, null, dp), w.toFloat(), dp, sc.police, h * if (sc.vertical) 0.45f else 0.5f).naturelle
+            g.dispose()
+            (h - kotlin.math.ceil(bande)).toInt().let { if (sc.vertical) it else minOf(w, it) }
+        }
         sc.bande = (w to h) to v
         return v
     }
@@ -459,7 +464,48 @@ object RenduPc {
     }
     private fun legende(g: Graphics2D, w: Int, h: Int, sc: Scene, instant: Long, p: JournalPassage.Point?): LegendePc.Mise {
         val dp = echelle(w, h)
-        return LegendePc.dispose(g, rangs(sc, instant, p, dp), w.toFloat(), dp, sc.police, (h - hautVue(w, h, sc)).toFloat())
+        val bande = (h - hautVue(w, h, sc)).toFloat()
+        return if (large(sc)) LegendePc.disposeColonnes(g, colonnes(sc, instant, p, dp), w.toFloat(), dp, sc.police, bande)
+        else LegendePc.dispose(g, rangs(sc, instant, p, dp), w.toFloat(), dp, sc.police, bande)
+    }
+
+    /** The things the caption can say at [instant], each keeping its place all along the video. */
+    private class Choses(val nom: LegendePc.Element, val tx: LegendePc.Element?, val date: LegendePc.Element, val heure: LegendePc.Element,
+                         val relatif: LegendePc.Element, val passage: LegendePc.Element?, val azel: LegendePc.Element, val rx: LegendePc.Element?,
+                         val recues: LegendePc.Element?, val aos: List<LegendePc.Element>, val smetre: LegendePc.Element?,
+                         val station: LegendePc.Element, val marque: LegendePc.Element)
+
+    /** [rxApart]: the frequency a thing of its own (16:9), else after the pointing. */
+    private fun choses(sc: Scene, instant: Long, p: JournalPassage.Point?, dp: Float, rxApart: Boolean): Choses {
+        val e = sc.e; val k = sc.police
+        val gris = Color(160, 175, 195)
+        val f13 = police(13 * dp * k); val f13g = police(13 * dp * k, true)
+        fun t(s: String, f: java.awt.Font, c: Color, prio: Int, droite: Boolean = false, gabarit: String? = null, visible: Boolean = true) =
+            LegendePc.Element(LegendePc.Sorte.TEXTE, s, f, c, prio, droite, gabarit, visible)
+        val ses = sc.legendeSession
+        // The satellite's name large, growing less than the rest.
+        val nom = t(e.satName, police(20 * dp * (1 + (k - 1) * 0.6f), true), Color.WHITE, 0)
+        val tx = if (sc.affTx && e.emissions.isNotEmpty()) LegendePc.Element(LegendePc.Sorte.TX, "TX", f13g, Color.WHITE, 3, droite = !rxApart, visible = JournalPassage.enEmissionA(e, instant)) else null
+        val heure = fmt("HH:mm:ss", sc).format(Date(instant)) + " " + zone(sc, instant)
+        val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { f -> f.first <= instant + 2_000L }?.second
+        val avecRx = sc.affFreq && sc.frequences.isNotEmpty()
+        val rxTexte = rx?.let { r -> "RX %.4f MHz".format(r / 1e6) }
+        val azel = p?.let { "Az %.0f°  El %.0f°".format(it.az, it.el) + (if (rxApart) "" else rxTexte?.let { r -> "  $r" } ?: "") } ?: ""
+        val (aos, tca, los) = LegendePc.aosTcaLos(e, sc.fuseau)
+        val v = JournalPassage.signalA(e, instant)?.takeIf { sc.marques.any { m -> instant in (m.debutMs - 2_000L)..(m.finMs + sc.flashMs) } }
+        return Choses(nom, tx,
+            date = t(fmt("yyyy-MM-dd", sc).format(Date(instant)), f13, gris, 1),
+            heure = t(heure, f13, gris, 1, gabarit = "00:00:00 " + zone(sc, instant)),
+            relatif = t(LegendePc.relatif(e, instant), f13g, CYAN, 2, gabarit = "AOS dans 00:00:00"),
+            passage = ses?.let { t(it.first, f13g, Color.WHITE, 4, droite = true, gabarit = "Passage 000 / 000") },
+            azel = t(azel, f13, gris, 3, gabarit = "Az 000°  El 00°" + (if (avecRx && !rxApart) "  RX 000.0000 MHz" else ""), visible = p != null),
+            rx = if (rxApart && avecRx) t(rxTexte ?: "", f13, gris, 3, gabarit = "RX 000.0000 MHz", visible = rxTexte != null && p != null) else null,
+            recues = ses?.let { t(it.second, f13g, if (it.third) SSTV else gris, 5, droite = true, gabarit = "000 images reçues") },
+            aos = listOf(t(aos, f13, gris, 2), t(tca, f13, gris, 3), t(los, f13, gris, 2)),
+            smetre = if (sc.affSmetre && e.signal.isNotEmpty()) LegendePc.Element(LegendePc.Sorte.SMETRE, "", f13, Color.WHITE, 6,
+                visible = v != null, valeur = v, crete = v?.let { JournalPassage.crete(e, instant) }) else null,
+            station = t(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), f13, gris, 7, droite = rxApart),
+            marque = LegendePc.Element(LegendePc.Sorte.MARQUE, "", f13, CYAN, 1, droite = true))
     }
 
     /**
@@ -470,34 +516,24 @@ object RenduPc {
      * something to say.
      */
     private fun rangs(sc: Scene, instant: Long, p: JournalPassage.Point?, dp: Float): List<List<LegendePc.Element>> {
-        val e = sc.e; val k = sc.police
-        val gris = Color(160, 175, 195)
-        val f13 = police(13 * dp * k); val f13g = police(13 * dp * k, true)
-        fun t(s: String, f: java.awt.Font, c: Color, prio: Int, droite: Boolean = false, gabarit: String? = null, visible: Boolean = true) =
-            LegendePc.Element(LegendePc.Sorte.TEXTE, s, f, c, prio, droite, gabarit, visible)
-        val ses = sc.legendeSession
-        // The satellite's name large, growing less than the rest.
-        val a = listOfNotNull(t(e.satName, police(20 * dp * (1 + (k - 1) * 0.6f), true), Color.WHITE, 0),
-            if (sc.affTx && e.emissions.isNotEmpty()) LegendePc.Element(LegendePc.Sorte.TX, "TX", f13g, Color.WHITE, 3, droite = true, visible = JournalPassage.enEmissionA(e, instant)) else null)
-        // The date and the time apart: on two lines when the band is narrow.
-        val heure = fmt("HH:mm:ss", sc).format(Date(instant)) + " " + zone(sc, instant)
-        val b = listOfNotNull(t(fmt("yyyy-MM-dd", sc).format(Date(instant)), f13, gris, 1), t(heure, f13, gris, 1, gabarit = "00:00:00 " + zone(sc, instant)),
-            t(LegendePc.relatif(e, instant), f13g, CYAN, 2, gabarit = "AOS dans 00:00:00"),
-            ses?.let { t(it.first, f13g, Color.WHITE, 4, droite = true, gabarit = "Passage 000 / 000") })
-        val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { f -> f.first <= instant + 2_000L }?.second
-        val avecRx = sc.affFreq && sc.frequences.isNotEmpty()
-        val azel = p?.let { "Az %.0f°  El %.0f°".format(it.az, it.el) + (rx?.let { r -> "  RX %.4f MHz".format(r / 1e6) } ?: "") } ?: ""
-        val c = listOfNotNull(t(azel, f13, gris, 3, gabarit = "Az 000°  El 00°" + (if (avecRx) "  RX 000.0000 MHz" else ""), visible = p != null),
-            ses?.let { t(it.second, f13g, if (it.third) SSTV else gris, 5, droite = true, gabarit = "000 images reçues") })
-        val (aos, tca, los) = LegendePc.aosTcaLos(e, sc.fuseau)
-        // The pass's times after the pointing, on the same lines when there is room; kept before the pass's number and the pictures' count.
-        val d = listOf(t(aos, f13, gris, 2), t(tca, f13, gris, 3), t(los, f13, gris, 2))
-        val v = JournalPassage.signalA(e, instant)?.takeIf { sc.marques.any { m -> instant in (m.debutMs - 2_000L)..(m.finMs + sc.flashMs) } }
-        val sm = if (sc.affSmetre && e.signal.isNotEmpty()) listOf(LegendePc.Element(LegendePc.Sorte.SMETRE, "", f13, Color.WHITE, 6,
-            visible = v != null, valeur = v, crete = v?.let { JournalPassage.crete(e, instant) })) else emptyList()
-        val fin = listOf(t(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), f13, gris, 7),
-            LegendePc.Element(LegendePc.Sorte.MARQUE, "", f13, CYAN, 1, droite = true))
-        return listOf(a, b, c.filter { !it.droite } + d + c.filter { it.droite }, sm, fin)
+        val c = choses(sc, instant, p, dp, rxApart = false)
+        // The date and the time apart: on two lines when the band is narrow; the pass's times after the
+        // pointing, on the same lines when there is room, kept before the pass's number and the pictures' count.
+        return listOf(listOfNotNull(c.nom, c.tx), listOfNotNull(c.date, c.heure, c.relatif, c.passage),
+            listOf(c.azel) + c.aos + listOfNotNull(c.recues), listOfNotNull(c.smetre), listOf(c.station, c.marque))
+    }
+
+    /**
+     * The 16:9's caption in three columns, three rows: on the left the satellite (TX), the date
+     * and time, the pointing; in the middle where the pass is and the frequency, AOS · TCA · LOS,
+     * the S-meter; on the right the mark, a session's pass number and pictures, the station.
+     */
+    private fun colonnes(sc: Scene, instant: Long, p: JournalPassage.Point?, dp: Float): List<List<List<LegendePc.Element>>> {
+        val c = choses(sc, instant, p, dp, rxApart = true)
+        return listOf(
+            listOf(listOfNotNull(c.nom, c.tx), listOf(c.date, c.heure), listOf(c.azel)),
+            listOf(listOfNotNull(c.relatif, c.rx), c.aos, listOfNotNull(c.smetre)),
+            listOf(listOf(c.marque), listOfNotNull(c.passage, c.recues), listOf(c.station)))
     }
 
     /** One frame of the replay: the sky above a caption. */

@@ -32,6 +32,10 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ### en
 - **Demonstration: `satme --demo`.** A made-up station (callsign QF4DMO, every callsign in the Q series, nobody's) with an invented but believable log, pass journal and SSTV pictures, always dated in the last few days; virtual rig, rotator, SDR, aircraft, ships and an SSTV test card. Nothing real is opened, nothing transmits, nothing is sent under the made-up callsign; a « DÉMO — données fictives » band and its **Remettre à neuf** button on every page. A folder of its own (`~/.satme-demo`), works offline.
 - **On a VM or a Raspberry Pi**: the `satme-demo.tar.gz` archive and its `installe-demo.sh` (dry run with `--sec`) install the `satme-demo` service (port 8090, open to the network with a password).
+- **Journal, vidéo 16:9 : la légende du bas ne prend plus que 19 % de l'image** (28 % au plus avec les plus grands textes, contre près de la moitié avant) : trois colonnes — le satellite, la date et l'heure, le pointage à gauche ; AOS, RX, AOS · TCA · LOS et S-mètre au milieu ; la marque, le passage et les images reçues, la station à droite. La vue (ciel, carte, globe) gagne la place, et l'aperçu de *Fabriquer* montre exactement le même cadre.
+
+### en
+- **Journal, 16:9 video: the caption at the bottom now takes 19 % of the picture** (28 % at most with the largest texts, against nearly half before): three columns — the satellite, date and time, pointing on the left; AOS, RX, AOS · TCA · LOS and S-meter in the middle; the mark, the pass and pictures received, the station on the right. The view (sky, map, globe) gets the room, and the *Fabriquer* preview shows exactly the same frame.
 
 ## 2026.10.31
 
