@@ -8,22 +8,14 @@ et la publication GitHub prend la section de sa version.
 Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
-Une section par version, la plus récente en haut, une partie « ### fr
-- **DATV, sous-titres comme à la télé** : chaque passage découpé en sous-titres de deux lignes au plus (par phrase), chacun affiché un temps proportionnel à sa longueur, la traduction dessous ; **plus rien de coupé** — la police s'ajuste à l'image (plein écran compris) jusqu'à tout faire tenir, avec un minimum lisible.
-- **DATV, indicatifs lus dans l'image** : ils suivent la station — rangés au changement de fréquence ou de service et au décrochage, et après 5 min sans être relus ; « vu à l'instant » ou « vu il y a 3 min », les anciens à part sous **Vus avant**.
-- **DATV, listes de textes le plus récent en haut** : passages sous-titrés et traduits, salon de la bande large, chat de la carte de visite et du flux émis — plus besoin de faire défiler, l'historique reste dessous.
-- **DATV, réception plus sûre** : **Essayer aussi** d'autres débits de symboles (LongMynd les essaie à tour de rôle, plus longtemps pour les bas débits) ; **Relance automatique** de LongMynd s'il s'arrête seul en pleine réception, et du décodeur si l'image fige alors que le flux passe ; la marge s'appelle **Marge (D)** comme sur Ryde.
-» et une
-partie « ### en
-- **DATV, TV-style subtitles**: each over cut into cues of two lines at most (by sentence), each shown for a time proportional to its length, the translation under it; **nothing cut off any more** — the font fits the picture (full screen too) until everything shows, with a readable minimum.
-- **DATV, callsigns read in the picture**: they follow the station — put away on a new frequency or service and on a lost lock, and after 5 min without being read again; "seen just now" or "seen 3 min ago", older ones apart under **Vus avant**.
-- **DATV, text lists latest on top**: subtitled and translated overs, the wide-band chat, the station card's and transmitted stream's chat — no more scrolling, the history stays below.
-- **DATV, steadier reception**: **Essayer aussi** other symbol rates (LongMynd tries them in turn, longer for low rates); **automatic restart** of LongMynd when it stops by itself mid-reception, and of the decoder when the picture freezes while the stream flows; the margin is called **Marge (D)** as on Ryde.
-». Des listes courtes : ce que l'utilisateur voit, où cliquer.
+Une section par version, la plus récente en haut, une partie « ### fr » et une
+partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.
 Markdown simple (gras, italique, `code`, listes, liens https).
 -->
 
 ## Prochaine version
+
+## 2026.10.32
 
 ### fr
 - **QO-100, émission bande étroite** (cockpit › sous-onglet **Émission**) : l'**ADALM-PLUTO en direct sur 2,4 GHz** en BLU (micro du navigateur, ou une carte son du PC pour FT8 depuis WSJT-X), en **CW** (texte ou touche) — son oscillateur garé sous le transpondeur, sa **correction de fréquence** saisie ou mesurée sur sa propre descente, la montée liée au cockpit, le plan de bande AMSAT-DL appliqué par mode. PTT tenu (ou maintenu pour FT8) avec chien de garde 2 s et minuterie, **essai sur charge** (−40 dB) à chaque démarrage, plafond de gain, **coupure immédiate si LEILA** est entendue, « ton signal vs balise » pendant l'émission.
@@ -33,6 +25,13 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Suivi › Polarisation** : les boutons V / H / D / G, l'état réel (y compris « manuel (sélecteur) » et « bloqué : émission »), et la polarisation de chaque satellite **à l'AOS** (fixe, ou la meilleure connue). Le sélecteur en façade garde le dernier mot, et jamais de commutation sur l'antenne qui émet.
 - **Sonder H/V** : en AUTO, l'antenne de réception essaie H puis V, mesurés au S-mètre du poste ou au SDR, et garde la meilleure (hystérésis). Chaque mesure est gardée : par satellite et par élévation, SatMe apprend la meilleure polarisation et en démarre le passage suivant.
 - **ESP32 virtuel** : les mêmes règles sans le boîtier, sa façade à l'écran et un passage simulé, pour tout essayer avant de souder.
+- **Démonstration : `satme --demo`.** Une station fictive (indicatif QF4DMO, tous les indicatifs en série Q, attribuée à personne) avec un carnet, un journal de passages et des images SSTV inventés mais crédibles, toujours aux dates des derniers jours ; poste, rotor, SDR, avions, navires et une mire SSTV virtuels. Rien de réel n'est ouvert, rien n'émet, rien n'est envoyé sous l'indicatif fictif ; un bandeau « DÉMO — données fictives » et son bouton **Remettre à neuf** sur chaque page. Dossier à part (`~/.satme-demo`), marche hors ligne.
+- **Sur une VM ou un Raspberry Pi** : l'archive `satme-demo.tar.gz` et son `installe-demo.sh` (essai à sec avec `--sec`) installent le service `satme-demo` (port 8090, ouvert au réseau avec mot de passe).
+- **Journal, vidéo 16:9 : la légende du bas ne prend plus que 19 % de l'image** (28 % au plus avec les plus grands textes, contre près de la moitié avant) : trois colonnes — le satellite, la date et l'heure, le pointage à gauche ; AOS, RX, AOS · TCA · LOS et S-mètre au milieu ; la marque, le passage et les images reçues, la station à droite. La vue (ciel, carte, globe) gagne la place, et l'aperçu de *Fabriquer* montre exactement le même cadre.
+- **DATV, sous-titres comme à la télé** : chaque passage découpé en sous-titres de deux lignes au plus (par phrase), chacun affiché un temps proportionnel à sa longueur, la traduction dessous ; **plus rien de coupé** — la police s'ajuste à l'image (plein écran compris) jusqu'à tout faire tenir, avec un minimum lisible.
+- **DATV, indicatifs lus dans l'image** : ils suivent la station — rangés au changement de fréquence ou de service et au décrochage, et après 5 min sans être relus ; « vu à l'instant » ou « vu il y a 3 min », les anciens à part sous **Vus avant**.
+- **DATV, listes de textes le plus récent en haut** : passages sous-titrés et traduits, salon de la bande large, chat de la carte de visite et du flux émis — plus besoin de faire défiler, l'historique reste dessous.
+- **DATV, réception plus sûre** : **Essayer aussi** d'autres débits de symboles (LongMynd les essaie à tour de rôle, plus longtemps pour les bas débits) ; **Relance automatique** de LongMynd s'il s'arrête seul en pleine réception, et du décodeur si l'image fige alors que le flux passe ; la marge s'appelle **Marge (D)** comme sur Ryde.
 
 ### en
 - **QO-100, narrow-band transmitting** (cockpit › **Émission** sub-tab): the **ADALM-PLUTO straight on 2.4 GHz** in SSB (the browser's microphone, or a sound card of the PC for FT8 from WSJT-X), in **CW** (text or key) — its oscillator parked below the transponder, its **frequency correction** typed or measured on its own downlink, the uplink tied to the cockpit, the AMSAT-DL band plan applied per mode. PTT held (or latched for FT8) with a 2 s watchdog and a time-out, **dummy load** (−40 dB) at every start, a gain cap, **cut at once when LEILA** is heard, "your signal vs the beacon" while transmitting.
@@ -42,16 +41,13 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Suivi › Polarisation**: the V / H / D / G buttons, the real state (including « manuel (sélecteur) » and « bloqué : émission »), and each satellite's polarisation **at AOS** (fixed, or the best known). The front panel selector has the last word, and never a switch on the antenna that transmits.
 - **Sonder H/V** (probe H/V): in AUTO, the receiving antenna tries H then V, measured by the rig's S-meter or the SDR, and keeps the best (hysteresis). Every measurement is kept: per satellite and elevation, SatMe learns the best polarisation and starts the next pass with it.
 - **Virtual ESP32**: the same rules without the box, its front panel on screen and a simulated pass, to try everything before soldering.
-- **Démonstration : `satme --demo`.** Une station fictive (indicatif QF4DMO, tous les indicatifs en série Q, attribuée à personne) avec un carnet, un journal de passages et des images SSTV inventés mais crédibles, toujours aux dates des derniers jours ; poste, rotor, SDR, avions, navires et une mire SSTV virtuels. Rien de réel n'est ouvert, rien n'émet, rien n'est envoyé sous l'indicatif fictif ; un bandeau « DÉMO — données fictives » et son bouton **Remettre à neuf** sur chaque page. Dossier à part (`~/.satme-demo`), marche hors ligne.
-- **Sur une VM ou un Raspberry Pi** : l'archive `satme-demo.tar.gz` et son `installe-demo.sh` (essai à sec avec `--sec`) installent le service `satme-demo` (port 8090, ouvert au réseau avec mot de passe).
-
-### en
 - **Demonstration: `satme --demo`.** A made-up station (callsign QF4DMO, every callsign in the Q series, nobody's) with an invented but believable log, pass journal and SSTV pictures, always dated in the last few days; virtual rig, rotator, SDR, aircraft, ships and an SSTV test card. Nothing real is opened, nothing transmits, nothing is sent under the made-up callsign; a « DÉMO — données fictives » band and its **Remettre à neuf** button on every page. A folder of its own (`~/.satme-demo`), works offline.
 - **On a VM or a Raspberry Pi**: the `satme-demo.tar.gz` archive and its `installe-demo.sh` (dry run with `--sec`) install the `satme-demo` service (port 8090, open to the network with a password).
-- **Journal, vidéo 16:9 : la légende du bas ne prend plus que 19 % de l'image** (28 % au plus avec les plus grands textes, contre près de la moitié avant) : trois colonnes — le satellite, la date et l'heure, le pointage à gauche ; AOS, RX, AOS · TCA · LOS et S-mètre au milieu ; la marque, le passage et les images reçues, la station à droite. La vue (ciel, carte, globe) gagne la place, et l'aperçu de *Fabriquer* montre exactement le même cadre.
-
-### en
 - **Journal, 16:9 video: the caption at the bottom now takes 19 % of the picture** (28 % at most with the largest texts, against nearly half before): three columns — the satellite, date and time, pointing on the left; AOS, RX, AOS · TCA · LOS and S-meter in the middle; the mark, the pass and pictures received, the station on the right. The view (sky, map, globe) gets the room, and the *Fabriquer* preview shows exactly the same frame.
+- **DATV, TV-style subtitles**: each over cut into cues of two lines at most (by sentence), each shown for a time proportional to its length, the translation under it; **nothing cut off any more** — the font fits the picture (full screen too) until everything shows, with a readable minimum.
+- **DATV, callsigns read in the picture**: they follow the station — put away on a new frequency or service and on a lost lock, and after 5 min without being read again; "seen just now" or "seen 3 min ago", older ones apart under **Vus avant**.
+- **DATV, text lists latest on top**: subtitled and translated overs, the wide-band chat, the station card's and transmitted stream's chat — no more scrolling, the history stays below.
+- **DATV, steadier reception**: **Essayer aussi** other symbol rates (LongMynd tries them in turn, longer for low rates); **automatic restart** of LongMynd when it stops by itself mid-reception, and of the decoder when the picture freezes while the stream flows; the margin is called **Marge (D)** as on Ryde.
 
 ## 2026.10.31
 
