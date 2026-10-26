@@ -11,22 +11,64 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 <a href="docs/API-v1.fr.md">API</a>
 </p>
 
-### Une station, trois SatMe
+## Quoi de neuf
+
+SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point est détaillé dans le [guide intégré](docs/station-pc.fr.md) (**F1** dans SatMe-PC) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
+
+**Orbites, et son tableau plein écran.** La Terre en 3D avec tes satellites sur leur orbite, leurs empreintes et près de 250 monuments. **⛶ Tableau** en fait un écran mural, avec six thèmes : *Dessin animé* (le globe tourne seul), *Pédagogique* (des fiches qui expliquent, « Le savais-tu ? »), et **Vitrine** pour le stand d'un club — de grandes cartes qui défilent : « AO-91 passe au-dessus de nous dans 30 min — venez écouter ! », un satellite et son histoire, ton club et son QR code.
+
+<p align="center">
+<img src="docs/images/pc-orbites-tableau.webp" width="49%" alt="Orbites en plein écran, thème Dessin animé : le globe dessiné avec la station QF4DMO, l'ISS et son orbite, les panneaux de l'heure, du Soleil et de la Lune, des prochains passages et de la position de l'ISS">
+<img src="docs/images/pc-orbites-vitrine-fiche.webp" width="49%" alt="Thème Vitrine pour le stand d'un club : une grande carte avec une vraie photo de l'ISS (NASA, domaine public), son pays, son lancement et sa mission, et une phrase sur les contacts ARISS des écoles">
+</p>
+<p align="center">
+<img src="docs/images/pc-orbites-pedagogique.webp" width="49%" alt="Thème Pédagogique : le globe avec la trace de l'ISS, une fiche qui explique pourquoi la trace se décale vers l'ouest à chaque tour, et un « Le savais-tu ? » sur le Doppler à 435 MHz">
+<img src="docs/images/pc-orbites-vitrine-passage.webp" width="49%" alt="Thème Vitrine : une carte annonce qu'AO-91 passe au-dessus de la station dans 30 minutes, jusqu'à 54 degrés, venez écouter">
+</p>
+
+**Des fiches de satellites avec de vraies photos.** Pays, lancement, mission, orbite, une anecdote, les fréquences radioamateur et le résumé Wikipédia. La photo est une photo libre de Wikimedia Commons (auteur et licence affichés), demandée une fois puis gardée ; sans Internet, un dessin de SatMe.
+
+**Le Journal devient un petit éditeur vidéo.** Un seul éditeur pour un passage ou pour une session de plusieurs. Choisis le cadre **écran 16:9** ou **téléphone 9:16**, place l'image SSTV et les incrustations à la souris, commence quelques minutes avant l'AOS pour voir arriver le satellite. Exporte une vidéo MP4 avec le son des contacts, un GIF, une image, le WAV ou un ZIP. En 16:9, la légende tient maintenant dans une bande de trois colonnes (environ 19 % de l'image) : la vue gagne la place.
+
+<p align="center">
+<img src="docs/images/pc-journal-editeur-169.webp" width="49%" alt="L'éditeur du Journal sur une session de quatre passages de l'ISS : le globe dans le cadre 16:9, une image SSTV de la série qui se pose près de la station, la frise des passages, l'onglet Fabriquer avec les formats 16:9 et 9:16">
+<img src="docs/images/pc-video-legende-169.webp" width="49%" alt="Une image d'une vidéo 16:9 exportée : l'ISS au-dessus de l'Europe sur le globe dessiné, son empreinte, deux vignettes SSTV, et la bande de légende compacte avec le satellite, AOS + 3:58, AOS, TCA et LOS, et la station">
+</p>
+
+**La polarisation d'antenne depuis le Suivi.** Un boîtier ESP32 en USB commande un commutateur WiMo : verticale, horizontale, circulaire droite ou gauche. SatMe met la polarisation de chaque satellite à l'AOS, peut sonder H contre V au S-mètre et apprend, passage après passage, laquelle marche le mieux. Jamais de commutation sur l'antenne qui émet, et le sélecteur en façade a toujours le dernier mot. Un ESP32 virtuel permet de tout essayer avant de souder.
+
+**QO-100 bande étroite, en émission.** L'ADALM-PLUTO en direct sur 2,4 GHz (BLU au micro du navigateur, CW, FT8 par une carte son) ou l'IC-9700 avec un convertisseur. Le plan de bande AMSAT-DL par mode, un essai sur charge à chaque démarrage, un chien de garde de 2 s, la coupure dès que LEILA est entendue, et ton signal comparé à la balise. *Pas encore essayé sur l'air avec le vrai matériel.*
+
+<p align="center">
+<img src="docs/images/pc-polarisation-suivi.webp" width="49%" alt="Onglet Suivi sur SO-50 : le panneau Polarisation en AUTO, l'UHF sur H après un sondage (H 28,5 dB, V 24,4 dB), le profil à l'AOS, le tableau de ce que les sondages ont appris, et la façade de l'ESP32 virtuel">
+<img src="docs/images/pc-qo100-emission.webp" width="49%" alt="Cockpit QO-100 sur le générateur d'essai du SDR : les signaux nommés sur la cascade, le plan de bande, et le panneau Émission Pluto bridé à -40 dB sur charge">
+</p>
+
+**Ta station, ta disposition.** *Réglages › Modules* ne garde que ce qui te sert (QO-100, DATV, SSTV, SDR, APRS, avions, navires…), ou prends un profil. Dans le Suivi, les panneaux se replient, les colonnes s'élargissent par une poignée, et **⊞ Disposition** s'en souvient.
+
+**Une démo à installer partout.** `satme --demo` lance une station fictive (indicatif QF4DMO, tous les indicatifs en série Q, à personne) avec un carnet, un journal et des images SSTV crédibles, toujours datés des derniers jours, et un poste, un rotor, un SDR, des avions et des navires virtuels. Rien de réel n'est ouvert, rien n'émet. Pour le stand d'un club ou pour faire le tour avant d'installer : l'archive `satme-demo.tar.gz` (`./gradlew :pc:demoTar`) et son `installe-demo.sh` la mettent en service sur une VM Linux ou un Raspberry Pi. → [Démonstration](docs/station-pc.fr.md#démonstration--données-fictives-matériel-virtuel) · [les notes de la démo](pc/demo/README.md)
+
+<p align="center">
+<img src="docs/images/pc-modules.webp" width="49%" alt="Réglages › Modules : les profils Satellites FM/SSB, SSTV ARISS, Parabole QO-100 / DATV, Météo et non-sat, Tout, et une case par module">
+<img src="docs/images/pc-demo.webp" width="49%" alt="SatMe-PC en démonstration : l'onglet Suivi avec le globe, la station QF4DMO, l'IC-9700 et le rotor simulés, et le bandeau orange DÉMO en bas à gauche">
+</p>
+
+## Une station, trois SatMe
 
 <p align="center"><img src="docs/images/satme-ensemble-fr.svg" width="100%" alt="Les trois SatMe : SatMe sur le téléphone, SatMe-PC sur un PC ou un Raspberry Pi, SatMe-Node au pied du mât ; le téléphone rejoint le PC par un QR code ; le même moteur partout"></p>
 
 **SatMe** dans la poche pour trafiquer partout, **SatMe-PC** pour toute la station dans un navigateur, **SatMe-Node** sur un Raspberry Pi au pied du mât. Le même moteur partout : ce qui se fait sur le PC se fait aussi sur le téléphone. Gratuit, sans compte, sans publicité, logiciel libre.
 
 **L'essayer en deux minutes, sans rien brancher** : poste et rotor simulés, les vrais passages du moment.
-[▶ Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo) · PC Linux ou Raspberry Pi : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [Windows, tout en un (.msi)](docs/installer-satme-pc-windows.fr.md)
+[▶ Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo) · PC Linux ou Raspberry Pi : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [Windows, tout en un (.msi)](docs/installer-satme-pc-windows.fr.md) · ou la [station de démonstration](#quoi-de-neuf) sur une VM ou un Raspberry Pi
 
 - 🛰 **Ne plus rater un passage** — le mode automatique suit chaque passage des satellites choisis : le poste et le rotor se mettent en place 5 min avant l'AOS, le son est enregistré, le passage arrive dans le journal.
 - 🎯 **Le Doppler fait tout seul** — IC-9700, IC-9100, IC-910H, TS-2000, FT-817 / IC-705, TH-D72 ; on tourne la molette, le poste suit le transpondeur.
 - 🎞 **Chaque passage rejoué** — sur le ciel ou la carte, avec son son, le S-mètre, les contacts et les images SSTV à leur place ; fait en vidéo ou en GIF à partager.
 - 📲 **Du téléphone au PC en un QR code** — les passages faits au portable arrivent sur le PC avec leurs contacts, images et sons.
-- 📡 **Et tout le reste** — SSTV, METEOR, APRS (et KISS), FT8, radiosondes, un cockpit QO-100, la DATV en réception et en émission, phonie → texte, carnet avec QRZ et Wavelog / Cloudlog.
+- 📡 **Et tout le reste** — SSTV, METEOR, APRS (et KISS), FT8, radiosondes, un cockpit QO-100 qui reçoit et émet, la DATV, la polarisation d'antenne, phonie → texte, carnet avec QRZ et Wavelog / Cloudlog.
 
-### Un vrai passage, tel que SatMe l'a gardé
+## Un vrai passage, tel que SatMe l'a gardé
 
 L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'elles arrivaient, chacune à sa place sur la trajectoire — puis RS-44 rejoué avec son S-mètre et la fréquence où était le poste, et l'image que SatMe fabrique pour partager le moment.
 
@@ -37,9 +79,9 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 <img src="docs/images/fr-journal-export-iss.webp" width="24%" alt="L'image que SatMe fabrique pour partager le moment">
 </p>
 
-### SatMe-PC — toute la station dans un navigateur
+## SatMe-PC — toute la station dans un navigateur
 
-SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100**, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, en douze chapitres)
+SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, polarisation d'antenne, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100** (bande étroite en réception et en émission), **Orbites** et son tableau plein écran, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, chapitre par chapitre)
 
 **Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-PC sous Windows](docs/installer-satme-pc-windows.fr.md) (tout en un) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -56,7 +98,7 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
 </p>
 
-### Du téléphone au PC : un QR code
+## Du téléphone au PC : un QR code
 
 <p align="center"><img src="docs/images/satme-qr-fr.svg" width="100%" alt="Du téléphone au PC en trois gestes : le PC affiche un QR code, le téléphone le scanne, les passages cochés arrivent avec leurs contacts, images SSTV et sons"></p>
 
@@ -107,21 +149,21 @@ Dans les images et vidéos du journal, chaque image SSTV brute, corrigée ou fus
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Nouveau sur SatMe-PC (octobre 2026)
+## SatMe-PC, fonction par fonction
 
 SatMe-PC est passé d'une station satellites à toute une station dans un navigateur : QO-100 et DATV avec son propre modem DVB-S2, un récepteur SDR tout confort, la télémesure, les avions et les navires, la station dessinée telle qu'elle est câblée. Tout ce qui suit est détaillé, onglet par onglet et bouton par bouton, dans le [guide de SatMe-PC du wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) ; le [guide intégré](docs/station-pc.fr.md) s'ouvre aussi dans SatMe-PC (**F1**).
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC : le rail des espaces de travail, le bandeau, la barre d'état, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
 
-**🚀 Démarrage** *(en cours)* — une **configuration rapide** au premier lancement (indicatif, locator, heure, réseau), **Quoi de neuf** après chaque mise à jour, un badge discret quand une **nouvelle version** est publiée (rien n'est installé tout seul), `--reseau`, `--port` et `--dossier` réglés dans *Réglages › Démarrage*, et le **déploiement** des réglages sur un autre PC, sans les mots de passe. → [détails](docs/station-pc.fr.md#démarrage-mises-à-jour-et-déploiement)
+**🚀 Démarrage** — une **configuration rapide** au premier lancement (indicatif, locator, heure, réseau), **Quoi de neuf** après chaque mise à jour, un badge discret quand une **nouvelle version** est publiée (rien n'est installé tout seul), `--reseau`, `--port` et `--dossier` réglés dans *Réglages › Démarrage*, et le **déploiement** des réglages sur un autre PC, sans les mots de passe. → [détails](docs/station-pc.fr.md#démarrage-mises-à-jour-et-déploiement)
 
-**🔧 SatMe-Node depuis la page** *(en cours, après la 20.83)* — Station › **SatMe-Node** : la santé du Pi, le rôle de chaque carte (réception DATV, récepteur SDR, émetteur), les services, la version et le journal ; **redémarrer ou éteindre le Pi** après une confirmation. L'alimentation LNB du node est gardée quand on change de station, depuis le PC comme depuis le téléphone ; SatMe-PC redémarré retrouve seul un node qui reçoit ; le téléphone liste les stations de la bande large à recevoir d'un toucher, l'image en plein écran. [Installer SatMe-Node](docs/installer-satme-node.fr.md)
+**🔧 SatMe-Node depuis la page** — Station › **SatMe-Node** : la santé du Pi, le rôle de chaque carte (réception DATV, récepteur SDR, émetteur), les services, la version et le journal ; **redémarrer ou éteindre le Pi** après une confirmation. L'alimentation LNB du node est gardée quand on change de station, depuis le PC comme depuis le téléphone ; SatMe-PC redémarré retrouve seul un node qui reçoit ; le téléphone liste les stations de la bande large à recevoir d'un toucher, l'image en plein écran. [Installer SatMe-Node](docs/installer-satme-node.fr.md)
 
-**📺 Émis | Reçu** *(en cours)* — pendant une émission DATV, l'image émise à côté de l'image reçue de QO-100, chacune agrandie d'un clic.
+**📺 Émis | Reçu** — pendant une émission DATV, l'image émise à côté de l'image reçue de QO-100, chacune agrandie d'un clic.
 
-**🎙 L'IC-9700 en émission** *(en cours)* — PTT tenu depuis la page (un seul client, 2 s de garde, minuterie), le micro du navigateur vers le poste par sa carte son USB ou par le réseau, puissance plafonnée ; HTTPS pour la page ouverte d'une autre machine.
+**🎙 L'IC-9700 en émission** — PTT tenu depuis la page (un seul client, 2 s de garde, minuterie), le micro du navigateur vers le poste par sa carte son USB ou par le réseau, puissance plafonnée ; HTTPS pour la page ouverte d'une autre machine.
 
-**🖼 La planche SSTV** *(en cours)* — moins d'images que le modèle, disposées le plus grand possible, une copie de chaque diapo (la mieux notée, les images rangées par diapo) ; une série ARISS suivie diapo par diapo : celles qui manquent, et les passages où les attendre ; un fond (intégré, images NASA ou la vôtre) et jusqu'à trois écussons de mission, leur contour uni enlevé. Un modèle s'exporte en un fichier `.satme-planche` et s'importe sur un autre téléphone ou PC — sans vos images, l'indicatif et le nom remplis par la station qui l'importe. La planche a son **événement** (campagne, activité annoncée ou série de la galerie), se **remplit par diapo** strictement à sa place (diapo 5 manquante : case 5 vide), choisit **case par case** la version montrée (Auto, reçue, corrigée, fusion), et donne le **rapport de l'événement** — planche, diapos, passages et leur ciel, horaire — en page web ou en **PDF A4**. Une **planche stylée** comme l'affiche d'une série ARISS : **+ Affiche ISS** toute prête, **titres stylés** (chrome, néon, or, le numéro de la série tiré de l'événement), une police (sept polices libres livrées) et un effet pour chaque texte, des cadres néon ou arrondis, sept fonds de plus.
+**🖼 La planche SSTV** — moins d'images que le modèle, disposées le plus grand possible, une copie de chaque diapo (la mieux notée, les images rangées par diapo) ; une série ARISS suivie diapo par diapo : celles qui manquent, et les passages où les attendre ; un fond (intégré, images NASA ou la vôtre) et jusqu'à trois écussons de mission, leur contour uni enlevé. Un modèle s'exporte en un fichier `.satme-planche` et s'importe sur un autre téléphone ou PC — sans vos images, l'indicatif et le nom remplis par la station qui l'importe. La planche a son **événement** (campagne, activité annoncée ou série de la galerie), se **remplit par diapo** strictement à sa place (diapo 5 manquante : case 5 vide), choisit **case par case** la version montrée (Auto, reçue, corrigée, fusion), et donne le **rapport de l'événement** — planche, diapos, passages et leur ciel, horaire — en page web ou en **PDF A4**. Une **planche stylée** comme l'affiche d'une série ARISS : **+ Affiche ISS** toute prête, **titres stylés** (chrome, néon, or, le numéro de la série tiré de l'événement), une police (sept polices libres livrées) et un effet pour chaque texte, des cadres néon ou arrondis, sept fonds de plus.
 
 <p align="center">
 <img src="docs/images/pc-planche-decor.webp" width="58%" alt="La planche SSTV dans SatMe-PC, onglet Décor : six images de l'ISS ajustées en grand sur un modèle de douze cases, le fond NASA « Lueur de la Terre », l'écusson de l'Expédition 75 placé à gauche, son contour enlevé">
@@ -148,7 +190,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 <img src="docs/images/pc-rotor-plan.webp" width="34%" alt="Le plan du rotor sur le ciel de Suivi : un passage par la butée, le déroulement prévu en rouge pointillé">
 </p>
 
-**🧭 Une nouvelle page** — six espaces de travail dans un rail (Ciel, QO-100, DATV, Modes, Carnet, Station ; touches 1 à 6), un bandeau (ce qui est suivi, le récepteur actif, le prochain passage, un voyant **TX** rouge qui ne fait qu'arrêter), une barre d'état, la palette **Ctrl+K** (un onglet, un satellite, un indicatif, une fréquence tapée), des « ? » sur chaque carte, le **manuel intégré (F1)** avec recherche, des raccourcis clavier. La puce **« Son »** du bandeau : ce qu'entendent les décodeurs, la carte son du poste reconnue par son nom, **Préparer le passage** et enregistrer d'une touche. Les onglets hors satellites (avions, navires, sondes) seulement cochés.
+**🧭 La page** — six espaces de travail dans un rail (Ciel, QO-100, DATV, Modes, Carnet, Station ; touches 1 à 6), un bandeau (ce qui est suivi, le récepteur actif, le prochain passage, un voyant **TX** rouge qui ne fait qu'arrêter), une barre d'état, la palette **Ctrl+K** (un onglet, un satellite, un indicatif, une fréquence tapée), des « ? » sur chaque carte, le **manuel intégré (F1)** avec recherche, des raccourcis clavier. La puce **« Son »** du bandeau : ce qu'entendent les décodeurs, la carte son du poste reconnue par son nom, **Préparer le passage** et enregistrer d'une touche. **Modules** : ne coche que ce qui te sert, le reste quitte le menu.
 
 **🔌 Montage : la station telle qu'elle est câblée** — la station dessinée de l'antenne au PC, allumée en direct (cyan reçoit, rouge émet, les fréquences sur les câbles) ; modifiée par glisser-déposer depuis un catalogue (paraboles, LNB, convertisseurs et amplis DX Patrol, GPSDO dont Leo Bodnar, bias-T, bloqueur de continu…), photos détourées toutes seules, **ce qui manque** vérifié avec les dangers signalés (une alimentation LNB qui atteindrait une carte SDR) ; quelle fonction de SatMe tient quelle carte, les conflits et comment les lever, des profils de réception appliqués dans un ordre sûr. **Plusieurs plans** de la même station, le plan de ce qui tourne montré tout seul, la chaîne détectée gardée comme plan.
 
@@ -185,16 +227,17 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 <img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un essai en intérieur sur 23 cm, l'ADALM-PLUTO émet et le bladeRF 2.0 reçoit avec le démodulateur DVB-S2 de SatMe">
 </p>
 
-## Nouveautés de la 20.83
+## L'application du téléphone, version par version
+
+### 20.83
 
 - **CAT** : le poste se cale aussitôt sur le nouveau satellite (linéaire ou FM).
 - **Rotor** : le passage planifié avant l'AOS, retournement à 180° plutôt que le grand tour.
 - **Carnet** : le satellite noté d'après le poste ; satellite, date et heure modifiables ; indicatifs composés (EA3/M5JFS) et drapeaux.
 - **QO-100** : le calage sur la balise suit un LNB qui dérive ; FT8 tolère la dérive.
-- **SatMe-PC** : nombreuses nouveautés (Montage, IC-9700 par le réseau, télémesure…), voir plus haut.
 - **SSTV** : le décodeur en direct ne se piège plus sur une durée de ligne fausse après un passage bruité ou un saut du son, et chaque image est **re-décodée à la fin** depuis son propre son, en arrière-plan (SSTV › Réglages › Décodage sur le PC, Options SSTV sur le téléphone, cochée d'origine), sa version corrigée gardée si elle est mieux notée — sur 42 images ISS, note moyenne 82,8 → 90,2.
 
-### Et dans la 20.82
+### 20.82
 
 - **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
 - **Icom IC-910H et IC-9100** en mode satellite, à côté de l'IC-9700 : leur adresse CI-V et leur vitesse (19 200 bauds), et la commande de mode satellite propre à l'IC-910H. Éprouvés au banc, pas encore sur les vrais postes.
@@ -203,17 +246,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>
 
-### Et dans la 20.81
-
-- **Rotor : un passage par la butée est planifié** — les antennes passent de l'autre côté du zénith, ou basculent par-dessus avec 180° d'élévation, au lieu de repartir à la butée ; un tour seulement s'il vaut la peine, jamais pendant une image SSTV attendue ni en émission. Un cadran avec la butée, la zone morte, le câble et le chemin prévu ; le trajet aussi dessiné en blanc sur la boussole du satellite.
-- **Kenwood TS-2000** en mode SAT : Doppler sur les deux VFO, mode de chaque côté, CTCSS, S-mètre.
-
-### Et dans la 20.80
-
-- **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
-- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, un fond (étoiles, dégradés, images NASA, ou la vôtre ajustée à la planche) et jusqu'à trois écussons de mission placés et redimensionnés à la souris, leur contour uni enlevé ; planche téléchargée en pleine résolution ; le modèle exporté en fichier `.satme-planche`, celui d'un autre importé (bouton ou déposé sur la page).
-- **Une version choisie case par case** sur la planche (page du PC, page du téléphone et écran) : un clic sur une case — *Auto (la mieux notée)*, *Reçue*, *Corrigée* ou *Fusion*, celles qui existent avec leur note et une vignette, *Créer la fusion* s'il n'y en a pas encore, et la copie reçue dans la case ; *Remplir par diapo* garde ces choix (sauf si *Tout réinitialiser* est coché), le fichier modèle garde la version de chaque case mais jamais une image, le pack ARISS garde les originales.
-- Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
+Les versions précédentes : [les nouveautés du wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes).
 
 ## Fonctions
 
@@ -250,7 +283,8 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 - Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.
 - SSTV décodée en direct pendant l'enregistrement (Robot, Martin, Scottie, PD), ou après coup depuis un enregistrement ou un WAV de la carte SD du poste. SSTV automatique : l'ISS ou un satellite favori et son transpondeur choisis, chaque passage enregistré et décodé tout seul jusqu'au passage choisi, écran éteint compris. Une mire SSTV à émettre, avec des évanouissements simulés pour éprouver un décodeur.
 - Chaque passage enregistré tout seul quand le poste est piloté en CAT (option), de 5 s avant l'AOS à 5 s après le LOS, l'entrée audio vérifiée à l'armement.
-- Chaque image SSTV garde son propre son : l'écouter, la re-décoder seule, la partager ou l'enregistrer ; une vidéo de l'image qui arrive avec son son, légère ou HD ; images nettoyées des lignes perdues dans le bruit, exportées avec ou sans bandeau ; le re-décodage garde l'heure et le lieu de réception. Une planche SSTV place les images d'une série, dans l'ordre choisi, sur un modèle importé (ARISS…) ou un fond SatMe, avec indicatif, logo, nom @ locator et dates ; elle peut porter moins d'images que le modèle, choisies une à une ou par nombre (1, 2, 4, 6…), la disposition ajustée pour qu'elles soient les plus grandes ; le remplissage ne prend qu'une copie de chaque diapo, la mieux notée, et **par diapo** met la diapo n dans la case n (case vide pour une diapo manquante). Une planche se **renomme** et appartient à un **événement** (la campagne du pilote auto, l'activité ARISS, ou la série vue dans la galerie), choisi d'après ses images : le choix des images montre d'abord celles de l'événement, une par diapo, avec leur note et leur numéro — lu, donné à la main (✎) ou estimé (≈) ; **Relancer l'analyse** refait le tri sans perdre ce qui a été donné à la main. Le **rapport de l'événement**, une page HTML ou, au choix, un PDF A4 fait par SatMe lui-même (sans navigateur ; une publication sur le site f4ioz.fr est prévue) : la planche, les diapos reçues et manquantes, chaque passage (heure, élévation, azimuts, diapos prévues et reçues, bilan), son ciel avec les images sur la trace, et si on veut la chaîne de réception — dessinée comme Station › Montage la dessine (le plan allumé pour l'événement : dessins du matériel ou tes photos, câbles en couleur, fonctions de SatMe) ou en simples cases ; le logo SatMe en tête. La galerie se range **par diapo** : les copies d'une même diapo ensemble (même bruitées, coupées ou décalées), chacune notée de 0 à 100 (bruit, lignes abîmées, image incomplète, glissements), la meilleure d'abord ; une **version corrigée** à côté de l'image reçue, jamais à sa place : re-décodée de son son toute d'un coup (lignes recalées sur toutes les synchros, niveaux recalés), ses taches retirées, ou les copies d'une diapo **fusionnées**, comparées « Brute | Corrigée », la planche prenant la version la mieux notée (sans marque sauf si on le demande) (série 34 : note moyenne 91,6 → 95,8, des images ratées en direct 24 → 91) ; le numéro « SLIDE n/12 » lu au bas des diapos ARISS ou donné à la main, et pour la série en cours un **tableau des passages** qui dit quelles diapos chaque passage devrait envoyer et quand écouter pour celles qui manquent (une estimation).
+- Chaque image SSTV garde son propre son : l'écouter, la re-décoder, la partager, en faire une vidéo qui la montre arriver. La galerie range les images **par diapo**, note chacune de 0 à 100 et garde une **version corrigée** à côté de la reçue (re-décodée depuis son son, taches retirées, copies fusionnées — série 34 : note moyenne 91,6 → 95,8). Pour une série ARISS, un **tableau des passages** dit quand écouter pour les diapos manquantes.
+- La **planche SSTV** pose une série sur un modèle (ARISS ou un fond SatMe) avec indicatif, logo et dates, la diapo n dans la case n ; elle appartient à un **événement**, dont le **rapport** (planche, diapos, passages et leur ciel, chaîne de réception) sort en page HTML ou en PDF A4.
 - APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS, et les stations décodées par un Yaesu FT3D. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés. On travaille sur l'ISS (145,825 MHz, Doppler suivi) ou sur le réseau terrestre (144,800 MHz, WIDE1-1,WIDE2-1) — ou les deux, l'ISS pendant ses passages et le terrestre le reste du temps. Un bouton « Écouter » règle l'IC-9700 par le CAT ; un Kenwood est passé en KISS et réglé par SatMe lui-même. La position émise peut être approximative (décalage fixe de moins de 500 m).
 - L'APRS pour le plaisir : quand l'ISS répète ta propre trame, SatMe le fête (bannière, vibration, notification) et dit qui d'autre était sur le passage. Une carte sur fond OpenStreetMap (zoom et déplacement au doigt) avec les stations entendues, la trace de l'ISS, et chaque station reliée à l'endroit où était l'ISS quand on l'a entendue. Les messages en conversations, accusés dans les deux sens, avec les boutons APRS Thursday et les participants du jour. La chasse à une station : distance, cap et flèche qui suit le téléphone. Le bilan du jour en image à partager, les contacts APRS par l'ISS directement au carnet, des records et 14 badges. Les stations météo décodées, et une balise au passage de l'ISS (désactivée par défaut).
 - Images météo METEOR-M2-3 / M2-4 (LRPT, bêta) depuis une clé RTL-SDR : couleur et infrarouge, en direct, toutes seules à chaque passage, ou depuis un enregistrement I/Q brut.
@@ -271,14 +305,16 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 |---|---|
 | Postes | Icom IC-9700 (SatMe-PC : USB ou le réseau du poste) · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
-| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) · la FI de l'IC-9700 · ADS-B et AIS sur une RTL-SDR |
+| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV ; le Pluto aussi sur la bande étroite de QO-100 (BLU, CW, FT8)² · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) · la FI de l'IC-9700 · ADS-B et AIS sur une RTL-SDR |
 | DATV | MiniTiouner (par LongMynd, sur le PC ou un SatMe-Node) · ADALM-PLUTO ou bladeRF 2.0 avec le démodulateur DVB-S2 de SatMe |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
+| Polarisation | Commutateurs WiMo (UHF 18082 / 18083, VHF 18080 / 18081) ou un relais H/V, par un boîtier ESP32 en USB (SatMe-PC ; [firmware](materiel/esp32-polarisation/README.fr.md))² |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
 | Divers | Cartes son USB · molette/clavier USB (touches apprises par appui ; aussi SatMe-PC, Linux) |
 
 ¹ Écrit et testé au banc, pas encore essayé sur le matériel réel.
+² Nouveau : écrit et essayé sur simulateurs (ESP32 virtuel, essai sur charge), pas encore essayé sur l'air avec le vrai matériel.
 
 ### Câblage
 
@@ -289,8 +325,10 @@ Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout
 ## Documentation
 
 - **[Wiki SatMe](https://github.com/f4ioz/SatMe/wiki/Accueil)** : le guide complet, pas à pas, avec captures — installation, passages, CAT, enregistrement, SSTV, APRS, carnet, FAQ
-- **[Guide de SatMe-PC (wiki)](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr)** : chaque fonction de SatMe-PC et où cliquer, en douze chapitres, avec captures — aussi en manuel PDF
+- **[Guide de SatMe-PC (wiki)](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr)** : chaque fonction de SatMe-PC et où cliquer, chapitre par chapitre, avec captures — aussi en manuel PDF
 - [Guide intégré de SatMe-PC](docs/station-pc.fr.md) : le texte du manuel que SatMe-PC ouvre sur **F1**
+- [La démonstration](pc/demo/README.md) : une station fictive à installer sur une VM ou un Raspberry Pi
+- [Boîtier de polarisation](materiel/esp32-polarisation/README.fr.md) : le firmware de l'ESP32, son câblage et son dialogue USB
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients
 - [Serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) : relais d'éléments orbitaux (OMM/GP) pour SatMe, à installer sur un Raspberry Pi, un serveur Linux ou Proxmox
 - [Composants tiers](THIRD-PARTY.fr.md)
