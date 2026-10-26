@@ -312,6 +312,24 @@ class SessionRenduPcTest {
     }
 
     @Test
+    fun avec_une_longue_marge_on_voit_venir_le_satellite_de_loin() {
+        // One pass, 5 minutes before: the margin starts from afar (« zoom hors passage »), the AOS near.
+        val un = SessionRenduPc.Session(scenes().take(1), "passages", SessionRenduPc.Vitesses(passage = 20.0), avant = 300_000L, zHors = 0.8, zPassage = 2.0)
+        val e = un.scenes[0].e
+        val plan = SessionRenduPc.plan(un)
+        val z = plan.map { SessionRenduPc.zoom(un, it) }
+        assertEquals(0.8, z.first(), 1e-6)
+        assertTrue(plan.take(SessionRenduPc.FPS * 3).all { Math.abs(SessionRenduPc.zoom(un, it) - 0.8) < 1e-6 })
+        assertEquals(2.0, z[plan.indexOfFirst { it.t >= e.debutMs }], 1e-6)
+        assertTrue(plan.filter { it.t in e.debutMs..e.finMs }.all { Math.abs(SessionRenduPc.zoom(un, it) - 2.0) < 1e-6 })
+        // Coming nearer before the AOS, step by step.
+        val l = Math.log(2.0 / 0.8)
+        for (k in 1 until z.size) assertTrue("$k", Math.abs(Math.log(z[k] / z[k - 1])) <= l / 6)
+        ImageIO.write(SessionRenduPc.image(un, plan.first(), 1280, 720), "png", File(echantillons, "marge-5min-loin.png"))
+        ImageIO.write(SessionRenduPc.image(un, plan.first { it.t >= e.debutMs }, 1280, 720), "png", File(echantillons, "marge-5min-aos.png"))
+    }
+
+    @Test
     fun un_passage_seul_en_video_et_en_gif() {
         val un = SessionRenduPc.Session(scenes().take(1), "passages", SessionRenduPc.Vitesses(passage = 60.0, image = 20.0), avant = 180_000L, apres = 60_000L, titre = null)
         val gif = SessionRenduPc.gif(un, File(echantillons, "passage-seul.gif")) {}!!
@@ -345,9 +363,10 @@ class SessionRenduPcTest {
     @Test
     fun deux_zooms_et_le_passage_de_l_un_a_l_autre() {
         val s = SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(5000.0, 20.0, 3.0), zHors = 0.8, zPassage = 2.0)
-        val f = s.fenetres
-        // In a pass and its margins: the pass's zoom; far between two: the other.
+        val f = s.passages
+        // In a pass (AOS to LOS): the pass's zoom; in its margin, on the way; far between two: the other.
         assertEquals(1.0, SessionRenduPc.partPassage(f, f[1].first + 1000, 20.0), 1e-9)
+        assertTrue(SessionRenduPc.partPassage(f, s.fenetres[1].first, 20.0) in 0.3..0.8)
         assertEquals(0.0, SessionRenduPc.partPassage(f, (f[0].last + f[1].first) / 2, 20.0), 1e-9)
         val plan = SessionRenduPc.plan(s)
         val z = plan.map { SessionRenduPc.zoom(s, it) }
@@ -356,13 +375,16 @@ class SessionRenduPcTest {
         // Progressive: never more than a sixth of the way from one frame to the next (over 1.5 s, 12 frames, eased).
         val l = Math.log(2.0 / 0.8)
         for (k in 1 until z.size) assertTrue("$k ${z[k - 1]} → ${z[k]}", Math.abs(Math.log(z[k] / z[k - 1])) <= l / 6)
-        val avant = plan.indexOfFirst { it is SessionRenduPc.Trame.Passe && it.i == 1 }
+        val avant = plan.indexOfFirst { it is SessionRenduPc.Trame.Passe && it.i == 1 && it.t >= s.scenes[1].e.debutMs }
         assertTrue("${z[avant - SessionRenduPc.FPS]}", z[avant] > 1.99 && z[avant - SessionRenduPc.FPS] in 0.85..1.99)
-        // Passes in a row: out half way through the turn, back in at its end.
+        // Passes in a row: out half way through the turn, back at its ends to the windows' zoom (one turn step from it).
         val p = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(), zHors = 0.8, zPassage = 2.0, transition = 2.0)
-        val tours = SessionRenduPc.plan(p).filterIsInstance<SessionRenduPc.Trame.Tourne>().filter { it.i == 1 }
+        val pp = SessionRenduPc.plan(p)
+        val tours = pp.filterIsInstance<SessionRenduPc.Trame.Tourne>().filter { it.i == 1 }
         assertTrue(SessionRenduPc.zoom(p, tours[tours.size / 2]) < 0.85)
-        assertTrue(SessionRenduPc.zoom(p, tours.first()) > 1.6 && SessionRenduPc.zoom(p, tours.last()) > 1.6)
+        val finPrec = SessionRenduPc.zoom(p, pp[pp.indexOf(tours.first()) - 1]); val debutSuiv = SessionRenduPc.zoom(p, pp[pp.indexOf(tours.last()) + 1])
+        assertTrue("$finPrec ${SessionRenduPc.zoom(p, tours.first())}", Math.abs(Math.log(SessionRenduPc.zoom(p, tours.first()) / finPrec)) < 0.2)
+        assertTrue("$debutSuiv ${SessionRenduPc.zoom(p, tours.last())}", Math.abs(Math.log(SessionRenduPc.zoom(p, tours.last()) / debutSuiv)) < 0.2)
         // The frame shows it: the globe larger in the pass than between two (less of the sky round it).
         fun bleu(b: BufferedImage): Int { var n = 0; for (y in 0 until b.height step 4) for (x in 0 until b.width step 4) { val c = Color(b.getRGB(x, y)); if (c.red < 45 && c.green < 70 && c.blue in 40..140) n++ }; return n }
         val dedans = SessionRenduPc.image(s, plan[avant + 10], 640, 360)

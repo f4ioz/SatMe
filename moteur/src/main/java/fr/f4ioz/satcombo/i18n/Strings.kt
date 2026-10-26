@@ -2484,7 +2484,6 @@ val FR: Map<String, String> = mapOf(
     "pj_marge_apres" to "Finir après le LOS",
     "pj_vitesses" to "Vitesses",
     "pj_vitesses_aide" to "Un son enregistré se joue en temps réel ; ailleurs le temps passe à ces vitesses (× la vitesse de lecture).",
-    "pj_zoom" to "Zoom",
     "pj_accel_titre" to "Lecture accélérée de ce passage",
     "pj_s_passages" to "Passages",
     "pj_s_ouvrir" to "Ouvrir seul",

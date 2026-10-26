@@ -2460,7 +2460,6 @@ val EN: Map<String, String> = mapOf(
     "pj_marge_apres" to "End after the LOS",
     "pj_vitesses" to "Speeds",
     "pj_vitesses_aide" to "A recorded sound plays in real time; elsewhere the time runs at these speeds (× the playback speed).",
-    "pj_zoom" to "Zoom",
     "pj_accel_titre" to "Accelerated playback of this pass",
     "pj_s_passages" to "Passes",
     "pj_s_ouvrir" to "Open alone",

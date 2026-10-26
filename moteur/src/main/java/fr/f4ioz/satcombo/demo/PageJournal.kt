@@ -51,7 +51,7 @@ object PageJournal {
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
         "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
-        "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_zoom", "pj_accel_titre",
+        "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_session", "pj_exp_passage", "pj_vue_globe_n")
 
     private fun js(s: String): String = buildString {
@@ -605,7 +605,7 @@ function montreVue(v) {
     // pass's zoom (the session's, as the file on the globe shows it), the wheel changing it.
     Orbites.rejeu(g('globe'), { id: P.id, sat: P.sat, sol: P.sol, qth: P.qth, indicatif: P.indicatif, locator: P.loc, marques: P.marques, tle: P.tle,
       image: m => url('/image', { f: m.f, id: P.id, n: tourVersion }), horloge: () => t, nomStation: () => !!O.locator,
-      hauteur: () => 3.5 / O.zPassage, molette: sg => { O.zPassage = Math.max(.5, Math.min(3, Math.round(O.zPassage * (1 - sg * .08) * 20) / 20)); garde(); montreZooms(); } })
+      hauteur: () => P ? 3.5 / zoomDe(partPassage(t, [[P.de, P.a]])) : 3.5, molette: molettePassage })
       .then(() => compagnons());
   }
   majSstv();
@@ -1342,18 +1342,28 @@ function montreZooms() { zoomsAffiches = zoomsAffiches.filter(z => document.body
  * How much of the pass's zoom at [tt] (1 in a pass, 0 far from it): by the seconds of play still to go to the nearest
  * pass, the speed slowing down as it comes (its speed plus 2 per second away), over 1.5 s — as the session's video works it out.
  */
-function partPassage(tt) {
+function partPassage(tt, l) {
   let d = Infinity;
-  S.segs.forEach(q => { d = Math.min(d, tt < q[0] ? q[0] - tt : tt > q[1] ? tt - q[1] : 0); });
+  (l || S.ps.map(q => [q.de, q.a])).forEach(q => { d = Math.min(d, tt < q[0] ? q[0] - tt : tt > q[1] ? tt - q[1] : 0); });
   if (!isFinite(d)) return 1;
   const vp = +O.vPassage, s = Math.log((vp + 2 * d / 1000) / vp) / 2;
   return Math.max(0, Math.min(1, 1 - s / 1.5));
 }
 /** The globe's size now: eased from the zoom outside to the pass's; going from one pass to the next (« passages »), out and back in. */
 function zoomSession() {
-  const k = S.mode !== 'continu' && S.trans ? 1 - Math.sin(Math.PI * Math.max(0, Math.min(1, 1 - S.trans / (O.transition * 1000)))) : partPassage(S.t);
-  const dx = (1 - Math.cos(Math.PI * k)) / 2;
-  return O.zHors * Math.pow(O.zPassage / O.zHors, dx);
+  let k;
+  if (S.mode !== 'continu' && S.trans) {
+    // Turning to the next pass: out, then back in to where its window starts (far still when its margin is long).
+    const f = Math.max(0, Math.min(1, 1 - S.trans / (O.transition * 1000))), n = S.segs[S.i + 1] ? S.i + 1 : S.i;
+    k = (1 - Math.sin(Math.PI * f)) * partPassage(f < .5 ? S.segs[S.i][1] : S.segs[n][0]);
+  } else k = partPassage(S.t);
+  return zoomDe(k);
+}
+function zoomDe(k) { const dx = (1 - Math.cos(Math.PI * k)) / 2; return O.zHors * Math.pow(O.zPassage / O.zHors, dx); }
+/* The wheel on a pass's globe: the zoom of the moment (the pass's in it, the other in the margins far from it). */
+function molettePassage(sg) {
+  const cle = partPassage(t, [[P.de, P.a]]) >= .5 ? 'zPassage' : 'zHors';
+  O[cle] = Math.max(.5, Math.min(3, Math.round(O[cle] * (1 - sg * .08) * 20) / 20)); garde(); montreZooms();
 }
 /* The wheel on the session's globe: the zoom of the moment (the pass's in one, the other outside). */
 function moletteSession(sg) {
@@ -1490,9 +1500,9 @@ function panneauOptions(p) {
   p.appendChild(v);
   if (un) p.appendChild(el('div', { class: 'aide', text: T.vitesses_aide }));
   if (pc) {
-    // On the globe: two zooms (one for a pass alone: it is in its pass all along), from afar outside the passes, near in one.
+    // On the globe: two zooms, from afar outside the passes (a long margin: the satellite seen coming), near from the AOS to the LOS.
     p.appendChild(titreBloc(T.vue_globe));
-    p.appendChild(el('div', { class: 'commandes', title: T.s_zoom_aide }, un ? [curseurZoom('zPassage', T.zoom)] : [curseurZoom('zHors', T.s_zoom_hors), curseurZoom('zPassage', T.s_zoom_passage)]));
+    p.appendChild(el('div', { class: 'commandes', title: T.s_zoom_aide }, [curseurZoom('zHors', T.s_zoom_hors), curseurZoom('zPassage', T.s_zoom_passage)]));
     // More satellites going round: the station's favourites (all of them when it has none).
     const sat = un ? P.sat : S.sat, favs = (FAV || []).filter(s => s.nom !== sat), l = favs.some(s => s.fav) ? favs.filter(s => s.fav) : favs;
     if (l.length) {
@@ -1676,7 +1686,7 @@ async function fabrique(quoi) {
     if (f) { const s = 256 * Math.pow(2, zc); p.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; p.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; p.cw = f.fw; p.ch = f.vh; } }
   if (window.SATME_PC) p.format = O.format || 'paysage';
   // The globe as framed here: moved and scaled the same in the file (as large as the pass's zoom).
-  if (O.vue === 'globe') Object.assign(p, Orbites.cadrage(), { gz: O.zPassage });
+  if (O.vue === 'globe') Object.assign(p, Orbites.cadrage(), { gz: +zoomDe(partPassage(t, [[P.de, P.a]])).toFixed(2) });
   // The pass whole on the globe: made as a session of one (its margins, paces, zooms, companions).
   if (commeSession() && ['video', 'gif', 'image'].includes(quoi)) Object.assign(p, optionsSession(P.sat), { moteur: 'session' });
   // The SSTV picture where it shows here (or "auto").

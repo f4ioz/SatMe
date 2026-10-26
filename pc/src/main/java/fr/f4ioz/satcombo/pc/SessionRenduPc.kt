@@ -127,6 +127,8 @@ object SessionRenduPc {
                   val autres: List<GlobeRenduPc.Autre> = emptyList(), val tachesAutres: Boolean = false, val son: Boolean = false,
                   val avant: Long = MARGE_MS, val apres: Long = MARGE_MS) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
+        /** The passes themselves, AOS to LOS: the zoom comes near around them (the satellite seen coming from afar in the margin). */
+        val passages: List<LongRange> = scenes.map { it.e.debutMs..it.e.finMs }
         /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */
         val seul get() = scenes.size == 1
         /** The pictures of the session, each once (a picture tied to two passes close together), by the time it was received. */
@@ -248,7 +250,7 @@ object SessionRenduPc {
     // ---------------------------------------------------------------- the zoom
 
     /**
-     * How much of the pass's zoom at [t] (1 in a pass and its margins, 0 far from them): by the
+     * How much of the pass's zoom at [t] (1 in a pass, AOS to LOS — [Session.passages] —, 0 far from it): by the
      * video's seconds still to go to the nearest pass at its pace slowing down ([Allure]: its
      * pace plus [EASE] per second away, ln((p + 2d) / p) / 2 s), over [ZOOM_S] — the camera comes
      * near before the AOS, goes away after the LOS, however fast the time runs between. The
@@ -264,10 +266,14 @@ object SessionRenduPc {
     /** The globe's size from the part of the pass's zoom [k]: eased, from [zHors] to [zPassage] (geometrically, as a camera comes nearer). */
     fun zoom(zHors: Double, zPassage: Double, k: Double): Double = zHors * Math.pow(zPassage / zHors, doux(k))
 
-    /** The globe's size for a frame: as [partPassage] says; turning from one pass to the next (« passages »), out and back in. */
+    /**
+     * The globe's size for a frame: as [partPassage] says from the passes' AOS and LOS; turning from one pass to the
+     * next (« passages »), out and back in to where the next window starts (far still when its margin is long).
+     */
     fun zoom(s: Session, tr: Trame): Double = zoom(s.zHors, s.zPassage, when (tr) {
-        is Trame.Tourne -> 1 - sin(PI * tr.k)
-        else -> partPassage(s.fenetres, tr.t, s.v.passage)
+        is Trame.Tourne -> (1 - sin(PI * tr.k)) * partPassage(s.passages,
+            if (tr.k < 0.5) s.fenetres[tr.i - 1].last else s.fenetres[tr.i].first, s.v.passage)
+        else -> partPassage(s.passages, tr.t, s.v.passage)
     })
 
     // ---------------------------------------------------------------- frames
