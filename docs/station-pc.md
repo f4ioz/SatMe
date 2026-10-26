@@ -34,6 +34,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 22. [More of the PC](#more-of-the-pc)
 23. [Hardware safety](#hardware-safety)
 24. [Before the first try](#before-the-first-try)
+25. [Demonstration: made-up data, virtual hardware](#demonstration-made-up-data-virtual-hardware) — `--demo`, a VM or a Raspberry Pi, making it new
 
 ## Installing it
 
@@ -50,6 +51,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 | `--noeud` | SatMe-Node: the DATV receiver only, driven over the network |
 | `--bureau` · `--console` | open the page in the browser, an icon by the clock (the default on Windows); or not |
 | `--local` | this PC only, even when the startup file says otherwise |
+| `--demo` · `--demo-reset` | a demonstration station, made-up data and virtual hardware (see [Demonstration](#demonstration-made-up-data-virtual-hardware)); made new |
 
 `--port`, `--reseau` and `--dossier` can also be set from the page (*Réglages › Démarrage*, kept in `~/.config/satme/satme-pc.properties`, `%APPDATA%\SatMe\satme-pc.properties` on Windows); the command line wins (see [Start-up, updates and deployment](#start-up-updates-and-deployment)).
 
@@ -1064,3 +1066,18 @@ For the page opened from afar (a VPN, another house): the **Distant** button at 
 - Start with the **simulated rig** and **simulated rotator**, then plug in the real hardware one piece at a time.
 - To try **a second copy** of SatMe-PC beside the station (another port, another folder), start it with `SATME_SANS_SERIE=1` (or `-Dsatme.sansSerie=true`): it then opens no serial port at all, and cannot raise RTS/DTR on a rig or a board.
 - With no hardware at all: the SDR receiver's **test generator**, and the **Essai** buttons of telemetry and ships.
+
+## Demonstration: made-up data, virtual hardware
+
+To show SatMe-PC without a station (a stand, a VM, a Raspberry Pi in a case): **`satme --demo`**.
+
+- **A made-up station**: callsign **QF4DMO**, in Clermont-Ferrand (JN15MS). Every callsign of the demonstration starts with **Q** — a series the ITU keeps for the Q code and gives to no country: none can be anybody's. The correspondents have a first name only.
+- **Data that look real**: favourites (ISS, SO-50, AO-91, RS-44, AO-7, FO-29, QO-100, AO-123, PO-101), a log of about two hundred contacts over forty days (inside the satellite's footprint at that moment), a journal of some twenty passes of the last ten days — most followed with the virtual rig and rotator (Doppler, S-meter, rotator), a few rebuilt —, an SSTV campaign under way and its pictures (a series of twelve drawn by SatMe, nobody's photo), the station's chain.
+- **Always recent**: these are the real passes of the days before, computed at the first start; passes, log and pictures are made again when older than two days (at start, and every hour). The orbital elements are carried in the program: **no Internet needed**; with it, they are refreshed.
+- **Virtual hardware plugged in**: a simulated IC-9700 (Doppler, PTT with nothing opened), a simulated rotator that follows, the SDR receiver on the **test generator**, trial aircraft and ships, and as the sound card an **SSTV test card**: a picture of the series every forty seconds or so, decoded live in the SSTV tab (never kept).
+- **Nothing real**: no serial port, no sound card (in or out), no SDR, MiniTiouner, SatMe-Node or IC-9700 over the network; DATV, SSTV, I/Q correction and APRS do not transmit; nothing is sent under the made-up callsign (PSK Reporter, AMSAT, online log, SatNOGS, chat). Open to the network (`--reseau`), the page keeps its password: it cannot be removed.
+- **A « DÉMO — données fictives » band** on every page, with **Remettre à neuf**: everything made again (settings included; the remote access password is kept) and SatMe-PC restarts. Or at start: `satme --demo-reset`.
+- **Its own folder and options**: `~/.satme-demo` (or `--dossier`), never `~/.satme`; a folder already holding other data is refused.
+- **On a VM or a Raspberry Pi** (x86_64 or arm64, Raspberry Pi OS 64-bit): the `satme-demo.tar.gz` archive (`./gradlew :pc:demoTar`) holds the program, `installe-demo.sh` and short notes. `./installe-demo.sh --sec` shows what would be done; `sudo ./installe-demo.sh` installs Java 17+ when missing, the program into `/opt/satme-demo`, a `satme-demo` account without login and the **`satme-demo`** service (`satme --demo --port 8090 --reseau`, data in `/var/lib/satme-demo`, no device visible), opens the port in ufw or firewalld when they run, and shows the address and the password. `--port`, `--desinstalle`. Only Java is needed: no native library (ffmpeg optional, for videos).
+- **Polarisation (ESP32)**: the demonstration sets `pc_pol_port=virtuel`, `pc_pol_uhf=WIMO`, `pc_pol_vhf=AUCUN` in its settings: a virtual polarisation switch, taken into account once SatMe-PC drives one.
+

@@ -30,22 +30,29 @@ fun main(args: Array<String>) {
     if (a.version) { println("SatMe-PC " + versionPc()); return }
     if (a.aide) {
         println("SatMe-PC " + versionPc())
-        println("satme [--port 8090] [--reseau|--local] [--noeud] [--dossier DIR] [--bureau|--console] [--version]")
+        println("satme [--port 8090] [--reseau|--local] [--noeud] [--dossier DIR] [--bureau|--console] [--demo [--demo-reset]] [--version]")
         println("  --port     port de la page (8090)")
         println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement) ; --local : ce PC seulement")
         println("  --noeud    SatMe-Node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
         println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
         println("  --bureau   ouvrir la page dans le navigateur, icône près de l'horloge (d'origine sous Windows)")
+        println("  --demo     démonstration : station et données fictives, matériel virtuel, rien de réel ouvert (${ModeDemo.dossierParDefaut()})")
+        println("  --demo-reset  la démonstration remise à neuf")
         println("  options de démarrage aussi dans ${FichierLanceur.emplacement()} (Réglages › Démarrage) ;")
         println("  la ligne de commande passe avant ce fichier")
         return
     }
     // Started again by « Redémarrer SatMe-PC »: the previous one gone first (its port, its files).
     a.apres?.let { RedemarragePc.attend(it) }
+    if (a.demo && a.noeud) { println("SatMe-PC : --demo et --noeud ne vont pas ensemble"); kotlin.system.exitProcess(2) }
+    // The demonstration: before anything opens; its own folder, its own start options in it, never the station's.
+    if (a.demo) ModeDemo.active()
+    val dossierDemo = if (a.demo) (a.dossier ?: ModeDemo.dossierParDefaut()).absoluteFile else null
     // Portable (a `donnees` folder beside the program): its start options kept there too, nothing on the PC.
-    val fichierLanceur = FichierLanceur(dossierPortable()?.let { File(it, FichierLanceur.NOM) } ?: FichierLanceur.emplacement())
-    val optionsLanceur = fichierLanceur.lit()
-    val lanceur = LanceurPc.resout(a, optionsLanceur, fichierLanceur.fichier, dossierParDefaut())
+    val fichierLanceur = FichierLanceur(dossierDemo?.let { File(it, FichierLanceur.NOM) }
+        ?: dossierPortable()?.let { File(it, FichierLanceur.NOM) } ?: FichierLanceur.emplacement())
+    val optionsLanceur = fichierLanceur.lit().let { if (dossierDemo != null) it.copy(dossier = null, copieDepuis = null) else it }
+    val lanceur = LanceurPc.resout(if (dossierDemo != null) a.copy(dossier = dossierDemo) else a, optionsLanceur, fichierLanceur.fichier, dossierDemo ?: dossierParDefaut())
     val port = lanceur.port
     val reseau = lanceur.reseau
     val noeud = a.noeud
@@ -59,6 +66,10 @@ fun main(args: Array<String>) {
             println(if (fait) "  données copiées de $depuis vers $dossier (l'ancien dossier est gardé)" else "  données non copiées vers $dossier (dossier déjà rempli ou source absente)")
         }
         runCatching { fichierLanceur.ecrit(fichierLanceur.lit().copy(copieDepuis = null)) }
+    }
+    // The demonstration's made-up data: made the first time, begun again when asked, its dates kept recent.
+    val ligneDemo = if (!a.demo) null else runCatching { ModeDemo.prepare(dossier, a.demoReset) }.getOrElse {
+        println("SatMe-PC (démonstration) : " + (it.message ?: it.toString())); kotlin.system.exitProcess(2)
     }
     dossier.mkdirs()
     // No console on Windows's desktop: what SatMe-PC says goes to a file, read when something goes wrong.
@@ -82,6 +93,11 @@ fun main(args: Array<String>) {
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
         stockageSat = StockageFichier(File(dossier, "satellites.properties")),
         stockageAgenda = StockageFichier(File(dossier, "agenda.properties")))
+    // The demonstration: the simulated mast whatever is chosen, no IC-9700 by the network.
+    if (ModeDemo.actif) {
+        station.stationRotor.simulationSeule = true
+        station.icomReseau.interdit = ModeDemo.refus("l'IC-9700 par le réseau")
+    }
     I18n.apply(station.settings.language, java.util.Locale.getDefault().language)
     fr.f4ioz.satcombo.data.AgentHttp.version = "pc-" + versionPc()
     fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"
@@ -94,6 +110,8 @@ fun main(args: Array<String>) {
     carnet.ecouteurs += { lien.qso(it) }
     lien.demarreSiActif()
     val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))
+    // The demonstration's sound card: the made-up series' SSTV pictures now and then, nothing opened.
+    if (ModeDemo.actif) son.son.virtuelles += SonDemo().source()
     // The sound card used last time, started again: listening opens nothing on the rig.
     // The IC-9700 by the network: its receive audio listed as a source, nothing opened until chosen.
     val icomReseau = IcomReseauPc(station, son.son, dossier)
@@ -127,11 +145,16 @@ fun main(args: Array<String>) {
     sdr.deplacePoste = { d ->
         if (station.etat.value.catConnecte && station.emetteurChoisi() != null) { station.reglageSat(calibHz = station.etat.value.calibHz + d); true } else false
     }
-    son.psk.bloque = { sdr.fictif }
+    son.psk.bloque = { sdr.fictif || ModeDemo.actif }
     // Nor do pictures and frames from them pass for real receptions (generator: never kept; recording: marked).
     val horsAntenneSdr = { sdr.generateur?.let { SstvPc.HorsAntenne(SstvPc.ESSAI) }
         ?: sdr.lecture?.let { SstvPc.HorsAntenne(SstvPc.RELECTURE, it.momentMs(), it.donnees.name) } }
-    son.horsAntenne = { if (son.son.etat.value.appareil == SdrPc.NOM_SOURCE) horsAntenneSdr() else null }
+    son.horsAntenne = { when (son.son.etat.value.appareil) {
+        SdrPc.NOM_SOURCE -> horsAntenneSdr()
+        // The demonstration's test card: seen while it comes, never kept.
+        SonDemo.NOM -> SstvPc.HorsAntenne(SstvPc.ESSAI)
+        else -> null
+    } }
     son.sstv.horsAntenne = { src -> if (src == SstvPc.SDR) horsAntenneSdr() else son.horsAntenne() }
     // A picture is named after the satellite its sound came from (QO-100 by the dongle on QO-100, not the LEO followed).
     son.sstv.satelliteDe = { src -> satelliteSstv(src, son, sdr, station) }
@@ -355,6 +378,17 @@ fun main(args: Array<String>) {
     }
     // The modules (Réglages › Modules): decided once too, everything on but the functions above left unticked.
     fr.f4ioz.satcombo.demo.ModulesStation.migre(station.stockage)
+    // The demonstration's virtual hardware plugged in; its data kept recent; « Remettre à neuf » from its band.
+    if (ModeDemo.actif) {
+        ModeDemo.branche(station, sdr, adsb, ais)
+        portee.launch(kotlinx.coroutines.Dispatchers.IO) {
+            while (true) {
+                kotlinx.coroutines.delay(3_600_000L)
+                runCatching { if (ModeDemo.rafraichit(dossier)) carnet.oublieMemoire() }
+            }
+        }
+        serveur.demoReset = { ModeDemo.remetANeuf(dossier, RedemarragePc(args)).also { carnet.oublieMemoire() } }
+    }
     // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
     // The satellites' cards (Orbites): their photo and summary asked from Wikipedia when first shown, then kept.
@@ -486,7 +520,8 @@ fun main(args: Array<String>) {
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
-    println("SatMe-PC " + versionPc())
+    println("SatMe-PC " + versionPc() + if (ModeDemo.actif) "  — DÉMONSTRATION (données fictives, matériel virtuel)" else "")
+    ligneDemo?.let { println(it) }
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     if (serveur.portHttpsReel > 0) println("  https     : port ${serveur.portHttpsReel} (certificat de ce PC, empreinte dans Réglages › Accès à distance)")
     else if (serveur.erreurHttps.isNotBlank()) println("  https     : " + serveur.erreurHttps)

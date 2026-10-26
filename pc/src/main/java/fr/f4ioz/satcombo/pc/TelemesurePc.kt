@@ -108,7 +108,7 @@ class TelemesurePc(
 
     /** A frame received for real: queued for SatNOGS DB when the operator chose so. */
     private fun partage(t: RecepteurPaquets.TramePaquet) {
-        if (t.essai || !sidsActif || t.norad <= 0) return
+        if (t.essai || !sidsActif || t.norad <= 0 || ModeDemo.actif) return
         val (indicatif, lat, lon) = station() ?: return
         if (indicatif.isBlank()) return
         sids.ajoute(fr.f4ioz.satcombo.telemesure.Sids.Envoi(t.norad, indicatif, t.t, t.hex(), lat, lon))

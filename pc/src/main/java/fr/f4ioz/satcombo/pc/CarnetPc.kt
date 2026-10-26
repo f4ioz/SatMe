@@ -346,6 +346,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      * (or already had it). The server's answer, in words.
      */
     suspend fun depose(timeMs: Long): String {
+        ModeDemo.refus("l'envoi au carnet en ligne")?.let { return it }
         val s = station.settings
         if (s.carnetUrl.isBlank() || s.carnetCle.isBlank())
             return "renseigne l'adresse et une clé en écriture du carnet en ligne"
@@ -428,6 +429,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      * Wavelog needs the DXCC, the CQ and ITU zones. Then reads them again.
      */
     suspend fun creeProfils(lieux: List<Set<String>>, dxcc: String, pays: String, cq: String, itu: String): String {
+        ModeDemo.refus("la création de profils en ligne")?.let { return it }
         val s = station.settings
         if (itu.isBlank()) return "zone ITU obligatoire : Wavelog refuse ensuite chaque contact d'un profil sans elle"
         var faits = 0; var dernier = ""
@@ -484,11 +486,14 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      */
     /** The AMSAT push ([fr.f4ioz.satcombo.domain.PushAmsat]): a pass over with a contact, reported "Heard". */
     fun ticAmsat() {
+        // The demonstration's made-up callsign never reaches AMSAT, Wavelog, QRZ…
+        if (ModeDemo.actif) return
         val e = station.etat.value
         station.pushAmsat.tic(store.load(), e.indicatif, e.locator) { station.statutAmsat(it)?.name ?: it }
     }
 
     fun ticEnvoi() {
+        if (ModeDemo.actif) return
         val s = station.settings
         if (!s.carnetAuto || envoiEnCours) return
         if (s.carnetUrl.isBlank() || s.carnetCle.isBlank()) return
@@ -537,6 +542,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     /** Every contact not yet uploaded, oldest first, stopping at the first refusal. */
     suspend fun deposeTout(): String {
+        ModeDemo.refus("l'envoi au carnet en ligne")?.let { return it }
         val a = store.load().filter { it.envoyeMs == 0L && it.callsign.isNotBlank() && !it.retenu }.sortedBy { it.timeMs }
         if (a.isEmpty()) return "tout est déjà déposé"
         var n = 0

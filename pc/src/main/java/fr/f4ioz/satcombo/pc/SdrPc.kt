@@ -314,6 +314,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** Reads what the bladeRF is (read-only); not while it receives here, nor while it transmits. */
     fun detecteBladerf(): InfoBladerf {
         val i = when {
+            ModeDemo.actif -> InfoBladerf(message = ModeDemo.refus("le bladeRF").orEmpty(), lu = true)
             bladerfEnReception -> infoBladerf.copy(message = "", lu = true)
             emissionBladerf() -> InfoBladerf(infoBladerf.carte, "le bladeRF émet (onglet DATV ou SSTV)", true)
             else -> programmeBladerf()?.let { p -> Bladerf.detecte(p).let { (c, m) -> InfoBladerf(c, m, true) } }
@@ -586,6 +587,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
     private fun connecte(): SourceIq {
+        // The demonstration: the test generator or a recording, never a receiver.
+        if (recepteur != GENERATEUR && recepteur != FICHIER) ModeDemo.refus("ce récepteur")?.let { throw java.io.IOException(it + " : choisir « Générateur d'essai »") }
         // No hardware: nothing to lend to DATV, nothing that could transmit.
         if (recepteur == GENERATEUR) return fr.f4ioz.satcombo.sdr.GenerateurIq(reglagesGenerateur)
         // The rig's IF: no SDR hardware, the rig tunes itself (CAT).

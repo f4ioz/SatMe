@@ -199,6 +199,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** « Configuration rapide », « Quoi de neuf », Réglages › Démarrage, the update check, « Déploiement » (set before [demarre]). */
     @Volatile var demarrage: DemarragePc? = null
+    /** The demonstration's « Remettre à neuf » (set by Main with `--demo`): what it did. */
+    @Volatile var demoReset: (() -> JSONObject)? = null
 
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
@@ -435,6 +437,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val local = estLocal(c.inetAddress)
         if (garde(c, r, chemin, q, sortie, local)) return
         if (chemin == "/api/acces" || chemin.startsWith("/api/acces/")) { acces(c, r, chemin, sortie, local); return }
+        // The demonstration made new (its band's button): from this page's own origin only.
+        if (chemin == "/api/demo/reset" && r.methode == "POST") {
+            val o = when {
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> JSONObject().put("ok", false).put("erreur", "origine refusée")
+                else -> demoReset?.invoke() ?: JSONObject().put("ok", false).put("erreur", "pas une démonstration")
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (chemin == "/api/flux") { flux(c, sortie, q); return }
         if (chemin == "/api/son/ws" && sonDistant != null) {
             // « Mode distant »: the low-latency sound, a WebSocket from this page's own origin.
@@ -1222,6 +1232,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             chemin == "/api/acces/retire" ->
                 if (!local) JSONObject().put("ok", false).put("erreur", "seulement depuis le PC lui-même")
+                else if (reseau && ModeDemo.actif) JSONObject().put("ok", false).put("erreur", ModeDemo.refus("le retrait du mot de passe (démonstration ouverte au réseau)"))
                 else { a.retire(); JSONObject().put("ok", true) }
             chemin == "/api/acces/sessions" -> { a.sessions.retireTout(if (local) null else jeton); JSONObject().put("ok", true) }
             else -> JSONObject().put("ok", false).put("erreur", "inconnu")
@@ -1414,6 +1425,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
+                ModeDemo.refus("le rapport à l'AMSAT (indicatif fictif)")?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 val e = station.etat.value
                 val sat = e.suivi ?: return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
                 if (e.indicatif.isBlank()) return JSONObject().put("ok", false).put("erreur", "renseigne ton indicatif (Réglages)")
@@ -2254,7 +2266,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('='), "UTF-8")
         }
 
-    private fun envoie(s: OutputStream, statut: String, type: String, corps: ByteArray, entetes: String = "") {
+    private fun envoie(s: OutputStream, statut: String, type: String, corps0: ByteArray, entetes: String = "") {
+        // The demonstration's band on every page.
+        val corps = if (ModeDemo.actif && type.startsWith("text/html")) ModeDemo.bandeau(corps0) else corps0
         s.write(("HTTP/1.1 $statut\r\nContent-Type: $type\r\nContent-Length: ${corps.size}\r\n" + entetes +
             "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
         s.write(corps)

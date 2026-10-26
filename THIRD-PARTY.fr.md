@@ -93,7 +93,9 @@ du domaine public. **Aucun code de WSJT-X n'est employé** : WSJT-X est sous GPL
 et n'apparaît ni dans le code, ni dans les crédits de l'application.
 
 **Les éléments orbitaux** proviennent de Celestrak et du bulletin AMSAT, aux
-conditions de leurs éditeurs respectifs.
+conditions de leurs éditeurs respectifs. La démonstration de SatMe-PC (`--demo`) emporte une copie
+du bulletin AMSAT du 25 octobre 2026 (`pc/src/main/resources/…/demo/elements.json`) pour marcher
+hors ligne ; elle est remplacée par un bulletin frais dès que le réseau répond.
 
 **Les statuts de satellites** viennent de l'AMSAT Live OSCAR Status et de
 SatNOGS.

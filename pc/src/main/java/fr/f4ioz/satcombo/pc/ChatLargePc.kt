@@ -104,6 +104,7 @@ class ChatLargePc(
 
     /** The operator's message, sent now (the nick first when needed); null when sent, else why not. */
     fun envoie(texte: String): String? {
+        ModeDemo.refus("l'envoi dans le salon (indicatif fictif)")?.let { return it }
         val nick = ChatLarge.nick(indicatif()) ?: return "indicatif de la station manquant (Réglages) : le salon reste en lecture seule"
         val (t, pourquoi) = ChatLarge.texte(texte)
         if (t == null) return pourquoi

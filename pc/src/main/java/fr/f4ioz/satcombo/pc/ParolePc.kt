@@ -59,6 +59,7 @@ class ParolePc(
 
         companion object {
             val Systeme = Lecteur { pcm, rate ->
+                if (ModeDemo.actif) return@Lecteur
                 val f = AudioFormat(rate.toFloat(), 16, 1, true, false)
                 val b = ByteArray(pcm.size * 2)
                 for (i in pcm.indices) { b[2 * i] = pcm[i].toByte(); b[2 * i + 1] = (pcm[i].toInt() shr 8).toByte() }

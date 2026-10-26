@@ -65,6 +65,7 @@ class SonLocalDatvPc(
     @Synchronized
     private fun ligne(t: Long): SourceDataLine? {
         ligne?.let { return it }
+        if (ModeDemo.actif) return null
         // No output (no sound card, busy): tried again every 5 s, the levels go on.
         if (t - ligneEssaiMs < 5_000L) return null
         ligneEssaiMs = t

@@ -74,8 +74,12 @@ class PosteIcomReseau(
             marqueTx = s.icomTxMarque.takeIf { it >= 0 } ?: FormatTxReseau.MARQUE_DEFAUT, octetsTx = s.icomTxOctets) to ""
     }
 
+    /** Why this instance never logs in to a rig (SatMe-PC's demonstration), or null. */
+    @Volatile var interdit: String? = null
+
     /** [u] starts using the rig; null when the session is up, else why not. */
     fun prends(u: Usage): String? {
+        interdit?.let { dernier = SessionIcom.Statut(SessionIcom.Etat.REFUSE, it); return it }
         synchronized(this) {
             if (session?.connecte == true) { usages += u; if (u == Usage.CAT) pourCat.clear(); return null }
         }

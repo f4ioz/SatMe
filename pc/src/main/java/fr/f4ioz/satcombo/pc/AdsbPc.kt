@@ -148,6 +148,8 @@ class AdsbPc(private val station: StationPc, private val sdr: SdrPc, private val
      * SDR tab's dongle from it (never done otherwise). An error, or null.
      */
     @Synchronized fun demarre(prendre: Boolean = false): String? {
+        // The demonstration: the trial avions, no receiver.
+        if (ModeDemo.actif) return essai()
         arrete()
         val s = source
         occupe(s)?.let { o ->
