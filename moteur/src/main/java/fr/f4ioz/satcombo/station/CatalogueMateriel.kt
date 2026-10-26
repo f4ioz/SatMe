@@ -91,6 +91,14 @@ object CatalogueMateriel {
         Modele("parabole-qo100", "Parabole + source QO-100 (POTY / patch)", Genre.ANTENNE, "parabole",
             listOf(rfS("lnb", "Source 10 GHz", Voie.RX, 10489, "guide"), rfE("patch", "Patch 2,4 GHz", Voie.TX, 2400, "N")),
             130, 120, setOf("parabole"), "Parabole fixe vers QO-100 ; la source double bande reçoit 10 GHz et émet 2,4 GHz."),
+        Modele("parabole-35", "Parabole 35 cm + hélice 2,4 GHz (portable)", Genre.ANTENNE, "parabole",
+            listOf(rfS("lnb", "Source 10 GHz", Voie.RX, 10489, "guide"), rfE("helice", "Hélice 2,4 GHz (source)", Voie.TX, 2400, "N")),
+            100, 92, setOf("parabole"), "Petite parabole de portable vers QO-100 : environ 16 dBi à 2,4 GHz, une hélice courte en source " +
+                "(circulaire droite à l'émission : la réflexion la rend gauche, l'hélice se bobine donc à gauche) et le LNB pour la descente."),
+        Modele("helice-2400", "Hélice 2,4 GHz (circulaire droite)", Genre.ANTENNE, "helice",
+            listOf(rfE("ant", "Entrée 2,4 GHz", Voie.TX, 2400, "N"), mat()), 130, 64,
+            note = "Hélice en mode axial pour la montée QO-100, sans parabole : vers 15 dBi pour 20 tours (≈ 2,5 m), polarisation circulaire droite " +
+                "comme le demande le satellite. Pointage plus large qu'une parabole ; la descente se reçoit à part (parabole et LNB)."),
         Modele("parabole-rx", "Parabole TV (réception seule)", Genre.ANTENNE, "parabole",
             listOf(rfS("lnb", "Source 10 GHz", Voie.RX, 10489, "guide")), 120, 110, setOf("parabole")),
         Modele("yagi-2m", "Yagi 2 m", Genre.ANTENNE, "yagi", listOf(rfB("ant", "Antenne 2 m", 145, "N"), mat()), 130, 70),
@@ -257,7 +265,7 @@ object CatalogueMateriel {
 
     /** The names under the drawings, when the catalogue's is too long for them. */
     private val COURTS = mapOf(
-        "parabole-qo100" to "Parabole QO-100", "parabole-rx" to "Parabole TV", "yagi-bibande" to "Yagi 2 m / 70 cm",
+        "parabole-qo100" to "Parabole QO-100", "parabole-rx" to "Parabole TV", "parabole-35" to "Parabole 35 cm", "helice-2400" to "Hélice 2,4 GHz", "yagi-bibande" to "Yagi 2 m / 70 cm",
         "antenne-interieure" to "Antenne intérieure", "colineaire" to "Colinéaire", "lnb-pll" to "LNB PLL",
         "dc-144" to "Conv. 10 GHz → 144", "dc-432" to "Conv. 10 GHz → 432", "dc-739" to "Conv. 10 GHz → 739",
         "up-144" to "Conv. 144 → 2,4 GHz", "up-432" to "Conv. 432 → 2,4 GHz", "pa-2400" to "Ampli 2,4 GHz",
@@ -298,6 +306,25 @@ object CatalogueMateriel {
                     relie(d, "lnb", dc, "entree"); relie(dc, "sortie", r, "ant432")
                     relie(r, "ant144", up, "entree"); relie(up, "sortie", a, "entree"); relie(a, "sortie", d, "patch")
                     relie(r, "usb", pc, "usb")
+                    chaine()
+                }),
+            Prereglage("qo100-pluto-helice", "QO-100 fixe : Pluto + hélice 20 tours",
+                "Montée : Pluto en direct sur 2,4 GHz, ampli et hélice circulaire droite ; descente : parabole 80 cm et LNB vers le MiniTiouner",
+                Montage.Bati("QO-100 fixe (hélice)").run {
+                    val d = ajoute("parabole-qo100"); val l = ajoute("lnb-pll"); val m = ajoute("minitiouner")
+                    val p = ajoute("pluto"); val a = ajoute("pa-2400"); val h = ajoute("helice-2400"); val pc = ajoute("pc")
+                    relie(d, "lnb", l, "entree"); relie(l, "sortie", m, "lnb_a")
+                    relie(p, "tx", a, "entree"); relie(a, "sortie", h, "ant")
+                    relie(m, "usb", pc, "usb"); relie(p, "usb", pc, "usb")
+                    chaine()
+                }),
+            Prereglage("qo100-portable-35", "QO-100 portable : Pluto + parabole 35 cm",
+                "Le Pluto émet par l'ampli dans l'hélice de la parabole de 35 cm et reçoit la descente par son LNB et un T de polarisation",
+                Montage.Bati("QO-100 portable (35 cm)").run {
+                    val d = ajoute("parabole-35"); val l = ajoute("lnb-pll"); val t = ajoute("bias-t")
+                    val p = ajoute("pluto"); val a = ajoute("pa-2400"); val pc = ajoute("pc")
+                    relie(d, "lnb", l, "entree"); relie(l, "sortie", t, "lnb"); relie(t, "rx", p, "rx")
+                    relie(p, "tx", a, "entree"); relie(a, "sortie", d, "helice"); relie(p, "usb", pc, "usb")
                     chaine()
                 }),
             Prereglage("datv-minitiouner-bladerf", "DATV MiniTiouner + bladeRF en émission", "Le MiniTiouner reçoit (il alimente le LNB), le bladeRF émet en DVB-S2 par l'amplificateur",

@@ -15165,6 +15165,12 @@ const MT_D = (() => {
       for (let i = 0; i < n; i++) { const x = w * .1 + i * w * .8 / (n - 1), l = h * (.86 - i * .045); s += R(x - 1, y - l / 2, 2.2, l, 1, i === 1 ? '#E8F0F7' : '#C9D2DB'); }
       return s + R(w * .1 + w * .8 / (n - 1) - 5, y + 3, 10, 6, 1, '#1A1F24', '#7D8893', .6);
     },
+    helice: (w, h) => {
+      const y = h * .42, n = 10, pas = w * .82 / n, a = h * .2;
+      let d = 'M' + (w * .1) + ' ' + y;
+      for (let i = 0; i < n; i++) { const x0 = w * .1 + i * pas; d += ' Q' + (x0 + pas / 4) + ' ' + (y - 2 * a) + ' ' + (x0 + pas / 2) + ' ' + y + ' Q' + (x0 + 3 * pas / 4) + ' ' + (y + 2 * a) + ' ' + (x0 + pas) + ' ' + y; }
+      return R(w / 2 - 2, y, 4, h - y, 1, '#59636E') + R(w * .06, y - h * .3, 4, h * .6, 1, '#9AA7B4') + R(w * .08, y - 1, w * .86, 2, 1, '#59636E') + P(d, 'none', '#E3E8ED', 1.6);
+    },
     xquad: (w, h) => {
       const y = h * .44, a = h * .34;
       return R(w / 2 - 2, y, 4, h - y, 1, '#59636E') + R(w * .08, y - 1.5, w * .84, 3, 1.5, '#9AA7B4') +

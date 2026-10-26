@@ -101,6 +101,30 @@ class EmissionPostePcTest {
         assertEquals(960L, fausse.recus.get())
     }
 
+    @Test fun qo100_jamais_sur_la_balise_et_LEILA_coupe() {
+        val st = station()
+        val p = tx(st)
+        st.qo100.auPoste(true)
+        // The cockpit on the middle beacon: listening only, the PTT refused.
+        st.qo100.balise()
+        assertTrue(p.appuie("a", false, "")!!.contains("balise"))
+        assertFalse(st.posteSimule!!.transmitting)
+        // In the upper SSB segment: keyed; LEILA heard, released at once.
+        st.qo100.descente(10_489_800_000L)
+        var leila = false
+        p.leila = { leila }
+        assertNull(p.appuie("a", false, ""))
+        assertTrue(st.posteSimule!!.transmitting)
+        leila = true
+        p.tic()
+        assertFalse(st.posteSimule!!.transmitting)
+        assertTrue(p.json("a").getString("raison").contains("LEILA"))
+        // Another transmitter (the Pluto's narrow band) excludes the rig.
+        leila = false
+        p.autreEmission = { "une émission BLU par le Pluto est en cours" }
+        assertTrue(p.appuie("a", false, "")!!.contains("Pluto"))
+    }
+
     @Test fun chien_et_minuterie() {
         val st = station()
         val p = tx(st)

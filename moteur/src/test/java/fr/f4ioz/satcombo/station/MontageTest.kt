@@ -43,7 +43,7 @@ class MontageTest {
     }
 
     @Test fun lesPrereglagesSontComplets() {
-        assertEquals(6, CatalogueMateriel.PREREGLAGES.size)
+        assertEquals(8, CatalogueMateriel.PREREGLAGES.size)
         for (p in CatalogueMateriel.PREREGLAGES) {
             val c = p.chaine
             assertTrue(p.id, c.elements.size >= 4)
@@ -252,7 +252,7 @@ class MontageTest {
     @Test fun leCatalogueSeDonneALaPage() {
         val j = Montage.catalogueJson()
         assertEquals(CatalogueMateriel.MODELES.size, j.getJSONArray("modeles").length())
-        assertEquals(6, j.getJSONArray("prereglages").length())
+        assertEquals(8, j.getJSONArray("prereglages").length())
         val plan = DispositionMontage.json(DispositionMontage.dispose(prereglage("fm-ic9700-yagi")))
         assertEquals(5, plan.getJSONArray("boites").length())
     }

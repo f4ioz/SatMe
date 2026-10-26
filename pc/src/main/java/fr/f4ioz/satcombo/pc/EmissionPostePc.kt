@@ -66,6 +66,27 @@ class EmissionPostePc(
         get() = stockage.getString("pc_tx_poste_carte", "") ?: ""
         set(v) { stockage.edit().putString("pc_tx_poste_carte", v.trim().take(200)).apply() }
 
+    /** LEILA heard lately on QO-100's downlink (set by the station): keyed on QO-100, released at once. */
+    @Volatile var leila: () -> Boolean = { false }
+    /** QO-100's narrow band signals while SatMe hears it, or null: our level against the beacon's. */
+    @Volatile var signauxQo100: () -> List<fr.f4ioz.satcombo.domain.SignalQo100>? = { null }
+    /** Our level against the beacon's while keyed on QO-100 (dB), when both are seen. */
+    @Volatile var niveauQo100 = fr.f4ioz.satcombo.sstv.NiveauSstvQo100.Mesure(null, null); private set
+
+    /** Another transmitter SatMe drives that excludes the rig (the Pluto's narrow band), or null. */
+    @Volatile var autreEmission: () -> String? = { null }
+
+    /** On QO-100 (« Appliquer au poste »): why the rig may not be keyed where the cockpit is, or null. */
+    private fun refusQo100(): String? {
+        autreEmission()?.let { return it }
+        val q = station.qo100.etat.value
+        if (!q.auPoste || q.transpondeur != fr.f4ioz.satcombo.domain.Qo100.NB.cle) return null
+        if (!q.emissionPermise) return "QO-100 : l'accord est sur une balise ou hors du plan de bande, écoute seule"
+        if (q.monteeRetenue) return "QO-100 : fréquence d'urgence proposée par SatMe, montée non écrite au poste"
+        if (leila()) return "LEILA entendue à l'instant : attendre et baisser la puissance"
+        return null
+    }
+
     /** The CAT went through the network server (as connected, whatever the setting says since). */
     private val reseau: Boolean get() = station.catParReseau
 
@@ -79,7 +100,7 @@ class EmissionPostePc(
             if (perteLien) return "le poste ne répond plus"
             if (reseau && !e.catSimule && !station.txReseauAutorise)
                 return "émission par le réseau non autorisée (Réglages › Émission, sur le PC de la station)"
-            return null
+            return refusQo100()
         }
         override fun joignable(): Boolean {
             val e = station.etat.value
@@ -156,6 +177,13 @@ class EmissionPostePc(
     /** A few times a second: the guards, the rig's TX state read back, the microphone's way closed after an over. */
     fun tic() {
         val t = horloge()
+        // LEILA while SatMe keys the rig on QO-100: released before anything else.
+        if (poste.etat.emet && station.qo100.etat.value.auPoste && leila()) { relache("LEILA détectée : émission coupée"); return }
+        if (poste.etat.emet && station.qo100.etat.value.auPoste) {
+            val q = station.qo100.etat.value
+            niveauQo100 = signauxQo100()?.let { fr.f4ioz.satcombo.sstv.NiveauSstvQo100.mesure(it, q.monteeHz + 300, q.monteeHz + 2_800) }
+                ?: fr.f4ioz.satcombo.sstv.NiveauSstvQo100.Mesure(null, null)
+        } else niveauQo100 = fr.f4ioz.satcombo.sstv.NiveauSstvQo100.Mesure(null, null)
         if (poste.etat.emet && t - lectureTxMs >= 500L) {
             lectureTxMs = t
             val lu = runBlocking { withTimeoutOrNull(1_000L) { runCatching { station.etatTxPoste() }.getOrNull() } }
@@ -286,6 +314,8 @@ class EmissionPostePc(
             .put("chienS", poste.chienMs / 1000.0)
             .put("txMarque", station.settings.icomTxMarque).put("txOctets", station.settings.icomTxOctets)
             .put("txMarqueDefaut", FormatTxReseau.MARQUE_DEFAUT)
+            .put("qo100", JSONObject().put("ecart", niveauQo100.ecartDb ?: JSONObject.NULL).put("tropFort", (niveauQo100.ecartDb ?: -99.0) > 0.0)
+                .put("refus", refusQo100() ?: ""))
         if (e.emet) o.put("client", if (e.distant) "un autre appareil" + (if (e.adresse.isNotBlank()) " (" + e.adresse + ")" else "") else "la page de ce PC")
             .put("moi", client != null && client == e.client).put("depuisS", (t - e.depuisMs) / 1000)
         return o
@@ -296,7 +326,7 @@ class EmissionPostePc(
         if (!ee.catConnecte) return "poste non connecté (Réglages › Poste)"
         if (ee.catModele != "IC9700") return "émission par SatMe : IC-9700 seulement"
         if (reseau && !ee.catSimule && !station.txReseauAutorise) return "émission par le réseau non autorisée (Réglages › Émission, sur le PC de la station)"
-        return null
+        return refusQo100()
     }
 
     /**

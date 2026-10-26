@@ -91,6 +91,15 @@ object DessinsMateriel {
                 R(w / 2 - 4, h * .78, 8.0, h * .22, 1.0, "#59636E")
                 P("M${f(w / 2)} ${f(h * .8)} l-${f(w * .38)} ${f(h * .12)} M${f(w / 2)} ${f(h * .8)} l${f(w * .38)} ${f(h * .12)}", "none", "#9AA7B4", 1.6)
             }
+            "helice" -> {
+                // An axial-mode helix: its ground plate, the boom, the coil.
+                val y = h * .42
+                R(w / 2 - 2, y, 4.0, h - y, 1.0, "#59636E"); R(w * .06, y - h * .3, 4.0, h * .6, 1.0, "#9AA7B4"); R(w * .08, y - 1, w * .86, 2.0, 1.0, "#59636E")
+                val n = 10; val pas = w * .82 / n; val a = h * .2
+                val d = StringBuilder("M${f(w * .1)} ${f(y)}")
+                for (i in 0 until n) { val x0 = w * .1 + i * pas; d.append(" Q${f(x0 + pas / 4)} ${f(y - 2 * a)} ${f(x0 + pas / 2)} ${f(y)} Q${f(x0 + 3 * pas / 4)} ${f(y + 2 * a)} ${f(x0 + pas)} ${f(y)}") }
+                P(d.toString(), "none", "#E3E8ED", 1.6)
+            }
             "interieure" -> {
                 R(w * .2, h * .74, w * .6, h * .22, 4.0, "url(#P-noir)", "#0B0F13")
                 groupe { tourne(12.0, w / 2, h * .74); R(w / 2 - 3, h * .06, 6.0, h * .7, 3.0, "#1A1F24", "#3A4450") }
@@ -263,7 +272,7 @@ object DessinsMateriel {
     }
 
     /** The drawings this side knows (the page's `MT_D`). */
-    val CONNUS = setOf("parabole", "yagi", "xquad", "colineaire", "interieure", "lnb", "convertisseur", "ampli", "biast", "filtre", "attenuateur",
+    val CONNUS = setOf("parabole", "helice", "yagi", "xquad", "colineaire", "interieure", "lnb", "convertisseur", "ampli", "biast", "filtre", "attenuateur",
         "charge", "repartiteur", "rotor", "ic9700", "ic705", "ts2000", "ft991", "ft818", "poste", "rtlsdr", "pluto", "bladerf", "hackrf", "sdr",
         "minitiouner", "noeud", "carteson", "esp32", "pc", "dxpup", "dxpdown", "pa", "lnb2", "gpsdo", "bodnar", "gps", "injecteur", "dcblock",
         "alim", "sequenceur", "molette", "boite", "telephone")

@@ -252,7 +252,7 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
     private fun activite(l: ActiviteMontage.Lectures) = ActiviteMontage.depuis(l, instantane?.let { f -> runCatching { f(l) }.getOrNull() })
 
     /**
-     * The plans: GET the list; POST ?op= nouveau (?nom=), duplique (?id=,
+     * The plans: GET the list; POST ?op= nouveau (?nom=), prereglage (?pre=, ?nom=), duplique (?id=,
      * ?nom=), renomme (?id=, ?nom=), retire (?id=), affiche (?id=: the plan
      * chosen by hand, held while something works), suivre (?on=1|0), garde
      * (the chain detected now kept as a plan, ?nom=).
@@ -265,11 +265,16 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
         synchronized(this) {
             val id = p("id")
             when (p("op")) {
-                "nouveau", "duplique", "garde" -> {
+                "nouveau", "duplique", "garde", "prereglage" -> {
                     if (plans.plans.size >= PlansMontage.MAX) return refus("${PlansMontage.MAX} plans au plus")
                     val n = PlansMontage.nouvelId(plans)
                     val c = when (p("op")) {
                         "nouveau" -> Montage.Chaine(nom = PlansMontage.nomLibre(plans, nom.ifBlank { "Plan " + n.removePrefix("p") }))
+                        // A ready-made chain as a new plan (the QO-100 uplink profiles propose theirs): nothing replaced.
+                        "prereglage" -> {
+                            val pr = fr.f4ioz.satcombo.station.CatalogueMateriel.PREREGLAGES.firstOrNull { it.id == p("pre") } ?: return refus("montage tout fait inconnu")
+                            pr.chaine.copy(nom = PlansMontage.nomLibre(plans, nom.ifBlank { pr.nom }))
+                        }
                         "duplique" -> {
                             val src = plans.plan(id) ?: return refus("plan inconnu")
                             src.chaine.copy(nom = PlansMontage.nomLibre(plans, nom.ifBlank { PlansMontage.nomVu(src) + " (copie)" }))

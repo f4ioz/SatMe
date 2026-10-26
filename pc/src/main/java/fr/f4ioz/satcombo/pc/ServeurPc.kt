@@ -98,6 +98,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** The IC-9700 transmitting: PTT, microphone, power (set before [demarre]). */
     @Volatile var emissionPoste: EmissionPostePc? = null
+    /** QO-100's narrow band by the Pluto: SSB, CW, digital; the uplink profiles (set before [demarre]). */
+    @Volatile var emissionBe: EmissionBandeEtroitePc? = null
 
     /** HTTPS for the remote page: its certificate (set before [demarre]); on only when chosen, on this PC. */
     @Volatile var certificat: CertificatPc? = null
@@ -217,9 +219,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     private val ROUTES_TX = setOf("/api/datv/emission/demarre", "/api/datv/emission/vie", "/api/datv/emission/arrete",
         "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete",
-        "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete")
+        "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete",
+        "/api/be/emission/demarre", "/api/be/emission/vie", "/api/be/emission/arrete")
 
-    private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true
+    private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
+        emissionBe?.emet == true
+
+    /** The Pluto's narrow-band PTT routes: hold (demarre, ?confirme=1 on the air), still holding (vie), release (arrete). */
+    private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
+        val b = emissionBe ?: return JSONObject().put("ok", false).put("absent", true)
+        return when {
+            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1")?.let { JSONObject().put("ok", false).put("erreur", it) } ?: b.json(cl.id)
+            chemin.endsWith("/vie") -> if (b.vie(cl.id)) b.json(cl.id) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
+            else -> { b.relache("relâché"); b.json(cl.id) }
+        }
+    }
 
     /** The rig's PTT routes: hold (demarre), still holding (vie), release (arrete). */
     private fun actionPoste(chemin: String, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
@@ -241,8 +255,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return etat()
         }
         val poste = chemin.startsWith("/api/poste/")
-        val quoi = if (poste) "IC-9700" else if (chemin.startsWith("/api/datv/")) "DATV" else "SSTV"
-        fun faire() = if (poste) actionPoste(chemin, cl) else action(chemin, q)
+        val be = chemin.startsWith("/api/be/")
+        val quoi = if (poste) "IC-9700" else if (be) "BLU Pluto" else if (chemin.startsWith("/api/datv/")) "DATV" else "SSTV"
+        fun faire() = if (poste) actionPoste(chemin, cl) else if (be) actionBe(chemin, q, cl) else action(chemin, q)
         return when {
             chemin.endsWith("/demarre") -> {
                 controle.refus(cl, emetQuelqueChose())?.let { return JSONObject().put("ok", false).put("erreur", it).put("controle", controle.json(cl)) }
@@ -257,13 +272,31 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
     }
 
+    /**
+     * A measurement on our own downlink: the Pluto's error ([quoi] "pluto"),
+     * or the IC-9700 chain's uplink oscillator ("poste": the rig keyed in CW
+     * by SatMe, its carrier heard) — the latter stored in the chain.
+     */
+    private fun mesureBe(b: EmissionBandeEtroitePc, quoi: String): JSONObject {
+        if (quoi != "poste") return b.mesureCorrection()
+        val p = emissionPoste
+        if (p == null || !p.poste.etat.emet) return JSONObject().put("ok", false).put("erreur", "mettre l'IC-9700 en émission (CW, porteuse) par SatMe d'abord")
+        val q = station.qo100.etat.value
+        val f = station.stationCat.etat.value.monteeHz?.let { station.convTx().versPoste(it) }
+            ?: return JSONObject().put("ok", false).put("erreur", "fréquence d'émission du poste inconnue")
+        val (ol, msg) = b.mesureOlPoste(f, q.descenteHz)
+        if (ol == null) return JSONObject().put("ok", false).put("erreur", msg)
+        station.qo100.poseOl(false, ol)
+        return JSONObject().put("ok", true).put("ol", ol).put("message", "$msg — gardé dans la chaîne « " + q.chaine + " »")
+    }
+
     fun demarre() {
         // A remote controller gone silent: the transmissions stopped within its watchdog; nobody holds once all stopped.
         thread(isDaemon = true, name = "satme-controle-tx") {
             while (socket?.isClosed != true) {
                 runCatching {
                     if (!emetQuelqueChose()) controle.libere()
-                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); emissionPoste?.relache(r); controle.libere() }
+                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); emissionPoste?.relache(r); emissionBe?.relache(r); controle.libere() }
                 }
                 Thread.sleep(200)
             }
@@ -826,6 +859,34 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
             }
             return
+        }
+        // The Pluto's narrow-band microphone: its own WebSocket, the PTT holder's frames only to the transmitter.
+        if (chemin == "/api/be/micro/ws") {
+            val b = emissionBe
+            val d = WebSocketPc.Demande(r.methode, r.chemin, r.entetes)
+            when {
+                b == null -> SonDistantPc.refusHttp(sortie, "404 Not Found", "absent")
+                !d.valide -> SonDistantPc.refusHttp(sortie, "400 Bad Request", "WebSocket attendu")
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> SonDistantPc.refusHttp(sortie, "403 Forbidden", "origine refusée")
+                else -> {
+                    sortie.write(WebSocketPc.reponse(d.cle!!)); sortie.flush()
+                    b.sertMicro(c, q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress })
+                }
+            }
+            return
+        }
+        // The Pluto's narrow-band panel: its state, its settings (POST, the guards from this PC only), CW, the measurements.
+        if (chemin == "/api/be/emission" || chemin == "/api/be/emission/reglage" || chemin == "/api/be/cw" || chemin == "/api/be/mesure") {
+            val b = emissionBe
+            val client = q["client"].orEmpty().take(40)
+            val o = when {
+                b == null -> JSONObject().put("ok", false).put("absent", true)
+                r.methode != "POST" -> b.json(client).put("local", local)
+                chemin == "/api/be/cw" -> b.cw(client, q)
+                chemin == "/api/be/mesure" -> mesureBe(b, q["quoi"].orEmpty())
+                else -> b.reglage(q, local).let { res -> if (res.optBoolean("ok")) b.json(client).put("local", local) else res }
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         // The IC-9700's TX panel: its state, its settings and power (POST), a TX capture to learn from (this PC only).
         if (chemin == "/api/poste/emission" || chemin == "/api/poste/emission/reglage" || chemin == "/api/poste/emission/trace") {

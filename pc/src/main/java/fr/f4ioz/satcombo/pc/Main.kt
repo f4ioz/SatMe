@@ -299,6 +299,8 @@ fun main(args: Array<String>) {
     val corrections = fr.f4ioz.satcombo.sdr.CorrectionsIq(station.stockage)
     emission.corrections = corrections
     var sstvRef: EmissionSstvPc? = null
+    var beRef: EmissionBandeEtroitePc? = null
+    val beEnCours = "une émission BLU par le Pluto est en cours (onglet QO-100) : la relâcher d'abord"
     val iq = CalibrationIqPc(station.stockage, corrections,
         MaterielIqPc(sdr, emission, { sstvRef }, datv, { trafic.reprend() }, { station.settings.qo100EnCours }))
     val iqEnCours = "une correction I/Q est en cours (Réglages › Émission) : l'arrêter d'abord"
@@ -312,22 +314,26 @@ fun main(args: Array<String>) {
         bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfProgramme = { sdr.programmeBladerf() },
-        autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null },
+        autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours
+            else if (beRef?.emet == true) beEnCours else null },
         gainMaxDb = { emission.gainMaxDb },
         planche = { planche.image(it) }, planches = { planche.modeles() },
         signauxQo100 = { qo100.signaux.recents() },
         noeudTx = { noeudDistant.fabriqueTx { emission.gainMaxDb } })
     sstvRef = emissionSstv
     emissionSstv.corrections = corrections
-    emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null }
+    emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours
+        else if (beRef?.emet == true) beEnCours else null }
     // DATV received with the Pluto or the bladeRF: the SDR tab's board lent, given back afterwards; never while it transmits.
     datv.materiel = MaterielSdrPc(sdr, { trafic.reprend() }, { station.settings.qo100EnCours }) { r ->
         val qui = if (r == fr.f4ioz.satcombo.datv.Datv.PLUTO) fr.f4ioz.satcombo.datv.Emetteur.PLUTO else fr.f4ioz.satcombo.datv.Emetteur.BLADERF
         if (iq.enCours) iqEnCours
-        else if ((emission.etat.emet && emission.etat.emetteur == qui && !emission.etat.parNoeud) || emissionSstv.emetAvec(qui))
+        else if ((emission.etat.emet && emission.etat.emetteur == qui && !emission.etat.parNoeud) || emissionSstv.emetAvec(qui) ||
+            (qui == fr.f4ioz.satcombo.datv.Emetteur.PLUTO && beRef?.emet == true))
             (if (qui == fr.f4ioz.satcombo.datv.Emetteur.PLUTO) "l'ADALM-PLUTO" else "le bladeRF") + " émet : arrêter l'émission d'abord" else null
     }
-    sdr.emissionPluto = { (emission.etat.emet && !emission.etat.parNoeud) || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
+    sdr.emissionPluto = { (emission.etat.emet && !emission.etat.parNoeud) || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) ||
+        beRef?.emet == true }
     sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF && !emission.etat.parNoeud) ||
         emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
@@ -413,14 +419,39 @@ fun main(args: Array<String>) {
         { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
     // The IC-9700 transmitting (PTT held by a page's button, its microphone, the power): nothing keyed until asked.
     val emissionPoste = EmissionPostePc(station, { son.carteDuPoste() })
+    emissionPoste.leila = { qo100.leilaEntendue() }
+    emissionPoste.signauxQo100 = { qo100.signaux.recents() }
     emissionPoste.demarre()
     serveur.emissionPoste = emissionPoste
+    // QO-100's narrow band by the Pluto (SSB, CW, digital) and the uplink profiles: nothing keyed until a button is held,
+    // every start back into the dummy load; LEILA heard while transmitting cuts it.
+    val emissionBe = EmissionBandeEtroitePc(station.stockage, indicatif = { station.settings.callsign },
+        plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
+        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (sdr.adsbTient() == SdrPc.PLUTO) SdrPc.ADSB_TIENT_PLUTO
+            else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.PLUTO) "l'ADALM-PLUTO reçoit la DATV : arrêter cette réception d'abord" else null },
+        autreEmission = {
+            if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord"
+            else if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord"
+            else if (iq.enCours) iqEnCours
+            else if (emissionPoste.poste.etat.emet) "l'IC-9700 émet : relâcher son PTT d'abord" else null
+        },
+        gainMaxDb = { emission.gainMaxDb }, reseauAutorise = { station.txReseauAutorise },
+        descenteCockpit = { station.qo100.etat.value.descenteHz },
+        signauxQo100 = { qo100.signaux.recents() }, leila = { qo100.leilaEntendue() },
+        cartes = { son.son.appareils().map { it.nom } },
+        ouvreCarte = { nom, recoit -> son.son.capture(nom, recoit).let { (r, err) -> r?.second to err } })
+    beRef = emissionBe
+    emissionPoste.autreEmission = { if (emissionBe.emet) beEnCours else null }
+    emissionBe.demarre()
+    serveur.emissionBe = emissionBe
     // The antenna polarisation switch (an ESP32 on USB, or the virtual one): nothing opened until a port is chosen;
     // never a command to an antenna SatMe transmits through (the band from the frequency, both when unknown).
     val polarisation = PolarisationPc(station, dossier)
     polarisation.emissions = {
         buildList {
             if (emissionPoste.poste.etat.emet) add(station.stationCat.etat.value.monteeHz)
+            if (emissionBe.emet) add(emissionBe.cadranHz)
             if (emissionSstv.etat.emet) add(emissionSstv.etat.frequenceHz.takeIf { it > 0 })
             if (emission.etat.emet) add(emission.etat.frequenceKhz.takeIf { it > 0 }?.let { it * 1000L })
         }
@@ -432,7 +463,7 @@ fun main(args: Array<String>) {
     // HTTPS for the remote page (its microphone needs it): off unless chosen on this PC.
     serveur.certificat = CertificatPc(dossier)
     // The station's frequency for logging programs (rigctld protocol): off unless chosen in Réglages › Interfaces.
-    val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet }
+    val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet || emissionBe.emet }
     rigctld.demarreSiActif()
     serveur.rigctld = rigctld
     // The USB volume knob as a VFO (Linux): off unless chosen in Réglages › Interfaces; receive tuning only.
@@ -457,6 +488,7 @@ fun main(args: Array<String>) {
                 if (emissionSstv.etat.emet) put("SSTV", null)
                 if (iq.enCours) put("correction I Q", null)
                 if (emissionPoste.poste.etat.emet) put("IC-9700", null)
+                if (emissionBe.emet) put("BLU Pluto", emissionBe.cadranHz)
             })
     }, { station.settings.callsign }, gainSdr = { baisseSdr.regle("annonces", it) })
     annoncesRef = annonces
@@ -476,7 +508,7 @@ fun main(args: Array<String>) {
     autopilote.prendSource = { nom -> serveur.prendSource(son, nom) }
     autopilote.emissionEnCours = {
         if (emission.etat.emet) "émission DATV" else if (emissionSstv.etat.emet) "émission SSTV" else if (iq.enCours) "correction I/Q"
-        else if (emissionPoste.poste.etat.emet) "émission IC-9700" else null
+        else if (emissionPoste.poste.etat.emet) "émission IC-9700" else if (emissionBe.emet) "émission BLU Pluto" else null
     }
     autopilote.annonce = { t ->
         val r = annonces.reglages
@@ -522,7 +554,7 @@ fun main(args: Array<String>) {
         DeploiementPc(dossier, lanceur, { reglages.brutes() }),
         RedemarragePc(args),
         occupe = {
-            if (emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet)
+            if (emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet || emissionBe.emet)
                 "une émission est en cours : l'arrêter d'abord" else null
         },
         motDePasse = { acces.defini },
@@ -553,6 +585,8 @@ fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread {
         // The rig's PTT released first, while the CAT still reaches it.
         runCatching { emissionPoste.arreteTout("SatMe-PC fermé") }
+        // The Pluto's narrow band: its LO powered down.
+        runCatching { emissionBe.arreteTout("SatMe-PC fermé") }
         // The transmitter first: its LO powered down before anything else.
         runCatching { iq.arrete() }
         runCatching { adsb.arrete() }
