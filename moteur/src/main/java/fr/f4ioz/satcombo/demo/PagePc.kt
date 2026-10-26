@@ -828,6 +828,49 @@ ${STYLE_JETONS}
   .bascule button { padding:4px 10px; font-size:12px; }
   .bascule button.actif { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
   #suivants-boite { max-height:220px; overflow:auto; }
+  /* Panels the user arranges (pliTab): folded to their title, columns hidden or widened, a screen made taller. */
+  .pli-t, .carte > .t.pli-t:first-child { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+  .pli-bs { margin-left:auto; display:flex; gap:4px; flex:none; }
+  .pli-b { padding:2px 7px; min-width:26px; min-height:24px; font-size:12px; line-height:1; letter-spacing:0; text-transform:none; font-weight:600;
+           color:var(--texte-2); background:transparent; border:1px solid var(--ligne); border-radius:var(--r1); }
+  .pli-b:hover, .pli-b[aria-pressed="true"] { color:var(--rx); border-color:var(--rx); }
+  .pli-chev { display:inline-block; transition:transform .15s; }
+  .pli-b[aria-expanded="false"] .pli-chev { transform:rotate(-90deg); }
+  .pli-x { display:none !important; }
+  .carte.pli-plie > :not(:first-child) { display:none !important; }
+  .carte.pli-plie { height:auto !important; padding-bottom:8px; }
+  .carte.pli-plie > .t:first-child { margin-bottom:0; }
+  .pli-col-cache { display:none !important; }
+  .pli-sep { position:relative; touch-action:none; user-select:none; -webkit-user-select:none; z-index:2; outline:none; }
+  .pli-sep::before { content:''; position:absolute; inset:0 -4px; }
+  .pli-sep::after { content:''; position:absolute; border-radius:2px; background:var(--ligne-forte); opacity:.6; transition:opacity .15s, background .15s; }
+  .pli-sep-v { cursor:col-resize; min-height:40px; }
+  .pli-sep-v::after { left:calc(50% - 2px); width:4px; top:calc(50% - 28px); height:56px; }
+  .pli-sep-h { cursor:row-resize; height:14px; margin:0 0 -4px; }
+  .pli-sep-h::before { inset:-3px 0; }
+  .pli-sep-h::after { top:5px; height:4px; left:calc(50% - 28px); width:56px; }
+  .pli-sep:hover::after, .pli-sep:focus-visible::after, .pli-sep.pli-tire::after { opacity:1; background:var(--rx); }
+  .pli-sep:focus-visible { box-shadow:inset 0 0 0 1px var(--rx); border-radius:4px; }
+  .pli-focus { font-size:14px !important; }
+  .pli-focus[aria-pressed="true"] { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  /* The frequencies' compact form: the transmitter and RX / TX, nothing else. */
+  .carte.pli-compact:not(.pli-plie) { display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; }
+  .carte.pli-compact > .t:first-child { flex-basis:100%; margin-bottom:0; }
+  .carte.pli-compact > .ligne { display:none !important; }
+  .carte.pli-compact > select { flex:1 1 150px; width:auto !important; min-width:0; }
+  .carte.pli-compact > .paire { margin:0 !important; gap:16px; }
+  .carte.pli-compact > .paire .val { font-size:22px; }
+  .pli-dispo { position:sticky; bottom:10px; height:0; display:flex; justify-content:flex-end; align-items:flex-start; padding-right:16px; z-index:6; pointer-events:none; }
+  .pli-dispo-in { position:relative; transform:translateY(-100%); pointer-events:auto; }
+  .pli-dispo-b { padding:5px 12px; border-radius:999px; font-size:var(--fs-s); background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre); opacity:.85; }
+  .pli-dispo-b:hover, .pli-dispo-b[aria-expanded="true"] { opacity:1; color:var(--rx); border-color:var(--rx); }
+  .pli-menu { position:absolute; right:0; bottom:calc(100% + 6px); width:max-content; max-width:min(320px, calc(100vw - 32px)); max-height:70vh; overflow:auto;
+              background:var(--s2); border:1px solid var(--ligne-forte); border-radius:var(--r2); box-shadow:var(--ombre-pop); padding:10px 12px; }
+  .pli-menu .t { margin:6px 0 2px; } .pli-menu .t:first-child { margin-top:0; }
+  .pli-menu label { display:flex; align-items:center; gap:8px; min-height:30px; font-size:var(--fs-s); cursor:pointer; }
+  .pli-menu .ligne { margin-top:8px; }
+  @media (max-width:760px) { .pli-dispo { bottom:66px; } }
+  @media (pointer:coarse) { .pli-b { min-width:36px; min-height:32px; font-size:14px; } .pli-sep-h { height:20px; } .pli-sep::before { inset:0 -8px; } .pli-sep-h::before { inset:-6px 0; } .pli-menu label { min-height:40px; } }
   #k-grille { grid-template-columns:minmax(380px,1fr) minmax(420px,1.7fr); }
   .k-fenetres { max-height:360px; overflow:auto; }
   .k-corps { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
@@ -985,6 +1028,8 @@ ${STYLE_JETONS}
     #v-station .ecran { flex:1; height:auto; min-height:220px; }
     #v-station #suivants-boite { flex:none; max-height:24vh; }
     #v-station .col3 .carte { margin-bottom:8px; padding:10px 12px; }
+    #v-station .ecran.pli-hfixe { flex:none; }
+    #v-station .ecran.pli-hfixe ~ #suivants-boite { flex:1 1 auto; max-height:none; min-height:60px; }
     /* QO-100 and DATV: one screen; the waterfall and the side panels take what is left. */
     #v-qo100 .tq { height:100%; box-sizing:border-box; display:flex; flex-direction:column; padding-bottom:10px; }
     #v-qo100 .tq-grille { flex:1; min-height:0; }
@@ -1109,6 +1154,41 @@ ${STYLE_JETONS}
   .ob-mesures { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-family:var(--mono); font-size:var(--fs-s); margin:0; }
   .ob-mesures dt { color:var(--texte-3); }
   .ob-mesures dd { margin:0; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  /* The dashboard (Tableau): the globe on the whole screen, its information in the corners, readable from across the room. */
+  .ob-tb { position:relative; }
+  .ob-infos { position:absolute; right:0; top:calc(100% + 6px); z-index:6; width:max-content; max-width:min(300px, 80vw); background:var(--s2); border:1px solid var(--ligne-forte); border-radius:var(--r2); box-shadow:var(--ombre-pop); padding:8px 12px; }
+  .ob-infos label { display:flex; align-items:center; gap:8px; min-height:30px; font-size:var(--fs-s); color:var(--texte); padding:0; cursor:pointer; }
+  #v-orbites.ob-tableau { position:relative; min-height:100vh; background:var(--s0); }
+  #v-orbites.ob-pseudo { position:fixed; inset:0; z-index:1000; overflow:hidden; }
+  #v-orbites.ob-tableau .ob-boite { position:absolute; inset:0; margin:0; height:auto; min-height:0; grid-template-columns:minmax(0, 1fr); grid-template-rows:minmax(0, 1fr); }
+  #v-orbites.ob-tableau .ob-liste { display:none; }
+  #v-orbites.ob-tableau .ob-scene { height:auto; min-height:0; border:0; border-radius:0; order:0; }
+  #v-orbites.ob-tableau .ob-haut { justify-content:center; transition:opacity .4s; }
+  #v-orbites.ob-tableau .ob-haut > :not(.ob-tb):not(.ob-tb-garde):not(.ob-cadreur) { display:none; }
+  #v-orbites.ob-tableau.ob-calme .ob-haut:not(:hover):not(:focus-within) { opacity:.2; }
+  #v-orbites.ob-tableau.ob-calme .ob-scene { cursor:none; }
+  .ob-coin { display:none; }
+  #v-orbites.ob-tableau .ob-coin { position:absolute; z-index:3; display:flex; flex-direction:column; gap:10px; max-width:min(38%, 440px); pointer-events:none; overflow:hidden; }
+  .ob-coin-hg { left:14px; top:60px; max-height:calc(50% - 70px); } .ob-coin-hd { right:14px; top:60px; max-height:calc(50% - 70px); align-items:flex-end; }
+  .ob-coin-bg { left:14px; bottom:14px; max-height:calc(50% - 24px); justify-content:flex-end; } .ob-coin-bd { right:14px; bottom:14px; max-height:calc(50% - 24px); align-items:flex-end; justify-content:flex-end; }
+  #v-orbites.ob-tableau .ob-instruments:not([hidden]) ~ .ob-coin-b { display:none; }
+  .ob-w { background:rgba(8,13,18,.6); border:1px solid rgba(255,255,255,.12); border-radius:var(--r3); padding:10px 16px; color:var(--texte); font-size:clamp(14px, 1.3vw, 21px); line-height:1.3;
+          text-shadow:0 1px 2px rgba(0,0,0,.6); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); min-width:0; max-width:100%; box-sizing:border-box; }
+  .ob-w[hidden] { display:none; }
+  .ob-w-t { font-size:.68em; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--texte-2); margin-bottom:2px; }
+  .ob-w-gros { font-family:var(--mono); font-size:clamp(30px, 4.4vw, 68px); font-weight:800; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.02em; white-space:nowrap; }
+  .ob-w-gros small { font-size:.36em; font-weight:600; color:var(--texte-2); margin-left:.3em; letter-spacing:0; }
+  .ob-w-moy { font-family:var(--mono); font-size:1.5em; font-weight:700; font-variant-numeric:tabular-nums; }
+  .ob-w-mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .ob-w-g { display:grid; grid-template-columns:auto auto; gap:1px 16px; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .ob-w-g span { color:var(--texte-2); } .ob-w-g b { text-align:right; }
+  .ob-w-pas { display:grid; grid-template-columns:auto minmax(0, 1fr) auto auto; gap:2px 12px; align-items:baseline; }
+  .ob-w-pas i { width:.6em; height:.6em; border-radius:50%; display:inline-block; }
+  .ob-w-pas .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .ob-w-pas .d { font-family:var(--mono); text-align:right; font-variant-numeric:tabular-nums; } .ob-w-pas .m { font-family:var(--mono); color:var(--warn); text-align:right; }
+  .ob-w-pas .la { color:var(--ok); }
+  @media (max-width:700px) { #v-orbites.ob-tableau .ob-coin { max-width:calc(50% - 20px); } .ob-w { padding:6px 10px; } }
+  @media (pointer:coarse) { .ob-tb button { min-height:36px; } .ob-infos label { min-height:40px; } }
   .ob-attente { position:absolute; inset:0; display:grid; place-items:center; color:var(--texte-2); z-index:5; background:rgba(0,0,0,.6); padding:20px; text-align:center; }
   @media (max-width:900px) {
     .ob-boite { grid-template-columns:minmax(0, 1fr); height:auto; }
@@ -2041,8 +2121,8 @@ ${rail()}
 <div class="vue" id="v-station">
 <div class="grille">
   <!-- Passes -->
-  <div class="col1">
-    <div class="carte">
+  <div class="col1" data-pli-col="c1" data-pli-nom="Prochains passages">
+    <div class="carte" data-pli="passages" data-pli-nom="Prochains passages (24 h)">
       <div class="t">Prochains passages (24 h)</div>
       <div class="ligne" style="margin-top:0">
         <input id="filtre" placeholder="Filtrer : ISS, SO-50, RS-44…">
@@ -2057,8 +2137,8 @@ ${rail()}
   </div>
 
   <!-- The satellite followed -->
-  <div class="col2">
-    <div class="carte">
+  <div class="col2" data-pli-col="c2" data-pli-fr="1.2" data-pli-nom="Satellite suivi : ciel, carte, globe">
+    <div class="carte" data-pli="suivi" data-pli-nom="Satellite suivi">
       <div class="t">Satellite suivi</div>
       <div class="ligne" style="margin:0 0 8px">
         <input id="cherche" list="tous" placeholder="Suivre un satellite : QO-100, AO-7…">
@@ -2077,8 +2157,8 @@ ${rail()}
         <span>El <span class="val cyan" id="el">—</span></span>
         <span class="petit" id="dist"></span>
       </div>
-      <div class="ecran" id="s-ecran">
-        <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button><button id="b-globe" onclick="montreEcran('globe')" title="Le globe : le satellite suivi, son orbite et son empreinte, les favoris autour">Globe</button></div>
+      <div class="ecran" id="s-ecran" data-pli-h="ecran" data-pli-nom="la hauteur du ciel, de la carte ou du globe">
+        <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button><button id="b-globe" onclick="montreEcran('globe')" title="Le globe : le satellite suivi, son orbite et son empreinte, les favoris autour">Globe</button><button id="b-pli-focus" class="pli-focus" type="button" aria-pressed="false" onclick="pliFocus(PLI_ST, 'c2')" title="Agrandir : le ciel, la carte ou le globe seul, les autres colonnes cachées (encore : les revoir)" aria-label="Agrandir l'écran du satellite suivi">⤢</button></div>
         <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
         <canvas id="st-globe" hidden title="Glisser pour tourner, molette pour zoomer"></canvas>
@@ -2089,14 +2169,14 @@ ${rail()}
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
         <button class="st-passage" onclick="preparePassage()" title="Ce satellite : la source qui l'entend, les décodeurs de son émetteur, l'enregistrement du passage (réception seulement) — touche P">⚡ Préparer le passage</button>
         <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
-      <div class="t" style="margin-top:10px">Ses prochains passages <a class="petit" id="ics-suivi" href="api/passages.ics" download title="Ses prochains passages dans un fichier d'agenda" style="color:var(--cyan);font-weight:normal">⤓ .ics</a></div>
+      <div class="t" style="margin-top:10px" data-pli-sous="suivants" data-pli-cible="suivants-boite" data-pli-nom="Ses prochains passages">Ses prochains passages <a class="petit" id="ics-suivi" href="api/passages.ics" download title="Ses prochains passages dans un fichier d'agenda" style="color:var(--cyan);font-weight:normal">⤓ .ics</a></div>
       <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
     </div>
   </div>
 
   <!-- Frequencies, rig, mast -->
-  <div class="col3">
-    <div class="carte">
+  <div class="col3" data-pli-col="c3" data-pli-nom="Fréquences, poste et rotor">
+    <div class="carte" data-pli="frequences" data-pli-compact data-pli-nom="Fréquences (Doppler)">
       <div class="t">Fréquences (Doppler)</div>
       <select id="emetteur" style="width:100%"></select>
       <div class="paire" style="margin-top:10px">
@@ -2169,6 +2249,10 @@ ${rail()}
 
   </div>
 </div>
+<div class="pli-dispo"><div class="pli-dispo-in">
+  <button type="button" class="pli-dispo-b" id="st-pli-b" aria-expanded="false" aria-controls="st-pli-menu" title="Disposition de l'onglet : colonnes affichées, panneaux repliés, Fréquences en compact">⊞ Disposition</button>
+  <div class="pli-menu" id="st-pli-menu" role="dialog" aria-label="Disposition de l'onglet Suivi" hidden></div>
+</div></div>
 </div>
 <div class="vue" id="v-carnet" hidden>
 <div class="grille3c">
@@ -3791,7 +3875,9 @@ ${rail()}
     <canvas id="ob-3d" aria-label="Le globe et les satellites"></canvas>
     <canvas id="ob-2d" hidden aria-label="La carte des satellites et de leurs empreintes"></canvas>
     <div class="ob-haut">
-      <div class="ob-seg" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
+      <div class="ob-seg ob-tb-garde" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
+      <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, météo spatiale). Échap pour sortir">⛶ Tableau</button><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
+        <div class="ob-infos" id="ob-infos" role="dialog" aria-label="Informations du tableau de bord" hidden></div></div>
       <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
       <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label></div>
       <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1">×1 réel</option><option value="10">×10</option><option value="60" selected>×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
@@ -3808,6 +3894,10 @@ ${rail()}
         <div class="ob-lecteur"><button type="button" class="ob-jouer" id="ob-jouer">▶ Jouer le passage</button><select id="ob-pvitesse" aria-label="Vitesse de l'animation"><option value="10">×10</option><option value="20" selected>×20</option><option value="40">×40</option><option value="80">×80</option></select><button type="button" id="ob-rejouer">⟲ Depuis l'AOS</button></div></div>
       <div><dl class="ob-mesures" id="ob-mesures"></dl></div>
     </div>
+    <div class="ob-coin ob-coin-hg"><div class="ob-w" data-w="horloge" hidden></div></div>
+    <div class="ob-coin ob-coin-hd"><div class="ob-w" data-w="station" hidden></div><div class="ob-w" data-w="espace" hidden></div></div>
+    <div class="ob-coin ob-coin-b ob-coin-bg"><div class="ob-w" data-w="passages" hidden></div></div>
+    <div class="ob-coin ob-coin-b ob-coin-bd"><div class="ob-w" data-w="sat" hidden></div></div>
     <div class="ob-attente" id="ob-attente" hidden></div>
   </div>
 </div>
@@ -5559,6 +5649,112 @@ function majPassageCarnet() {
 ${EtiquettesCarteJs.JS}
 const GLOBE_MONDE = ${GlobeDonnees.json()};
 ${OrbitesJs.JS}
+// ------------------------------------------------------------------ the Orbites tab as a dashboard (Tableau)
+/*
+ * The globe (or the map) on the whole screen — the browser's full screen, or the window's when it is refused — and in
+ * its corners the information chosen, each kept in this browser: the time, the next passes of the satellites shown,
+ * the satellite chosen, the station and its Sun, the space weather the page already has (ES). Échap, or ✕, leaves.
+ */
+const OB_INFOS = [['horloge', 'Heure UTC et locale'], ['passages', 'Prochains passages'], ['sat', 'Satellite choisi : az, él, distance, Doppler'],
+  ['station', 'Station et Soleil'], ['espace', 'Météo spatiale (Kp, flux)']];
+let obInfos = {}, obTbT = 0, obCalmeT = 0;
+try { obInfos = JSON.parse(localStorage.getItem('ob-infos')) || {}; } catch (x) {}
+const obInfo = k => obInfos[k] !== false;
+function obTableau(on) {
+  const v = g('v-orbites');
+  if (on && !v.classList.contains('ob-tableau')) {
+    v.classList.add('ob-tableau');
+    const fs = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.reject(new Error('non'));
+    fs.catch(() => v.classList.add('ob-pseudo'));
+    Orbites.tempsReel();
+    clearInterval(obTbT); obTbT = setInterval(obTbMaj, 1000);
+    v.addEventListener('pointermove', obReveil); obReveil();
+  } else if (!on && v.classList.contains('ob-tableau')) {
+    if (document.fullscreenElement === v) document.exitFullscreen().catch(() => {});
+    v.classList.remove('ob-tableau', 'ob-pseudo', 'ob-calme');
+    clearInterval(obTbT); clearTimeout(obCalmeT); v.removeEventListener('pointermove', obReveil);
+    g('ob-infos').hidden = true;
+  }
+  const t = v.classList.contains('ob-tableau');
+  g('ob-tableau-b').hidden = t; g('ob-infos-b').hidden = g('ob-sortir').hidden = !t;
+  g('ob-infos-b').setAttribute('aria-expanded', !g('ob-infos').hidden);
+  obTbMaj();
+  if (t) g('ob-sortir').focus(); else g('ob-tableau-b').focus();
+  pliRedim();
+}
+/** The bar fades after a few seconds without the mouse; a move brings it back. */
+function obReveil() {
+  const v = g('v-orbites'); v.classList.remove('ob-calme'); clearTimeout(obCalmeT);
+  obCalmeT = setTimeout(() => { if (v.classList.contains('ob-tableau') && g('ob-infos').hidden) v.classList.add('ob-calme'); }, 4000);
+}
+document.addEventListener('fullscreenchange', () => {
+  const v = g('v-orbites');
+  if (document.fullscreenElement !== v && v.classList.contains('ob-tableau') && !v.classList.contains('ob-pseudo')) obTableau(false);
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !g('v-orbites').classList.contains('ob-tableau')) return;
+  if (!g('ob-infos').hidden) { g('ob-infos').hidden = true; g('ob-infos-b').setAttribute('aria-expanded', false); g('ob-infos-b').focus(); return; }
+  obTableau(false);
+});
+g('ob-infos-b').onclick = ev => {
+  ev.stopPropagation();
+  const m = g('ob-infos'), ouvre = m.hidden;
+  m.hidden = !ouvre; g('ob-infos-b').setAttribute('aria-expanded', ouvre);
+  if (!ouvre) return;
+  m.innerHTML = '';
+  OB_INFOS.forEach(i => { const l = document.createElement('label'), c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = obInfo(i[0]);
+    c.onchange = () => { obInfos[i[0]] = c.checked; try { localStorage.setItem('ob-infos', JSON.stringify(obInfos)); } catch (x) {} obTbMaj(); };
+    l.append(c, document.createTextNode(i[1])); m.appendChild(l); });
+  m.querySelector('input').focus();
+};
+document.addEventListener('pointerdown', ev => { const m = g('ob-infos');
+  if (!m.hidden && !m.contains(ev.target) && ev.target !== g('ob-infos-b')) { m.hidden = true; g('ob-infos-b').setAttribute('aria-expanded', false); } });
+const obDuree = ms => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return h ? h + ' h ' + String(m).padStart(2, '0') : m ? m + ' min ' + String(s % 60).padStart(2, '0') : s + ' s'; };
+const obDeux = n => String(n).padStart(2, '0');
+/** The corners, once a second while the dashboard is shown. */
+function obTbMaj() {
+  const v = g('v-orbites');
+  // Another tab opened (a shortcut, the menu): the dashboard leaves the screen with it.
+  if (v.hidden && v.classList.contains('ob-tableau')) { obTableau(false); return; }
+  const on = v.classList.contains('ob-tableau');
+  const w = k => v.querySelector('.ob-w[data-w="' + k + '"]'), montre = (k, html) => { const e = w(k), vu = on && obInfo(k) && html != null;
+    e.hidden = !vu; if (vu && e.dataset.h !== html) { e.dataset.h = html; e.innerHTML = html; } };
+  if (!on) { OB_INFOS.forEach(i => { w(i[0]).hidden = true; }); return; }
+  const now = new Date(), d = Orbites.tableau();
+  montre('horloge', '<div class="ob-w-t">Heure</div><div class="ob-w-gros">' + obDeux(now.getUTCHours()) + ':' + obDeux(now.getUTCMinutes()) + ':' + obDeux(now.getUTCSeconds()) + '<small>UTC</small></div>' +
+    '<div class="ob-w-mono">' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' locale · ' + now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + '</div>');
+  if (!d) { ['passages', 'sat', 'station', 'espace'].forEach(k => montre(k, null)); return; }
+  // The next passes: under way (green), then the countdowns.
+  if (!d.vu) montre('passages', '<div class="ob-w-t">Prochains passages</div><div class="petit">Le locator de la station manque (Réglages › Station).</div>');
+  else {
+    const l = Orbites.prochains(6);
+    montre('passages', '<div class="ob-w-t">Prochains passages</div>' + (l.length ? '<div class="ob-w-pas">' + l.map(p => {
+      const la = p.aos <= d.t;
+      return '<i style="background:' + p.couleur + '"></i><span class="n">' + esc(p.nom) + '</span><span class="d' + (la ? ' la' : '') + '">' +
+        (la ? '↑ encore ' + obDuree(p.los - d.t) : p.aos - d.t < 3600000 ? 'dans ' + obDuree(p.aos - d.t) : hm(p.aos)) + '</span><span class="m">' + p.max.toFixed(0) + '°</span>';
+    }).join('') + '</div>' : '<div class="petit">Aucun dans les 24 h (les satellites cochés, sinon les favoris).</div>'));
+  }
+  // The satellite chosen in the list.
+  const e = d.e, s = d.sat;
+  montre('sat', s ? '<div class="ob-w-t"><span style="color:' + s.couleur + '">●</span> ' + esc(s.nom) + '</div>' + (e ? (d.vu ?
+    '<div class="ob-w-gros" style="color:' + (e.el > 0 ? 'var(--ok)' : 'var(--texte)') + '">' + e.el.toFixed(1) + '°<small>él · az ' + e.az.toFixed(0) + '°</small></div>' : '') +
+    '<div class="ob-w-g">' + (d.vu ? '<span>Distance</span><b>' + Math.round(e.dist).toLocaleString('fr-FR') + ' km</b>' : '') +
+    '<span>Altitude</span><b>' + Math.round(e.alt).toLocaleString('fr-FR') + ' km</b><span>Sous lui</span><b>' + e.lat.toFixed(1) + '° ' + e.lon.toFixed(1) + '°</b>' +
+    (d.dop != null ? '<span>Descente</span><b>' + d.dop.toFixed(4) + ' MHz</b><span>Doppler</span><b>' + ((d.dop - s.dl) * 1e3 >= 0 ? '+' : '') + ((d.dop - s.dl) * 1e3).toFixed(1) + ' kHz</b>' : '') + '</div>'
+    : '<div class="petit">Position inconnue.</div>') : null);
+  // The station and its Sun.
+  const so = d.soleil;
+  montre('station', '<div class="ob-w-t">Station</div><div class="ob-w-moy">' + esc(d.indicatif || '—') + (d.locator ? ' <small class="petit">' + esc(d.locator) + '</small>' : '') + '</div>' +
+    (so ? '<div class="ob-w-mono">' + (so.el > 0 ? '☀ jour' : so.el > -6 ? '◐ crépuscule' : so.el > -18 ? '◑ crépuscule (nuit proche)' : '☾ nuit') + ' · Soleil ' + so.el.toFixed(0) + '° az ' + so.az.toFixed(0) + '°</div>' : ''));
+  // The space weather, as the page last read it (Météo spatiale tab).
+  const k = typeof ES !== 'undefined' && ES ? ES.kp : null, f = ES && ES.f107, x = ES && ES.rayons;
+  montre('espace', '<div class="ob-w-t">Météo spatiale</div>' + (k || f || x ? '<div class="ob-w-g">' +
+    (k ? '<span>Kp</span><b style="color:' + (ES_COUL[k.niveau] || '') + '">' + esc(k.texte) + ' · ' + esc(ES_NIVEAU[k.niveau] || '') + '</b>' : '') +
+    (f ? '<span>Flux 10,7 cm</span><b>' + esc(f.sfu) + ' SFU</b>' : '') + (x ? '<span>Rayons X</span><b>' + esc(x.classe) + '</b>' : '') + '</div>'
+    : '<div class="petit">Pas de données (onglet Météo spatiale).</div>'));
+}
 const ETQ_H = 14;
 function pointsDuPassage(m) {
   const pc = E && E.passageCarnet; if (!pc) return;
@@ -9876,6 +10072,177 @@ function dessineCarteStation() {
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
 }
 attacheCarte(g('st-carte'), SV, dessineCarteStation, cadreStation, 0);
+// ------------------------------------------------------------------ panels the user arranges (Pli)
+/*
+ * A tab's panels arranged by its user, with the mouse, a finger (Pointer Events) or the keyboard, and kept per browser
+ * under [cle]: read from the tab's marks, so another tab can take it by marking its own.
+ *   data-pli="k"           a card folded to its title (its first child) by a button there
+ *   data-pli-compact       … and its compact form (CSS: .pli-compact)
+ *   data-pli-sous="k"      a title folding the element [data-pli-cible] below it
+ *   data-pli-col="k"       a column of the tab's grid: hidden from the menu, widened by the handles between
+ *   data-pli-h="k"         a box made taller or shorter by a handle below it
+ *   data-pli-nom           the name the buttons and the menu say
+ * The menu ([menu], opened by [bouton]) ticks the columns shown and the panels unfolded, and puts everything back.
+ */
+const PLI_MIN = 180;
+function pliLit(cle) { try { const d = JSON.parse(localStorage.getItem(cle)); return d && typeof d === 'object' ? d : {}; } catch (x) { return {}; } }
+function pliGarde(P) { try { localStorage.setItem(P.cle, JSON.stringify(P.d)); } catch (x) {} }
+function pliNeuf(P) { ['plie', 'compact', 'cache', 'fr', 'h'].forEach(k => { if (!P.d[k] || typeof P.d[k] !== 'object') P.d[k] = {}; }); }
+let pliRaf = 0;
+/** Sizes changed: the maps redraw (they listen to the window); the globes and the sky follow by themselves. */
+function pliRedim() { if (!pliRaf) pliRaf = requestAnimationFrame(() => { pliRaf = 0; window.dispatchEvent(new Event('resize')); }); }
+function pliBouton(boite, html, titre, fait) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'pli-b'; b.innerHTML = html; b.title = titre; b.setAttribute('aria-label', titre);
+  b.onclick = ev => { ev.stopPropagation(); fait(); }; boite.appendChild(b); return b;
+}
+function pliBoutons(t) { t.classList.add('pli-t'); const bs = document.createElement('span'); bs.className = 'pli-bs'; t.appendChild(bs); return bs; }
+/** A handle dragged by mouse or finger, or moved by the arrow keys; [debut]() → its context, [bouge](ctx, dx, dy), [fin](ctx); double-click: [remet]. */
+function pliPoignee(sep, debut, bouge, fin, remet) {
+  sep.addEventListener('pointerdown', ev => {
+    if (ev.button > 0) return;
+    ev.preventDefault(); try { sep.setPointerCapture(ev.pointerId); } catch (x) {} sep.classList.add('pli-tire');
+    const x0 = ev.clientX, y0 = ev.clientY, ctx = debut();
+    const mv = e => bouge(ctx, e.clientX - x0, e.clientY - y0);
+    const fini = () => { sep.removeEventListener('pointermove', mv); sep.removeEventListener('pointerup', fini); sep.removeEventListener('pointercancel', fini); sep.classList.remove('pli-tire'); fin(ctx); };
+    sep.addEventListener('pointermove', mv); sep.addEventListener('pointerup', fini); sep.addEventListener('pointercancel', fini);
+  });
+  sep.addEventListener('keydown', ev => {
+    const pas = ev.shiftKey ? 80 : 24, d = { ArrowLeft: [-pas, 0], ArrowRight: [pas, 0], ArrowUp: [0, -pas], ArrowDown: [0, pas] }[ev.key];
+    if (ev.key === 'Enter' || ev.key === 'Home') { ev.preventDefault(); remet(); return; }
+    if (!d) return;
+    ev.preventDefault(); const ctx = debut(); bouge(ctx, d[0], d[1]); fin(ctx);
+  });
+  sep.addEventListener('dblclick', remet);
+}
+function pliTab(v, cle, menu, bouton) {
+  const P = { v: v, cle: cle, d: pliLit(cle), cols: [].slice.call(v.querySelectorAll('[data-pli-col]')), seps: [], menu: menu, bouton: bouton, maj: [] };
+  pliNeuf(P);
+  P.grille = P.cols.length ? P.cols[0].parentNode : null;
+  // The cards: fold (and compact).
+  v.querySelectorAll('[data-pli]').forEach(c => {
+    const k = c.dataset.pli, nom = c.dataset.pliNom || k, bs = pliBoutons(c.firstElementChild);
+    if (c.hasAttribute('data-pli-compact')) {
+      const b = pliBouton(bs, '▭', nom + ' : compact, l’essentiel seulement (encore : tout)', () => { P.d.compact[k] = !P.d.compact[k]; pliChange(P); });
+      P.maj.push(() => { const on = !!P.d.compact[k]; c.classList.toggle('pli-compact', on); b.setAttribute('aria-pressed', on); });
+    }
+    const b = pliBouton(bs, '<span class="pli-chev">▾</span>', '', () => { P.d.plie[k] = !P.d.plie[k]; pliChange(P); });
+    P.maj.push(() => { const p = !!P.d.plie[k]; c.classList.toggle('pli-plie', p); b.setAttribute('aria-expanded', !p);
+      b.title = (p ? 'Déplier : ' : 'Replier : ') + nom; b.setAttribute('aria-label', b.title); });
+  });
+  // The titles folding what follows them.
+  v.querySelectorAll('[data-pli-sous]').forEach(t => {
+    const k = t.dataset.pliSous, nom = t.dataset.pliNom || k, cible = g(t.dataset.pliCible);
+    const b = pliBouton(pliBoutons(t), '<span class="pli-chev">▾</span>', '', () => { P.d.plie[k] = !P.d.plie[k]; pliChange(P); });
+    b.setAttribute('aria-controls', cible.id);
+    P.maj.push(() => { const p = !!P.d.plie[k]; cible.classList.toggle('pli-x', p); b.setAttribute('aria-expanded', !p);
+      b.title = (p ? 'Déplier : ' : 'Replier : ') + nom; b.setAttribute('aria-label', b.title); });
+  });
+  // The boxes whose height a handle below sets.
+  v.querySelectorAll('[data-pli-h]').forEach(box => {
+    const k = box.dataset.pliH, sep = document.createElement('div');
+    sep.className = 'pli-sep pli-sep-h'; sep.tabIndex = 0; sep.setAttribute('role', 'separator'); sep.setAttribute('aria-orientation', 'horizontal');
+    sep.title = 'Glisser (souris ou doigt) pour changer ' + (box.dataset.pliNom || 'la hauteur') + ' ; double-clic : la hauteur d’origine';
+    sep.setAttribute('aria-label', 'Poignée : ' + (box.dataset.pliNom || 'hauteur'));
+    box.after(sep);
+    pliPoignee(sep, () => ({ h: box.getBoundingClientRect().height }), (c, dx, dy) => {
+      P.d.h[k] = Math.round(Math.max(160, Math.min(window.innerHeight * 0.9, c.h + dy))); pliHauteurs(P); pliRedim();
+    }, () => pliGarde(P), () => { delete P.d.h[k]; pliChange(P); });
+    P.maj.push(() => { const h = P.d.h[k]; box.style.height = h ? h + 'px' : ''; box.classList.toggle('pli-hfixe', !!h); sep.setAttribute('aria-valuenow', Math.round(h || box.getBoundingClientRect().height)); });
+  });
+  // The handles between the columns.
+  for (let i = 0; i + 1 < P.cols.length; i++) {
+    const sep = document.createElement('div');
+    sep.className = 'pli-sep pli-sep-v'; sep.tabIndex = 0; sep.hidden = true; sep.setAttribute('role', 'separator'); sep.setAttribute('aria-orientation', 'vertical');
+    sep.title = 'Glisser (souris ou doigt) pour élargir une colonne ; flèches du clavier ; double-clic : les largeurs d’origine';
+    sep.setAttribute('aria-label', 'Poignée entre deux colonnes');
+    P.grille.appendChild(sep); P.seps.push(sep);
+    pliPoignee(sep, () => {
+      const a = sep.pli[0], b = sep.pli[1];
+      return { a: a.dataset.pliCol, b: b.dataset.pliCol, wa: a.getBoundingClientRect().width, wb: b.getBoundingClientRect().width, fa: pliFr(P, a), fb: pliFr(P, b) };
+    }, (c, dx) => {
+      const w = c.wa + c.wb, na = Math.max(PLI_MIN, Math.min(w - PLI_MIN, c.wa + dx)), f = c.fa + c.fb;
+      P.d.fr[c.a] = +(f * na / w).toFixed(3); P.d.fr[c.b] = +(f - P.d.fr[c.a]).toFixed(3);
+      pliColonnes(P); pliRedim();
+    }, () => pliGarde(P), () => { P.d.fr = {}; pliChange(P); });
+  }
+  if (menu && bouton) {
+    bouton.onclick = ev => { ev.stopPropagation(); pliMenu(P, menu.hidden); };
+    document.addEventListener('pointerdown', ev => { if (!menu.hidden && !menu.contains(ev.target) && ev.target !== bouton) pliMenu(P, false); });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !menu.hidden) { pliMenu(P, false); bouton.focus(); } });
+  }
+  window.addEventListener('resize', () => pliColonnes(P));
+  pliChange(P, true);
+  return P;
+}
+/** A column's share of the width (fr): the user's, or the one the page gives it. */
+function pliFr(P, c) { const k = c.dataset.pliCol; return P.d.fr[k] || +(c.dataset.pliFr || 1); }
+function pliHauteurs(P) { P.maj.forEach(f => f()); }
+/** Everything as [P.d] says, kept (unless [lu]: just read), the maps told. */
+function pliChange(P, lu) {
+  P.maj.forEach(f => f()); pliColonnes(P);
+  if (P.menu && !P.menu.hidden) pliMenuRemplit(P);
+  if (P.focus) P.focus();
+  if (!lu) { pliGarde(P); pliRedim(); }
+}
+/** The columns in the grid: a row of the shown ones and the handles between; on a middle width the third goes below, on a narrow one the page's own layout. */
+function pliColonnes(P) {
+  if (!P.grille) return;
+  let vis = P.cols.filter(c => !P.d.cache[c.dataset.pliCol]);
+  if (!vis.length) vis = P.cols.slice(0, 1);
+  P.cols.forEach(c => c.classList.toggle('pli-col-cache', !vis.includes(c)));
+  const st = P.grille.style;
+  if (matchMedia('(max-width:760px)').matches) {
+    st.gridTemplateColumns = st.columnGap = '';
+    P.cols.forEach(c => { c.style.gridColumn = c.style.gridRow = ''; }); P.seps.forEach(s => { s.hidden = true; }); return;
+  }
+  let ligne = vis, bas = [];
+  if (vis.length === 3 && matchMedia('(max-width:1100px)').matches) { ligne = vis.slice(0, 2); bas = vis.slice(2); }
+  const tr = [];
+  ligne.forEach((c, i) => { if (i) tr.push('12px'); tr.push('minmax(' + PLI_MIN + 'px, ' + pliFr(P, c) + 'fr)'); c.style.gridColumn = String(2 * i + 1); c.style.gridRow = '1'; });
+  bas.forEach(c => { c.style.gridColumn = '1 / -1'; c.style.gridRow = '2'; });
+  st.gridTemplateColumns = tr.join(' '); st.columnGap = '0';
+  P.seps.forEach((s, i) => { const on = i + 1 < ligne.length; s.hidden = !on;
+    if (on) { s.style.gridColumn = String(2 * i + 2); s.style.gridRow = '1'; s.pli = [ligne[i], ligne[i + 1]]; } });
+}
+function pliMenu(P, ouvre) {
+  P.menu.hidden = !ouvre; P.bouton.setAttribute('aria-expanded', ouvre);
+  if (ouvre) { pliMenuRemplit(P); const c = P.menu.querySelector('input'); if (c) c.focus(); }
+}
+function pliMenuRemplit(P) {
+  const m = P.menu, coche = (nom, on, off, fait) => { const l = document.createElement('label'), c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = on; c.disabled = !!off; c.onchange = () => fait(c.checked); l.append(c, document.createTextNode(nom)); m.appendChild(l); };
+  const titre = t => { const d = document.createElement('div'); d.className = 't'; d.textContent = t; m.appendChild(d); };
+  const ici = [].indexOf.call(m.querySelectorAll('input'), document.activeElement);
+  m.innerHTML = '';
+  const vis = P.cols.filter(c => !P.d.cache[c.dataset.pliCol]);
+  if (P.cols.length) { titre('Colonnes affichées');
+    P.cols.forEach(c => { const k = c.dataset.pliCol, on = !P.d.cache[k]; coche(c.dataset.pliNom || k, on, on && vis.length < 2, x => { if (x) delete P.d.cache[k]; else P.d.cache[k] = 1; pliChange(P); }); }); }
+  titre('Panneaux dépliés');
+  P.v.querySelectorAll('[data-pli], [data-pli-sous]').forEach(e => { const k = e.dataset.pli || e.dataset.pliSous;
+    coche(e.dataset.pliNom || k, !P.d.plie[k], false, x => { P.d.plie[k] = !x; pliChange(P); }); });
+  const cp = P.v.querySelectorAll('[data-pli-compact]');
+  if (cp.length) { titre('Compact'); cp.forEach(e => { const k = e.dataset.pli; coche((e.dataset.pliNom || k) + ' : l’essentiel', !!P.d.compact[k], false, x => { P.d.compact[k] = x; pliChange(P); }); }); }
+  const l = document.createElement('div'); l.className = 'ligne';
+  const r = document.createElement('button'); r.type = 'button'; r.textContent = 'Rétablir'; r.title = 'Toutes les colonnes et tous les panneaux, aux tailles d’origine';
+  r.onclick = () => { P.d = {}; pliNeuf(P); pliChange(P); };
+  l.appendChild(r); m.appendChild(l);
+  const a = document.createElement('div'); a.className = 'petit aide';
+  a.textContent = 'Les poignées entre les colonnes et sous l’écran se glissent à la souris ou au doigt (flèches du clavier aussi) ; double-clic : la taille d’origine. Gardé dans ce navigateur.';
+  m.appendChild(a);
+  if (ici >= 0 && m.querySelectorAll('input')[ici]) m.querySelectorAll('input')[ici].focus();
+}
+/** Only the column [garder] shown (the others hidden), or, again, the columns shown before. */
+function pliFocus(P, garder) {
+  const autres = P.cols.filter(c => c.dataset.pliCol !== garder && !P.d.cache[c.dataset.pliCol]);
+  if (autres.length) { P.d.avant = Object.assign({}, P.d.cache); P.cols.forEach(c => { if (c.dataset.pliCol !== garder) P.d.cache[c.dataset.pliCol] = 1; }); }
+  else { P.d.cache = P.d.avant && typeof P.d.avant === 'object' ? P.d.avant : {}; delete P.d.cache[garder]; delete P.d.avant; }
+  pliChange(P);
+}
+// The Suivi tab: its passes, the satellite followed (its screen as tall as wanted), the frequencies (compact).
+const PLI_ST = pliTab(g('v-station'), 'pli-station', g('st-pli-menu'), g('st-pli-b'));
+PLI_ST.focus = () => { const seul = PLI_ST.cols.every(c => c.dataset.pliCol === 'c2' || PLI_ST.d.cache[c.dataset.pliCol]);
+  g('b-pli-focus').setAttribute('aria-pressed', seul); g('b-pli-focus').textContent = seul ? '⤡' : '⤢'; };
+PLI_ST.focus();
 // The carnet's small map: the same track, the satellite and its footprint, centred on it.
 const CV = { cx: 0.5, cy: 0.4, z: 1, libre: false };
 function cadreCarnet() {

@@ -1358,6 +1358,51 @@ const Orbites = (function () {
       return (d.sats || []).map(s => ({ nom: s.nom, catnum: s.catnum, fav: f.includes(s.catnum), l1: s.l1, l2: s.l2 })).sort((a, b) => (b.fav - a.fav) || a.nom.localeCompare(b.nom)); } catch (x) { return []; } },
     /** The journal's globe: where its satellite shows (px from the canvas's left), null when unknown. */
     satEcranX: () => rejeu ? rejeu.satX : null,
+    /**
+     * The dashboard's figures, at the present time (not the tab's): the station {indicatif, locator, lat, lon}, the Sun's
+     * elevation and azimuth there, the satellite chosen {nom, couleur} and where it is {az, el, dist, alt, lat, lon}, its Doppler (MHz).
+     */
+    tableau: () => {
+      const d = OB.donnees; if (!d || typeof satellite === 'undefined') return null;
+      const t = Date.now(), s = OB.choisi, e = s ? etat(s, t) : null, so = obSoleil(t, satellite.gstime(new Date(t))), o = d.obs;
+      let soleil = null, dop = null;
+      if (o) {
+        const f = o.lat * D2R, dc = so.dec * D2R, H = (o.lon - so.lon) * D2R;
+        const el = Math.asin(Math.sin(f) * Math.sin(dc) + Math.cos(f) * Math.cos(dc) * Math.cos(H));
+        const az = Math.atan2(-Math.cos(dc) * Math.sin(H), Math.sin(dc) * Math.cos(f) - Math.cos(dc) * Math.sin(f) * Math.cos(H));
+        soleil = { el: el * R2D, az: ((az * R2D) + 360) % 360 };
+      }
+      if (e && s.dl && OB.obs) { const e2 = etat(s, t + 1000); if (e2) dop = s.dl * (1 - (e2.dist - e.dist) / CL); }
+      return { t: t, indicatif: d.indicatif || '', locator: d.locator || '', obs: o || null, soleil: soleil, sat: s ? { nom: s.nom, couleur: s.couleur, dl: s.dl } : null,
+        e: e ? { az: e.az, el: e.el, dist: e.dist, alt: e.alt, lat: e.lat, lon: e.lon } : null, vu: !!OB.obs, dop: dop };
+    },
+    /**
+     * The next passes, present time, of the satellites shown on the globe (else the favourites), up to [n]: [{nom, couleur, aos, los, max}],
+     * the one under way first. Each satellite's passes worked out a few at a time and kept until they are over (or half an hour).
+     */
+    prochains: n => {
+      if (!OB.obs || typeof satellite === 'undefined') return [];
+      const t = Date.now(), cache = OB.prochains || (OB.prochains = new Map());
+      let l = OB.sats.filter(s => s.on && s.mm >= 1.2);
+      if (!l.length) l = OB.sats.filter(s => (s.fav || s.suivi) && s.mm >= 1.2);
+      l = l.slice(0, 40);
+      let budget = 3;
+      l.forEach(s => {
+        const c = cache.get(s.catnum);
+        if (c && c.satrec === s.satrec && t - c.t < 1800000 && (!c.p.length || c.p[0].los > t)) return;
+        if (budget-- <= 0) return;
+        cache.set(s.catnum, { t: t, satrec: s.satrec, p: obPassages(u => { const e = etat(s, u); return e ? e.el : null; }, t, t + 86400000, 60000, 2) });
+      });
+      const out = [];
+      l.forEach(s => { const c = cache.get(s.catnum); if (c) c.p.forEach(p => { if (p.los > t) out.push({ nom: s.nom, couleur: s.couleur, aos: p.aos, los: p.los, max: p.max }); }); });
+      return out.sort((a, b) => a.aos - b.aos).slice(0, n || 6);
+    },
+    /** The tab's time back to the present, at its real pace (the dashboard shows now). */
+    tempsReel: () => {
+      if (OB.vue === 'passage') return;
+      OB.anim = null; OB.temps = { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false };
+      if (tab) { el('ob-vitesse').value = '1'; el('ob-pause').textContent = '⏸'; el('ob-pause').title = 'Pause'; boutonJouer(); }
+    },
     style: k => prendStyle(k),
     villes: v => prendVilles(v),
     etiquettes: v => prendEtiq(v),
