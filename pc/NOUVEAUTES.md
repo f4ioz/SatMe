@@ -16,6 +16,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Suivi à ta façon** (souris, ou doigt sur tablette) : chaque panneau se **replie** sur son titre, les **poignées** élargissent les colonnes et grandissent le ciel / la carte / le globe, **⤢** le laisse seul ; *Fréquences* en **compact** (RX et TX seulement) ; **⊞ Disposition** : colonnes affichées, panneaux, **Rétablir**. Gardé dans ce navigateur.
+- **Orbites en tableau de bord** : **⛶ Tableau** met le globe en plein écran, avec au choix dans les coins l'heure UTC et locale, les prochains passages en compte à rebours, le satellite choisi (él., az., distance, Doppler), la station et le Soleil, la météo spatiale.
 - **Session du Journal** : même très vite hors des passages, la lecture ralentit à l'approche d'un passage ou d'une image ; plus aucun passage ni première image n'est sauté.
 - **Session : deux zooms**, un de loin hors des passages, un de près pendant le passage ; la caméra passe de l'un à l'autre en douceur (la molette règle celui du moment).
 - **Session : satellites en plus** : coche des favoris, ils tournent aussi autour du globe (leurs taches au sol en option), sur la page et dans la vidéo.
@@ -27,6 +29,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Modules** (Réglages › Modules) : coche ce qui t'intéresse — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, avions, navires… — ou prends un profil (Satellites FM/SSB, SSTV ARISS, Parabole QO-100 / DATV, Météo et non-sat, Tout). Un module décoché quitte le menu, ses réglages et la barre d'état ; ce qui reçoit ne démarre plus. Rien ne change à la mise à jour : tout reste coché. La configuration rapide propose les profils.
 
 ### en
+- **Suivi your way** (mouse, or finger on a tablet): each panel **folds** to its title, **handles** widen the columns and make the sky / map / globe taller, **⤢** leaves it alone; *Fréquences* **compact** (RX and TX only); **⊞ Disposition**: columns shown, panels, **Rétablir** (reset). Kept in this browser.
+- **Orbites as a dashboard**: **⛶ Tableau** puts the globe full screen, with in its corners, as you choose, the time UTC and local, the next passes counting down, the chosen satellite (el., az., range, Doppler), the station and the Sun, the space weather.
 - **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.
 - **Session: two zooms**, one from afar outside the passes, one near in a pass; the camera eases from one to the other (the wheel sets the one of the moment).
 - **Session: more satellites**: tick favourites, they go round the globe too (their footprints as an option), on the page and in the video.
