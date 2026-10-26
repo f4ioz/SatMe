@@ -246,6 +246,16 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 - **+ Passage**: a pass made from nothing — the satellite and its times, contacts, a sound, pictures.
 - The pass's **Doppler / CAT log** (when kept, see [Réglages](#réglages-settings)) is linked from it.
 
+### One pass or several: the same editor
+
+A **session groups passes**: opening a pass from the list is a session of one pass; **🌍 Session** (or **🌍 Plusieurs passages** at the top of a pass: its satellite, the day before to the day after) brings several together. The same tabs (**Options**, **Fabriquer**), the same settings, kept together in this browser:
+
+- **Before and after the pass**: **Commencer avant l'AOS** (start before the AOS) and **Finir après le LOS** (end after the LOS), 0 to 30 min, 30 s by default. With a few minutes you **see the satellite coming** on the globe (its position from its orbit), then leaving; the caption says « AOS dans 1:40 ». On the page as in the video, the GIF and the picture.
+- **Speeds**: *Pendant le passage* (in the pass) and *Image ou contact* (plus *Enchaînement*, *Hors passage* and *Pause entre passages* for several); for one pass, a recorded sound always plays in real time, the rest at these speeds (× the playback speed).
+- **Globe**: the zoom (two for several passes), the **extra satellites**; **Afficher** (SSTV picture, record, S-meter, frequency, locator, thumbnails) and the texts' size.
+- **Fabriquer**: video, GIF, picture of the moment, sound. For one pass **on the globe**, whole and not accelerated, the video, the GIF and the picture are made as a session of one pass: margins, speeds, zoom, extra satellites — with its title, its report cards and its summary.
+- **What only makes sense for one pass** stays with it: the sky and the map, the sound in real time, the moments and the stretch chosen on the timeline, the accelerated playback, the SSTV pictures' versions and their place, the report elements, a stretch's WAV, the pass file. Sky, map, stretch or accelerated video: the pass alone, AOS to LOS. Several passes: on the globe. **Ouvrir seul** (open alone, a session's *Passages* tab) opens a pass with all that.
+
 ### The globe view
 
 **Globe**, beside *Ciel* and *Carte*: the pass replayed round the Earth (the globe of the [Orbites](#orbites-the-earth-in-3d) tab). The contacts light up at their time with a line station → satellite → correspondent; the SSTV pictures received land beside the station.

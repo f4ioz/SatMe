@@ -247,6 +247,16 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
 - Le **journal Doppler / CAT** du passage (quand il est tenu, voir [Réglages](#réglages)) y est relié.
 
+### Un passage ou plusieurs : le même éditeur
+
+Une **session regroupe des passages** : ouvrir un passage de la liste, c'est une session d'un passage ; **🌍 Session** (ou **🌍 Plusieurs passages** en tête d'un passage : son satellite, la veille au lendemain) en réunit plusieurs. Les mêmes onglets (**Options**, **Fabriquer**), les mêmes réglages, gardés ensemble dans ce navigateur :
+
+- **Avant et après le passage** : **Commencer avant l'AOS** et **Finir après le LOS** (0 à 30 min, 30 s d'origine). Avec quelques minutes, on **voit arriver le satellite** sur le globe (sa position d'après ses orbites), puis repartir ; le bandeau dit « AOS dans 1:40 ». Sur la page comme dans la vidéo, le GIF et l'image.
+- **Vitesses** : *Pendant le passage* et *Image ou contact* (plus *Enchaînement*, *Hors passage* et *Pause entre passages* pour plusieurs) ; d'un passage seul, un son enregistré se joue toujours en temps réel, le reste à ces vitesses (× la vitesse de lecture).
+- **Globe** : le zoom (deux pour plusieurs passages), les **satellites en plus** ; **Afficher** (image SSTV, fiche, S-mètre, fréquence, locator, vignettes) et la taille des textes.
+- **Fabriquer** : vidéo, GIF, image du moment, son. D'un passage seul **sur le globe**, entier et non accéléré, la vidéo, le GIF et l'image sont faits comme une session d'un passage : marges, vitesses, zoom, satellites en plus — avec son titre, ses cartes du rapport et son récapitulatif.
+- **Ce qui n'a de sens que pour un passage** reste avec lui : le ciel et la carte, le son en temps réel, les moments et le morceau choisi sur la frise, la lecture accélérée, les versions des images SSTV et leur place, les éléments du rapport, le son WAV d'un morceau, le fichier du passage. Ciel, carte, morceau ou vidéo accélérée : le passage seul, de l'AOS au LOS. Plusieurs passages : sur le globe. **Ouvrir seul** (onglet *Passages* d'une session) ouvre un passage avec tout cela.
+
 ### La vue Globe
 
 **Globe**, à côté de *Ciel* et *Carte* : le passage rejoué autour de la Terre (le globe de l'onglet [Orbites](#orbites--la-terre-en-3d)). Les contacts s'allument à leur heure avec un trait station → satellite → correspondant ; les images SSTV reçues viennent se poser près de la station.

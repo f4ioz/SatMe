@@ -669,12 +669,12 @@ object RenduPc {
     }
 
     /** After the title: the montage's card when asked, [n] frames. */
-    private fun ouvertureVideo(w: Int, h: Int, sc: Scene, n: Int): List<Pair<() -> BufferedImage, Int>> =
+    internal fun ouvertureVideo(w: Int, h: Int, sc: Scene, n: Int): List<Pair<() -> BufferedImage, Int>> =
         sc.cartesOuverture.map { k -> { carte(w, h, sc, k) } to n }
 
-    private fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int, parCarte: Int = resumeN * 2 / 3): List<Pair<() -> BufferedImage, Int>> {
+    internal fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int, parCarte: Int = resumeN * 2 / 3, recap: Boolean = sc.recap): List<Pair<() -> BufferedImage, Int>> {
         val l = ArrayList<Pair<() -> BufferedImage, Int>>()
-        if (sc.recap) {
+        if (recap) {
             sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
                 val bm = m.fichier?.let { sc.images[it] } ?: return@forEach
                 l += { imagePleine(w, h, sc, m, bm) } to parImage

@@ -31,8 +31,10 @@ import kotlin.math.sqrt
 
 /**
  * The journal's session as a video: one satellite's passes one after
- * another on the globe, as the page's « Session » plays them. Each pass
- * from 30 s before to 30 s after, drawn as the pass's own video draws it
+ * another on the globe, as the page's « Session » plays them — or a single
+ * pass, the same way (a session of one). Each pass from some minutes before
+ * its AOS to some after its LOS ([Session.avant], [Session.apres], 30 s by
+ * default: the satellite seen coming), drawn as the pass's own video draws it
  * ([RenduPc.image], its overlays); between two, a short turn of the globe
  * with the next one's card (« passages ») or the time running on, faster
  * outside the passes (« continu »). Three paces, eased from one to the
@@ -49,7 +51,9 @@ object SessionRenduPc {
 
     /** Frames a second: the globe turns smoothly enough between two passes. */
     const val FPS = 8
+    /** Before the AOS and after the LOS, by default (ms); at most [MARGE_MAX_MS]. */
     const val MARGE_MS = 30_000L
+    const val MARGE_MAX_MS = 30 * 60_000L
     /** The turn between two passes (« passages »), by default, in seconds. */
     const val TRANSITION_S = 1.5
     /** The old « entre » by default: outside the passes this many times « vitesse ». */
@@ -84,7 +88,13 @@ object SessionRenduPc {
                           /** The companions (satellites' names), their footprints or not. */
                           val autres: List<String> = emptyList(), val tachesAutres: Boolean = false,
                           /** What is made: « video », « gif », « image » (the moment [instant]), « son »; the contacts' sound or not. */
-                          val quoi: String = "video", val instant: Long? = null, val son: Boolean = false)
+                          val quoi: String = "video", val instant: Long? = null, val son: Boolean = false,
+                          /** Before each AOS, after each LOS (ms). */
+                          val avant: Long = MARGE_MS, val apres: Long = MARGE_MS)
+
+    /** A margin (ms) from « margeAvant » / « margeApres », else « avant » / « apres »: 0 to 30 min, 30 s when missing or wrong. */
+    fun marge(p: (String) -> String, nom: String, ancien: String): Long =
+        (p(nom).trim().ifEmpty { p(ancien).trim() }).toDoubleOrNull()?.takeIf { it.isFinite() }?.toLong()?.coerceIn(0L, MARGE_MAX_MS) ?: MARGE_MS
 
     fun parametres(p: (String) -> String): Parametres {
         val mode = p("mode").trim().takeIf { it in setOf("passages", "continu") } ?: "passages"
@@ -106,15 +116,19 @@ object SessionRenduPc {
             autres = p("autres").split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(GlobeRenduPc.COULEURS_AUTRES.size),
             tachesAutres = p("tachesAutres").trim() == "1",
             quoi = p("quoi").trim().takeIf { it in setOf("video", "gif", "image", "son") } ?: "video",
-            instant = p("t").trim().toLongOrNull(), son = p("avecSon").trim() == "1")
+            instant = p("t").trim().toLongOrNull(), son = p("avecSon").trim() == "1",
+            avant = marge(p, "margeAvant", "avant"), apres = marge(p, "margeApres", "apres"))
     }
 
     /** What a session's video shows: its passes' scenes (sorted by time), how it plays, the cards asked. */
     class Session(val scenes: List<RenduPc.Scene>, val mode: String, val v: Vitesses = Vitesses(), val titre: String? = null, val vignettes: Boolean = false,
                   val ouverture: Boolean = true, val recap: Boolean = true, val transition: Double = TRANSITION_S,
                   val zHors: Double = Z_HORS, val zPassage: Double = Z_PASSAGE,
-                  val autres: List<GlobeRenduPc.Autre> = emptyList(), val tachesAutres: Boolean = false, val son: Boolean = false) {
-        val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - MARGE_MS)..(it.e.finMs + MARGE_MS) }
+                  val autres: List<GlobeRenduPc.Autre> = emptyList(), val tachesAutres: Boolean = false, val son: Boolean = false,
+                  val avant: Long = MARGE_MS, val apres: Long = MARGE_MS) {
+        val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
+        /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */
+        val seul get() = scenes.size == 1
         /** The pictures of the session, each once (a picture tied to two passes close together), by the time it was received. */
         val images: List<Pair<Marque, BufferedImage>> = scenes.flatMap { sc ->
             sc.marques.filter { it.type == TypeMarque.SSTV && it.fichier != null }.mapNotNull { m -> sc.images[m.fichier]?.let { m to it } }
@@ -291,7 +305,7 @@ object SessionRenduPc {
         // Which pass, the pictures so far: in the caption, on the right.
         val k = if (tr is Trame.Entre) tr.i + 2 else i + 1
         val vues = s.images.filter { it.first.finMs <= tr.t }
-        sc.legendeSession = Triple("Passage $k / ${s.scenes.size}", recues(vues.size), vues.isNotEmpty())
+        sc.legendeSession = if (s.seul) null else Triple("Passage $k / ${s.scenes.size}", recues(vues.size), vues.isNotEmpty())
         val haut = RenduPc.hautVue(w, h, sc).toFloat()
         sc.centreImpose = centre; sc.gzImpose = zoom(s, tr).toFloat(); sc.autres = s.autres; sc.tachesAutres = s.tachesAutres
         val b = try { RenduPc.image(w, h, sc, tr.t) } finally { sc.centreImpose = null; sc.gzImpose = null; sc.autres = emptyList() }
@@ -411,8 +425,24 @@ object SessionRenduPc {
         return b
     }
 
+    /**
+     * Before the passes, each drawing with its frames: the session's card 3 s; a single pass, its own title 3 s
+     * and the report's opening cards 4 s each, as its video has them.
+     */
+    fun debut(s: Session, w: Int, h: Int): List<Pair<() -> BufferedImage, Int>> {
+        val sc = s.scenes.firstOrNull() ?: return emptyList()
+        val titre: List<Pair<() -> BufferedImage, Int>> = if (!s.ouverture) emptyList()
+            else listOf((if (s.seul) { -> RenduPc.titre(w, h, sc) } else { -> titre(s, w, h) }) to 3 * FPS)
+        return titre + if (s.seul) RenduPc.ouvertureVideo(w, h, sc, 4 * FPS) else emptyList()
+    }
+
+    /** After the passes: the mosaic of the pictures 6 s; a single pass, its pictures 3 s each, its summary 6 s and the report's cards, as its video. */
+    fun fin(s: Session, w: Int, h: Int): List<Pair<() -> BufferedImage, Int>> =
+        if (s.seul) RenduPc.finVideo(w, h, s.scenes[0], 3 * FPS, 6 * FPS, recap = s.recap)
+        else if (s.recap) listOf({ -> mosaique(s, w, h) } to 6 * FPS) else emptyList()
+
     /** How many frames the video holds: the card, the passes, the mosaic. */
-    fun trames(s: Session): Int = (if (s.ouverture) 3 * FPS else 0) + plan(s).size + (if (s.recap) 6 * FPS else 0)
+    fun trames(s: Session): Int = debut(s, 1, 1).sumOf { it.second } + plan(s).size + fin(s, 1, 1).sumOf { it.second }
 
     /** The session as an MP4 (H.264, with [son]'s sound as AAC when given) through ffmpeg; null without it or when it failed. */
     fun video(s: Session, sortie: File, son: Son? = null, travail: File? = null, progres: (Float) -> Unit): File? {
@@ -420,15 +450,15 @@ object SessionRenduPc {
         if (s.scenes.isEmpty()) return null
         val (w, h) = RenduPc.tailleVideo(s.paysage, s.resolution)
         val plan = plan(s)
-        val nTitre = if (s.ouverture) 3 * FPS else 0; val nFin = if (s.recap) 6 * FPS else 0
-        val total = nTitre + plan.size + nFin
+        val avantP = debut(s, w, h); val apresP = fin(s, w, h)
+        val total = avantP.sumOf { it.second } + plan.size + apresP.sumOf { it.second }
         val wav = if (son != null && travail != null) File(travail, "session-" + System.nanoTime() + ".wav").also { RenduPc.ecritWav(source(s, plan, son), son.rate, it) } else null
         try {
             return RenduPc.encode(ff, w, h, FPS, total, wav, sortie) { ecris ->
                 var fait = 0
-                if (nTitre > 0) { val t = titre(s, w, h); repeat(nTitre) { ecris(t); progres(++fait / total.toFloat()) } }
+                for ((dessin, n) in avantP) { val img = dessin(); repeat(n) { ecris(img); progres(++fait / total.toFloat()) } }
                 for (tr in plan) { ecris(image(s, tr, w, h)); progres(++fait / total.toFloat()) }
-                if (nFin > 0) { val m = mosaique(s, w, h); repeat(nFin) { ecris(m); progres(++fait / total.toFloat()) } }
+                for ((dessin, n) in apresP) { val img = dessin(); repeat(n) { ecris(img); progres(++fait / total.toFloat()) } }
             }
         } finally { wav?.delete() }
     }
@@ -448,7 +478,7 @@ object SessionRenduPc {
      */
     fun source(s: Session, plan: List<Trame>, son: Son): fr.f4ioz.satcombo.domain.SourcePcm {
         val allure = allure(s)
-        val nTitre = if (s.ouverture) 3 * FPS else 0
+        val nTitre = debut(s, 1, 1).sumOf { it.second }
         val r = son.rate.toLong()
         fun debut(n: Int) = n * r / FPS
         var n = 0; var dans = 0
@@ -513,14 +543,15 @@ object SessionRenduPc {
         val delai = maxOf(2, Math.round(100.0 * pas / FPS).toInt())
         val choisies = plan.indices.filter { it % pas == 0 || it == plan.size - 1 }
         fun px(img: BufferedImage) = img.getRGB(0, 0, w, h, null, 0, w)
-        val titre = if (s.ouverture) px(titre(s, w, h)) else null
-        val fin = if (s.recap) px(mosaique(s, w, h)) else null
+        // The card(s) before and after, each held as long as in the video (in hundredths of a second).
+        val avantP = debut(s, w, h).map { (d, n) -> px(d()) to n * 100 / FPS }
+        val apresP = fin(s, w, h).map { (d, n) -> px(d()) to n * 100 / FPS }
         var pourPalette = px(image(s, plan[plan.size / 2], w, h))
-        titre?.let { pourPalette += it }; fin?.let { pourPalette += it }
+        avantP.firstOrNull()?.let { pourPalette += it.first }; apresP.firstOrNull()?.let { pourPalette += it.first }; apresP.lastOrNull()?.let { pourPalette += it.first }
         val pal = Gif.palette(pourPalette, listOf(0x0A0F18, 0x111B29, 0xFFFFFF, RenduPc.CYAN.rgb and 0xFFFFFF, RenduPc.SSTV.rgb and 0xFFFFFF, RenduPc.ISS.rgb and 0xFFFFFF))
         sortie.outputStream().buffered().use { o ->
             val g = Gif.Ecrivain(o, w, h, pal)
-            titre?.let { g.trame(it, 0, h, 250) }
+            avantP.forEach { (pixels, cs) -> g.trame(pixels, 0, h, cs) }
             var avant: IntArray? = null
             choisies.forEachIndexed { n, k ->
                 val cur = px(image(s, plan[k], w, h))
@@ -536,7 +567,7 @@ object SessionRenduPc {
                 avant = cur
                 progres((n + 1f) / choisies.size)
             }
-            fin?.let { g.trame(it, 0, h, 500) }
+            apresP.forEach { (pixels, cs) -> g.trame(pixels, 0, h, cs) }
             g.fin()
         }
         return sortie

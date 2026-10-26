@@ -22,6 +22,13 @@ import fr.f4ioz.satcombo.i18n.t
  * the phone ([JournalWeb]), the same as from its Share tab.
  *
  * **Nothing from outside**: no library, no map tile fetched by the PC.
+ *
+ * **One editor for one pass or several** (a session groups passes): the same
+ * options (margins before the AOS and after the LOS, paces, zooms, companions,
+ * what shows) and the same files; what only makes sense for one pass (the sky
+ * and the map, its sound in real time, the stretch chosen on its timeline, its
+ * SSTV pictures' versions, the report's panels, its WAV, its pass file) shows
+ * only with one.
  */
 object PageJournal {
 
@@ -43,7 +50,9 @@ object PageJournal {
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
-        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son")
+        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
+        "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_zoom", "pj_accel_titre",
+        "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_session", "pj_exp_passage", "pj_vue_globe_n")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -214,6 +223,10 @@ object PageJournal {
   .panneau { background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:8px 10px; margin-top:6px; }
   .mo { display:flex; gap:8px; align-items:center; padding:3px 4px; border-radius:6px; cursor:pointer; }
   .mo:hover { background:#18232D; }
+  .mo.actif { background:#13262A; }
+  .titre-bloc { font-weight:700; color:var(--clair); margin:8px 0 2px; }
+  .titre-bloc:first-child { margin-top:0; }
+  .panneau .colonnes label.rangee { flex-wrap:nowrap; align-items:flex-start; }
   .mo .h { font-family:ui-monospace,Consolas,monospace; color:var(--gris); }
   .mo .t { font-weight:700; } .mo .x { color:var(--gris); font-size:11px; flex:1; }
   .mo img { width:52px; height:39px; object-fit:cover; border-radius:4px; }
@@ -284,7 +297,8 @@ let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
     smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true,
-    entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3, zHors: .9, zPassage: 1.8, autres: [], tachesAutres: false });
+    entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3, zHors: .9, zPassage: 1.8, autres: [], tachesAutres: false,
+    mAvant: .5, mApres: .5, mode: 'passages' });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -308,6 +322,7 @@ let utc = true;
 function p2(n) { return String(n).padStart(2, '0'); }
 function hms(t) { const d = new Date(t); return utc ? p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) : p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); }
 function jour(t) { const d = new Date(t); return utc ? p2(d.getUTCDate()) + '/' + p2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + 'Z' : d.toLocaleDateString() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function mmss(ms) { const s = Math.round(Math.abs(ms) / 1000); return Math.floor(s / 60) + ':' + p2(s % 60); }
 function duree(ms) { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ' min ' + p2(s % 60); }
 const COUL = { QSO: 'var(--qso)', APRS: 'var(--aprs)', ISS: 'var(--iss)', SSTV: 'var(--sstv)', SIGNET: 'var(--signet)' };
 const COULHEX = { QSO: '#FF4FA3', APRS: '#4C8DFF', ISS: '#FFC21A', SSTV: '#FF8A1F', SIGNET: '#B98CFF' };
@@ -349,17 +364,17 @@ function dessineListe() {
 // ------------------------------------------------------------ a pass
 let t = 0, joue = false, vitesse = 1, vue0 = 0, vue1 = 1, sel = null, activite = [], onglet = 'moments';
 async function ouvre(id) {
-  arrete();
+  arrete(); if (S) { S.joue = false; S = null; }
   if (!P || P.id !== id) ajoutFait = '';
-  P = await lire('/passage', { id: id }); utc = P.utc;
-  // What the replay covers: the pass, and what is tied to it a little before or after
-  // (a contact logged once the satellite had set, the recording started early).
-  P.t0 = Math.min(P.de, ...P.sons.map(s => s.o + s.an), ...P.marques.map(m => m.de));
-  P.t1 = Math.max(P.a, ...P.marques.map(m => m.a + 5000));
-  t = P.de; vue0 = P.t0; vue1 = P.t1; sel = null; activite = []; morceauJoue = -1; fiches = {}; segments = []; carteCadree = false;
-  // A recording started after the pass began: the replay starts where its sound does, not on seconds of silence.
+  const q = await lire('/passage', { id: id }); utc = q.utc;
+  // On the PC, the satellite's elements (it is seen coming before the AOS on the globe) and the companions to choose from.
+  if (window.SATME_PC) { q.tle = await elementsDe(q.sat); await favorisStation(); }
+  P = q;
+  bornesPassage();
+  t = P.de - marges()[0]; vue0 = P.t0; vue1 = P.t1; sel = null; activite = []; morceauJoue = -1; fiches = {}; segments = []; carteCadree = false;
+  // No margin, a recording started after the pass began: the replay starts where its sound does, not on seconds of silence.
   const debutSon = P.sons.length ? Math.min(...P.sons.map(s => s.o + s.an)) : null;
-  if (debutSon && debutSon > P.de && debutSon < P.a) t = debutSon;
+  if (!marges()[0] && debutSon && debutSon > P.de && debutSon < P.a) t = debutSon;
   dessineListe(); construitVue(); dessineCiel(); maj();
   lire('/activite', { id: id }).then(a => { if (P && P.id === id) { activite = a; dessineFrise(); } }).catch(() => {});
   lire('/fiches', { id: id }).then(f => { if (P && P.id === id) { fiches = f; maj(); } }).catch(() => {});
@@ -372,6 +387,42 @@ async function supprimePassage() {
   arrete(); P = null; g('vue').innerHTML = ''; g('vue').appendChild(el('p', { class: 'aide', text: T.choisir }));
   const l = await lire('/liste'); passages = l.passages; dessineListe();
 }
+// ------------------------------------------------------------ the margins, the paces: the same for one pass or several
+/** Before the AOS, after the LOS (ms): « Commencer X min avant l'AOS », « Finir X min après le LOS », 0 to 30 min. */
+function marges() { return [Math.max(0, Math.min(30, +O.mAvant || 0)) * 60000, Math.max(0, Math.min(30, +O.mApres || 0)) * 60000]; }
+/**
+ * What a pass's replay covers: from its margin before the AOS to its margin after the LOS, and what is tied to it
+ * a little before or after (a contact logged once the satellite had set, the recording started early); where it
+ * slows down (a picture being received, a contact: as a session).
+ */
+function bornesPassage() {
+  const [ma, mp] = marges();
+  P.t0 = Math.min(P.de - ma, ...P.sons.map(s => s.o + s.an), ...P.marques.map(m => m.de));
+  P.t1 = Math.max(P.a + mp, ...P.marques.map(m => m.a + 5000));
+  P.segs = [[P.de - ma, P.a + mp]];
+  P.lentes = P.marques.filter(m => (m.k === 'SSTV' && m.f) || m.k === 'QSO').map(m => (m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]).concat(['image']));
+}
+/** The margins changed: the pass's replay or the session's windows follow. */
+function margesChangees() {
+  if (S) { fenetresSession(); majSession(); }
+  else if (P) { bornesPassage(); vue0 = P.t0; vue1 = P.t1; t = Math.max(P.t0, Math.min(P.t1, t)); maj(); }
+}
+/**
+ * The pace at [tt] (real time per time shown): slow on a picture or a contact, middling in a pass, fast outside
+ * ([continu]) — and already slowing before a slower stretch (its pace plus 2 per second still to go, as the
+ * session's video does), so that however fast the time runs, no pass and no picture is jumped over.
+ */
+function allure(tt, segs, lentes, continu) {
+  const loin = (q, v) => v + 2 * (tt < q[0] ? (q[0] - tt) / 1000 : tt > q[1] ? (tt - q[1]) / 1000 : 0);
+  let v = continu ? +O.vHors : +O.vPassage;
+  segs.forEach(q => { v = Math.min(v, loin(q, +O.vPassage)); });
+  lentes.forEach(q => { v = Math.min(v, loin(q, q[2] === 'son' && O.avecSon ? Math.min(1, +O.vImage) : +O.vImage)); });
+  return Math.max(.5, v);
+}
+// The satellites' elements and the station's favourites (the companions), read once.
+const TLE = {}; let FAV = null;
+async function elementsDe(sat) { if (!(sat in TLE)) TLE[sat] = await Orbites.elements(sat); return TLE[sat]; }
+async function favorisStation() { if (!FAV) FAV = await Orbites.favoris(); return FAV; }
 function optionsSegments() { return { id: P.id, avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: O.surActivite ? '1' : '0' }; }
 function chargeSegments() { if (!P) return; const id = P.id; lire('/segments', optionsSegments()).then(s => { if (P && P.id === id) { segments = s; dessineFrise(); } }).catch(() => {}); }
 function construitVue() {
@@ -379,7 +430,9 @@ function construitVue() {
   v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: P.sat }),
     el('span', { class: 'd', text: jour(P.de) + ' · ' + tf('duree', duree(P.a - P.de), P.el) + (P.loc ? ' · ' + P.loc : '') + (P.tp ? ' · ' + P.tp : '') })].concat(
     // The observation report (SatMe-PC): its own page, beside the replay.
-    window.SATME_PC ? [el('a', { class: 'discret', id: 'lienRapport', target: '_blank', href: url('/rapport', { id: P.id }), text: T.rapport })] : []).concat(
+    window.SATME_PC ? [el('a', { class: 'discret', id: 'lienRapport', target: '_blank', href: url('/rapport', { id: P.id }), text: T.rapport }),
+      // The same editor over several passes: this satellite's, the day before to the day after.
+      el('button', { class: 'discret', text: '🌍 ' + T.s_autour, title: T.session_aide, onclick: () => construitSession({ sat: P.sat, de: P.de - 86400000, a: P.de + 86400000, images: false }) })] : []).concat(
     // Taken out of the journal, asked first: its recordings, pictures and contacts stay.
     [el('button', { class: 'discret', style: 'color:var(--rose)', text: T.supprimer, onclick: supprimePassage })])));
   const mo = el('div', { class: 'moment' }, [
@@ -422,7 +475,7 @@ function construitVue() {
   gauche.appendChild(el('div', { class: 'rangee', id: 'selection' }));
   cote.appendChild(el('div', { class: 'onglets' }, [
     el('button', { id: 'oMoments', text: T.moments, onclick: () => { onglet = 'moments'; panneau(); } }),
-    el('button', { id: 'oRejeu', text: T.onglet_rejeu, onclick: () => { onglet = 'rejeu'; panneau(); } }),
+    el('button', { id: 'oOptions', text: T.onglet_options, onclick: () => { onglet = 'options'; panneau(); } }),
     el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
     el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } })]));
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
@@ -548,8 +601,12 @@ function montreVue(v) {
     g('globeChoix').firstChild.value = Orbites.styleActif();
     g('globeCam').value = Orbites.cameraActive() === 'poursuite' || Orbites.cameraActive() === 'sol' ? Orbites.cameraActive() : 'espace';
     if (g('globeCam').value === 'espace') Orbites.camera('espace');
-    Orbites.rejeu(g('globe'), { id: P.id, sat: P.sat, sol: P.sol, qth: P.qth, indicatif: P.indicatif, locator: P.loc, marques: P.marques,
-      image: m => url('/image', { f: m.f, id: P.id, n: tourVersion }), horloge: () => t, nomStation: () => !!O.locator });
+    // Its elements: the satellite seen coming before the AOS, going after the LOS. The globe as large as the
+    // pass's zoom (the session's, as the file on the globe shows it), the wheel changing it.
+    Orbites.rejeu(g('globe'), { id: P.id, sat: P.sat, sol: P.sol, qth: P.qth, indicatif: P.indicatif, locator: P.loc, marques: P.marques, tle: P.tle,
+      image: m => url('/image', { f: m.f, id: P.id, n: tourVersion }), horloge: () => t, nomStation: () => !!O.locator,
+      hauteur: () => 3.5 / O.zPassage, molette: sg => { O.zPassage = Math.max(.5, Math.min(3, Math.round(O.zPassage * (1 - sg * .08) * 20) / 20)); garde(); montreZooms(); } })
+      .then(() => compagnons());
   }
   majSstv();
 }
@@ -566,10 +623,11 @@ function nombreOpt(cle, lib, min, max, apres) {
   return el('label', { class: 'rangee' }, [el('span', { text: lib }), i]);
 }
 function panneau() {
-  ['Moments', 'Rejeu', 'Fabriquer', 'Ajouter'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
+  if (onglet === 'rejeu') onglet = 'options';
+  ['Moments', 'Options', 'Fabriquer', 'Ajouter'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
   const p = g('panneau'); p.innerHTML = '';
-  if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p);
-  else if (onglet === 'ajouter') panneauAjouter(p); else panneauFabriquer(p);
+  if (onglet === 'moments') panneauMoments(p); else if (onglet === 'options') panneauOptions(p);
+  else if (onglet === 'ajouter') panneauAjouter(p); else panneauExports(p);
   dessineCadre(); majSstv(); majElements();
 }
 function panneauMoments(p) {
@@ -598,24 +656,6 @@ function panneauMoments(p) {
     P.doppler.forEach(n => p.appendChild(el('div', { class: 'rangee' }, [
       el('a', { href: url('/doppler', { nom: n }), download: n, text: '⤓ ' + n })])));
   }
-}
-function panneauRejeu(p) {
-  const c = el('div', { class: 'colonnes' });
-  c.appendChild(caseOpt('accelere', T.accelere, () => { const a = g('accelere'); if (a) a.checked = O.accelere; if (joue) synchro(); }));
-  const r = el('select', { onchange: ev => { O.rapide = +ev.target.value; garde(); chargeSegments(); } }, [5, 10, 20, 50].map(x => el('option', { value: x, text: '×' + x })));
-  r.value = String(O.rapide); c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.vitesse }), r]));
-  c.appendChild(nombreOpt('avant', T.avant, 0, 60, chargeSegments));
-  c.appendChild(nombreOpt('apres', T.apres, 0, 120, chargeSegments));
-  c.appendChild(caseOpt('surActivite', T.activite_opt, chargeSegments));
-  c.appendChild(el('span'));
-  c.appendChild(el('div', { class: 'aide', text: T.afficher }));
-  c.appendChild(el('span'));
-  c.appendChild(caseOpt('sstv', T.aff_sstv)); c.appendChild(caseOpt('fiches', T.aff_fiche));
-  c.appendChild(caseOpt('smetre', T.aff_smetre)); c.appendChild(caseOpt('freq', T.aff_freq));
-  c.appendChild(caseOpt('locator', T.aff_locator, dessineCarte));
-  p.appendChild(c);
-  if (P.marques.some(m => m.k === 'SSTV' && m.f)) p.appendChild(el('p', { class: 'aide', text: T.sstv_cadre + ' — ' + T.sstv_cadre_aide }));
-  p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
 }
 // ------------------------------------------------------------ a pass from nothing, and what it holds
 // Times typed in local time; sent as milliseconds.
@@ -755,42 +795,6 @@ function majHeureContact() {
   if (!champHeureQso || heureTouchee || joue || onglet !== 'ajouter' || !document.body.contains(champHeureQso)) return;
   const v = versLocal(heureContact()); if (champHeureQso.value !== v) champHeureQso.value = v;
 }
-let deQuoi = 'tout', titre = '';
-function panneauFabriquer(p) {
-  const radio = (nom, val, lib, coche, sur) => { const r = el('input', { type: 'radio', name: nom, value: val }); r.checked = coche; r.addEventListener('change', sur); return el('label', {}, [r, document.createTextNode(' ' + lib)]); };
-  // The stretch's times and length beside its choice, so a tiny one is seen before making it.
-  const libSel = sel ? T.de_quoi_sel + ' (' + hms(sel[0]) + ' → ' + hms(sel[1]) + ', ' + duree(sel[1] - sel[0]) + ')' : T.de_quoi_sel;
-  p.appendChild(el('div', { class: 'rangee' }, [radio('quoi', 'sel', libSel, deQuoi === 'sel', () => { deQuoi = 'sel'; }),
-    radio('quoi', 'tout', T.de_quoi_tout, deQuoi === 'tout', () => { deQuoi = 'tout'; })]));
-  const ti = el('input', { placeholder: T.titre_extrait, style: 'width:100%', value: titre }); ti.addEventListener('input', () => titre = ti.value);
-  p.appendChild(ti);
-  const c = el('div', { class: 'colonnes' });
-  const res = el('select', { onchange: ev => { O.res = ev.target.value; garde(); } }, [['XS', T.res_xs], ['M', T.res_m], ['HD', T.res_hd]].map(([v, l]) => el('option', { value: v, text: l })));
-  res.value = O.res;
-  c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.resolution }), res]));
-  c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.vue }),
-    radio('vueF', 'ciel', T.vue_ciel, O.vue === 'ciel', () => montreVue('ciel')), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => montreVue('carte'))].concat(
-    window.SATME_PC ? [radio('vueF', 'globe', T.vue_globe, O.vue === 'globe', () => montreVue('globe'))] : [])));
-  // On the PC: the screen's format too (the phone's is 3:4, its view square above the caption).
-  if (window.SATME_PC) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.format }),
-    radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); dessineCadre(); }),
-    radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); dessineCadre(); })]));
-  c.appendChild(caseOpt('ouverture', T.ouverture)); c.appendChild(caseOpt('recap', T.recap));
-  c.appendChild(caseOpt('avecSon', T.avec_son)); c.appendChild(caseOpt('accelVideo', T.accelere_video));
-  c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
-  p.appendChild(c);
-  p.appendChild(curseurPolice());
-  p.appendChild(el('div', { class: 'rangee' }, [
-    el('button', { class: 'discret', text: T.son, onclick: () => fabrique('son') }),
-    el('button', { class: 'discret', text: T.image, onclick: () => fabrique('image') }),
-    el('button', { class: 'discret', text: T.video, onclick: () => fabrique('video') }),
-    el('button', { class: 'discret', text: T.gif, onclick: () => fabrique('gif') }),
-    el('button', { class: 'discret', text: T.paquet, onclick: () => fabrique('paquet') })]));
-  p.appendChild(el('div', { id: 'fabrication' }));
-  p.appendChild(el('div', { id: 'blocSstv' }));
-  dessineSstvChoix();
-}
-
 // ------------------------------------------------------------ the pass's SSTV pictures and the report's panels
 // Kept with the pass (its file on the station), the same for the video, the GIF, the picture and the replay:
 // which version of each picture (as received by default), « corrigée » written or not, the report's panels
@@ -1095,7 +1099,9 @@ function part(n) { return Math.max(0, Math.min(1, n <= 120 ? n / 120 * 0.6 : 0.6
 let imageVue = '';
 function majMoment() {
   g('heure').textContent = hms(t) + (utc ? ' UTC' : '');
-  const q = ptA(t); g('angles').textContent = q ? 'Az ' + Math.round(q[1]) + '°  ·  El ' + Math.round(q[2]) + '°' : '';
+  // In the margins, before the AOS or after the LOS: how long to go or since, not the pass's end's pointing.
+  const q = t >= P.de && t <= P.a ? ptA(t) : null;
+  g('angles').textContent = q ? 'Az ' + Math.round(q[1]) + '°  ·  El ' + Math.round(q[2]) + '°' : t < P.de ? tf('s_aos_dans', mmss(P.de - t)) : T.s_apres_los + ' + ' + mmss(t - P.a);
   const f = O.freq ? avant(P.freq, t + 2000) : null; g('rx').textContent = f ? 'RX ' + (f[1] / 1e6).toFixed(4) + ' MHz' : '';
   const avecS = O.smetre && P.sig.length;
   ['smetre', 'grad', 'lectureS'].forEach(id => g(id).classList.toggle('cache', !avecS));
@@ -1173,19 +1179,25 @@ function synchro() {
   if (Math.abs(a.currentTime - pos) > 0.6) a.currentTime = pos;
   if (a.paused) a.play().catch(() => {});
 }
+/**
+ * The time runs: in real time with the sound where it was recorded (the audio's clock), the accelerated replay's pace
+ * on its fast stretches, elsewhere the session's paces (the pass's, slower on a picture or a contact), × the speed chosen.
+ */
+let allureVue = 1;
 function boucle(now) {
   if (!joue) return;
-  const dt = now - (dernier || now); dernier = now;
+  const dt = Math.min(now - (dernier || now), 100); dernier = now;
   const a = g('son'), i = morceauA(t), r = rapideIci(t);
+  allureVue = r > 1 ? r : i >= 0 ? 1 : allure(t, P.segs, P.lentes, false);
   if (r === 1 && i >= 0 && i === morceauJoue && !a.paused && a.readyState >= 2) t = P.sons[i].o + a.currentTime * 1000;
-  else t += dt * vitesse * (r > 1 ? r : (P.sons.length ? 1 : 10));
+  else t += dt * vitesse * allureVue;
   if (t >= P.t1) { arrete(); t = P.t1; }
   else { const ri = rapideIci(t), mi = morceauA(t);
     if ((ri > 1 && !a.paused) || (ri === 1 && (mi !== morceauJoue || (mi >= 0 && a.paused)))) synchro(); }
   maj();
   requestAnimationFrame(boucle);
 }
-function bascule() { if (joue) arrete(); else { joue = true; dernier = 0; if (t >= P.t1) t = P.de; synchro(); requestAnimationFrame(boucle); maj(); } }
+function bascule() { if (joue) arrete(); else { joue = true; dernier = 0; if (t >= P.t1) t = Math.max(P.t0, P.de - marges()[0]); synchro(); requestAnimationFrame(boucle); maj(); } }
 function arrete() { joue = false; const a = g('son'); if (!a.paused) a.pause(); if (P) maj(); }
 function cherche(tt) { t = Math.max(P.t0, Math.min(P.t1, tt)); if (t < vue0 || t > vue1) { const l = vue1 - vue0; vue0 = t - l / 2; vue1 = vue0 + l; } if (joue) synchro(); maj(); }
 let carteMs = 0;
@@ -1197,7 +1209,8 @@ function maj() {
   if (O.vue === 'carte' && performance.now() - carteMs > 120) { carteMs = performance.now(); dessineCarte(); }
   g('lecture').textContent = joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
   const r = rapideIci(t);
-  g('position').textContent = duree(Math.max(0, t - P.de)) + ' / ' + duree(P.a - P.de) + (joue && r > 1 ? ' · ' + tf('accelere_actif', r) : '');
+  g('position').textContent = (t < P.de ? tf('s_aos_dans', mmss(P.de - t)) : t > P.a ? T.s_apres_los + ' + ' + mmss(t - P.a) : duree(t - P.de) + ' / ' + duree(P.a - P.de)) +
+    (joue && r > 1 ? ' · ' + tf('accelere_actif', r) : joue && allureVue > 1 ? ' · ×' + Math.round(allureVue * vitesse) : '');
   const s = g('selection'); s.innerHTML = '';
   if (sel) { s.appendChild(el('span', { text: tf('selection', hms(sel[0]), hms(sel[1]), duree(sel[1] - sel[0])) }));
     s.appendChild(el('button', { class: 'discret', text: T.effacer, onclick: () => { sel = null; deQuoi = 'tout'; maj(); if (onglet === 'fabriquer') panneau(); } })); }
@@ -1215,7 +1228,7 @@ let S = null;
 const jourLocal = tt => { const d = new Date(tt); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); };
 /** The session's form (satellite, dates), filled from [pre] (an SSTV event) or the last week of the satellite. */
 function construitSession(pre) {
-  arrete(); P = null; S = null; dessineListe();
+  arrete(); P = null; if (S) S.joue = false; S = null; dessineListe();
   const v = g('vue'); v.innerHTML = '';
   const sats = [...new Set(passages.map(p => p.sat))].sort();
   const sat = el('select', { id: 'sSat' }, sats.map(s => el('option', { value: s, text: s })));
@@ -1223,7 +1236,7 @@ function construitSession(pre) {
   const dernier = Math.max(0, ...passages.filter(p => p.sat === sat.value).map(p => p.de)) || Date.now();
   const de = el('input', { type: 'date', id: 'sDe', value: jourLocal(pre && pre.de ? pre.de : dernier - 6 * 86400000) });
   const a = el('input', { type: 'date', id: 'sA', value: jourLocal(pre && pre.a ? pre.a : dernier) });
-  const img = el('input', { type: 'checkbox', id: 'sImg' }); img.checked = true;
+  const img = el('input', { type: 'checkbox', id: 'sImg' }); img.checked = !(pre && pre.images === false);
   v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: T.s_titre }), el('span', { class: 'd', text: T.session_aide })]));
   v.appendChild(el('div', { class: 'session-f' }, [el('span', { class: 'aide', text: T.s_sat }), sat, el('span', { class: 'aide', text: T.s_de }), de,
     el('span', { class: 'aide', text: T.s_a }), a, el('label', { class: 'aide' }, [img, document.createTextNode(' ' + T.s_images)]),
@@ -1251,57 +1264,80 @@ async function chargeSession() {
   const avecSon = new Set(ps.filter(q => (q.sons || []).length).map(q => q.id));
   // With the sound (its box), a contact heard goes in real time: its zone marked « son ».
   const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || (m.k === 'QSO' && avecSon.has(m.pid))).map(m => (m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]).concat([m.k === 'QSO' ? 'son' : 'image']));
-  S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', f: O.vPassage,
-    images: images, lentes: lentes, marques: marques, fiches: {}, titre: '', vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat), favoris: await Orbites.favoris() };
-  S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
+  S = { sat: sat, ps: ps, segs: [], i: 0, t: 0, joue: false, mode: O.mode === 'continu' ? 'continu' : 'passages', f: O.vPassage,
+    images: images, lentes: lentes, marques: marques, fiches: {}, titre: '', vues: 0, trans: 0, dernier: 0, tle: await elementsDe(sat) };
+  await favorisStation();
+  fenetresSession(); S.t = S.segs[0][0];
   z.innerHTML = '';
-  const mode = el('select', { onchange: ev => { S.mode = ev.target.value; vitesses(); } }, [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
-  // Three speeds: outside the passes (continuous time; passes in a row: the pause between them), in a pass, on a picture or a contact.
-  const vHors = curseurVitesse('vHors', T.s_v_hors, 10, 20000), pause = curseurPause(), vPas = curseurVitesse('vPassage', T.s_v_passage, 1, 500), vImg = curseurVitesse('vImage', T.s_v_image, .5, 100);
-  const vitesses = () => { vHors.style.display = S.mode === 'continu' ? '' : 'none'; pause.style.display = S.mode === 'continu' ? 'none' : ''; };
-  const gauche = el('div', { class: 's-gauche' }), cote = el('div', { class: 's-cote' });
+  // The same editor as a pass's: the globe and its timeline on the left; the passes, the options, the files on the right.
+  const gauche = el('div', { class: 's-gauche' }), cote = el('div', { class: 'cote' });
   z.appendChild(el('div', { class: 's-deux' }, [gauche, cote]));
-  const zg = { appendChild: n => gauche.appendChild(n) };
-  zg.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
-  zg.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' }), el('div', { id: 'sCarte' }),
+  gauche.appendChild(el('div', { class: 'aide', text: sat + ' · ' + jour(ps[0].de) + ' → ' + jour(ps[ps.length - 1].a) + ' · ' + tf('s_resume', ps.length, images.length) }));
+  gauche.appendChild(el('div', { id: 'sEcran' }, [el('canvas', { id: 'sGlobe', title: T.globe_deplacer }), choixGlobe('sChoix', 'sCam'), el('div', { id: 'sBan' }), el('div', { id: 'sCarte' }),
     el('div', { id: 'sImage' }, [el('img', { alt: '' })])]));
   g('sChoix').style.display = 'flex';
-  zg.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
-    mode, caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
-  zg.appendChild(el('div', { class: 'commandes' }, [vHors, pause, vPas, vImg]));
-  // Two zooms, from afar outside the passes, near in one, eased from one to the other.
-  const zH = curseurZoom('zHors', T.s_zoom_hors), zP = curseurZoom('zPassage', T.s_zoom_passage);
-  S.majZoom = () => { zH.montre(); zP.montre(); };
-  zg.appendChild(el('div', { class: 'commandes', title: T.s_zoom_aide }, [zH, zP]));
-  vitesses();
-  const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); zg.appendChild(fr);
+  gauche.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
+    el('span', { class: 'aide', id: 'sPosition' })]));
+  const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); gauche.appendChild(fr);
   fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
-  zg.appendChild(el('div', { id: 'sGalerie' }));
-  cote.appendChild(panneauSession());
+  gauche.appendChild(el('div', { id: 'sGalerie' }));
+  cote.appendChild(el('div', { class: 'onglets' }, [
+    el('button', { id: 'soPassages', text: T.s_passages, onclick: () => { ongletS = 'passages'; panneauS(); } }),
+    el('button', { id: 'soOptions', text: T.onglet_options, onclick: () => { ongletS = 'options'; panneauS(); } }),
+    el('button', { id: 'soFabriquer', text: T.onglet_fabriquer, onclick: () => { ongletS = 'fabriquer'; panneauS(); } })]));
+  cote.appendChild(el('div', { class: 'panneau', id: 'sPanneau' }));
+  panneauS();
   Orbites.rejeu(g('sGlobe'), { id: 'session:' + sat + ':' + de + ':' + a, sat: sat, sol: sol, qth: ps[0].qth, indicatif: ps[0].indicatif, locator: ps[0].loc, marques: marques,
     image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle, cartes: () => !!O.vignettes,
     // The page's heights are the videos' sizes the other way round (3.5 / size).
-    hauteur: () => S ? 3.5 / zoomSession() : 3.5, molette: moletteSession, nomStation: () => !!O.locator });
+    hauteur: () => S ? 3.5 / zoomSession() : 3.5, molette: moletteSession, nomStation: () => !!O.locator }).then(() => compagnons());
   // The contacts' records (name, QTH…), for the card shown with a contact as in the video.
   ps.forEach(q => lire('/fiches', { id: q.id }).then(f => { if (S && S.ps === ps) Object.assign(S.fiches, f); }).catch(() => {}));
-  compagnons();
   majSession();
 }
-/* The companions chosen (the station's favourites), going round with the session's satellite. */
+/* The companions chosen (the station's favourites), going round with the satellite of the session or of the pass. */
 function compagnons() {
-  if (!S) return;
-  const l = (S.favoris || []).filter(s => O.autres.includes(s.nom) && s.nom !== S.sat);
+  const sat = S ? S.sat : P ? P.sat : null; if (!sat || !window.SATME_PC) return;
+  const l = (FAV || []).filter(s => O.autres.includes(s.nom) && s.nom !== sat);
   Orbites.compagnons(l, O.tachesAutres);
 }
+/** The session's windows: each pass from its margin before the AOS to its margin after the LOS; the time kept inside them. */
+function fenetresSession() {
+  const [ma, mp] = marges();
+  S.segs = S.ps.map(q => [q.de - ma, q.a + mp]);
+  S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
+  S.i = Math.min(S.i, S.segs.length - 1);
+  if (S.mode !== 'continu' || S.t < S.segs[0][0] || S.t > S.segs[S.segs.length - 1][1]) S.t = Math.max(S.segs[S.i][0], Math.min(S.segs[S.i][1], S.t));
+}
+/* The session's side: its passes, the options, the files (as a pass's tabs). */
+let ongletS = 'passages';
+function panneauS() {
+  ['Passages', 'Options', 'Fabriquer'].forEach(o => g('so' + o).classList.toggle('actif', ongletS === o.toLowerCase()));
+  const p = g('sPanneau'); p.innerHTML = '';
+  if (ongletS === 'passages') panneauPassagesS(p); else if (ongletS === 'options') panneauOptions(p); else panneauExports(p);
+}
+/* The session's passes: click one to go to it, open it alone (its sky, its map, its sound, its pictures' versions). */
+function panneauPassagesS(p) {
+  S.ps.forEach((q, i) => {
+    const haut = Math.round((q.pts || []).reduce((m, x) => x[2] > m ? x[2] : m, 0)), n = S.images.filter(m => m.pid === q.id).length;
+    p.appendChild(el('div', { class: 'mo' + (i === S.i ? ' actif' : ''), 'data-i': i, onclick: () => allerPassage(i) }, [
+      el('span', { class: 'h', text: String(i + 1) }), el('span', { class: 't', text: jour(q.de) }),
+      el('span', { class: 'x', text: haut + '° · ' + duree(q.a - q.de) + (n ? ' · ' + n + ' SSTV' : '') }),
+      el('button', { class: 'discret', text: T.s_ouvrir, onclick: ev => { ev.stopPropagation(); ouvre(q.id); } })]));
+  });
+}
+function allerPassage(i) { S.i = i; S.t = S.segs[i][0]; S.trans = 0; S.vues = 0; g('sGalerie').innerHTML = ''; majSession(); }
 /** A zoom's slider (the globe's size as the videos have it: 1, 85 % of the view's height), its value beside it. */
 function curseurZoom(cle, lib) {
   const v = el('b'), r = el('input', { type: 'range', min: .5, max: 3, step: .05 });
   const l = el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
   l.montre = () => { r.value = O[cle]; v.textContent = '×' + (+O[cle]).toFixed(2); };
   r.oninput = () => { O[cle] = +r.value; garde(); l.montre(); };
-  l.montre();
+  l.montre(); zoomsAffiches.push(l);
   return l;
 }
+let zoomsAffiches = [];
+function montreZooms() { zoomsAffiches = zoomsAffiches.filter(z => document.body.contains(z)); zoomsAffiches.forEach(z => z.montre()); }
 /**
  * How much of the pass's zoom at [tt] (1 in a pass, 0 far from it): by the seconds of play still to go to the nearest
  * pass, the speed slowing down as it comes (its speed plus 2 per second away), over 1.5 s — as the session's video works it out.
@@ -1324,7 +1360,7 @@ function moletteSession(sg) {
   if (!S) return;
   const cle = partPassage(S.t) >= .5 && !(S.mode !== 'continu' && S.trans) ? 'zPassage' : 'zHors';
   O[cle] = Math.max(.5, Math.min(3, Math.round(O[cle] * (1 - sg * .08) * 20) / 20)); garde();
-  if (S.majZoom) S.majZoom();
+  montreZooms();
 }
 /* The session's timeline: the passes end to end (the hours between them left out), the pictures as ticks. */
 function xSession(tt) { let x = 0; for (const q of S.segs) { if (tt <= q[1]) return (x + Math.max(0, tt - q[0])) / S.duree; x += q[1] - q[0]; } return 1; }
@@ -1353,13 +1389,7 @@ function curseurPause() {
  * before a slower stretch (its speed plus 2 per second still to go, as the session's video does), so that however fast
  * the time runs between passes, no pass and no picture is jumped over.
  */
-function vitesseSession(tt) {
-  const loin = (q, v) => v + 2 * (tt < q[0] ? (q[0] - tt) / 1000 : tt > q[1] ? (tt - q[1]) / 1000 : 0);
-  let v = S.mode === 'continu' ? +O.vHors : +O.vPassage;
-  S.segs.forEach(q => { v = Math.min(v, loin(q, +O.vPassage)); });
-  S.lentes.forEach(q => { v = Math.min(v, loin(q, q[2] === 'son' && O.avecSon ? Math.min(1, +O.vImage) : +O.vImage)); });
-  return Math.max(.5, v);
-}
+function vitesseSession(tt) { return allure(tt, S.segs, S.lentes, S.mode === 'continu'); }
 function boucleSession(now) {
   if (!S || !S.joue || !g('sGlobe')) return;
   const dt = now - (S.dernier || now); S.dernier = now;
@@ -1425,68 +1455,155 @@ function curseurPolice(apres) {
   const r = el('input', { type: 'range', min: .6, max: 2.5, step: .1, value: O.police, oninput: ev => { O.police = +ev.target.value; v.textContent = '×' + O.police.toFixed(1); garde(); if (apres) apres(); } });
   return el('label', { class: 'rangee s-curseur' }, [el('span', { text: T.police }), r, v]);
 }
-/* The session as a video made by the station: the same options as a pass's, the passes one after another. */
-function panneauSession() {
-  const p = el('div', { class: 'panneau', style: 'margin-top:8px' });
-  p.appendChild(el('div', { class: 'aide', style: 'font-weight:700;color:var(--clair)', text: T.s_video_titre }));
-  const ti = el('input', { placeholder: T.titre_extrait, style: 'width:100%', value: S.titre || '' });
-  ti.addEventListener('input', () => { S.titre = ti.value; majSession(); }); p.appendChild(ti);
+/** A margin's slider (0 to 30 min, by half minutes then minutes), its value beside it. */
+function curseurMarge(cle, lib) {
+  const pas = [0, .25, .5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30], v = el('b');
+  const r = el('input', { type: 'range', min: 0, max: pas.length - 1, step: 1 });
+  const montre = () => { const x = +O[cle] || 0; v.textContent = x < 1 ? Math.round(x * 60) + ' s' : String(x).replace('.', document.documentElement.lang === 'en' ? '.' : ',') + ' min'; };
+  r.value = pas.reduce((b, x, i) => Math.abs(x - O[cle]) < Math.abs(pas[b] - O[cle]) ? i : b, 0);
+  r.oninput = () => { O[cle] = pas[+r.value]; garde(); montre(); margesChangees(); };
+  montre();
+  return el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
+}
+function titreBloc(texte) { return el('div', { class: 'aide titre-bloc', text: texte }); }
+function rafraichit() { if (S) majSession(); else if (P) maj(); }
+/**
+ * The options, the same for one pass and for a session: the margins before the AOS and after the LOS, the paces,
+ * the zooms, the companions, what shows, the texts' size; for one pass, its accelerated replay too.
+ */
+function panneauOptions(p) {
+  const un = !S, pc = !!window.SATME_PC;
+  p.appendChild(titreBloc(T.marges));
+  p.appendChild(el('div', { class: 'commandes' }, [curseurMarge('mAvant', T.marge_avant), curseurMarge('mApres', T.marge_apres)]));
+  // Three paces (outside the passes: continuous time only; passes in a row: the pause between them), in a pass, on a picture or a contact.
+  p.appendChild(titreBloc(T.vitesses));
+  const v = el('div', { class: 'commandes' });
+  if (!un) {
+    const vHors = curseurVitesse('vHors', T.s_v_hors, 10, 20000), pause = curseurPause();
+    const montre = () => { vHors.style.display = S.mode === 'continu' ? '' : 'none'; pause.style.display = S.mode === 'continu' ? 'none' : ''; };
+    const mode = el('select', { onchange: ev => { S.mode = O.mode = ev.target.value; garde(); S.trans = 0; montre(); fenetresSession(); majSession(); } },
+      [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
+    mode.value = S.mode;
+    v.appendChild(el('label', { class: 's-curseur' }, [el('span', { text: T.s_mode }), mode])); v.appendChild(vHors); v.appendChild(pause); montre();
+  }
+  v.appendChild(curseurVitesse('vPassage', T.s_v_passage, 1, 500)); v.appendChild(curseurVitesse('vImage', T.s_v_image, .5, 100));
+  p.appendChild(v);
+  if (un) p.appendChild(el('div', { class: 'aide', text: T.vitesses_aide }));
+  if (pc) {
+    // On the globe: two zooms (one for a pass alone: it is in its pass all along), from afar outside the passes, near in one.
+    p.appendChild(titreBloc(T.vue_globe));
+    p.appendChild(el('div', { class: 'commandes', title: T.s_zoom_aide }, un ? [curseurZoom('zPassage', T.zoom)] : [curseurZoom('zHors', T.s_zoom_hors), curseurZoom('zPassage', T.s_zoom_passage)]));
+    // More satellites going round: the station's favourites (all of them when it has none).
+    const sat = un ? P.sat : S.sat, favs = (FAV || []).filter(s => s.nom !== sat), l = favs.some(s => s.fav) ? favs.filter(s => s.fav) : favs;
+    if (l.length) {
+      const compte = () => T.s_autres + (O.autres.length ? ' (' + O.autres.filter(n => l.some(s => s.nom === n)).length + ')' : '');
+      const d = el('details', { class: 's-autres' }, [el('summary', { text: compte() }), el('div', { class: 'aide', text: T.s_autres_aide })]);
+      const cases = el('div', { class: 'colonnes' });
+      l.forEach(s => {
+        const k = el('input', { type: 'checkbox' }); k.checked = O.autres.includes(s.nom);
+        k.onchange = () => { O.autres = O.autres.filter(n => n !== s.nom).concat(k.checked ? [s.nom] : []); garde(); compagnons(); d.firstChild.textContent = compte(); };
+        cases.appendChild(el('label', {}, [k, document.createTextNode(' ' + s.nom)]));
+      });
+      d.appendChild(cases);
+      d.appendChild(caseOpt('tachesAutres', T.s_taches, compagnons));
+      p.appendChild(d);
+    }
+  }
+  p.appendChild(titreBloc(T.afficher));
+  const c = el('div', { class: 'colonnes' });
+  [['sstv', T.aff_sstv], ['fiches', T.aff_fiche], ['smetre', T.aff_smetre], ['freq', T.aff_freq], ['locator', T.aff_locator, () => { if (!S) dessineCarte(); }]]
+    .concat(pc ? [['vignettes', T.s_vignettes]] : []).forEach(q => c.appendChild(caseOpt(q[0], q[1], () => { if (q[2]) q[2](); rafraichit(); })));
+  p.appendChild(c);
+  p.appendChild(curseurPolice(rafraichit));
+  if (un) {
+    // A pass alone: its accelerated replay, quick and silent where nothing was logged nor heard.
+    p.appendChild(titreBloc(T.accel_titre));
+    const a = el('div', { class: 'colonnes' });
+    a.appendChild(caseOpt('accelere', T.accelere, () => { const x = g('accelere'); if (x) x.checked = O.accelere; if (joue) synchro(); }));
+    const r = el('select', { onchange: ev => { O.rapide = +ev.target.value; garde(); chargeSegments(); } }, [5, 10, 20, 50].map(x => el('option', { value: x, text: '×' + x })));
+    r.value = String(O.rapide); a.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.vitesse }), r]));
+    a.appendChild(nombreOpt('avant', T.avant, 0, 60, chargeSegments));
+    a.appendChild(nombreOpt('apres', T.apres, 0, 120, chargeSegments));
+    a.appendChild(caseOpt('surActivite', T.activite_opt, chargeSegments));
+    p.appendChild(a);
+    if (P.marques.some(m => m.k === 'SSTV' && m.f)) p.appendChild(el('p', { class: 'aide', text: T.sstv_cadre + ' — ' + T.sstv_cadre_aide }));
+  }
+  p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
+}
+/**
+ * The files, the same for one pass and for a session: the video, a GIF, the moment as a picture, the sound — and for
+ * one pass its stretch, its view (sky, map or globe), its accelerated video, its pass file, its pictures' versions
+ * and the report's panels. A session, or a pass whole on the globe, is made the session's way (its margins, paces,
+ * zooms, companions); the sky, the map, a stretch or the accelerated video, the pass's own way (AOS to LOS).
+ */
+let deQuoi = 'tout', titre = '';
+function panneauExports(p) {
+  const un = !S, pc = !!window.SATME_PC;
+  const radio = (nom, val, lib, coche, sur) => { const r = el('input', { type: 'radio', name: nom, value: val }); r.checked = coche; r.addEventListener('change', sur); return el('label', {}, [r, document.createTextNode(' ' + lib)]); };
+  if (un) {
+    // The stretch's times and length beside its choice, so a tiny one is seen before making it.
+    const libSel = sel ? T.de_quoi_sel + ' (' + hms(sel[0]) + ' → ' + hms(sel[1]) + ', ' + duree(sel[1] - sel[0]) + ')' : T.de_quoi_sel;
+    p.appendChild(el('div', { class: 'rangee' }, [radio('quoi', 'sel', libSel, deQuoi === 'sel', () => { deQuoi = 'sel'; panneau(); }),
+      radio('quoi', 'tout', T.de_quoi_tout, deQuoi === 'tout', () => { deQuoi = 'tout'; panneau(); })]));
+  }
+  const ti = el('input', { placeholder: un ? T.titre_extrait : T.s_video_titre, style: 'width:100%', value: un ? titre : S.titre || '' });
+  ti.addEventListener('input', () => { if (un) titre = ti.value; else { S.titre = ti.value; majSession(); } });
+  p.appendChild(ti);
   const c = el('div', { class: 'colonnes' });
   const res = el('select', { onchange: ev => { O.res = ev.target.value; garde(); } }, [['XS', T.res_xs], ['M', T.res_m], ['HD', T.res_hd]].map(([v, l]) => el('option', { value: v, text: l })));
   res.value = O.res;
   c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.resolution }), res]));
-  const fmt = el('select', { onchange: ev => { O.format = ev.target.value; garde(); } }, [['paysage', T.format_paysage], ['portrait', T.format_portrait]].map(([v, l]) => el('option', { value: v, text: l })));
-  fmt.value = O.format || 'paysage';
-  c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.format }), fmt]));
-  [['ouverture', T.ouverture], ['recap', T.recap], ['sstv', T.aff_sstv], ['fiches', T.aff_fiche], ['smetre', T.aff_smetre], ['freq', T.aff_freq], ['locator', T.aff_locator], ['vignettes', T.s_vignettes]]
-    .forEach(q => c.appendChild(caseOpt(q[0], q[1], majSession)));
-  p.appendChild(c);
-  p.appendChild(curseurPolice(majSession));
+  if (un) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.vue }),
+    radio('vueF', 'ciel', T.vue_ciel, O.vue === 'ciel', () => { montreVue('ciel'); panneau(); }), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => { montreVue('carte'); panneau(); })].concat(
+    pc ? [radio('vueF', 'globe', T.vue_globe, O.vue === 'globe', () => { montreVue('globe'); panneau(); })] : [])));
+  else c.appendChild(el('div', { class: 'rangee aide', text: T.vue_globe_n }));
+  // On the PC: the screen's format too (the phone's is 3:4, its view square above the caption).
+  if (pc) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.format }),
+    radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); dessineCadre(); }),
+    radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); dessineCadre(); })]));
+  c.appendChild(caseOpt('ouverture', T.ouverture, rafraichit)); c.appendChild(caseOpt('recap', T.recap, rafraichit));
   // The sound: a contact heard goes in real time (here too), its sound in the video.
-  p.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son)]));
-  // More satellites going round: the station's favourites (all of them when it has none).
-  const favs = (S.favoris || []).filter(s => s.nom !== S.sat), l = favs.some(s => s.fav) ? favs.filter(s => s.fav) : favs;
-  if (l.length) {
-    const d = el('details', { class: 's-autres' }, [el('summary', { text: T.s_autres + (O.autres.length ? ' (' + O.autres.filter(n => l.some(s => s.nom === n)).length + ')' : '') }),
-      el('div', { class: 'aide', text: T.s_autres_aide })]);
-    const cases = el('div', { class: 'colonnes' });
-    l.forEach(s => {
-      const k = el('input', { type: 'checkbox' }); k.checked = O.autres.includes(s.nom);
-      k.onchange = () => { O.autres = O.autres.filter(n => n !== s.nom).concat(k.checked ? [s.nom] : []); garde(); compagnons();
-        d.firstChild.textContent = T.s_autres + ' (' + O.autres.filter(n => l.some(x => x.nom === n)).length + ')'; };
-      cases.appendChild(el('label', {}, [k, document.createTextNode(' ' + s.nom)]));
-    });
-    d.appendChild(cases);
-    d.appendChild(caseOpt('tachesAutres', T.s_taches, compagnons));
-    p.appendChild(d);
-  }
-  const zone = el('div');
-  const fais = quoi => async () => {
-    const b = v => v ? '1' : '0';
-    const q = Object.assign({ quoi: quoi, t: Math.round(S.t), ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: O.vPassage, vHors: O.vHors, vPassage: O.vPassage, vImage: O.vImage, titre: ti.value, vignettes: b(O.vignettes),
-      zHors: O.zHors, zPassage: O.zPassage, autres: O.autres.filter(n => n !== S.sat).join(','), tachesAutres: b(O.tachesAutres), avecSon: b(O.avecSon),
-      entre: O.entre, transition: O.transition, police: O.police, utc: b(utc),
-      res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
-      ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
-      etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif() }, Orbites.cadrage());
-    zone.innerHTML = '';
-    const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
-    zone.appendChild(mot); zone.appendChild(barre);
-    const j = await lire('/fabrique-session', q).catch(() => ({ ok: false }));
-    if (!j.ok) { mot.textContent = j.raison === 'ffmpeg' ? T.s_sans_ffmpeg : T.echec; return; }
-    await suitTravail(j, zone, barre, mot);
-    if (quoi === 'son' && zone.textContent === T.echec) zone.firstChild.textContent = T.s_sans_son;
-  };
-  // The same files as a pass's: its video, a GIF, the moment shown as a picture, its sound.
-  p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: fais('video') }),
-    el('button', { class: 'discret', text: T.gif, onclick: fais('gif') }), el('button', { class: 'discret', text: T.image, onclick: fais('image') }),
-    el('button', { class: 'discret', text: T.son, onclick: fais('son') })]));
-  p.appendChild(zone);
-  return p;
+  c.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son)]));
+  if (un) { c.appendChild(caseOpt('accelVideo', T.accelere_video, () => panneau())); c.appendChild(caseOpt('paquetQsos', T.paquet_qsos)); }
+  p.appendChild(c);
+  const fais = un ? fabrique : fabriqueSession;
+  p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: un ? T.video : T.s_video, onclick: () => fais('video') }),
+    el('button', { class: 'discret', text: T.gif, onclick: () => fais('gif') }), el('button', { class: 'discret', text: T.image, onclick: () => fais('image') }),
+    el('button', { class: 'discret', text: T.son, onclick: () => fais('son') })].concat(un ? [el('button', { class: 'discret', text: T.paquet, onclick: () => fais('paquet') })] : [])));
+  if (un && pc) p.appendChild(el('div', { class: 'aide', text: commeSession() ? T.exp_session : T.exp_passage }));
+  if (!un) p.appendChild(el('div', { class: 'aide', text: T.s_son_aide }));
+  p.appendChild(el('div', { id: 'fabrication' }));
+  if (un) { p.appendChild(el('div', { id: 'blocSstv' })); dessineSstvChoix(); }
+}
+/* A pass alone made the session's way: on the globe, whole (no stretch), not the accelerated video. */
+function commeSession() { return !!window.SATME_PC && O.vue === 'globe' && !(deQuoi === 'sel' && sel) && !O.accelVideo; }
+/** The session's words for the station, the same for one pass or several. */
+function optionsSession(sat) {
+  const b = v => v ? '1' : '0', [ma, mp] = marges();
+  return { mode: S ? S.mode : 'passages', vitesse: O.vPassage, vHors: O.vHors, vPassage: O.vPassage, vImage: O.vImage, vignettes: b(O.vignettes),
+    zHors: O.zHors, zPassage: O.zPassage, autres: O.autres.filter(n => n !== sat).join(','), tachesAutres: b(O.tachesAutres), avecSon: b(O.avecSon),
+    entre: O.entre, transition: O.transition, margeAvant: ma, margeApres: mp };
+}
+/* The session as files made by the station: the same options as a pass's, the passes one after another. */
+async function fabriqueSession(quoi) {
+  const b = v => v ? '1' : '0', [ma, mp] = marges();
+  const q = Object.assign({ quoi: quoi, t: Math.round(S.t), ids: S.ps.map(x => x.id).join(','), titre: S.titre || '', police: O.police, utc: b(utc),
+    res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
+    ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
+    etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), avant: ma, apres: mp }, optionsSession(S.sat), Orbites.cadrage());
+  const zone = g('fabrication'); zone.innerHTML = '';
+  const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
+  zone.appendChild(mot); zone.appendChild(barre);
+  const j = await lire('/fabrique-session', q).catch(() => ({ ok: false }));
+  if (!j.ok) { mot.textContent = j.raison === 'ffmpeg' ? T.s_sans_ffmpeg : T.echec; return; }
+  await suitTravail(j, zone, barre, mot);
+  if (quoi === 'son' && zone.textContent === T.echec) zone.firstChild.textContent = T.s_sans_son;
 }
 function majSession() {
   if (!S || !g('sBan')) return;
   g('sLecture').textContent = S.joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
+  g('sPosition').textContent = tf('s_passage', S.i + 1, S.segs.length) + (S.joue ? ' · ×' + Math.round(S.f || 0) : '');
+  document.querySelectorAll('#sPanneau .mo').forEach(r => r.classList.toggle('actif', +r.dataset.i === S.i));
   const recues = S.images.filter(m => m.a <= S.t);
   const ban = g('sBan'), q = S.ps[S.i], ms = x => { const s = Math.round(Math.abs(x) / 1000); return Math.floor(s / 60) + ':' + p2(s % 60); };
   ban.style.setProperty('--police', O.police);
@@ -1500,7 +1617,7 @@ function majSession() {
       (ici && S.t >= q.de && S.t <= q.a ? ' · Az ' + Math.round(ici[1]) + '° El ' + Math.round(ici[2]) + '°' : '') }));
   }
   // As the video's caption: the RX frequency, the S-meter, the contact's record (each when ticked).
-  if (q && S.t >= q.de - 30000 && S.t <= q.a + 30000) {
+  if (q && S.t >= S.segs[S.i][0] && S.t <= S.segs[S.i][1]) {
     const f = O.freq ? avant(q.freq || [], S.t + 2000) : null;
     if (f) ban.appendChild(el('div', { text: 'RX ' + (f[1] / 1e6).toFixed(4) + ' MHz' }));
     if (O.smetre && (q.sig || []).length) {
@@ -1558,8 +1675,10 @@ async function fabrique(quoi) {
     const f = cadreFichier();
     if (f) { const s = 256 * Math.pow(2, zc); p.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; p.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; p.cw = f.fw; p.ch = f.vh; } }
   if (window.SATME_PC) p.format = O.format || 'paysage';
-  // The globe as framed here: moved and scaled the same in the file.
-  if (O.vue === 'globe') Object.assign(p, Orbites.cadrage());
+  // The globe as framed here: moved and scaled the same in the file (as large as the pass's zoom).
+  if (O.vue === 'globe') Object.assign(p, Orbites.cadrage(), { gz: O.zPassage });
+  // The pass whole on the globe: made as a session of one (its margins, paces, zooms, companions).
+  if (commeSession() && ['video', 'gif', 'image'].includes(quoi)) Object.assign(p, optionsSession(P.sat), { moteur: 'session' });
   // The SSTV picture where it shows here (or "auto").
   p.cadreSstv = texteCadre(cadreSstv);
   const zone = g('fabrication'); zone.innerHTML = '';

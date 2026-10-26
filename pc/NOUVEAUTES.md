@@ -16,6 +16,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Journal : passage et session, un seul éditeur** : une session regroupe des passages ; un passage ouvert, c'est une session d'un passage — mêmes onglets **Options** et **Fabriquer**, mêmes réglages (vitesses, zoom, satellites en plus, affichage), mêmes fichiers. Ce qui n'a de sens que pour un passage (ciel, carte, son en temps réel, morceau choisi, versions SSTV, éléments du rapport, fichier du passage) reste avec lui ; **🌍 Plusieurs passages** en tête d'un passage, **Ouvrir seul** depuis une session.
+- **Commencer avant l'AOS, finir après le LOS** (0 à 30 min) : on voit arriver le satellite sur le globe, sur la page comme dans la vidéo, le GIF et l'image — d'un passage comme d'une session.
 - **Suivi à ta façon** (souris, ou doigt sur tablette) : chaque panneau se **replie** sur son titre, les **poignées** élargissent les colonnes et grandissent le ciel / la carte / le globe, **⤢** le laisse seul ; *Fréquences* en **compact** (RX et TX seulement) ; **⊞ Disposition** : colonnes affichées, panneaux, **Rétablir**. Gardé dans ce navigateur.
 - **Orbites en tableau de bord** : **⛶ Tableau** met le globe en plein écran, avec au choix dans les coins l'heure UTC et locale, les prochains passages en compte à rebours, le satellite choisi (él., az., distance, Doppler), la station et le Soleil, la météo spatiale.
 - **Session du Journal** : même très vite hors des passages, la lecture ralentit à l'approche d'un passage ou d'une image ; plus aucun passage ni première image n'est sauté.
@@ -29,6 +31,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Modules** (Réglages › Modules) : coche ce qui t'intéresse — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, avions, navires… — ou prends un profil (Satellites FM/SSB, SSTV ARISS, Parabole QO-100 / DATV, Météo et non-sat, Tout). Un module décoché quitte le menu, ses réglages et la barre d'état ; ce qui reçoit ne démarre plus. Rien ne change à la mise à jour : tout reste coché. La configuration rapide propose les profils.
 
 ### en
+- **Journal: pass and session, one editor**: a session groups passes; an opened pass is a session of one pass — the same **Options** and **Fabriquer** tabs, the same settings (speeds, zoom, extra satellites, what shows), the same files. What only makes sense for one pass (sky, map, sound in real time, chosen stretch, SSTV versions, report elements, pass file) stays with it; **🌍 Plusieurs passages** at the top of a pass, **Ouvrir seul** from a session.
+- **Start before the AOS, end after the LOS** (0 to 30 min): you see the satellite coming on the globe, on the page as in the video, the GIF and the picture — for one pass as for a session.
 - **Suivi your way** (mouse, or finger on a tablet): each panel **folds** to its title, **handles** widen the columns and make the sky / map / globe taller, **⤢** leaves it alone; *Fréquences* **compact** (RX and TX only); **⊞ Disposition**: columns shown, panels, **Rétablir** (reset). Kept in this browser.
 - **Orbites as a dashboard**: **⛶ Tableau** puts the globe full screen, with in its corners, as you choose, the time UTC and local, the next passes counting down, the chosen satellite (el., az., range, Doppler), the station and the Sun, the space weather.
 - **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.

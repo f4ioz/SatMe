@@ -234,7 +234,91 @@ class SessionRenduPcTest {
             // The card 3 s, two passes of 5 minutes at ×100 (3 s each), one turn.
             val d = duree(RenduPc.ffmpeg()!!, mp4)
             assertTrue("$d s", d > 8 && d < 12)
+
+            fun fait(r: org.json.JSONObject): File {
+                assertTrue(r.toString(), r.getBoolean("ok"))
+                var x: org.json.JSONObject
+                do { Thread.sleep(200); x = lit("/travail", mapOf("n" to r.getString("travail"))) } while (!x.getBoolean("fini"))
+                assertTrue(x.toString(), x.getBoolean("ok"))
+                return web.sert("/fichier") { mapOf("n" to r.getString("travail"))[it].orEmpty() }.fichier!!
+            }
+            // The margins (ms): one pass of 4 minutes at ×100 without a card, then 10 minutes more before its AOS (+6 s).
+            val base = mapOf("ids" to es[0].id, "mode" to "passages", "vPassage" to "100", "res" to "XS", "ouverture" to "0", "recap" to "0")
+            val court = duree(RenduPc.ffmpeg()!!, fait(lit("/fabrique-session", base + ("avant" to "0") + ("apres" to "0"))))
+            val long = duree(RenduPc.ffmpeg()!!, fait(lit("/fabrique-session", base + ("avant" to "600000") + ("apres" to "0"))))
+            assertEquals("$court → $long", 6.0, long - court, 1.0)
+            // One pass whole on the globe, asked the session's way: made as a session of one, its margins too.
+            val seul = lit("/fabrique", mapOf("id" to es[0].id, "quoi" to "video", "vue" to "globe", "moteur" to "session", "vPassage" to "100", "res" to "XS",
+                "ouverture" to "0", "recap" to "0", "margeAvant" to "600000", "margeApres" to "0", "avant" to "10", "apres" to "30"))
+            assertEquals(1, seul.getInt("passages"))
+            val f1 = fait(seul)
+            assertTrue(f1.name, f1.name.endsWith("_passage.mp4"))
+            assertEquals(long, duree(RenduPc.ffmpeg()!!, f1), 0.3)
+            // Without it (the phone's words, the sky, a stretch, the accelerated video): the pass's own video, as before.
+            for (autre in listOf(mapOf("vue" to "globe"), mapOf("vue" to "ciel", "moteur" to "session"), mapOf("vue" to "globe", "moteur" to "session", "accelere" to "1"),
+                mapOf("vue" to "globe", "moteur" to "session", "de" to "${es[0].debutMs + 10_000L}", "a" to "${es[0].debutMs + 40_000L}")))
+                assertTrue(autre.toString(), !lit("/fabrique", mapOf("id" to es[0].id, "quoi" to "image", "t" to "${es[0].debutMs + 60_000L}") + autre).has("passages"))
         } finally { portee.coroutineContext[kotlinx.coroutines.Job]?.cancel(); dossier.deleteRecursively() }
+    }
+
+    @Test
+    fun les_marges_avant_l_aos_et_apres_le_los() {
+        fun lit(vararg kv: Pair<String, String>) = SessionRenduPc.parametres { k -> kv.toMap()[k].orEmpty() }
+        // 30 s by default; in ms, « margeAvant » before « avant »; 0 to 30 min.
+        assertEquals(30_000L, lit().avant); assertEquals(30_000L, lit().apres)
+        assertEquals(180_000L, lit("avant" to "180000").avant); assertEquals(60_000L, lit("apres" to "60000").apres)
+        assertEquals(240_000L, lit("avant" to "180000", "margeAvant" to "240000").avant)
+        assertEquals(0L, lit("margeApres" to "0").apres)
+        assertEquals(SessionRenduPc.MARGE_MAX_MS, lit("avant" to "1e12").avant); assertEquals(0L, lit("avant" to "-5").avant)
+        assertEquals(30_000L, lit("avant" to "abc", "apres" to "NaN").avant)
+
+        // One pass, 3 minutes before: it starts 3 minutes before the AOS, the satellite coming.
+        val un = SessionRenduPc.Session(scenes().take(1), "passages", SessionRenduPc.Vitesses(passage = 20.0), avant = 180_000L, apres = 60_000L)
+        val e = un.scenes[0].e
+        assertTrue(un.seul)
+        assertEquals((e.debutMs - 180_000L)..(e.finMs + 60_000L), un.fenetres.single())
+        val plan = SessionRenduPc.plan(un)
+        assertEquals(e.debutMs - 180_000L, plan.first().t); assertEquals(e.finMs + 60_000L, plan.last().t)
+        assertTrue(plan.none { it is SessionRenduPc.Trame.Tourne })
+        // At ×20: 3 minutes in about 9 s of video.
+        val avant = plan.filter { it.t < e.debutMs }
+        assertEquals(9.0, avant.size.toDouble() / SessionRenduPc.FPS, 1.0)
+        // Two minutes before the AOS: the satellite drawn where its elements put it (not without them).
+        val tr = avant.first { it.t >= e.debutMs - 120_000L }
+        val vu = SessionRenduPc.image(un, tr, 1280, 720)
+        ImageIO.write(vu, "png", File(echantillons, "marge-avant-aos.png"))
+        val sansElements = SessionRenduPc.Session(scenes().take(1).onEach { sc -> sc.horsTrace = { null } }, "passages", SessionRenduPc.Vitesses(passage = 20.0), avant = 180_000L)
+        val cache = SessionRenduPc.image(sansElements, tr, 1280, 720)
+        var diff = 0
+        for (y in 0 until 720 step 2) for (x in 0 until 1280 step 2) if (vu.getRGB(x, y) != cache.getRGB(x, y)) diff++
+        assertTrue("$diff", diff > 30)
+        // A pass alone: its own title and caption (not « Passage 1 / 1 »), its own summary after it.
+        assertNull(un.scenes[0].legendeSession)
+        assertEquals(3 * SessionRenduPc.FPS, SessionRenduPc.debut(un, 640, 360).sumOf { it.second })
+        assertTrue(SessionRenduPc.fin(un, 640, 360).isNotEmpty())
+        assertEquals(SessionRenduPc.debut(un, 1, 1).sumOf { it.second } + plan.size + SessionRenduPc.fin(un, 1, 1).sumOf { it.second }, SessionRenduPc.trames(un))
+
+        // Several passes: each its windows, in both modes.
+        val n = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(), avant = 120_000L, apres = 0L)
+        assertTrue(!n.seul)
+        n.scenes.forEachIndexed { i, sc -> assertEquals((sc.e.debutMs - 120_000L)..sc.e.finMs, n.fenetres[i]) }
+        val pn = SessionRenduPc.plan(n)
+        for (i in 0..2) {
+            val l = pn.filter { it is SessionRenduPc.Trame.Passe && it.i == i }
+            assertEquals(n.scenes[i].e.debutMs - 120_000L, l.first().t); assertEquals(n.scenes[i].e.finMs, l.last().t)
+        }
+        val c = SessionRenduPc.plan(SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(), avant = 120_000L, apres = 0L))
+        assertEquals(n.scenes[0].e.debutMs - 120_000L, c.first().t); assertEquals(n.scenes[2].e.finMs, c.last().t)
+    }
+
+    @Test
+    fun un_passage_seul_en_video_et_en_gif() {
+        val un = SessionRenduPc.Session(scenes().take(1), "passages", SessionRenduPc.Vitesses(passage = 60.0, image = 20.0), avant = 180_000L, apres = 60_000L, titre = null)
+        val gif = SessionRenduPc.gif(un, File(echantillons, "passage-seul.gif")) {}!!
+        assertTrue(gif.length() > 20_000)
+        val ff = RenduPc.ffmpeg() ?: return
+        val mp4 = SessionRenduPc.video(un, File(echantillons, "passage-seul.mp4")) {}!!
+        assertEquals(SessionRenduPc.trames(un).toDouble() / SessionRenduPc.FPS, duree(ff, mp4), 0.5)
     }
 
     @Test
