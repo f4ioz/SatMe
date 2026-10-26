@@ -1,0 +1,22 @@
+{
+ "type": "standard",
+ "title": "AMSAT-OSCAR 7",
+ "extract": "Sample text: an old amateur satellite.",
+ "thumbnail": {
+  "source": "https://upload.wikimedia.org/wikipedia/en/a/ad/AMSAT-OSCAR_7.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "width": 300,
+  "height": 180
+ },
+ "originalimage": {
+  "source": "https://upload.wikimedia.org/wikipedia/en/a/ad/AMSAT-OSCAR_7.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "width": 300,
+  "height": 180
+ },
+ "content_urls": {
+  "desktop": {
+   "page": "https://en.wikipedia.org/wiki/AMSAT-OSCAR_7"
+  }
+ },
+ "lang": "en",
+ "description": "sample"
+}

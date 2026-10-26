@@ -1,0 +1,12 @@
+{
+ "type": "disambiguation",
+ "title": "Tiangong",
+ "extract": "Sample text: may refer to several things.",
+ "content_urls": {
+  "desktop": {
+   "page": "https://en.wikipedia.org/wiki/Tiangong"
+  }
+ },
+ "lang": "en",
+ "description": "sample"
+}

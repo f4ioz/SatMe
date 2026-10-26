@@ -1,0 +1,22 @@
+{
+ "type": "standard",
+ "title": "Station spatiale internationale",
+ "extract": "Texte d’exemple : la station tourne autour de la Terre.",
+ "thumbnail": {
+  "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg/330px-The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg?utm_source=fr.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "width": 330,
+  "height": 219
+ },
+ "originalimage": {
+  "source": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/59/The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg/3840px-The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg?utm_source=fr.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+  "width": 7556,
+  "height": 5020
+ },
+ "content_urls": {
+  "desktop": {
+   "page": "https://fr.wikipedia.org/wiki/Station_spatiale_internationale"
+  }
+ },
+ "lang": "fr",
+ "description": "sample"
+}

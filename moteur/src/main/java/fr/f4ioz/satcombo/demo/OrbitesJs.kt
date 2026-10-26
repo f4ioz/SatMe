@@ -189,7 +189,8 @@ const Orbites = (function () {
     choisi: null, temps: { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false }, anim: null, passages: [], passage: null,
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
     detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0,
-    villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null };
+    villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null,
+    monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)) };
   try { OB.monOff = JSON.parse(lit('ob-montypes-off', '[]')) || []; } catch (x) {}
   let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null;
 
@@ -1044,6 +1045,8 @@ const Orbites = (function () {
       if (carte && now - dernier2d > 66) { dernier2d = now; dessine2d(t); }
       if (now - derniereListe > 400) { derniereListe = now; lignesSats(t); }
       if (OB.vue === 'passage' && now - dernierInstr > 80) { dernierInstr = now; instruments(t); }
+      // Live, the pass over: on to the next one (the list worked out again every ten minutes without one).
+      if (OB.vue === 'passage' && !OB.anim && OB.choisi && (OB.passage ? t > OB.passage.los + 60000 : now - (OB.passagesT || 0) > 600000)) calculePassages();
     };
     requestAnimationFrame(f);
   }
@@ -1123,7 +1126,8 @@ const Orbites = (function () {
    */
   function monumentsImage(gp, terre, camPos, style, noms) {
     const l = gp.userData.items; if (!l || !l.length) return;
-    const camL = terre.worldToLocal(camPos.clone()), d = camPos.length(), ech = Math.max(.6, Math.min(1, .45 + .55 * (d - 1) / 2.4));
+    // The size chosen (Monuments › Taille) on the tab's and the Suivi's globes; the journal's as its videos draw them.
+    const camL = terre.worldToLocal(camPos.clone()), d = camPos.length(), ech = Math.max(.6, Math.min(1, .45 + .55 * (d - 1) / 2.4)) * (noms ? OB.monTaille : 1);
     const proche = noms && d < (OB.tb && OB.tb.pedago ? 2.6 : 2.25);
     let neufs = 0;
     l.forEach(it => {
@@ -1137,7 +1141,7 @@ const Orbites = (function () {
       }
       if (it.nom) {
         it.nom.visible = montre;
-        if (montre) { const z = .017 * Math.max(.55, Math.min(1.1, 3.2 / Math.max(1.2, d))) * (OB.tb && OB.tb.pedago ? 1.3 : 1); it.nom.scale.set(z * it.nom.userData.ratio, z, 1); it.nom.position.copy(local(it.m[2], it.m[3], 1 + .03 * ech * it.taille)); }
+        if (montre) { const z = .017 * Math.max(.55, Math.min(1.1, 3.2 / Math.max(1.2, d))) * (OB.tb && OB.tb.pedago ? 1.3 : 1); it.nom.scale.set(z * it.nom.userData.ratio * Math.sqrt(noms ? OB.monTaille : 1), z * Math.sqrt(noms ? OB.monTaille : 1), 1); it.nom.position.copy(local(it.m[2], it.m[3], 1 + .03 * ech * it.taille)); }
       }
     });
   }
@@ -1167,12 +1171,12 @@ const Orbites = (function () {
   /** The landmarks on the flat map: their signs, their names where the map is big enough and they find room. */
   function monuments2d(x, X, Y, mw, S, vieux, boites) {
     const l = monumentsVus(''); if (!l.length) return;
-    const s = Math.max(9, Math.min(18, mw / 110)), pedago = !!(OB.tb && OB.tb.pedago);
+    const s = Math.max(9, Math.min(18, mw / 110)) * OB.monTaille, pedago = !!(OB.tb && OB.tb.pedago), fz = Math.round((pedago ? 13 : 11) * Math.sqrt(OB.monTaille));
     l.forEach(m => signeMon(x, m[4], m[7] === 'fusee', X(m[3]), Y(m[2]), s));
-    if (mw < 1300) return;
-    x.font = (vieux ? 'italic ' : '') + '600 ' + (pedago ? 13 : 11) + 'px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'top';
+    if (mw < 1300 / Math.sqrt(OB.monTaille)) return;
+    x.font = (vieux ? 'italic ' : '') + '600 ' + fz + 'px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'top';
     l.filter(m => m[6] === 1 || mw > 2600).forEach(m => {
-      const X0 = X(m[3]), Y0 = Y(m[2]) + 2, w = x.measureText(m[1]).width, b = [X0 - w / 2 - 2, Y0, w + 4, 14];
+      const X0 = X(m[3]), Y0 = Y(m[2]) + 2, w = x.measureText(m[1]).width, b = [X0 - w / 2 - 2, Y0, w + 4, fz + 3];
       if (boites.some(q => b[0] < q[0] + q[2] && q[0] < b[0] + b[2] && b[1] < q[1] + q[3] && q[1] < b[1] + b[3])) return;
       boites.push(b);
       x.lineWidth = 3; x.strokeStyle = vieux ? 'rgba(239,224,184,.9)' : 'rgba(0,0,0,.7)'; x.strokeText(m[1], X0, Y0);
@@ -1286,6 +1290,7 @@ const Orbites = (function () {
     el('ob-contacts').value = OB.contacts;
     el('ob-contacts').onchange = e => prendContacts(e.target.value);
     el('ob-monuments').value = OB.monuments; el('ob-monuments').onchange = e => prendMonuments(e.target.value);
+    el('ob-montaille').value = String(OB.monTaille); el('ob-montaille').onchange = e => prendMonTaille(+e.target.value);
     el('ob-montypes-b').onclick = ev => {
       ev.stopPropagation(); const m = el('ob-montypes'), ouvre = m.hidden;
       m.hidden = !ouvre; el('ob-montypes-b').setAttribute('aria-expanded', ouvre); if (ouvre) { typesMon(m); const c = m.querySelector('input'); if (c) c.focus(); }
@@ -1293,15 +1298,18 @@ const Orbites = (function () {
     document.addEventListener('pointerdown', ev => { const m = el('ob-montypes'); if (!m.hidden && !m.contains(ev.target) && ev.target !== el('ob-montypes-b')) { m.hidden = true; el('ob-montypes-b').setAttribute('aria-expanded', false); } });
     el('ob-pause').onclick = () => { recale(); OB.temps.pause = !OB.temps.pause; el('ob-pause').textContent = OB.temps.pause ? '▶' : '⏸'; el('ob-pause').title = OB.temps.pause ? 'Reprendre' : 'Pause'; };
     el('ob-vitesse').onchange = e => recale(+e.target.value);
-    el('ob-maint').onclick = () => { OB.anim = null; OB.temps.base = Date.now(); OB.temps.reel = performance.now(); boutonJouer(); };
+    // « Maintenant » and « En direct »: the present time at its real pace, the Passage view back on the pass under way or next.
+    el('ob-maint').onclick = direct;
+    el('ob-direct').onclick = direct;
     el('ob-jouer').onclick = () => {
       if (!OB.passage) return;
       if (!OB.anim) prendPassage(OB.passage, true);
       else { if (OB.anim.t >= OB.anim.p.los + 60000) OB.anim.t = OB.anim.p.aos - 90000; OB.anim.joue = !OB.anim.joue; OB.anim.dernier = performance.now(); }
       boutonJouer();
     };
-    el('ob-rejouer').onclick = () => { if (OB.anim) { OB.anim.t = OB.anim.p.aos - 20000; OB.anim.joue = true; OB.anim.dernier = performance.now(); boutonJouer(); } };
-    el('ob-pvitesse').onchange = e => { if (OB.anim) OB.anim.vitesse = +e.target.value; };
+    el('ob-rejouer').onclick = () => { if (!OB.passage) return; if (!OB.anim) prendPassage(OB.passage, true);
+      OB.anim.t = OB.anim.p.aos - 20000; OB.anim.joue = true; OB.anim.dernier = performance.now(); boutonJouer(); };
+    el('ob-pvitesse').onchange = e => { if (OB.anim) OB.anim.vitesse = +e.target.value; boutonJouer(); };
     el('ob-suivre').onclick = () => { if (OB.choisi && typeof suivre === 'function') suivre(OB.choisi.catnum); };
     tab.c2d.addEventListener('pointermove', ev => {
       const r = tab.c2d.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
@@ -1323,6 +1331,10 @@ const Orbites = (function () {
   function prendDetail(n) { OB.detail = n; garde('ob-detail', String(n)); scenes.forEach(sc => sc.monde()); }
   function prendVilles(v) { OB.villes = v; garde('ob-villes', v); scenes.forEach(sc => sc.monde()); }
   function prendEtiq(v) { OB.etiq = v; garde('ob-etiq', v); scenes.forEach(sc => sc.monde()); }
+  function prendMonTaille(n) {
+    OB.monTaille = Math.max(.5, Math.min(3, n || 1)); garde('ob-montaille', String(OB.monTaille));
+    document.querySelectorAll('.ob-montaille-choix').forEach(s => { s.value = String(OB.monTaille); });
+  }
   function prendMonuments(v) { OB.monuments = v; garde('ob-monuments', v); document.querySelectorAll('.ob-mon-choix').forEach(s => { s.value = v; }); scenes.forEach(sc => sc.monde()); }
   function prendTypeMon(k, on) {
     OB.monOff = OB.monOff.filter(x => x !== k).concat(on ? [] : [k]); garde('ob-montypes-off', JSON.stringify(OB.monOff));
@@ -1345,7 +1357,15 @@ const Orbites = (function () {
     OB.anim = null; OB.temps = { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false };
     if (tab) { el('ob-vitesse').value = '1'; el('ob-pause').textContent = '⏸'; el('ob-pause').title = 'Pause'; boutonJouer(); }
   }
-  function boutonJouer() { if (tab) el('ob-jouer').textContent = OB.anim && OB.anim.joue ? '⏸ Pause' : (OB.anim && OB.anim.t >= OB.anim.p.los + 60000 ? '▶ Rejouer' : '▶ Jouer le passage'); }
+  /** Back to the present (×1, not paused); the Passage view on the pass under way, else the next one. */
+  function direct() { temps1(); if (tab && OB.vue === 'passage') calculePassages(); }
+  function boutonJouer() {
+    if (!tab) return;
+    el('ob-jouer').textContent = OB.anim && OB.anim.joue ? '⏸ Pause' : OB.anim ? (OB.anim.t >= OB.anim.p.los + 60000 ? '▶ Rejouer' : '▶ Reprendre') : '▶ Rejouer en accéléré';
+    // Live (the default) or a replay: said beside the buttons, « En direct » to come back.
+    el('ob-direct').hidden = !OB.anim; el('ob-mode').textContent = OB.anim ? 'Rejeu ×' + OB.anim.vitesse : '● En direct';
+    el('ob-mode').classList.toggle('ob-live', !OB.anim);
+  }
   function gardeCoches() { garde('ob-coches', JSON.stringify(OB.sats.filter(s => s.on).map(s => s.catnum))); }
 
   function listeSats() {
@@ -1374,6 +1394,7 @@ const Orbites = (function () {
   function choisis(s) {
     OB.choisi = s; if (!s.on) { s.on = true; gardeCoches(); tab.scene.synchro(); listeSats(); }
     tab.v.querySelectorAll('.ob-sat').forEach(r => r.classList.toggle('choisi', +r.dataset.n === s.catnum));
+    if (typeof obFicheTab === 'function') obFicheTab(s);
     if (OB.vue === 'globe') tab.scene.suit = s;
     if (OB.vue === 'passage') calculePassages();
   }
@@ -1385,16 +1406,20 @@ const Orbites = (function () {
     ['ob-cadreur', 'ob-passages', 'ob-instruments', 'ob-banniere'].forEach(id => { el(id).hidden = v !== 'passage'; });
     el('ob-bulle').hidden = true;
     tab.scene.enPassage = v === 'passage';
-    if (v !== 'passage' && OB.anim) { OB.temps.base = OB.anim.t; OB.temps.reel = performance.now(); OB.anim = null; }
+    // A replay ends with its view: the globe and the map come back to the present, never to the replay's time.
+    if (v !== 'passage' && OB.anim) temps1();
     if (v === 'passage') calculePassages();
     if (v === 'globe') tab.scene.suit = null;
     tourne();
   }
 
-  /* The passes of the satellite chosen, the next 36 hours; the best one ready to play. */
+  /*
+   * The passes of the satellite chosen, the next 36 hours, shown live: the one under way followed as it goes, else the
+   * next one counted down. Replaying one (faster) is a button away, never the default.
+   */
   function calculePassages() {
     const s = OB.choisi, box = el('ob-passages');
-    OB.anim = null; OB.passage = null; boutonJouer();
+    OB.anim = null; OB.passage = null; OB.passagesT = performance.now(); boutonJouer();
     if (!s) { box.innerHTML = '<div class="petit">Choisis un satellite dans la liste.</div>'; return; }
     box.innerHTML = '<div class="t">' + echappe(s.nom) + ' · prochains passages</div>';
     if (!OB.obs) { box.innerHTML += '<div class="petit">La position de la station n’est pas connue : renseigne le locator (Réglages › Station).</div>'; instruments(maintenant()); return; }
@@ -1404,7 +1429,8 @@ const Orbites = (function () {
       box.innerHTML += '<div class="petit">Géostationnaire : toujours au même endroit du ciel' + (e ? ', az ' + e.az.toFixed(1) + '° el ' + e.el.toFixed(1) + '°' : '') + '. Pas de passage à animer.</div>';
       OB.passages = []; instruments(de); return;
     }
-    OB.passages = obPassages(t => { const e = etat(s, t); return e ? e.el : null; }, de, de + 36 * 3600000, 30000, 10).map(p => {
+    // From a while ago: the pass under way keeps its real AOS.
+    OB.passages = obPassages(t => { const e = etat(s, t); return e ? e.el : null; }, de - 20 * 60000, de + 36 * 3600000, 30000, 12).filter(p => p.los > de).slice(0, 10).map(p => {
       const piste = [];
       for (let t = p.aos; t <= p.los + 1; t += Math.max(2000, (p.los - p.aos) / 300)) { const e = etat(s, t); if (e) piste.push({ t: t, az: e.az, el: e.el }); }
       const a = etat(s, p.aos), b = etat(s, p.los);
@@ -1413,16 +1439,21 @@ const Orbites = (function () {
     if (!OB.passages.length) box.innerHTML += '<div class="petit">Aucun passage au-dessus de l’horizon dans les 36 h.</div>';
     OB.passages.forEach((p, i) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'ob-pas'; b.setAttribute('aria-pressed', 'false'); b.dataset.i = i;
-      b.innerHTML = '<b>' + jour(p.aos) + ' ' + hh(p.aos) + '</b><span class="ob-max">' + p.max.toFixed(0) + '°</span><span class="ob-sous">' + Math.round((p.los - p.aos) / 60000) + ' min · ' + cardinal(p.azAos) + ' → ' + cardinal(p.azLos) + '</span>';
-      b.onclick = () => prendPassage(p, true);
+      b.innerHTML = '<b>' + (p.aos <= de ? 'en cours' : jour(p.aos) + ' ' + hh(p.aos)) + '</b><span class="ob-max">' + p.max.toFixed(0) + '°</span><span class="ob-sous">' + Math.round((p.los - p.aos) / 60000) + ' min · ' + cardinal(p.azAos) + ' → ' + cardinal(p.azLos) + (i ? ' · rejouer' : ' · en direct') + '</span>';
+      // The first one live, the others replayed.
+      b.onclick = () => { if (i) prendPassage(p, true); else direct(); };
       box.appendChild(b);
     });
-    const meilleur = OB.passages.find(p => p.max > 25) || OB.passages[0];
-    if (meilleur) prendPassage(meilleur, false);
+    if (OB.passages[0]) suisPassage(OB.passages[0]);
+    instruments(de);
   }
-  function prendPassage(p, jouer) {
+  /** [p] the pass shown: its sky track, its profile, the camera turned to its AOS. */
+  function suisPassage(p) {
     OB.passage = p; tab.scene.azAos = p.azAos;
     el('ob-passages').querySelectorAll('.ob-pas').forEach(b => b.setAttribute('aria-pressed', OB.passages[+b.dataset.i] === p));
+  }
+  function prendPassage(p, jouer) {
+    suisPassage(p);
     OB.anim = { p: p, t: p.aos - 90000, vitesse: +el('ob-pvitesse').value, joue: jouer, dernier: performance.now() };
     boutonJouer(); instruments(OB.anim.t);
   }
@@ -1462,7 +1493,7 @@ const Orbites = (function () {
         x.beginPath(); x.moveTo(X(p.aos), Y(0)); p.piste.forEach(q => x.lineTo(X(q.t), Y(q.el))); x.lineTo(X(p.los), Y(0)); x.closePath();
         x.globalAlpha = .25; x.fillStyle = coul; x.fill(); x.globalAlpha = 1;
         x.strokeStyle = coul; x.lineWidth = 2; x.beginPath(); p.piste.forEach((q, i) => { if (i) x.lineTo(X(q.t), Y(q.el)); else x.moveTo(X(q.t), Y(q.el)); }); x.stroke();
-        if (OB.anim) { const tx = X(OB.anim.t); x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(tx, 6); x.lineTo(tx, h - 18); x.stroke(); }
+        if (t >= t0 && t <= t1) { const tx = X(t); x.strokeStyle = OB.anim ? '#fff' : '#7CF29A'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(tx, 6); x.lineTo(tx, h - 18); x.stroke(); }
       }
     }
     let dop = '—';
@@ -1475,7 +1506,9 @@ const Orbites = (function () {
     let texte = '', sous = '', flash = false;
     if (!s || !e) texte = '';
     else if (!p) { texte = s.nom; sous = OB.obs ? 'az ' + e.az.toFixed(1) + '° · el ' + e.el.toFixed(1) + '°' : ''; }
-    else if (t < p.aos) { const n = Math.ceil((p.aos - t) / 1000); texte = n <= 10 ? String(n) : 'AOS dans ' + Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0'); sous = s.nom + ' se lève au ' + cardinal(p.azAos) + ' (az ' + p.azAos.toFixed(0) + '°)'; flash = n <= 10; }
+    else if (t < p.aos) { const n = Math.ceil((p.aos - t) / 1000);
+      texte = n <= 10 ? String(n) : n >= 3600 ? 'AOS dans ' + Math.floor(n / 3600) + ' h ' + String(Math.floor(n / 60) % 60).padStart(2, '0') : 'AOS dans ' + Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+      sous = s.nom + ' se lève ' + (n >= 3600 ? 'à ' + hh(p.aos) + ' ' : '') + 'au ' + cardinal(p.azAos) + ' (az ' + p.azAos.toFixed(0) + '°)'; flash = n <= 10; }
     else if (t <= p.los) {
       if (Math.abs(t - p.tca) < (p.los - p.aos) * .08) { texte = 'Culmination ' + p.max.toFixed(0) + '°'; sous = hh(p.tca) + ' · ' + Math.round(e.dist) + ' km'; flash = true; }
       else if (t - p.aos < 25000) { texte = 'AOS !'; sous = s.nom + ' est là · az ' + e.az.toFixed(0) + '°'; flash = true; }
@@ -1597,12 +1630,13 @@ const Orbites = (function () {
     montre: async function () {
       const v = el('v-orbites'), att = el('ob-attente');
       att.hidden = false; att.textContent = 'Chargement du globe…';
-      // Each time the tab opens: the present time at its real pace (the speed can be raised again).
-      if (!OB.tb) temps1();
+      // Each time the tab opens: the present time at its real pace (the speed can be raised again), never a replay or a pause.
+      temps1();
       try { await charge(); } catch (x) { att.textContent = 'Le globe n’a pas pu se charger : ' + (x && x.message ? x.message : 'erreur') + '. Recharge la page.'; return; }
       if (v.hidden) return;
       prepareTab(); att.hidden = true;
       listeSats(); montreVue(OB.vue);
+      if (typeof obFicheTab === 'function') obFicheTab(OB.choisi);
       rafraichit(); chargeCarnet();
     },
     /** The Suivi tab's globe shown in [canvas]. */
@@ -1675,7 +1709,7 @@ const Orbites = (function () {
       if (e && s.dl && OB.obs) { const e2 = etat(s, t + 1000); if (e2) dop = s.dl * (1 - (e2.dist - e.dist) / CL); }
       // For the explanations: its orbit's tilt, its speed, one turn, how far it hears, how far west its next track falls.
       const v = e && e.vel ? Math.hypot(e.vel.x, e.vel.y, e.vel.z) : null;
-      return { t: t, indicatif: d.indicatif || '', locator: d.locator || '', obs: o || null, soleil: soleil, sat: s ? { nom: s.nom, couleur: s.couleur, dl: s.dl,
+      return { t: t, indicatif: d.indicatif || '', locator: d.locator || '', obs: o || null, soleil: soleil, sat: s ? { nom: s.nom, catnum: s.catnum, couleur: s.couleur, dl: s.dl,
           incl: s.satrec ? s.satrec.inclo * R2D : null, periode: s.periode / 60000, geo: s.mm < 1.2 } : null,
         e: e ? { az: e.az, el: e.el, dist: e.dist, alt: e.alt, lat: e.lat, lon: e.lon, vitesse: v, rayon: RE * Math.acos(RE / (RE + e.alt)) } : null, vu: !!OB.obs, dop: dop,
         decalage: s ? 360 * s.periode / 86164091 : null };
@@ -1698,11 +1732,11 @@ const Orbites = (function () {
         cache.set(s.catnum, { t: t, satrec: s.satrec, p: obPassages(u => { const e = etat(s, u); return e ? e.el : null; }, t, t + 86400000, 60000, 2) });
       });
       const out = [];
-      l.forEach(s => { const c = cache.get(s.catnum); if (c) c.p.forEach(p => { if (p.los > t) out.push({ nom: s.nom, couleur: s.couleur, aos: p.aos, los: p.los, max: p.max }); }); });
+      l.forEach(s => { const c = cache.get(s.catnum); if (c) c.p.forEach(p => { if (p.los > t) out.push({ nom: s.nom, catnum: s.catnum, couleur: s.couleur, aos: p.aos, los: p.los, max: p.max }); }); });
       return out.sort((a, b) => a.aos - b.aos).slice(0, n || 6);
     },
     /** The tab's time back to the present, at its real pace (the dashboard shows now). */
-    tempsReel: () => { if (OB.vue !== 'passage') temps1(); },
+    tempsReel: () => direct(),
     /**
      * The dashboard open ([o]: {style, vue, tourne, astres, pedago, surVue(v)}) or closed (null): its look and view taken without
      * being kept, the tab's own given back when it closes.
@@ -1727,8 +1761,13 @@ const Orbites = (function () {
       return { soleil: { lat: s.dec, lon: s.lon, ici: o ? azEl(o.lat, o.lon, s.dec, s.lon) : null }, lune: Object.assign({ ici: o ? azEl(o.lat, o.lon, l.dec, l.lon) : null }, l),
         jour: o ? OB.jour.j : null };
     },
+    /** The station's satellites [{nom, catnum, couleur, fav}] (the Vitrine's cards pick among them). */
+    satellites: () => OB.sats.map(s => ({ nom: s.nom, catnum: s.catnum, couleur: s.couleur, fav: s.fav || s.suivi })),
     monuments: v => prendMonuments(v),
     monumentsActifs: () => OB.monuments,
+    /** The landmarks' size (0.7 small … 2.4 very big), kept in this browser. */
+    monumentsTaille: n => prendMonTaille(n),
+    monumentsTailleActive: () => OB.monTaille,
     /** The landmarks' families to tick, in [box]. */
     typesMonuments: box => typesMon(box),
     /** The landmarks shown now [[nom, type, pays]], for the dashboard's ticker. */
