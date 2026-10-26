@@ -13675,7 +13675,14 @@ function apTete() {
   g('ap-bandeau').hidden = !e;
   // Just under the header strip, however many lines it takes.
   if (e) g('ap-bandeau').style.top = (g('tete').offsetHeight + 6) + 'px';
-  if (e) txt('ap-b-t', e.nom + ' — ' + e.sat + (e.phase === 'PRET' ? ' prêt, AOS ' + hm(e.aos) : ' en cours, LOS ' + hm(e.los)) +
+  apBandeau();
+}
+/* The banner's words, counted down every second with the header (the AOS to come, the LOS of the pass running). */
+function apBandeau() {
+  const e = AP && AP.enCours; if (!e || g('ap-bandeau').hidden) return;
+  const n = Date.now(), avantAos = e.phase === 'PRET' && n < e.aos;
+  txt('ap-b-t', e.nom + ' — ' + e.sat + (avantAos ? ' prêt, AOS ' + hm(e.aos) + ' (dans ' + duree(e.aos - n) + ')' :
+      ' en cours, LOS ' + hm(e.los) + (n < e.los ? ' (dans ' + duree(e.los - n) + ')' : '')) +
     ' · ' + (e.mode === 'Auto' ? 'mode auto' : e.mode) + (e.enregistrement ? ' · ● enregistré' : '') + ' · ' + e.images + ' image' + (e.images > 1 ? 's' : ''));
 }
 function apOuvre() {
@@ -16166,6 +16173,7 @@ function erreursServeur() {
   return l;
 }
 function rendTete() {
+  apBandeau();
   const tx = emissionsEnCours();
   const ctl = HX.ctl && HX.ctl.tenue ? HX.ctl : null;
   g('h-tx').hidden = !tx.length; txt('h-tx-q', tx.join(' · ') + (ctl && !ctl.moi ? ' — par ' + ctl.client : '') +

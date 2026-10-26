@@ -901,7 +901,8 @@ const Orbites = (function () {
         if (lui && plusieurs && !auSol) { cible.visible = true; cible.position.copy(p); const q = .075 + .012 * Math.sin(now / 250); cible.scale.set(q, q, 1); cible.material.rotation = now / 1200; cible.material.color.set(STYLES[sc.style].encre || s.couleur); }
       });
       if (mode === 'rejeu') rejeuImage(t, stW, satP, now);
-      nomStation.visible = station.visible; nomStation.position.copy(stW.clone().multiplyScalar(1.02)); nomStation.scale.set(.026 * nomStation.userData.ratio, .026, 1); nomStation.center.set(1.08, .5);
+      // The journal's « mon indicatif et mon locator » unticked: the station's pin without its name, as in its videos.
+      nomStation.visible = station.visible && !(mode === 'rejeu' && sc.rj && sc.rj.donnees.nomStation && !sc.rj.donnees.nomStation()); nomStation.position.copy(stW.clone().multiplyScalar(1.02)); nomStation.scale.set(.026 * nomStation.userData.ratio, .026, 1); nomStation.center.set(1.08, .5);
       const pulse = (now / 1400) % 1; anneau.scale.setScalar(1 + pulse * 2.5); anneau.material.opacity = 1 - pulse;
       cardinaux.forEach(c => { c.visible = auSol; if (auSol) { c.position.copy(stW.clone().add(dirCiel(stW, c.userData.az, 1).multiplyScalar(.04))); c.scale.set(.03 * c.userData.ratio, .03, 1); } });
       // The cities' and contacts' names: their size, smaller from far away.

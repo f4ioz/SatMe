@@ -21,6 +21,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Session : satellites en plus** : coche des favoris, ils tournent aussi autour du globe (leurs taches au sol en option), sur la page et dans la vidéo.
 - **Nouvelle version** : quand une version plus récente est publiée, sa fenêtre (nouveautés, téléchargement) s'ouvre d'elle-même, une fois par version ; le badge ⬆ reste dans le bandeau.
 - **SatMe-PC portable** : le bandeau affiche **Portable** (au survol, le dossier des données).
+- **Session en direct comme la vidéo** : la page montre aussi ce qui est coché pour la vidéo — fréquence RX, S-mètre, fiche du correspondant, indicatif et locator, carte d'ouverture, carte du passage suivant, mosaïque finale.
+- **Bandeau de l'auto-pilote SSTV** : l'AOS et le LOS sont comptés à la seconde.
 - **Session : exports comme un passage** : vidéo MP4 (avec le son des contacts entendus, passés en temps réel), GIF animé, image du moment, son WAV ; mêmes incrustations que le Journal.
 
 ### en
@@ -29,6 +31,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Session: more satellites**: tick favourites, they go round the globe too (their footprints as an option), on the page and in the video.
 - **New version**: when a newer version is published, its window (notes, download) opens by itself, once per version; the ⬆ badge stays in the header.
 - **Portable SatMe-PC**: the header shows **Portable** (hover: the data folder).
+- **Session live as the video**: the page also shows what is ticked for the video — RX frequency, S-meter, the contact's record, callsign and locator, opening card, next pass's card, final mosaic.
+- **SSTV auto-pilot banner**: the AOS and LOS are counted down every second.
 - **Session: exports as a pass's**: MP4 video (with the sound of the contacts heard, played in real time), animated GIF, picture of the moment, WAV sound; the same overlays as the Journal.
 
 ## 2026.10.30
