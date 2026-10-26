@@ -97,6 +97,11 @@ object DemarragePagePc {
       <a href="#" onclick="event.preventDefault(); cfrFin(true).then(() => { vue('reglages'); montreReglages('materiel'); })">Terminer et y aller</a></div>
   </div>
   <div class="cfr-etape" data-e="3" hidden>
+    <h3>Ce qui t’intéresse</h3>
+    <div class="petit">Les onglets et les réglages des autres parties quittent la page ; tout se rallume, module par module, dans <b>Réglages › Modules</b>. Le suivi des passages, le poste, le rotor, le Carnet et le Journal sont toujours là.</div>
+    <div id="cfr-profils" style="margin-top:6px"></div>
+  </div>
+  <div class="cfr-etape" data-e="4" hidden>
     <h3>Démarrage</h3>
     <div id="cfr-reseau-bloc">
       <label style="display:block"><input type="checkbox" id="cfr-reseau" onchange="cfrReseauAvert()"> <b>Accès depuis le réseau</b> <span class="petit">— la page ouverte aux autres machines (une tablette, le PC du salon)</span></label>
@@ -308,7 +313,7 @@ async function qdnOuvre(tout) {
 }
 function qdnFerme() { g('qdn-dlg').close(); if (QDN_AUTO) { QDN_AUTO = false; demPost('api/demarrage/vu'); if (DEM) DEM.quoiDeNeuf = []; } }
 // ---- « Configuration rapide »: four steps, written to the same settings as Réglages
-const CFR_N = 4;
+const CFR_N = 5;
 const MAIDENHEAD = /^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?$/i;
 function cfrLocDe(la, lo) {
   const A = 'ABCDEFGHIJKLMNOPQRSTUVWX'; lo += 180; la += 90;
@@ -346,6 +351,7 @@ async function cfrOuvre() {
   g('cfr-port').value = L.port.enregistre == null ? '' : L.port.enregistre;
   g('cfr-reseau-bloc').hidden = !DEM.permis; g('cfr-reseau-refus').hidden = DEM.permis;
   g('cfr-maj').checked = !!DEM.maj.actif;
+  cfrProfils();
   txt('cfr-msg', ''); cfrReseauAvert(); cfrValide(); cfrMontre(0);
   if (!g('cfr-dlg').open) g('cfr-dlg').showModal();
 }
@@ -367,6 +373,15 @@ function cfrVa(d) {
   if (d > 0 && CFR_E === CFR_N - 1) { cfrFin(false); return; }
   cfrMontre(CFR_E + d);
 }
+// The profiles of Réglages › Modules (api/capacites): « Tout » the first time, else the one in use (or the modules kept as they are).
+function cfrProfils() {
+  const b = g('cfr-profils');
+  if (!MOD) { b.innerHTML = '<div class="petit">Le choix des modules n’est pas proposé ici.</div>'; return; }
+  const choix = DEM.configRapide ? 'tout' : MOD.profil || 'garder';
+  const l = MOD.profils.map(p => ({ id: p.id, nom: p.nom, quoi: p.quoi }));
+  if (!DEM.configRapide && !MOD.profil) l.unshift({ id: 'garder', nom: 'Garder mes modules', quoi: 'ceux cochés dans Réglages › Modules' });
+  b.innerHTML = l.map(p => '<label class="petit" style="display:block;margin-top:6px"><input type="radio" name="cfr-profil" value="' + p.id + '"' + (p.id === choix ? ' checked' : '') + '> <b>' + esc(p.nom) + '</b> — ' + esc(p.quoi) + '</label>').join('');
+}
 async function cfrFin(aller) {
   const u = (document.querySelector('input[name=cfr-utc]:checked') || {}).value || '0';
   let q = 'indicatif=' + enc(v('cfr-indicatif')) + '&nom=' + enc(v('cfr-nom')) + '&utc=' + u + '&langue=' + enc(g('cfr-langue').value) + '&minEl=' + enc(v('cfr-minel'));
@@ -383,6 +398,8 @@ async function cfrFin(aller) {
   try { localStorage.setItem('utc', u); } catch (x) {}
   if (g('utc')) { g('utc').checked = u === '1'; try { dessinePassages(); } catch (x) {} }
   if (g('cfr-maj').checked !== !!DEM.maj.actif) await demPost('api/maj/reglage?on=' + (g('cfr-maj').checked ? 1 : 0));
+  const pr = (document.querySelector('input[name=cfr-profil]:checked') || {}).value;
+  if (MOD && pr && pr !== 'garder' && pr !== MOD.profil) await modPost('profil=' + pr);
   g('cfr-dlg').close();
   await demCharge();
   try { chargeReglages(); } catch (x) {}

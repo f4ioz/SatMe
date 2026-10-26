@@ -24,6 +24,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Session en direct comme la vidéo** : la page montre aussi ce qui est coché pour la vidéo — fréquence RX, S-mètre, fiche du correspondant, indicatif et locator, carte d'ouverture, carte du passage suivant, mosaïque finale.
 - **Bandeau de l'auto-pilote SSTV** : l'AOS et le LOS sont comptés à la seconde.
 - **Session : exports comme un passage** : vidéo MP4 (avec le son des contacts entendus, passés en temps réel), GIF animé, image du moment, son WAV ; mêmes incrustations que le Journal.
+- **Modules** (Réglages › Modules) : coche ce qui t'intéresse — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, avions, navires… — ou prends un profil (Satellites FM/SSB, SSTV ARISS, Parabole QO-100 / DATV, Météo et non-sat, Tout). Un module décoché quitte le menu, ses réglages et la barre d'état ; ce qui reçoit ne démarre plus. Rien ne change à la mise à jour : tout reste coché. La configuration rapide propose les profils.
 
 ### en
 - **Journal session**: even very fast outside the passes, the replay slows down as a pass or a picture comes near; no pass and no first picture is skipped any more.
@@ -34,6 +35,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Session live as the video**: the page also shows what is ticked for the video — RX frequency, S-meter, the contact's record, callsign and locator, opening card, next pass's card, final mosaic.
 - **SSTV auto-pilot banner**: the AOS and LOS are counted down every second.
 - **Session: exports as a pass's**: MP4 video (with the sound of the contacts heard, played in real time), animated GIF, picture of the moment, WAV sound; the same overlays as the Journal.
+- **Modules** (Réglages › Modules): tick what interests you — QO-100, DATV, SSTV, SDR, FT8, APRS, METEOR, planes, ships… — or pick a profile (Satellites FM/SSB, SSTV ARISS, QO-100 dish / DATV, weather and non-sat, everything). A module unticked leaves the menu, its settings and the status bar; what receives no longer starts. Nothing changes on updating: everything stays ticked. The quick setup offers the profiles.
 
 ## 2026.10.30
 
