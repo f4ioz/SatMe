@@ -387,7 +387,7 @@ object PagePc {
   }
   async function radio() {
     if (document.hidden) return;
-    [S, D, X.dtx, X.stx, X.iq, X.ptx] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq'), json('api/poste/emission')]);
+    [S, D, X.dtx, X.stx, X.iq, X.ptx, X.btx] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq'), json('api/poste/emission'), json('api/be/emission')]);
     sb('sb-sdr', S && !S.absent ? (S.actif ? (S.erreur ? 'warn' : 'ok') : (S.erreur ? 'danger' : '')) : '',
       S && !S.absent ? (S.actif ? (S.tuner || S.recepteur || 'réception') : (S.datvTient ? 'prêtée à la DATV' : 'arrêtée')) : '—');
     sb('sb-datv', D && D.actif ? (D.verrouille ? 'ok' : 'info') : '', D && D.ok !== false ? (D.actif ? D.libelle : 'arrêtée') : '—');
@@ -396,6 +396,7 @@ object PagePc {
     if (X.stx && X.stx.emet) tx.push('SSTV');
     if (X.iq && X.iq.actif) tx.push('calibration I/Q');
     if (X.ptx && X.ptx.emet) tx.push('IC-9700');
+    if (X.btx && X.btx.emet) tx.push('BLU Pluto');
     const h = g('h-tx'); if (h) { h.hidden = !tx.length; g('h-tx-q').textContent = tx.join(' · '); }
     document.body.classList.toggle('en-tx', tx.length > 0);
     const rx = (S && S.actif) || (D && D.actif) || (E && E.cat && E.cat.connecte);
@@ -403,7 +404,7 @@ object PagePc {
   }
   // The light: only stops (never starts anything).
   const htx = g('h-tx');
-  if (htx) htx.onclick = () => Promise.all(['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete']
+  if (htx) htx.onclick = () => Promise.all(['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete', 'api/be/emission/arrete']
     .map(u => fetch(u, { method: 'POST' }).catch(() => null))).then(radio);
   heure(); setInterval(heure, 1000); etat(); setInterval(etat, 15000); radio(); setInterval(radio, 3000);
   // The tabs the server offers (the phone some of them): the others hidden, an empty workspace too.
@@ -1072,6 +1073,9 @@ ${STYLE_JETONS}
     #v-qo100 .tq-pano { flex:1; min-height:110px; height:auto; }
     #v-qo100 .tq-cote, .d-cote { display:flex; flex-direction:column; min-height:0; }
     #v-qo100 .tq-cote .st, .d-cote .st { flex:1; min-height:0; display:flex; flex-direction:column; }
+    /* The PTT panels above may be tall: the sub-tabs keep room, the column scrolls. */
+    #v-qo100 .tq-cote { overflow-y:auto; }
+    #v-qo100 .tq-cote .st { min-height:280px; }
     .st-pan { flex:1; min-height:0; overflow:auto; }
     #v-datv .d-grille { height:100%; box-sizing:border-box; }
     #v-sstv .sx { height:100%; box-sizing:border-box; grid-template-rows:minmax(0,1fr); }
@@ -1485,6 +1489,11 @@ ${STYLE_JETONS}
   .ptx-vu i { display:block; height:100%; width:0; background:var(--ok); }
   .ptx-pre button { padding:2px 8px; font-size:var(--fs-xs); }
   #ptx-info.avert, #ptx-mic-etat.avert { color:var(--warn); }
+  .btx-bandeau { margin-top:6px; padding:4px 8px; border-radius:8px; font-weight:700; font-size:var(--fs-xs); border:1px solid var(--tx); color:var(--tx); background:rgba(255,90,54,.10); }
+  .btx-bandeau.air { color:#fff; background:var(--tx); }
+  .btx-bandeau:empty { display:none; }
+  #btx-info.avert, #btx-mic-etat.avert, #btx-niv.avert { color:var(--warn); }
+  #btx-niv.danger { color:var(--danger); font-weight:700; }
   .f-molette { cursor:ew-resize; touch-action:none; }
   .https-emp { font-family:var(--mono); font-size:var(--fs-xs); word-break:break-all; }
   /* Denser type for the cockpits. */
@@ -3538,9 +3547,39 @@ ${rail()}
     </div>
     <div class="tq-cote">
       <div id="ptx-slot-qo"></div>
+      <div class="carte ptx" id="btx" hidden tabindex="0" aria-label="Émission bande étroite par le Pluto : maintenir PTT, ou la barre d’espace le panneau sélectionné">
+        <div class="t">Émission Pluto · QO-100 <span class="ptx-etat" id="btx-etat">—</span><span class="petit" id="btx-qui"></span>
+          <span class="petit" style="margin-left:auto;text-transform:none;letter-spacing:0" id="btx-profil"></span></div>
+        <div class="btx-bandeau" id="btx-bandeau"></div>
+        <div class="ptx-l">
+          <button type="button" class="ptx-ptt" id="btx-ptt" title="Maintenir pour émettre (ou la barre d’espace, le panneau sélectionné) ; relâcher : réception. « Maintenu » coché : un clic émet, un autre relâche.">PTT</button>
+          <div class="ptx-mic">
+            <div class="ptx-l2" style="margin-top:0">
+              <select id="btx-mode" style="flex:none" aria-label="Mode" onchange="bxRegle('mode=' + this.value)"></select>
+              <select id="btx-source" style="flex:none" aria-label="Son émis" title="D’où vient le son : le micro de ce navigateur, ou une carte son de ce PC (WSJT-X par une carte son virtuelle ou une boucle)" onchange="bxRegle('source=' + this.value)"><option value="micro">micro du navigateur</option><option value="carte">carte son du PC</option></select>
+              <label class="petit" title="Un clic émet, un autre relâche (FT8, CW) ; le chien de garde et la minuterie restent"><input type="checkbox" id="btx-verrou"> maintenu</label></div>
+            <div class="ptx-vu" title="Niveau du micro (crête)"><i id="btx-vu"></i></div>
+            <div class="ptx-l2" id="btx-micl"><span class="petit">Micro</span><input type="range" id="btx-mgain" min="0" max="200" value="100" title="Gain du micro (100 % : tel quel)" oninput="bxMicGain(this.value)"><span class="petit" id="btx-mic-db" style="min-width:52px">—</span></div>
+          </div>
+        </div>
+        <div class="ptx-l2"><span class="petit">Montée</span><b class="val ambre" id="btx-f" style="font-size:14px">—</b><span class="petit" id="btx-d"></span>
+          <label class="petit" title="La montée suit l’accord du cockpit (descente − 8 089,5 MHz), pendant l’émission aussi"><input type="checkbox" id="btx-lie" onchange="bxRegle('lie=' + (this.checked ? 1 : 0))"> liée au cockpit</label>
+          <input id="btx-cadran" style="width:110px" placeholder="2400,300 MHz" aria-label="Montée (MHz, porteuse supprimée)" title="La montée à la main (MHz, porteuse supprimée, comme le cadran d’un poste en USB)" onchange="bxCadran(this.value)"></div>
+        <div class="ptx-l2" style="margin-top:2px"><span class="avert" id="btx-freq" style="flex:1"></span><button type="button" id="btx-seg" hidden onclick="bxSegment()" title="Accorde le cockpit sur la fréquence de départ de ce mode (montée et descente liées)"></button></div>
+        <div class="ptx-l2"><span class="petit">Gain Pluto</span><input type="range" id="btx-g" min="-89" max="0" step="1" value="-40" title="Atténuation du Pluto (dB) ; jamais au-dessus du plafond, ni de −40 dB sur charge" oninput="txt('btx-gv', this.value + ' dB')" onchange="bxRegle('gain=' + this.value)"><b class="val" id="btx-gv" style="font-size:14px;min-width:120px">—</b>
+          <label class="petit" title="Sur charge fictive : gain bridé à −40 dB. Décocher (sur le PC de la station) pour émettre vers QO-100, confirmé à la première émission."><input type="checkbox" id="btx-charge" onchange="bxCharge(this.checked)"> sur charge</label></div>
+        <div id="btx-cw" class="ptx-l2" hidden>
+          <input id="btx-cw-t" style="flex:1;min-width:120px" placeholder="CQ CQ DE F4IOZ K" aria-label="Texte CW" onkeydown="if (event.key === 'Enter') bxCwEnvoie()">
+          <button type="button" onclick="bxCwEnvoie()" title="Émet le texte (le PTT pris et rendu tout seul) à la vitesse choisie">Envoyer</button>
+          <button type="button" id="btx-cle" title="Manipulateur droit : maintenir pour une porteuse (aussi pour mesurer la correction du Pluto)">Touche</button>
+          <input type="number" id="btx-wpm" min="5" max="40" style="width:52px" aria-label="Vitesse (mots par minute)" title="Vitesse (mots par minute)" onchange="bxRegle('wpm=' + this.value)"><span class="petit">mots/min</span></div>
+        <div class="petit" id="btx-niv"></div>
+        <div class="petit" id="btx-mic-etat"></div>
+        <div class="petit" id="btx-info"></div>
+      </div>
       <div id="tq-carnet-slot"></div>
       <div class="st" data-st="tq">
-        <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-balise" title="La télémesure de la balise médiane, décodée">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Balise</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
+        <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-balise" title="La télémesure de la balise médiane, décodée">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Balise</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-tx" title="Émission bande étroite : profil de montée (fixe, portable), Pluto en direct ou IC-9700 + convertisseur">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
         <div class="st-pan" id="tq-p-calage">
       <div class="carte">
         <div class="t">Calage sur la balise</div>
@@ -3633,6 +3672,48 @@ ${rail()}
             <input id="o-mciel" placeholder="Référence (MHz)"><input id="o-mposte" placeholder="Poste (MHz)"><button onclick="qMesure()">Mesurer</button></div>
           <div class="etat" id="o-mmsg"></div>
         </details>
+      </div>
+        </div>
+        <div class="st-pan" id="tq-p-tx" hidden>
+      <div class="carte" id="bxp-carte">
+        <div class="t">Profil de montée</div>
+        <div class="ligne" style="margin-top:0"><span class="bascule-c" role="group" aria-label="Choix rapide" id="bxp-rapide"></span>
+          <select id="bxp-choix" style="max-width:150px" aria-label="Profil" onchange="bxRegle('profil=' + enc(this.value))"></select></div>
+        <div class="petit" id="bxp-resume" style="margin-top:6px"></div>
+        <div style="margin-top:6px"><span>PIRE max <b class="val ambre" id="bxp-pire" style="font-size:15px">—</b></span></div>
+        <div style="margin-top:2px"><span>Conseillé <b class="val cyan" id="bxp-conseil" style="font-size:15px">—</b> <span class="petit" id="bxp-conseil2"></span></span></div>
+        <div class="petit aide" id="bxp-aide"></div>
+        <details style="margin-top:6px" id="bxp-edit"><summary class="petit" style="cursor:pointer">Modifier ce profil</summary>
+          <div class="ligne"><span class="petit" style="min-width:80px">Nom</span><input id="bxp-nom" style="max-width:150px"></div>
+          <div class="ligne"><span class="petit" style="min-width:80px">Chaîne</span><select id="bxp-chaine"></select></div>
+          <div class="ligne"><span class="petit" style="min-width:80px">Antenne</span><select id="bxp-antenne" onchange="g('bxp-gl').hidden = this.value !== 'autre'"></select></div>
+          <div class="ligne" id="bxp-gl"><span class="petit" style="min-width:80px">Gain</span><input id="bxp-gain" type="number" step="0.5" style="width:70px"><span class="petit">dBi</span></div>
+          <div class="ligne"><span class="petit" style="min-width:80px">Ampli</span><input id="bxp-w" type="number" step="1" min="0" style="width:70px"><span class="petit">W</span>
+            <input id="bxp-ag" type="number" step="1" min="0" style="width:60px" title="Gain de l’ampli (dB) ; 0 : inconnu"><span class="petit">dB de gain (0 : inconnu)</span></div>
+          <div class="ligne"><span class="petit" style="min-width:80px">Câble</span><input id="bxp-pertes" type="number" step="0.1" min="0" style="width:70px"><span class="petit">dB de pertes</span></div>
+          <div class="ligne"><button onclick="bxProfilGarde()">Enregistrer</button><button onclick="bxProfilRetire()" title="Retirer ce profil">Retirer</button><span class="petit" id="bxp-msg"></span></div>
+        </details>
+        <div class="ligne"><button onclick="bxMontage()" title="Ouvre l’onglet Montage sur un plan qui dessine ce profil (créé s’il n’existe pas ; rien n’est remplacé)">Voir au Montage ›</button></div>
+      </div>
+      <div class="carte" id="bxc-poste" hidden>
+        <div class="t">Chaîne IC-9700 + convertisseur montant</div>
+        <div class="paire" style="margin-top:0"><span>Montée <b class="val ambre" id="bxc-m">—</b></span><span>Poste TX <b class="val ambre" id="bxc-p">—</b></span></div>
+        <div class="petit" id="bxc-ol"></div>
+        <div class="avert" id="bxc-av"></div>
+        <div class="ligne"><button onclick="bxMesure('poste')" title="L’IC-9700 en émission par SatMe, en CW (porteuse) : son signal retrouvé sur la descente donne l’oscillateur réel du convertisseur">Mesurer l’OL sur ma descente</button><span class="petit" id="bxc-msg"></span></div>
+        <div class="petit aide">Montée = fréquence du poste + OL du convertisseur (mesuré, onglet « Poste &amp; chaîne »). La montée suit la descente (liées, sans inversion) ; le calage sur la balise ne corrige que la descente (la dérive du LNB). « Appliquer au poste » coché, le PTT est refusé sur une balise ou hors du plan, et LEILA entendue le relâche. Le PTT, le micro et la puissance : le panneau « Émission IC-9700 » au-dessus.</div>
+      </div>
+      <div class="carte" id="bxc-pluto" hidden>
+        <div class="t">ADALM-PLUTO en direct</div>
+        <div class="paire" style="margin-top:0"><span>Pluto <b class="val" id="bxc-vu">—</b></span><span class="petit" id="bxc-plan"></span></div>
+        <div class="ligne"><span class="petit" style="min-width:110px">Correction</span><input id="bxc-corr" type="number" step="10" style="width:90px" title="Combien de Hz trop haut le Pluto émet à 2400 MHz (+ : trop haut)" onchange="bxRegle('correction=' + Math.round(+this.value || 0))"><span class="petit">Hz à 2400 MHz</span><b class="val" id="bxc-ppm"></b></div>
+        <div class="ligne"><button onclick="bxMesure('pluto')" title="En émission sur l’air, en CW touche enfoncée : la porteuse retrouvée sur la descente (récepteur calé sur la balise) donne l’erreur du quartz du Pluto">Mesurer sur ma descente</button><span class="petit" id="bxc-msg2"></span></div>
+        <div class="ligne"><span class="petit" style="min-width:110px">Plafond</span><input id="bxc-plafond" type="number" step="1" min="-89" max="0" style="width:70px" onchange="bxRegle('plafond=' + this.value)"><span class="petit">dB (gain Pluto maximum)</span></div>
+        <div class="ligne"><span class="petit" style="min-width:110px">Minuterie</span><select id="bxc-tot" onchange="bxRegle('tot=' + this.value)"><option value="1">1 min</option><option value="2">2 min</option><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option></select></div>
+        <div class="ligne"><span class="petit" style="min-width:110px">Carte son</span><select id="bxc-carte" style="max-width:220px" onchange="bxRegle('carte=' + enc(this.value))"></select></div>
+        <div class="petit" id="bxc-local"></div>
+        <div class="petit aide">Le Pluto émet seulement pendant le PTT (panneau « Émission Pluto » au-dessus) : mis en route à chaque appui, coupé (oscillateur éteint) à chaque relâche. Relâché tout seul : 2 s sans nouvelles de la page, la minuterie, LEILA entendue, la fréquence devenue interdite, SatMe-PC fermé ; Échap ou le bandeau TX coupent tout. Son oscillateur est garé sous le transpondeur (2399,6 MHz) : ni sa fuite ni son image n’arrivent au satellite. Chaque démarrage de SatMe-PC remet l’essai sur charge.</div>
+        <div class="petit aide">BLU haute, CW (une porteuse à 700 Hz au-dessus du cadran, manipulée sans clics) et modes numériques (FT8… depuis WSJT-X : sa sortie son vers une carte son virtuelle ou une boucle, choisie ici, source « carte son du PC », PTT « maintenu »). Le plan de bande AMSAT-DL est appliqué par mode : la BLU dans les segments phonie et mixte, la CW dans le sien et le mixte, le numérique dans les siens et le mixte, jamais sur une balise, la diffusion ni l’urgence. La correction : l’erreur du quartz du Pluto (1 ppm = 2,4 kHz sur QO-100), mesurée en retrouvant sa propre porteuse sur la descente ou saisie. Le gain : jamais au-dessus du plafond ni de celui de Réglages › Émission (commun à la DATV et la SSTV).</div>
       </div>
         </div>
         <div class="st-pan" id="tq-p-ciel" hidden>
@@ -7456,7 +7537,7 @@ function vue(n) {
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
   if (n === 'orbites') Orbites.montre();
   if (n === 'station' && ecranStation === 'globe') Orbites.suivi(g('st-globe'));
-  if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); }
+  if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); bxLit(); }
   if (n === 'datv') ticDatv(true);
   if (n === 'sdr') { ticSdr(); spSale(true); }
   g('aff-pop').hidden = true; g('mem-pop').hidden = true;
@@ -16702,8 +16783,11 @@ function pxRend() {
   if (j.emet && j.sortieErreur) l.push(j.sortieErreur);
   if (j.emet && j.posteEmet === false) l.push('le poste ne se dit pas en émission');
   if (j.plafond < 100) l.push('plafond ' + j.plafond + ' %');
+  // On QO-100, our level against the beacon's when SatMe hears its own downlink.
+  const q = j.qo100 || {};
+  if (j.emet && q.ecart != null) l.push('ton signal vs balise ' + (q.ecart > 0 ? '+' : '') + fr1(q.ecart) + ' dB' + (q.tropFort ? ' : PLUS FORT QUE LA BALISE, baisse la puissance' : ''));
   txt('ptx-info', l.filter(x => x).join(' · '));
-  g('ptx-info').classList.toggle('avert', !!(j.erreur || (j.emet && (j.sortieErreur || j.posteEmet === false)) || (!j.pret && !j.emet)));
+  g('ptx-info').classList.toggle('avert', !!(j.erreur || (j.emet && (j.sortieErreur || j.posteEmet === false)) || (!j.pret && !j.emet) || q.tropFort));
 }
 async function pxAppuie() {
   if (pxTenu || !PX || g('ptx-ptt').disabled) return;
@@ -16914,6 +16998,357 @@ async function pxTrace(input) {
   txt('ptxr-msg', l.join(' · '));
   pxLit();
 }
+
+// ------------------------------------------------------------------ QO-100's narrow band by the Pluto (api/be/emission): the PTT held, the microphone or a card, CW; the uplink profiles
+var BX = null, bxTenu = false, bxVerrouille = false, bxVieW = null, bxConfirme = false, bxCleTient = false, bxCwAuto = false;
+var bxMic = null, bxWs = null, bxPic = 0, bxSeq = 0, bxGainN = null, bxGT = null;
+const bxPluto = () => !!(BX && BX.ok && !BX.absent && (BX.profils || []).some(p => p.nom === BX.profil && p.chaine === 'pluto'));
+async function bxLit() {
+  if (window.SATME_TELEPHONE) return;
+  try { const r = await fetch('api/be/emission?client=' + TX_CLIENT); BX = r.ok ? await r.json() : null; } catch (x) { BX = null; }
+  bxRend();
+}
+const bxMhz = hz => (hz / 1e6).toFixed(4).replace('.', ',');
+function bxRend() {
+  const j = BX, p = g('btx');
+  if (!p) return;
+  const ok = !!(j && j.ok && !j.absent) && !window.SATME_TELEPHONE;
+  bxProfilRend();
+  p.hidden = !ok || !(bxPluto() || j.emet);
+  if (!ok) { if (bxTenu) bxRelache(); return; }
+  const moi = !!(j.emet && j.moi);
+  p.classList.toggle('emet', !!j.emet);
+  const e = g('btx-etat');
+  e.textContent = j.emet ? '● TX' + (j.restant != null ? ' ' + Math.floor(j.restant / 60) + ':' + String(j.restant % 60).padStart(2, '0') : '') : !j.pret ? 'indisponible' : j.plutoVu === false ? 'Pluto absent' : 'prêt';
+  e.className = 'ptx-etat' + (j.emet ? ' tx' : j.pret && j.plutoVu !== false ? ' ok' : '');
+  e.title = j.emet ? 'En émission ; temps restant avant la minuterie (' + j.tot + ' min)' : !j.pret ? j.pourquoi : j.plutoVu === false ? 'L’ADALM-PLUTO ne répond pas sur ' + j.pluto + ' (onglet SDR pour son adresse)' : 'Prêt : maintenir PTT pour émettre';
+  txt('btx-qui', j.emet ? (moi ? 'par cette page' : 'par ' + j.client) : '');
+  txt('btx-profil', 'profil ' + j.profil);
+  const ban = g('btx-bandeau');
+  const charge = j.emet ? j.sousCharge : j.charge;
+  txt('btx-bandeau', charge ? 'ESSAI SUR CHARGE — gain bridé à ' + j.gainCharge + ' dB : la sortie du Pluto (ou de l’ampli) sur une charge fictive, jamais sur l’antenne'
+    : 'SUR L’AIR vers QO-100 — jamais plus fort que la balise' + (j.emet ? '' : ' (confirmé au premier PTT)'));
+  ban.classList.toggle('air', !charge);
+  const b = g('btx-ptt');
+  b.disabled = !j.pret && !moi && !bxTenu;
+  b.classList.toggle('on', moi || bxTenu);
+  const sel = g('btx-mode');
+  if (!sel.options.length) sel.innerHTML = (j.modes || []).map(m => '<option value="' + m.cle + '">' + esc(m.nom) + '</option>').join('');
+  if (document.activeElement !== sel) sel.value = j.mode;
+  if (document.activeElement !== g('btx-source')) g('btx-source').value = j.source;
+  [sel, g('btx-source'), g('btx-charge')].forEach(x => x.disabled = !!j.emet);
+  g('btx-source').hidden = j.mode === 'cw';
+  g('btx-micl').hidden = j.mode === 'cw' || j.source !== 'micro';
+  g('btx-cw').hidden = j.mode !== 'cw';
+  g('btx-charge').checked = !!j.charge; g('btx-charge').disabled = !!j.emet || !j.local;
+  g('btx-lie').checked = !!j.lie;
+  txt('btx-f', bxMhz(j.cadran) + ' MHz');
+  txt('btx-d', 'descente ' + bxMhz(j.descente) + (j.mode === 'cw' ? ' · porteuse ' + bxMhz(j.porteuse) : ''));
+  if (document.activeElement !== g('btx-cadran')) g('btx-cadran').value = j.lie ? '' : bxMhz(j.cadran);
+  g('btx-cadran').disabled = !!j.lie;
+  txt('btx-freq', j.refusFreq || j.avertFreq || '');
+  g('btx-seg').hidden = !j.refusFreq || !!j.emet;
+  txt('btx-seg', '→ ' + bxMhz(j.defaut) + ' (' + ((j.modes || []).find(m => m.cle === j.mode) || {}).nom + ')');
+  if (document.activeElement !== g('btx-g') && !bxGT) g('btx-g').value = Math.round(j.gain);
+  txt('btx-gv', Math.round(j.gain) + ' dB → ' + (j.emet && j.gainApplique != null ? fr1(j.gainApplique) : fr1(j.gainEffectif)) + ' dB');
+  g('btx-gv').title = 'Demandé → appliqué (plafond ' + j.plafond + ' dB, Réglages › Émission ' + j.gainMax + ' dB' + (j.charge ? ', charge ' + j.gainCharge + ' dB' : '') + ')';
+  if (document.activeElement !== g('btx-wpm')) g('btx-wpm').value = j.wpm;
+  // Our level against the beacon's, when SatMe hears its own downlink.
+  const n = j.niveau || {};
+  const nv = g('btx-niv');
+  if (j.emet && !j.sousCharge) {
+    txt('btx-niv', n.ecart != null ? 'Ton signal vs balise : ' + (n.ecart > 0 ? '+' : '') + fr1(n.ecart) + ' dB' + (n.tropFort ? ' — PLUS FORT QUE LA BALISE : baisse le gain' : '')
+      : 'Ton signal vs balise : non mesuré (démarrer la réception QO-100 à la clé SDR pour le voir)');
+    nv.className = 'petit' + (n.tropFort ? ' danger' : n.ecart == null ? ' avert' : '');
+  } else { txt('btx-niv', j.leila ? 'LEILA entendue : quelqu’un émet trop fort ici' : ''); nv.className = 'petit' + (j.leila ? ' danger' : ''); }
+  const l = [];
+  if (!j.pret && !j.emet && j.pourquoi !== j.refusFreq) l.push(j.pourquoi);
+  if (j.erreur) l.push(j.erreur);
+  else if (!j.emet && j.raison && j.raison !== 'relâché' && j.raison !== 'PTT relâché') l.push('dernière émission : ' + j.raison);
+  if (j.plutoVu === false && !j.emet && !j.erreur) l.push('ADALM-PLUTO absent (' + j.pluto + ')');
+  if (j.emet && j.carteErreur) l.push(j.carteErreur);
+  txt('btx-info', l.filter(x => x).join(' · '));
+  g('btx-info').classList.toggle('avert', !!(j.erreur || (!j.pret && !j.emet) || j.plutoVu === false));
+  // The CW text sent with its own PTT: released once out.
+  if (bxCwAuto && bxTenu && j.emet && !j.cwOccupe && !bxCleTient) { bxCwAuto = false; bxRelache(); }
+  bxReglagesRend();
+}
+function bxReglagesRend() {
+  const j = BX;
+  if (!j || !j.ok) return;
+  const pl = bxPluto();
+  g('bxc-pluto').hidden = !pl; g('bxc-poste').hidden = pl;
+  txt('bxc-vu', j.plutoVu == null ? 'non vérifié (' + j.pluto + ')' : j.plutoVu ? 'joignable (' + j.pluto + ')' : 'absent (' + j.pluto + ')');
+  g('bxc-vu').className = 'val ' + (j.plutoVu ? 'cyan' : j.plutoVu === false ? 'rose' : '');
+  txt('bxc-plan', 'oscillateur ' + bxMhz(j.lo) + ' MHz, décalage numérique ' + (j.nco / 1000).toFixed(1).replace('.', ',') + ' kHz');
+  if (document.activeElement !== g('bxc-corr')) g('bxc-corr').value = j.correction;
+  txt('bxc-ppm', (j.ppm >= 0 ? '+' : '') + String(j.ppm).replace('.', ',') + ' ppm');
+  if (document.activeElement !== g('bxc-plafond')) g('bxc-plafond').value = Math.round(j.plafond);
+  g('bxc-tot').value = String(j.tot);
+  const s = g('bxc-carte'), cs = j.cartes || [];
+  const voulu = '<option value="">(aucune)</option>' + cs.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('') +
+    (j.carte && !cs.includes(j.carte) ? '<option value="' + esc(j.carte) + '">' + esc(j.carte) + ' (absente)</option>' : '');
+  if (s.dataset.l !== voulu) { s.innerHTML = voulu; s.dataset.l = voulu; }
+  if (document.activeElement !== s) s.value = j.carte || '';
+  ['bxc-plafond', 'bxc-tot', 'bxc-carte'].forEach(id => g(id).disabled = !j.local || !!j.emet);
+  txt('bxc-local', j.local ? '' : 'Plafond, minuterie, carte son et sortie de la charge : sur le PC de la station seulement.');
+  // The rig's chain, from the cockpit's numbers (api/qo100).
+  if (!pl && typeof O !== 'undefined' && O) {
+    txt('bxc-m', bxMhz(O.montee) + ' MHz');
+    txt('bxc-p', O.olTx > 0 ? bxMhz(O.posteTx) + ' MHz' : '—');
+    txt('bxc-ol', O.olTx > 0 ? 'OL de montée de la chaîne « ' + O.chaine + ' » : ' + bxMhz(O.olTx) + ' MHz · vérification : ' + bxMhz(O.posteTx) + ' + ' + bxMhz(O.olTx) + ' = ' + bxMhz(O.posteTx + O.olTx) + ' MHz'
+      : 'Pas d’OL de montée dans la chaîne « ' + O.chaine + ' » : le poste ne peut pas émettre sur 2,4 GHz (onglet « Poste & chaîne »).');
+    const av = [];
+    if (O.olTx > 0 && O.posteTx + O.olTx !== O.montee) av.push('la fréquence du poste ne redonne pas la montée : chaîne à vérifier');
+    if (!O.emission) av.push('l’accord est sur une balise ou hors du plan : écoute seule, PTT refusé');
+    if (O.monteeRetenue) av.push('fréquence d’urgence proposée par SatMe : montée non écrite');
+    if (!O.auPoste) av.push('« Appliquer au poste » décoché (onglet « Poste & chaîne ») : le poste n’est pas accordé par SatMe');
+    txt('bxc-av', av.join(' · '));
+  }
+}
+function bxProfilRend() {
+  const j = BX;
+  if (!j || !j.ok || !j.profils) return;
+  const r = g('bxp-rapide');
+  const rap = ['Fixe', 'Portable'].filter(n => j.profils.some(p => p.nom === n));
+  const html = rap.map(n => '<button type="button" data-n="' + esc(n) + '" class="' + (j.profil === n ? 'actif' : '') + '" aria-pressed="' + (j.profil === n) + '">' + esc(n) + '</button>').join('');
+  if (r.dataset.h !== html) { r.innerHTML = html; r.dataset.h = html; r.querySelectorAll('button').forEach(b => b.onclick = () => bxRegle('profil=' + enc(b.dataset.n))); }
+  const s = g('bxp-choix'), opts = j.profils.map(p => '<option>' + esc(p.nom) + '</option>').join('');
+  if (s.dataset.h !== opts) { s.innerHTML = opts; s.dataset.h = opts; }
+  if (document.activeElement !== s) s.value = j.profil;
+  const e = j.estimation || {};
+  txt('bxp-resume', (e.resume || '').split(' · PIRE')[0]);
+  txt('bxp-pire', e.pireMax != null ? fr1(e.pireMax) + ' dBW (≈ ' + Math.round(e.pireMaxW) + ' W)' : '—');
+  txt('bxp-conseil', e.conseilleW >= 1 ? fr1(e.conseilleW) + ' W' : Math.round(e.conseilleW * 1000) + ' mW');
+  txt('bxp-conseil2', 'à la sortie de l’ampli' + (e.gainPluto != null ? ' · gain Pluto ≈ ' + fr1(e.gainPluto) + ' dB' : ' (gain de l’ampli inconnu : pas de gain Pluto conseillé)'));
+  txt('bxp-aide', 'Ordre de grandeur seulement : la balise médiane correspond à environ ' + e.balise + ' dBW de PIRE en BLU (±6 dB selon la parabole, la source, le pointage, l’ampli réel) ; ' +
+    'conseillé ' + e.marge + ' dB en dessous en ' + ({ blu: 'BLU', cw: 'CW', num: 'numérique' }[BX.mode] || '') + '. La vraie mesure : ton signal comparé à la balise sur la descente, pendant l’émission.');
+  // The editor, filled from the chosen profile (not while typing in it).
+  const p = j.profils.find(x => x.nom === j.profil);
+  const ed = g('bxp-edit');
+  if (p && !ed.contains(document.activeElement)) {
+    if (!g('bxp-chaine').options.length) g('bxp-chaine').innerHTML = (j.chaines || []).map(c => '<option value="' + c.cle + '">' + esc(c.nom) + '</option>').join('');
+    if (!g('bxp-antenne').options.length) g('bxp-antenne').innerHTML = (j.antennes || []).map(c => '<option value="' + c.cle + '">' + esc(c.nom) + '</option>').join('');
+    g('bxp-nom').value = p.nom; g('bxp-chaine').value = p.chaine; g('bxp-antenne').value = p.antenne;
+    g('bxp-gain').value = p.gainAutre; g('bxp-w').value = p.ampliW; g('bxp-ag').value = p.ampliGain; g('bxp-pertes').value = p.pertes;
+    g('bxp-gl').hidden = p.antenne !== 'autre';
+  }
+}
+async function bxRegle(q) {
+  let j = null;
+  try { j = await (await fetch('api/be/emission/reglage?client=' + TX_CLIENT + '&' + q, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) { txt('btx-info', 'Refusé : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); }
+  else if (j) { BX = j; bxRend(); }
+}
+/** The mode's starting frequency: the cockpit tuned there when tied, else the dial typed. */
+function bxSegment() {
+  if (!BX) return;
+  if (BX.lie) qPost('frequence?hz=' + (BX.defaut + 8089500000)).then(bxLit); else bxRegle('cadran=' + BX.defaut);
+}
+function bxCadran(t) {
+  const x = parseFloat(String(t).replace(',', '.').replace(/\s/g, ''));
+  if (!x) return;
+  bxRegle('cadran=' + Math.round(x < 20000 ? x * 1e6 : x));
+}
+function bxCharge(on) {
+  if (!on && !confirm('Quitter l’essai sur charge : la prochaine émission part vers QO-100, au gain choisi (plafond ' + (BX ? BX.plafond : '?') + ' dB).\n\nL’ampli sur l’antenne, l’antenne pointée, jamais plus fort que la balise. Continuer ?')) { g('btx-charge').checked = true; return; }
+  bxConfirme = !on;
+  bxRegle('charge=' + (on ? 1 : 0));
+}
+async function bxProfilGarde() {
+  const p = { nom: v('bxp-nom'), chaine: g('bxp-chaine').value, antenne: g('bxp-antenne').value, gainAutre: +g('bxp-gain').value || 0,
+    ampliW: +g('bxp-w').value || 0, ampliGain: +g('bxp-ag').value || 0, pertes: +g('bxp-pertes').value || 0 };
+  if (!p.nom) { txt('bxp-msg', 'un nom'); return; }
+  await bxRegle('profilJson=' + enc(JSON.stringify(p)));
+  txt('bxp-msg', 'enregistré');
+}
+async function bxProfilRetire() {
+  if (!BX || !confirm('Retirer le profil « ' + BX.profil + ' » ?')) return;
+  await bxRegle('profilRetire=' + enc(BX.profil));
+}
+/** The Montage on a plan drawing this profile: the one already made, else a new one from the ready-made chain (nothing replaced). */
+async function bxMontage() {
+  const e = BX && BX.estimation; if (!e) return;
+  let l = null;
+  try { l = await (await fetch('api/montage/plans')).json(); } catch (x) {}
+  let cat = null;
+  try { cat = await (await fetch('api/montage/catalogue')).json(); } catch (x) {}
+  const pre = cat && cat.prereglages ? cat.prereglages.find(p => p.id === e.montage) : null;
+  const nom = pre ? pre.nom : e.montage;
+  const deja = l && l.plans ? l.plans.find(p => p.nom === nom) : null;
+  try {
+    if (deja) await fetch('api/montage/plans?op=affiche&id=' + enc(deja.id), { method: 'POST' });
+    else await fetch('api/montage/plans?op=prereglage&pre=' + enc(e.montage) + '&nom=' + enc(nom), { method: 'POST' });
+  } catch (x) {}
+  vue('montage');
+}
+async function bxMesure(quoi) {
+  const id = quoi === 'poste' ? 'bxc-msg' : 'bxc-msg2';
+  txt(id, 'mesure…');
+  let j = null;
+  try { j = await (await fetch('api/be/mesure?quoi=' + quoi, { method: 'POST' })).json(); } catch (x) {}
+  txt(id, j ? (j.ok ? j.message : 'Refusé : ' + j.erreur) : 'pas de réponse');
+  bxLit(); if (quoi === 'poste') chargeQo100();
+}
+/** Keys the Pluto; [maintenu]: until clicked again (FT8, CW text). */
+async function bxAppuie(maintenu) {
+  if (bxTenu || !BX || g('btx-ptt').disabled) return false;
+  bxTenu = true; bxVerrouille = !!maintenu; g('btx-ptt').classList.add('on');
+  let c = null;
+  try { const r = await fetch('api/emission/controle?client=' + TX_CLIENT); if (r.ok) c = await r.json(); } catch (x) {}
+  if (c && c.vous && c.vous.distant && !c.vous.confirme) {
+    bxTenu = false; g('btx-ptt').classList.remove('on');
+    if (await txPeutDemarrer()) txt('btx-info', 'Émission depuis cet appareil confirmée : appuyer de nouveau.');
+    return false;
+  }
+  // On the air: the operator's word, once for this page.
+  if (!BX.charge && !bxConfirme) {
+    if (!confirm('Émettre VERS QO-100 avec le Pluto : montée ' + bxMhz(BX.cadran) + ' MHz, gain ' + fr1(BX.gainEffectif) + ' dB.\n\nJamais plus fort que la balise ; LEILA coupe l’émission. Confirmer pour cette page ?')) {
+      bxTenu = false; g('btx-ptt').classList.remove('on'); return false;
+    }
+    bxConfirme = true;
+  }
+  if (!bxTenu) return false;
+  if (BX.mode !== 'cw' && BX.source === 'micro') await bxMicro();
+  if (!bxTenu) return false;
+  let r = null;
+  try { r = await (await fetch('api/be/emission/demarre?client=' + TX_CLIENT + (bxConfirme ? '&confirme=1' : ''), { method: 'POST' })).json(); } catch (x) {}
+  if (!r || r.ok === false) {
+    bxTenu = false; bxVerrouille = false; g('btx-ptt').classList.remove('on');
+    txt('btx-info', 'PTT refusé : ' + (r && r.erreur || 'pas de réponse')); g('btx-info').classList.add('avert');
+    return false;
+  }
+  if (!bxTenu) { fetch('api/be/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {}); return false; }
+  BX = r; bxRend(); bxVie(true);
+  HX.t.btx = 0; HX.t.ctl = 0;
+  return true;
+}
+function bxRelache() {
+  const etait = bxTenu; bxTenu = false; bxVerrouille = false; bxCwAuto = false;
+  const b = g('btx-ptt'); if (b) b.classList.remove('on');
+  bxVie(false);
+  if (etait) fetch('api/be/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json())
+    .then(j => { if (j && j.ok !== false) { BX = j; bxRend(); } HX.t.btx = 0; ticTete(); }).catch(() => {});
+}
+// While held, the page says it is there from a worker (the server's 2 s watchdog counts on it).
+function bxVie(on) {
+  if (on && !bxVieW) {
+    const bat = () => fetch('api/be/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json()).then(j => {
+      if (!bxTenu) return;
+      if (j && j.ok === false) { bxTenu = false; bxVerrouille = false; bxVie(false); g('btx-ptt').classList.remove('on'); txt('btx-info', 'PTT perdu : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); bxLit(); }
+      else if (j) { BX = j; bxRend(); }
+    }).catch(() => {});
+    try {
+      bxVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 400);'], { type: 'text/javascript' })));
+      bxVieW.onmessage = bat;
+    } catch (x) { bxVieW = { t: setInterval(bat, 400), terminate() { clearInterval(this.t); } }; }
+  } else if (!on && bxVieW) { bxVieW.terminate(); bxVieW = null; }
+}
+(function () {
+  const b = g('btx-ptt'), p = g('btx');
+  if (!b || !p) return;
+  b.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0) return; ev.preventDefault(); b.focus();
+    if (g('btx-verrou').checked) { if (bxTenu) bxRelache(); else bxAppuie(true); return; }
+    try { b.setPointerCapture(ev.pointerId); } catch (x) {}
+    bxAppuie(false);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, () => { if (bxTenu && !bxVerrouille) bxRelache(); }));
+  b.addEventListener('contextmenu', ev => ev.preventDefault());
+  p.addEventListener('keydown', ev => { if (ev.code !== 'Space' || (ev.target !== p && ev.target !== b)) return; ev.preventDefault(); ev.stopPropagation(); if (!ev.repeat && !bxTenu) bxAppuie(false); });
+  p.addEventListener('keyup', ev => { if (ev.code !== 'Space') return; ev.preventDefault(); if (bxTenu && !bxVerrouille) bxRelache(); });
+  // Held by the button: released when the page loses the hand; latched: the watchdog decides (a hidden tab's worker still beats).
+  p.addEventListener('focusout', ev => { if (bxTenu && !bxVerrouille && !p.contains(ev.relatedTarget)) bxRelache(); });
+  window.addEventListener('blur', () => { if (bxTenu && !bxVerrouille) bxRelache(); });
+  window.addEventListener('pagehide', () => { if (bxTenu) navigator.sendBeacon('api/be/emission/arrete?client=' + TX_CLIENT); });
+  // The straight key: the PTT taken for it when needed, given back with it.
+  const k = g('btx-cle');
+  k.addEventListener('pointerdown', async ev => {
+    if (ev.button !== 0) return; ev.preventDefault();
+    try { k.setPointerCapture(ev.pointerId); } catch (x) {}
+    bxCleTient = true;
+    const pris = !bxTenu && await bxAppuie(true);
+    if (!bxTenu || !bxCleTient) { if (pris) bxRelache(); return; }
+    k.dataset.pris = pris ? '1' : '';
+    fetch('api/be/cw?client=' + TX_CLIENT + '&touche=1', { method: 'POST' }).catch(() => {});
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => k.addEventListener(t, () => {
+    if (!bxCleTient) return; bxCleTient = false;
+    fetch('api/be/cw?client=' + TX_CLIENT + '&touche=0', { method: 'POST' }).catch(() => {});
+    if (k.dataset.pris === '1') { k.dataset.pris = ''; bxRelache(); }
+  }));
+  g('btx-mgain').value = pxCle('be-gain', '100');
+})();
+async function bxCwEnvoie() {
+  const t = v('btx-cw-t'); if (!t) return;
+  if (!bxTenu) { if (!await bxAppuie(true)) return; bxCwAuto = true; }
+  try { await fetch('api/be/cw?client=' + TX_CLIENT + '&texte=' + enc(t), { method: 'POST' }); } catch (x) {}
+  g('btx-cw-t').value = '';
+}
+
+// ---- the microphone for the Pluto: as the IC-9700's (getUserMedia at 48 kHz, a light compressor, 20 ms frames), its own socket
+function bxMicGain(x) { pxGarde('be-gain', String(x)); if (bxGainN) bxGainN.gain.value = Math.max(0, +x || 0) / 100; }
+function bxMicEtat(t, avert) { txt('btx-mic-etat', t); g('btx-mic-etat').classList.toggle('avert', !!avert); }
+async function bxMicro() {
+  if (bxMic) return true;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    bxMicEtat('micro refusé par le navigateur : page non sûre (http depuis une autre machine). Passer en HTTPS : Réglages › Accès à distance.', true); return false;
+  }
+  let flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+  catch (x) { bxMicEtat('micro : ' + (x.message || x.name), true); return false; }
+  let ctx;
+  try { ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' }); } catch (x) { ctx = new AudioContext({ latencyHint: 'interactive' }); }
+  const src = ctx.createMediaStreamSource(flux);
+  const gain = ctx.createGain(); gain.gain.value = Math.max(0, +g('btx-mgain').value || 0) / 100; bxGainN = gain;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.25;
+  src.connect(gain); gain.connect(comp);
+  let noeud = null;
+  try {
+    const url = URL.createObjectURL(new Blob(['(' + pxProcesseur.toString() + ')();'], { type: 'text/javascript' }));
+    await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    noeud = new AudioWorkletNode(ctx, 'satme-micro', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    noeud.port.onmessage = ev => bxBloc(ev.data, ctx.sampleRate);
+  } catch (x) {
+    noeud = ctx.createScriptProcessor(1024, 1, 1);
+    const n = Math.round(ctx.sampleRate / 50), b = new Float32Array(n); let k = 0;
+    noeud.onaudioprocess = ev => { const x = ev.inputBuffer.getChannelData(0); for (let i = 0; i < x.length; i++) { b[k++] = x[i]; if (k === n) { bxBloc(b.slice(0), ctx.sampleRate); k = 0; } } };
+  }
+  comp.connect(noeud); noeud.connect(ctx.destination);
+  bxMic = { flux, ctx, noeud };
+  bxSocket();
+  bxMicEtat('micro ouvert : ' + Math.round(ctx.sampleRate / 100) / 10 + ' kHz, trames de 20 ms');
+  return true;
+}
+function bxSocket() {
+  if (bxWs && bxWs.readyState <= 1) return;
+  const u = new URL('api/be/micro/ws?client=' + TX_CLIENT, location.href);
+  u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  try { bxWs = new WebSocket(u.href); bxWs.binaryType = 'arraybuffer'; } catch (x) { bxWs = null; return; }
+  const ws = bxWs;
+  ws.onclose = () => { if (bxWs === ws) { bxWs = null; if (bxMic) setTimeout(bxSocket, 1000); } };
+}
+function bxBloc(x, rate) {
+  let c = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > c) c = a; }
+  if (c > bxPic) bxPic = c;
+  if (!bxTenu || !bxWs || bxWs.readyState !== 1) return;
+  if (bxWs.bufferedAmount > 64000) return;
+  const b = new ArrayBuffer(16 + 2 * x.length), dv = new DataView(b);
+  dv.setUint8(0, 0x81); dv.setUint8(1, 0); dv.setUint16(2, rate, true); dv.setUint32(4, bxSeq++ >>> 0, true); dv.setFloat64(8, performance.now(), true);
+  for (let i = 0; i < x.length; i++) dv.setInt16(16 + 2 * i, Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767))), true);
+  bxWs.send(b);
+}
+setInterval(() => {
+  const i = g('btx-vu'); if (!i || g('btx').hidden) return;
+  const db = bxPic > 0 ? 20 * Math.log10(bxPic) : -99;
+  i.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
+  i.style.background = db > -3 ? 'var(--danger)' : db > -10 ? 'var(--warn)' : 'var(--ok)';
+  txt('btx-mic-db', bxMic ? (db > -99 ? Math.round(db) + ' dBFS' : '—') : '');
+  bxPic *= 0.5;
+}, 100);
+// Read each second while the QO-100 tab is shown or the PTT held (the header reads it too).
+setInterval(() => { if (!document.hidden && (!g('v-qo100').hidden || bxTenu)) bxLit(); }, 1000);
 
 // ---- Réglages › Accès à distance › HTTPS
 var HS = null;
@@ -17268,9 +17703,10 @@ async function ticTete() {
     hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000),
     hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000),
     hxLit('noeud', 'api/noeud', 3000), hxLit('ctl', 'api/emission/controle?client=' + TX_CLIENT, 2000),
-    hxLit('ptx', 'api/poste/emission?client=' + TX_CLIENT, 1000)]);
+    hxLit('ptx', 'api/poste/emission?client=' + TX_CLIENT, 1000), hxLit('btx', 'api/be/emission?client=' + TX_CLIENT, 1000)]);
   ndRend(); nxRend();
   if (HX.ptx && !pxTenu) { PX = HX.ptx; pxRend(); }
+  if (HX.btx && !bxTenu) { BX = HX.btx; bxRend(); }
   if (HX.ann && HX.ann.on !== undefined) annRattrape(HX.ann);
   rendTete();
 }
@@ -17281,6 +17717,7 @@ function emissionsEnCours() {
   if (HX.stx && HX.stx.emet) l.push('SSTV');
   if (HX.iq && HX.iq.actif) l.push('calibration I/Q');
   if (HX.ptx && HX.ptx.emet) l.push('IC-9700');
+  if (HX.btx && HX.btx.emet) l.push('BLU Pluto');
   return l;
 }
 function erreursServeur() {
@@ -17365,9 +17802,10 @@ function annonce(t, tx) {
  */
 async function arretEmissions() {
   const avant = emissionsEnCours(), inconnu = !HX.dtx && !HX.stx;
-  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT];
+  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT, 'api/be/emission/arrete?client=' + TX_CLIENT];
   if (!HX.iq || HX.iq.actif) l.push('api/iq/arrete');
   pxTenu = false; pxVie(false);
+  bxTenu = false; bxVerrouille = false; bxCwAuto = false; bxVie(false); { const b = g('btx-ptt'); if (b) b.classList.remove('on'); }
   await Promise.all(l.map(u => fetch(u, { method: 'POST' }).catch(() => null)));
   if (avant.length || inconnu) annonce(avant.length ? '■ Émission arrêtée : ' + avant.join(', ') : '■ Arrêt de toute émission demandé', true);
   HX.t = {}; ticTete();

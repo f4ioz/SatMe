@@ -445,7 +445,7 @@ class EmissionBandeEtroitePc(
             .put("refusFreq", MonteeQo100.refus(m, c) ?: "").put("avertFreq", MonteeQo100.avertissement(m, c) ?: "")
             .put("defaut", MonteeQo100.cadranParDefaut(m))
             .put("pret", e.emet || refus(m, c) == null).put("pourquoi", if (e.emet) "" else refus(m, c) ?: "")
-            .put("emet", e.emet && pe?.emet != false).put("raison", e.raison).put("erreur", e.erreur.ifBlank { dernierRefus ?: "" })
+            .put("emet", e.emet && pe?.emet != false).put("raison", e.raison).put("erreur", dernierRefus ?: e.erreur)
             .put("restant", poste.restantS(t) ?: JSONObject.NULL).put("tot", totMin).put("chienS", poste.chienMs / 1000.0)
             .put("charge", charge).put("gainCharge", ReglesSstvRf.GAIN_CHARGE_DB)
             .put("gain", gainDb).put("plafond", plafondDb).put("gainMax", gainMaxDb())

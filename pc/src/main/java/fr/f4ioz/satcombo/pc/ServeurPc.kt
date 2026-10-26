@@ -229,9 +229,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
         val b = emissionBe ?: return JSONObject().put("ok", false).put("absent", true)
         return when {
-            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1")?.let { JSONObject().put("ok", false).put("erreur", it) } ?: b.json(cl.id)
-            chemin.endsWith("/vie") -> if (b.vie(cl.id)) b.json(cl.id) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
-            else -> { b.relache("relâché"); b.json(cl.id) }
+            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1")?.let { JSONObject().put("ok", false).put("erreur", it) }
+                ?: b.json(cl.id).put("local", !cl.distant)
+            chemin.endsWith("/vie") -> if (b.vie(cl.id)) b.json(cl.id).put("local", !cl.distant) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
+            else -> { b.relache("relâché"); b.json(cl.id).put("local", !cl.distant) }
         }
     }
 
