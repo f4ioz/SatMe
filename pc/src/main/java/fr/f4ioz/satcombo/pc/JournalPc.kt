@@ -252,6 +252,13 @@ class JournalPc(
         predicteur.positionAt(sat, obs, t).let { JournalPassage.Sol(t, it.latDeg, it.lonDeg, it.altKm) }
     }.getOrNull()
 
+    /** Another satellite of the station's, [nom], at [t] (a session's companion), seen from the pass's station; null: unknown. */
+    fun positionDe(nom: String, e: JournalPassage.Entree, t: Long): JournalPassage.Sol? = runCatching {
+        val sat = station.etat.value.satellites.firstOrNull { it.name == nom } ?: return null
+        val obs = observateur(e) ?: return null
+        predicteur.positionAt(sat, obs, t).let { JournalPassage.Sol(t, it.latDeg, it.lonDeg, it.altKm) }
+    }.getOrNull()
+
     /** The pass as predicted from today's elements (az, el). */
     fun prevue(e: JournalPassage.Entree): List<Pair<Double, Double>> = runCatching {
         val sat = satellite(e) ?: return emptyList()

@@ -87,6 +87,12 @@ object GlobeRenduPc {
             gdx = nombre("gdx", -0.5f, 0.5f, 0f), gdy = nombre("gdy", -0.5f, 0.5f, 0f), gz = nombre("gz", 0.5f, 3f, 1f))
     }
 
+    /** Another satellite going round with the pass's (a session's companion): its name, its colour, where it is at a time. */
+    class Autre(val nom: String, val couleur: Color, val position: (Long) -> JournalPassage.Sol?)
+
+    /** The companions' colours, in the order chosen (the same as the journal page's). */
+    val COULEURS_AUTRES = listOf(0x7CF29A, 0xFF6B9A, 0xB48CFF, 0xFFD84D, 0x4CC3FF, 0xFF9F45, 0x9AE6FF, 0xF2A7FF)
+
     private const val RE = 6371.0
     private const val D2R = PI / 180
     private val STATION = Color(0xFFB454)
@@ -415,7 +421,7 @@ object GlobeRenduPc {
     /** The view of the frame at [t] in a view [w]×[h]: where it looks, the globe moved and scaled as the page asks. */
     fun camera(sc: RenduPc.Scene, t: Long, w: Float, h: Float): Camera {
         val o = sc.optionsGlobe
-        return Camera(sc.centreImpose ?: centre(sc, t), w / 2 + o.gdx * w, h / 2 + o.gdy * h, 0.425f * h * o.gz)
+        return Camera(sc.centreImpose ?: centre(sc, t), w / 2 + o.gdx * w, h / 2 + o.gdy * h, 0.425f * h * (sc.gzImpose ?: o.gz))
     }
 
     private fun Graphics2D.lisse() {
@@ -909,21 +915,26 @@ object GlobeRenduPc {
             else -> villes(g, cam, style, dp, ArrayList(reserve))
         }
 
+        // The companions, quieter than the pass's satellite: a light and their name, their footprint when asked.
+        for (a in sc.autres) {
+            val q = a.position(t) ?: continue
+            val s = vec(q.lat, q.lon); val k = 1 + q.altKm / RE
+            val p = doubleArrayOf(s[0] * k, s[1] * k, s[2] * k)
+            if (sc.tachesAutres) empreinte(g, cam, s, q.altKm, a.couleur, 22, 120, 1f * dp)
+            if (!cam.voit(p)) continue
+            val x = cam.x(p); val y = cam.y(p); val c = a.couleur
+            g.paint = RadialGradientPaint(x, y, 9f * dp, floatArrayOf(0f, 0.35f, 1f), arrayOf(Color(255, 255, 255, 220), Color(c.red, c.green, c.blue, 170), Color(c.red, c.green, c.blue, 0)))
+            g.fill(rond(x, y, 9f * dp))
+            g.color = Color(0x0a1230); g.fill(rond(x, y, 3.6f * dp)); g.color = c; g.fill(rond(x, y, 2.6f * dp))
+            val b = etiquette(g, a.nom, x + 9 * dp, y - 9 * dp, c, style, dp, dessine = false)
+            if (libre(b) && reserve.none { it.intersects(b) }) boites += etiquette(g, a.nom, x + 9 * dp, y - 9 * dp, c, style, dp)
+        }
+
         // The footprint.
         if (sous != null) {
             val (s, alt) = sous
-            val rho = acos(RE / (RE + alt.coerceAtLeast(1.0)))
-            val e = norme(doubleArrayOf(-s[1], s[0], 0.0)).let { if (abs(s[2]) > 0.9999) doubleArrayOf(0.0, 1.0, 0.0) else it }
-            val nn = doubleArrayOf(s[1] * e[2] - s[2] * e[1], s[2] * e[0] - s[0] * e[2], s[0] * e[1] - s[1] * e[0])
-            // Built straight on the sphere, counter-clockwise seen from outside (east, then north).
-            val p = DoubleArray(360)
-            for (i in 0 until 120) { val f = 2 * PI * i / 120; for (k in 0..2) p[3 * i + k] = cos(rho) * s[k] + sin(rho) * (cos(f) * e[k] + sin(f) * nn[k]) }
-            val an = Anneau(p, BooleanArray(120), s, rho)
-            val fill = Path2D.Float(Path2D.WIND_NON_ZERO); val bord = Path2D.Float()
-            decoupe(an, cam, fill, bord)
             val c = encre ?: coulSat
-            g.color = Color(c.red, c.green, c.blue, if (style == "cartoon") 60 else 40); g.fill(fill)
-            g.color = Color(c.red, c.green, c.blue, 210); g.stroke = BasicStroke(1.6f * dp); g.draw(bord)
+            empreinte(g, cam, s, alt, c, if (style == "cartoon") 60 else 40, 210, 1.6f * dp)
         }
 
         // The ground track: gone solid, to come dashed.
@@ -1022,6 +1033,21 @@ object GlobeRenduPc {
             }
         }
         return satX
+    }
+
+    /** A footprint: the circle seen from [alt] km over [s], filled with [c] at [fond], its edge at [trait]. */
+    private fun empreinte(g: Graphics2D, cam: Camera, s: DoubleArray, alt: Double, c: Color, fond: Int, trait: Int, l: Float) {
+        val rho = acos(RE / (RE + alt.coerceAtLeast(1.0)))
+        val e = norme(doubleArrayOf(-s[1], s[0], 0.0)).let { if (abs(s[2]) > 0.9999) doubleArrayOf(0.0, 1.0, 0.0) else it }
+        val nn = doubleArrayOf(s[1] * e[2] - s[2] * e[1], s[2] * e[0] - s[0] * e[2], s[0] * e[1] - s[1] * e[0])
+        // Built straight on the sphere, counter-clockwise seen from outside (east, then north).
+        val p = DoubleArray(360)
+        for (i in 0 until 120) { val f = 2 * PI * i / 120; for (k in 0..2) p[3 * i + k] = cos(rho) * s[k] + sin(rho) * (cos(f) * e[k] + sin(f) * nn[k]) }
+        val an = Anneau(p, BooleanArray(120), s, rho)
+        val fill = Path2D.Float(Path2D.WIND_NON_ZERO); val bord = Path2D.Float()
+        decoupe(an, cam, fill, bord)
+        g.color = Color(c.red, c.green, c.blue, fond); g.fill(fill)
+        g.color = Color(c.red, c.green, c.blue, trait); g.stroke = BasicStroke(l); g.draw(bord)
     }
 
     /** The cities: the great ones always, the small ones near the middle of the view; a dot, its name if it finds room. */

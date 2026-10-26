@@ -123,6 +123,11 @@ object RenduPc {
         var horsTrace: ((Long) -> JournalPassage.Sol?)? = null
         /** The globe's centre imposed (a session's turn from one pass to the next); null: its own. */
         var centreImpose: DoubleArray? = null
+        /** The globe's size imposed (a session's zoom, outside the passes or in one); null: the page's [GlobeRenduPc.Options.gz]. */
+        var gzImpose: Float? = null
+        /** Other satellites going round too (a session's companions), and their footprints or not. */
+        var autres: List<GlobeRenduPc.Autre> = emptyList()
+        var tachesAutres = false
         /** Kept free along the bottom of the view (px): the session's strip of pictures, the cards above it. */
         var margeBas = 0f
         /** A session's words in the caption: « Passage k / N », « n images reçues » (and whether any came). */

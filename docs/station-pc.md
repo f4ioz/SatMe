@@ -261,7 +261,12 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 - *l'image SSTV qui arrive* (the SSTV picture coming in): large over the globe, away from the satellite, drawn as it is received; *vignettes des images* (thumbnails): the pictures received under the timeline.
 - A caption: the time, « Passage 2 / 4 · 5 images reçues », AOS, TCA and LOS, « AOS + 3:06 ».
 - **▶ Animer la session de l'événement** (play the event's session; *Fabriquer › Éléments du rapport* of a pass that has an SSTV event): the session of its satellite and days, played at once.
-- **🎬 Vidéo de la session** (the session's video; ffmpeg needed): the same options as a pass's video and the text size; without sound, an **opening card**, the passes on the globe as it is framed, a **card of the next pass** between two, the **mosaic** of the pictures at the end; it follows the session's three speeds (fast between passes, slower in a pass, slow on a picture or a recorded contact).
+- **Two zooms**: **Zoom hors passage** (outside the passes, from afar, ×0.9 by default) and **Zoom passage** (in a pass, near, ×1.8); the camera eases from one to the other before the AOS and after the LOS (passes in a row: it goes away during the pause and comes back). The wheel on the globe sets the one of the moment.
+- **Satellites en plus** (more satellites): your favourites, ticked, go round the globe too, quieter than the session's (a light and their name, *leurs taches au sol*, their footprints, as an option), on the page and in the files. Their positions come from today's orbits.
+- **The session is a small video editor**: what is set on the page (globe style, cities, names, details, framing, speeds, zooms, more satellites, SSTV picture, texts) is what the file shows. With ffmpeg:
+  - **🎬 Vidéo de la session** (MP4): the same options as a pass's video (resolution, landscape or portrait, opening, summary, SSTV picture, card, S-meter, frequency, locator, text size); an **opening card**, the passes on the globe, a **card of the next pass** between two, the **mosaic** of the pictures at the end; it follows the session's three speeds and two zooms.
+  - **Avec le son de l'enregistrement** (with the recording's sound): a contact heard plays **in real time** (on the page too) and the video has its sound; the rest is silent.
+  - **GIF animé** (the session in fewer frames, looping), **Image de ce moment** (PNG of the moment shown) and **Son (WAV)** (the video's sound track).
 
 ### SSTV pictures and report elements
 

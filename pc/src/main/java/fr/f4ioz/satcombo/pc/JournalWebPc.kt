@@ -293,10 +293,10 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 }
                 json("{\"ok\":true,\"travail\":\"$n\"}")
             }
-            // A session: one satellite's passes one after another on the globe, as an MP4 (no sound).
+            // A session: one satellite's passes one after another on the globe, as an MP4 (with the contacts' sound when asked), a GIF, a picture, its sound.
             "/fabrique-session" -> {
-                if (RenduPc.ffmpeg() == null) return json("{\"ok\":false,\"raison\":\"ffmpeg\"}")
                 val q = SessionRenduPc.parametres(p)
+                if (q.quoi == "video" && RenduPc.ffmpeg() == null) return json("{\"ok\":false,\"raison\":\"ffmpeg\"}")
                 val es = q.ids.mapNotNull { j.passage(it) }.distinctBy { it.id }.sortedBy { it.debutMs }.take(150)
                 if (es.isEmpty()) return json("{\"ok\":false,\"raison\":\"vide\"}")
                 val n = "t" + System.currentTimeMillis().toString(36) + (100..999).random()
@@ -306,15 +306,40 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     val sortie = File(dossier, "exports").apply { mkdirs() }
                     // Always the globe, the pass whole (the session sets its own pace).
                     val pg: (String) -> String = { k -> when (k) { "vue" -> "globe"; "carte" -> "0"; "accelere" -> "0"; else -> p(k) } }
+                    val sons = HashMap<Int, fr.f4ioz.satcombo.domain.SonPassage>()
                     t.fichier = runCatching {
                         val scenes = es.map { e -> scene(e, null, null, false, pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } } }
+                        // The companions, seen from the first pass's station, each its colour (as on the page).
+                        val e0 = es[0]
+                        val autres = q.autres.filter { it != e0.satName }.mapIndexed { i, nom ->
+                            GlobeRenduPc.Autre(nom, java.awt.Color(GlobeRenduPc.COULEURS_AUTRES[i % GlobeRenduPc.COULEURS_AUTRES.size])) { tt -> j.positionDe(nom, e0, tt) }
+                        }
+                        val avecSon = q.son && q.quoi in setOf("video", "son")
                         val session = SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
-                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap), transition = q.transition)
+                            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap), transition = q.transition,
+                            zHors = q.zHors, zPassage = q.zPassage, autres = autres, tachesAutres = q.tachesAutres, son = avecSon)
+                        // Each pass's sound, from its window's start (its 30 s before the AOS).
+                        val debuts = HashMap<Int, Long>()
+                        if (avecSon) es.forEachIndexed { i, e ->
+                            val m = j.morceaux(e); if (m.isEmpty()) return@forEachIndexed
+                            val de = e.debutMs - SessionRenduPc.MARGE_MS
+                            fr.f4ioz.satcombo.domain.SonPassage.fabrique(m, de, e.finMs + SessionRenduPc.MARGE_MS, sortie, JournalPc.decodeur)?.let { sons[i] = it; debuts[i] = de }
+                        }
+                        val son = if (sons.isEmpty()) null else SessionRenduPc.Son(sons, debuts, sons.values.first().rate)
+                        val ext = when (q.quoi) { "gif" -> ".gif"; "image" -> ".png"; "son" -> ".wav"; else -> ".mp4" }
                         val nom = "SatMe_" + es[0].satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                             java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                                .format(java.util.Date(es[0].debutMs)) + "Z_session" + (q.titre?.take(30)?.replace(Regex("[^A-Za-z0-9-]"), "-")?.let { "_$it" } ?: "") + ".mp4"
-                        SessionRenduPc.video(session, File(sortie, nom)) { t.progres = it }
+                                .format(java.util.Date(if (q.quoi == "image") q.instant ?: es[0].debutMs else es[0].debutMs)) + "Z_session" +
+                            (q.titre?.take(30)?.replace(Regex("[^A-Za-z0-9-]"), "-")?.let { "_$it" } ?: "") + ext
+                        val f = File(sortie, nom)
+                        when (q.quoi) {
+                            "gif" -> SessionRenduPc.gif(session, f) { t.progres = it }
+                            "image" -> SessionRenduPc.png(session, q.instant ?: es[0].debutMs, f)
+                            "son" -> son?.let { sn -> RenduPc.ecritWav(SessionRenduPc.source(session, SessionRenduPc.plan(session), sn), sn.rate, f); f }
+                            else -> SessionRenduPc.video(session, f, son, sortie) { t.progres = it }
+                        }
                     }.onFailure { System.err.println("journal : session de ${es.size} passages : $it"); it.printStackTrace() }.getOrNull()
+                    sons.values.forEach { it.close() }
                     t.progres = 1f; t.fini = true
                 }
                 json("{\"ok\":true,\"travail\":\"$n\",\"passages\":${es.size}}")

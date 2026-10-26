@@ -42,7 +42,8 @@ object PageJournal {
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
-        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image")
+        "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
+        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -138,6 +139,7 @@ object PageJournal {
   #sBan b { font-size:1.25em; }
   .s-curseur { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gris); }
   .s-curseur input { width:120px; }
+  .s-autres { margin:6px 0; font-size:12px; } .s-autres summary { cursor:pointer; color:var(--clair); } .s-autres .colonnes label { white-space:nowrap; }
   #sFrise { width:100%; height:46px; display:block; margin-top:6px; cursor:pointer; background:#0E1720; border-radius:6px; }
   #sImage { position:absolute; z-index:2; display:none; pointer-events:none; }
   #sImage img { width:100%; height:100%; object-fit:contain; outline:2px solid var(--sstv); border-radius:4px; background:#000; }
@@ -273,7 +275,7 @@ let O = {}, OD = {}, OM = {};
 function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
     smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, accelVideo: false, paquetQsos: false, format: 'paysage', vignettes: true,
-    entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3 });
+    entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3, zHors: .9, zPassage: 1.8, autres: [], tachesAutres: false });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -1238,9 +1240,10 @@ async function chargeSession() {
   // Where to slow down: a picture being received, a contact being heard (3 s either side; a contact with no span, 20 s round it).
   // A contact slows down when its pass has its sound (a contact heard), as in the session's video.
   const avecSon = new Set(ps.filter(q => (q.sons || []).length).map(q => q.id));
-  const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || (m.k === 'QSO' && avecSon.has(m.pid))).map(m => m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]);
+  // With the sound (its box), a contact heard goes in real time: its zone marked « son ».
+  const lentes = marques.filter(m => (m.k === 'SSTV' && m.f) || (m.k === 'QSO' && avecSon.has(m.pid))).map(m => (m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000]).concat([m.k === 'QSO' ? 'son' : 'image']));
   S = { sat: sat, ps: ps, segs: ps.map(q => [q.de - 30000, q.a + 30000]), i: 0, t: ps[0].de - 30000, joue: false, mode: 'passages', f: O.vPassage,
-    images: images, lentes: lentes, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat) };
+    images: images, lentes: lentes, vues: 0, trans: 0, dernier: 0, tle: await Orbites.elements(sat), favoris: await Orbites.favoris() };
   S.duree = S.segs.reduce((s, q) => s + q[1] - q[0], 0);
   z.innerHTML = '';
   const mode = el('select', { onchange: ev => { S.mode = ev.target.value; vitesses(); } }, [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
@@ -1257,14 +1260,60 @@ async function chargeSession() {
   zg.appendChild(el('div', { class: 'commandes' }, [el('button', { class: 'primaire', id: 'sLecture', onclick: () => { S.joue = !S.joue; S.dernier = 0; if (S.joue && S.t >= S.segs[S.segs.length - 1][1]) { S.i = 0; S.t = S.segs[0][0]; S.vues = 0; g('sGalerie').innerHTML = ''; } if (S.joue) requestAnimationFrame(boucleSession); majSession(); } }),
     mode, caseOpt('sstv', T.aff_sstv, majSession), caseOpt('vignettes', T.s_vignettes, majSession)]));
   zg.appendChild(el('div', { class: 'commandes' }, [vHors, pause, vPas, vImg]));
+  // Two zooms, from afar outside the passes, near in one, eased from one to the other.
+  const zH = curseurZoom('zHors', T.s_zoom_hors), zP = curseurZoom('zPassage', T.s_zoom_passage);
+  S.majZoom = () => { zH.montre(); zP.montre(); };
+  zg.appendChild(el('div', { class: 'commandes', title: T.s_zoom_aide }, [zH, zP]));
   vitesses();
   const fr = el('canvas', { id: 'sFrise', title: T.s_frise }); zg.appendChild(fr);
   fr.addEventListener('click', ev => { const r = fr.getBoundingClientRect(); chercheSession((ev.clientX - r.left) / r.width); });
   zg.appendChild(el('div', { id: 'sGalerie' }));
   cote.appendChild(panneauSession());
   Orbites.rejeu(g('sGlobe'), { id: 'session:' + sat + ':' + de + ':' + a, sat: sat, sol: sol, qth: ps[0].qth, indicatif: ps[0].indicatif, locator: ps[0].loc, marques: marques,
-    image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle, cartes: () => !!O.vignettes });
+    image: m => url('/image', { f: m.f, id: m.pid, n: 0 }), horloge: () => S ? S.t : 0, tle: S.tle, cartes: () => !!O.vignettes,
+    // The page's heights are the videos' sizes the other way round (3.5 / size).
+    hauteur: () => S ? 3.5 / zoomSession() : 3.5, molette: moletteSession });
+  compagnons();
   majSession();
+}
+/* The companions chosen (the station's favourites), going round with the session's satellite. */
+function compagnons() {
+  if (!S) return;
+  const l = (S.favoris || []).filter(s => O.autres.includes(s.nom) && s.nom !== S.sat);
+  Orbites.compagnons(l, O.tachesAutres);
+}
+/** A zoom's slider (the globe's size as the videos have it: 1, 85 % of the view's height), its value beside it. */
+function curseurZoom(cle, lib) {
+  const v = el('b'), r = el('input', { type: 'range', min: .5, max: 3, step: .05 });
+  const l = el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
+  l.montre = () => { r.value = O[cle]; v.textContent = '×' + (+O[cle]).toFixed(2); };
+  r.oninput = () => { O[cle] = +r.value; garde(); l.montre(); };
+  l.montre();
+  return l;
+}
+/**
+ * How much of the pass's zoom at [tt] (1 in a pass, 0 far from it): by the seconds of play still to go to the nearest
+ * pass, the speed slowing down as it comes (its speed plus 2 per second away), over 1.5 s — as the session's video works it out.
+ */
+function partPassage(tt) {
+  let d = Infinity;
+  S.segs.forEach(q => { d = Math.min(d, tt < q[0] ? q[0] - tt : tt > q[1] ? tt - q[1] : 0); });
+  if (!isFinite(d)) return 1;
+  const vp = +O.vPassage, s = Math.log((vp + 2 * d / 1000) / vp) / 2;
+  return Math.max(0, Math.min(1, 1 - s / 1.5));
+}
+/** The globe's size now: eased from the zoom outside to the pass's; going from one pass to the next (« passages »), out and back in. */
+function zoomSession() {
+  const k = S.mode !== 'continu' && S.trans ? 1 - Math.sin(Math.PI * Math.max(0, Math.min(1, 1 - S.trans / (O.transition * 1000)))) : partPassage(S.t);
+  const dx = (1 - Math.cos(Math.PI * k)) / 2;
+  return O.zHors * Math.pow(O.zPassage / O.zHors, dx);
+}
+/* The wheel on the session's globe: the zoom of the moment (the pass's in one, the other outside). */
+function moletteSession(sg) {
+  if (!S) return;
+  const cle = partPassage(S.t) >= .5 && !(S.mode !== 'continu' && S.trans) ? 'zPassage' : 'zHors';
+  O[cle] = Math.max(.5, Math.min(3, Math.round(O[cle] * (1 - sg * .08) * 20) / 20)); garde();
+  if (S.majZoom) S.majZoom();
 }
 /* The session's timeline: the passes end to end (the hours between them left out), the pictures as ticks. */
 function xSession(tt) { let x = 0; for (const q of S.segs) { if (tt <= q[1]) return (x + Math.max(0, tt - q[0])) / S.duree; x += q[1] - q[0]; } return 1; }
@@ -1297,7 +1346,7 @@ function vitesseSession(tt) {
   const loin = (q, v) => v + 2 * (tt < q[0] ? (q[0] - tt) / 1000 : tt > q[1] ? (tt - q[1]) / 1000 : 0);
   let v = S.mode === 'continu' ? +O.vHors : +O.vPassage;
   S.segs.forEach(q => { v = Math.min(v, loin(q, +O.vPassage)); });
-  S.lentes.forEach(q => { v = Math.min(v, loin(q, +O.vImage)); });
+  S.lentes.forEach(q => { v = Math.min(v, loin(q, q[2] === 'son' && O.avecSon ? Math.min(1, +O.vImage) : +O.vImage)); });
   return Math.max(.5, v);
 }
 function boucleSession(now) {
@@ -1343,10 +1392,29 @@ function panneauSession() {
     .forEach(q => c.appendChild(caseOpt(q[0], q[1])));
   p.appendChild(c);
   p.appendChild(curseurPolice(majSession));
+  // The sound: a contact heard goes in real time (here too), its sound in the video.
+  p.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son)]));
+  // More satellites going round: the station's favourites (all of them when it has none).
+  const favs = (S.favoris || []).filter(s => s.nom !== S.sat), l = favs.some(s => s.fav) ? favs.filter(s => s.fav) : favs;
+  if (l.length) {
+    const d = el('details', { class: 's-autres' }, [el('summary', { text: T.s_autres + (O.autres.length ? ' (' + O.autres.filter(n => l.some(s => s.nom === n)).length + ')' : '') }),
+      el('div', { class: 'aide', text: T.s_autres_aide })]);
+    const cases = el('div', { class: 'colonnes' });
+    l.forEach(s => {
+      const k = el('input', { type: 'checkbox' }); k.checked = O.autres.includes(s.nom);
+      k.onchange = () => { O.autres = O.autres.filter(n => n !== s.nom).concat(k.checked ? [s.nom] : []); garde(); compagnons();
+        d.firstChild.textContent = T.s_autres + ' (' + O.autres.filter(n => l.some(x => x.nom === n)).length + ')'; };
+      cases.appendChild(el('label', {}, [k, document.createTextNode(' ' + s.nom)]));
+    });
+    d.appendChild(cases);
+    d.appendChild(caseOpt('tachesAutres', T.s_taches, compagnons));
+    p.appendChild(d);
+  }
   const zone = el('div');
-  p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: async () => {
+  const fais = quoi => async () => {
     const b = v => v ? '1' : '0';
-    const q = Object.assign({ ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: O.vPassage, vHors: O.vHors, vPassage: O.vPassage, vImage: O.vImage, titre: ti.value, vignettes: b(O.vignettes),
+    const q = Object.assign({ quoi: quoi, t: Math.round(S.t), ids: S.ps.map(x => x.id).join(','), mode: S.mode, vitesse: O.vPassage, vHors: O.vHors, vPassage: O.vPassage, vImage: O.vImage, titre: ti.value, vignettes: b(O.vignettes),
+      zHors: O.zHors, zPassage: O.zPassage, autres: O.autres.filter(n => n !== S.sat).join(','), tachesAutres: b(O.tachesAutres), avecSon: b(O.avecSon),
       entre: O.entre, transition: O.transition, police: O.police, utc: b(utc),
       res: O.res, format: O.format || 'paysage', sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator),
       ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
@@ -1357,7 +1425,12 @@ function panneauSession() {
     const j = await lire('/fabrique-session', q).catch(() => ({ ok: false }));
     if (!j.ok) { mot.textContent = j.raison === 'ffmpeg' ? T.s_sans_ffmpeg : T.echec; return; }
     await suitTravail(j, zone, barre, mot);
-  } })]));
+    if (quoi === 'son' && zone.textContent === T.echec) zone.firstChild.textContent = T.s_sans_son;
+  };
+  // The same files as a pass's: its video, a GIF, the moment shown as a picture, its sound.
+  p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.s_video, onclick: fais('video') }),
+    el('button', { class: 'discret', text: T.gif, onclick: fais('gif') }), el('button', { class: 'discret', text: T.image, onclick: fais('image') }),
+    el('button', { class: 'discret', text: T.son, onclick: fais('son') })]));
   p.appendChild(zone);
   return p;
 }

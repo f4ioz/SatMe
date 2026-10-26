@@ -122,6 +122,8 @@ function obPisteA(l, t, ecart) {
 const Orbites = (function () {
   const RE = 6378.137, D2R = Math.PI / 180, R2D = 180 / Math.PI, CL = 299792.458;
   const PALETTE = ['#FF6B6B', '#FFD166', '#3FE0C8', '#5AB8FF', '#C792FF', '#FF9F43', '#FF5FA2', '#9BE15D', '#7EF0FF', '#FFA8C5', '#F7F06D', '#B0C4FF'];
+  /* A journal session's companions, in the order chosen (as SatMe-PC's videos draw them: GlobeRenduPc.COULEURS_AUTRES). */
+  const COMPAGNONS = ['#7CF29A', '#FF6B9A', '#B48CFF', '#FFD84D', '#4CC3FF', '#FF9F45', '#9AE6FF', '#F2A7FF'];
   const el = id => document.getElementById(id);
   const lit = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (x) { return d; } };
   const garde = (k, v) => { try { localStorage.setItem(k, v); } catch (x) {} };
@@ -750,7 +752,7 @@ const Orbites = (function () {
     }
     sc.orbite = orbite;
     sc.choisi = () => mode === 'suivi' ? OB.sats.find(s => s.suivi) : mode === 'rejeu' ? (sc.rj && sc.rj.sat) : OB.choisi;
-    sc.montres = () => mode === 'rejeu' ? (sc.rj ? [sc.rj.sat] : []) : mode === 'suivi' ? OB.sats.filter(s => s.suivi || s.fav) : OB.sats.filter(s => s.on);
+    sc.montres = () => mode === 'rejeu' ? (sc.rj ? [sc.rj.sat].concat(sc.rj.autres || []) : []) : mode === 'suivi' ? OB.sats.filter(s => s.suivi || s.fav) : OB.sats.filter(s => s.on);
     sc.synchro = () => {
       const l = sc.montres(), ids = new Set(l.map(s => s.catnum));
       sc.objets.forEach((o, n) => { if (!ids.has(n) || !l.includes(o.s)) { o.retire(); sc.objets.delete(n); } });
@@ -834,7 +836,9 @@ const Orbites = (function () {
     canvas.addEventListener('pointerup', () => { tir = null; });
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      if (sc.enPassage) { OB.hauteur = Math.max(.6, Math.min(8, OB.hauteur * (1 + Math.sign(e.deltaY) * .1))); garde('ob-hauteur', OB.hauteur.toFixed(2)); document.querySelectorAll('.ob-hauteur-r').forEach(h => { h.value = OB.hauteur; }); }
+      // A session: its own zooms, the wheel changing the one shown.
+      if (mode === 'rejeu' && sc.rj && sc.rj.donnees.molette) sc.rj.donnees.molette(Math.sign(e.deltaY));
+      else if (sc.enPassage) { OB.hauteur = Math.max(.6, Math.min(8, OB.hauteur * (1 + Math.sign(e.deltaY) * .1))); garde('ob-hauteur', OB.hauteur.toFixed(2)); document.querySelectorAll('.ob-hauteur-r').forEach(h => { h.value = OB.hauteur; }); }
       else cam.dist = Math.max(1.3, Math.min(14, cam.dist * (1 + Math.sign(e.deltaY) * .1)));
     }, { passive: false });
     function glisse(de, vers, k) {
@@ -885,9 +889,11 @@ const Orbites = (function () {
         n.scale.set(.028 * n.userData.ratio * k, .028 * k, 1); n.center.set(-.08, .5);
         n.material.opacity = efface && !discret ? .8 : 1;
         poseCalotte(o.cal.geometry, o.bordCal, e.lat, e.lon, Math.acos(RE / (RE + e.alt)));
-        o.cal.visible = o.bordCal.visible = !discret && !auSol;
-        o.cal.material.opacity = lui ? (sc.style === 'cartoon' ? .26 : .2) : efface ? .05 : .14;
-        o.bordCal.material.opacity = lui ? 1 : efface ? .3 : .8;
+        // A session's companions: their footprints when asked, faint.
+        const tache = discret && mode === 'rejeu' && !!(sc.rj && sc.rj.taches);
+        o.cal.visible = o.bordCal.visible = (!discret || tache) && !auSol;
+        o.cal.material.opacity = lui ? (sc.style === 'cartoon' ? .26 : .2) : tache ? .09 : efface ? .05 : .14;
+        o.bordCal.material.opacity = lui ? 1 : tache ? .5 : efface ? .3 : .8;
         o.orbite.visible = !discret && (!lui || !!s.piste); o.orbite.material.opacity = efface ? .3 : lui ? .45 : .7;
         o.tube.visible = !discret && lui;
         o.rayon.visible = vu && !discret && !auSol && lieu;
@@ -907,7 +913,7 @@ const Orbites = (function () {
       const oc = choisi && sc.objets.get(choisi.catnum);
       const lisse = 1 - Math.pow(.02, dt);
       if (passage && oc && oc.p) {
-        const e = oc.e, p = oc.p, up = p.clone().normalize(), H = OB.hauteur;
+        const e = oc.e, p = oc.p, up = p.clone().normalize(), H = mode === 'rejeu' && sc.rj && sc.rj.donnees.hauteur ? sc.rj.donnees.hauteur() : OB.hauteur;
         let pos, vise;
         if (OB.cam === 'poursuite') {
           const v = eciVers3(e.vel).normalize();
@@ -1328,6 +1334,28 @@ const Orbites = (function () {
       rejeu.rj.donnees = d;
       tourne(); return true;
     },
+    /**
+     * The journal's session: other satellites going round with its own, [l] = [{nom, l1, l2}] (their colours in this order,
+     * as its videos draw them), their footprints shown or not ([taches]).
+     */
+    compagnons: (l, taches) => {
+      if (!rejeu || !rejeu.rj) return;
+      const cle = (l || []).map(s => s.nom).join('|');
+      rejeu.rj.taches = !!taches;
+      if (rejeu.rj.cleAutres === cle) return;
+      rejeu.rj.cleAutres = cle;
+      rejeu.rj.autres = [];
+      (l || []).forEach((s, i) => {
+        let satrec = null; try { satrec = satellite.twoline2satrec(s.l1, s.l2); } catch (x) {}
+        if (!satrec) return;
+        const mm = parseFloat(s.l2.slice(52, 63)) || 15;
+        rejeu.rj.autres.push({ nom: s.nom, catnum: 'c' + i + ':' + s.nom, satrec: satrec, mm: mm, periode: 1440 / mm * 60000, couleur: COMPAGNONS[i % COMPAGNONS.length] });
+      });
+      rejeu.synchro();
+    },
+    /** The station's favourites (then the others), with their elements: [{nom, catnum, fav, l1, l2}]. */
+    favoris: async () => { try { const d = await (await fetch(api('api/orbites'))).json(); const f = d.favoris || [];
+      return (d.sats || []).map(s => ({ nom: s.nom, catnum: s.catnum, fav: f.includes(s.catnum), l1: s.l1, l2: s.l2 })).sort((a, b) => (b.fav - a.fav) || a.nom.localeCompare(b.nom)); } catch (x) { return []; } },
     /** The journal's globe: where its satellite shows (px from the canvas's left), null when unknown. */
     satEcranX: () => rejeu ? rejeu.satX : null,
     style: k => prendStyle(k),

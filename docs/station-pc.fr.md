@@ -262,7 +262,12 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - *l'image SSTV qui arrive* : en grand sur le globe, loin du satellite, dessinée pendant qu'elle est reçue ; *vignettes des images* : les images reçues sous la frise.
 - Un bandeau : l'heure, « Passage 2 / 4 · 5 images reçues », AOS, TCA et LOS, « AOS + 3:06 ».
 - **▶ Animer la session de l'événement** (*Fabriquer › Éléments du rapport* d'un passage qui a un événement SSTV) : la session de son satellite et de ses jours, lancée tout de suite.
-- **🎬 Vidéo de la session** (il faut ffmpeg) : les mêmes options que la vidéo d'un passage et la taille des textes ; sans son, une **carte d'ouverture**, les passages sur le globe tel qu'il est cadré, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin ; elle suit les trois vitesses de la session (vite entre les passages, moins vite pendant un passage, lentement sur une image ou un contact enregistré).
+- **Deux zooms** : **Zoom hors passage** (de loin, ×0,9 d'origine) et **Zoom passage** (de près, ×1,8) ; la caméra passe de l'un à l'autre en douceur avant l'AOS et après le LOS (en passages enchaînés : elle s'éloigne pendant la pause et revient). La molette sur le globe règle celui du moment.
+- **Satellites en plus** : tes favoris à cocher tournent aussi autour du globe, plus discrets que celui de la session (une lumière et leur nom, *leurs taches au sol* en option), sur la page et dans les fichiers. Leurs positions viennent des orbites d'aujourd'hui.
+- **La session est un petit éditeur vidéo** : ce qu'on règle sur la page (style du globe, villes, noms, détails, cadrage, vitesses, zooms, satellites en plus, image SSTV, textes) se retrouve dans le fichier. Avec ffmpeg :
+  - **🎬 Vidéo de la session** (MP4) : les mêmes options que la vidéo d'un passage (résolution, format paysage ou portrait, ouverture, récapitulatif, image SSTV, fiche, S-mètre, fréquence, locator, taille des textes) ; une **carte d'ouverture**, les passages sur le globe, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin ; elle suit les trois vitesses et les deux zooms de la session.
+  - **Avec le son de l'enregistrement** : un contact entendu passe **en temps réel** (sur la page aussi) et la vidéo a son son ; le reste est muet.
+  - **GIF animé** (la session en moins d'images, en boucle), **Image de ce moment** (PNG du moment affiché) et **Son (WAV)** (la bande son de la vidéo).
 
 ### Images SSTV et éléments du rapport
 

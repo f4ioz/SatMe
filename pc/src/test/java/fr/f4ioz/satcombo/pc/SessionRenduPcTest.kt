@@ -36,10 +36,11 @@ class SessionRenduPcTest {
     }
 
     /** Three passes of 6 minutes, 95 minutes apart, over France; pictures in the first and the last, a contact in the second. */
-    private fun scenes(vignettes: Boolean = true, police: Float = 1f, tz: java.util.TimeZone = LegendePc.UTC): List<RenduPc.Scene> = (0..2).map { k ->
+    private fun scenes(vignettes: Boolean = true, police: Float = 1f, tz: java.util.TimeZone = LegendePc.UTC, avecSon: Boolean = false): List<RenduPc.Scene> = (0..2).map { k ->
         val de = t0 + k * 95 * 60_000L
         val sol = (0..24).map { s -> val f = s / 24.0; JournalPassage.Sol(de + s * 15_000L, 60.0 - 28 * f, -18.0 + 8 * k + 32 * f, 420.0) }
         val e = JournalPassage.Entree(25544, "ISS", de, de + 360_000L, "JN18DU",
+            enregistrements = if (avecSon && k == 1) listOf("qso.wav") else emptyList(),
             points = (0..6).map { JournalPassage.Point(de + it * 60_000L, (300.0 + it * 20) % 360, if (it <= 3) 5.0 + it * 15 else 50.0 - (it - 3) * 15) })
         val marques = when (k) {
             0 -> listOf(Marque(TypeMarque.SSTV, de + 60_000L, de + 96_000L, "Robot 36", fichier = photo(1)))
@@ -255,5 +256,103 @@ class SessionRenduPcTest {
         // Not long before it, the pass's pace (×20): it slowed down on the way.
         val avant = plan.filter { it is SessionRenduPc.Trame.Passe && it.t in (m.debutMs - 60_000L)..(m.debutMs - 40_000L) }
         assertTrue(avant.size in 3..12)
+    }
+
+    @Test
+    fun deux_zooms_et_le_passage_de_l_un_a_l_autre() {
+        val s = SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(5000.0, 20.0, 3.0), zHors = 0.8, zPassage = 2.0)
+        val f = s.fenetres
+        // In a pass and its margins: the pass's zoom; far between two: the other.
+        assertEquals(1.0, SessionRenduPc.partPassage(f, f[1].first + 1000, 20.0), 1e-9)
+        assertEquals(0.0, SessionRenduPc.partPassage(f, (f[0].last + f[1].first) / 2, 20.0), 1e-9)
+        val plan = SessionRenduPc.plan(s)
+        val z = plan.map { SessionRenduPc.zoom(s, it) }
+        assertTrue(z.all { it in 0.8 - 1e-9..2.0 + 1e-9 })
+        assertEquals(0.8, z.min(), 1e-6); assertEquals(2.0, z.max(), 1e-6)
+        // Progressive: never more than a sixth of the way from one frame to the next (over 1.5 s, 12 frames, eased).
+        val l = Math.log(2.0 / 0.8)
+        for (k in 1 until z.size) assertTrue("$k ${z[k - 1]} → ${z[k]}", Math.abs(Math.log(z[k] / z[k - 1])) <= l / 6)
+        val avant = plan.indexOfFirst { it is SessionRenduPc.Trame.Passe && it.i == 1 }
+        assertTrue("${z[avant - SessionRenduPc.FPS]}", z[avant] > 1.99 && z[avant - SessionRenduPc.FPS] in 0.85..1.99)
+        // Passes in a row: out half way through the turn, back in at its end.
+        val p = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(), zHors = 0.8, zPassage = 2.0, transition = 2.0)
+        val tours = SessionRenduPc.plan(p).filterIsInstance<SessionRenduPc.Trame.Tourne>().filter { it.i == 1 }
+        assertTrue(SessionRenduPc.zoom(p, tours[tours.size / 2]) < 0.85)
+        assertTrue(SessionRenduPc.zoom(p, tours.first()) > 1.6 && SessionRenduPc.zoom(p, tours.last()) > 1.6)
+        // The frame shows it: the globe larger in the pass than between two (less of the sky round it).
+        fun bleu(b: BufferedImage): Int { var n = 0; for (y in 0 until b.height step 4) for (x in 0 until b.width step 4) { val c = Color(b.getRGB(x, y)); if (c.red < 45 && c.green < 70 && c.blue in 40..140) n++ }; return n }
+        val dedans = SessionRenduPc.image(s, plan[avant + 10], 640, 360)
+        val dehors = SessionRenduPc.image(s, plan.first { it is SessionRenduPc.Trame.Entre && Math.abs(SessionRenduPc.zoom(s, it) - 0.8) < 1e-6 }, 640, 360)
+        ImageIO.write(dedans, "png", File(echantillons, "zoom-passage.png")); ImageIO.write(dehors, "png", File(echantillons, "zoom-hors.png"))
+        assertTrue("${bleu(dedans)} / ${bleu(dehors)}", bleu(dehors) > bleu(dedans) * 1.3)
+    }
+
+    @Test
+    fun d_autres_satellites_tournent_aussi() {
+        val violet = Color(0xFF00FF)
+        // Over Paris, at 800 km.
+        val autre = GlobeRenduPc.Autre("AO-91", violet) { t -> JournalPassage.Sol(t, 47.0, 4.0, 800.0) }
+        fun violets(b: BufferedImage): Int { var n = 0; for (y in 0 until b.height) for (x in 0 until b.width) { val c = Color(b.getRGB(x, y)); if (c.red > 200 && c.blue > 200 && c.green < 80) n++ }; return n }
+        val sans = SessionRenduPc.Session(scenes(), "passages")
+        val avec = SessionRenduPc.Session(scenes(), "passages", autres = listOf(autre))
+        val taches = SessionRenduPc.Session(scenes(), "passages", autres = listOf(autre), tachesAutres = true)
+        val tr = SessionRenduPc.plan(sans).first { it is SessionRenduPc.Trame.Passe && it.i == 1 }
+        val a = SessionRenduPc.image(sans, tr, 1280, 720); val b = SessionRenduPc.image(avec, tr, 1280, 720); val c = SessionRenduPc.image(taches, tr, 1280, 720)
+        ImageIO.write(c, "png", File(echantillons, "compagnon.png"))
+        assertEquals(0, violets(a))
+        assertTrue("${violets(b)}", violets(b) > 20)
+        // Its footprint too.
+        var diff = 0
+        for (y in 0 until c.height step 2) for (x in 0 until c.width step 2) if (b.getRGB(x, y) != c.getRGB(x, y)) diff++
+        assertTrue("$diff", diff > 2000)
+        // Not kept on the pass's scene afterwards.
+        assertTrue(sans.scenes.all { it.autres.isEmpty() && it.gzImpose == null })
+    }
+
+    @Test
+    fun avec_le_son_un_contact_passe_en_temps_reel() {
+        val s = SessionRenduPc.Session(scenes(avecSon = true), "passages", SessionRenduPc.Vitesses(passage = 50.0, image = 3.0), son = true)
+        val q = s.scenes[1].marques.single()
+        val plan = SessionRenduPc.plan(s)
+        val pendant = plan.filter { it is SessionRenduPc.Trame.Passe && it.t in q.debutMs - 9_000..q.debutMs + 9_000 }
+        // 18 s at ×1, 8 frames a second.
+        assertTrue("${pendant.size}", pendant.size >= 18 * SessionRenduPc.FPS - 2)
+        for (k in 1 until pendant.size) assertEquals(1000L / SessionRenduPc.FPS, pendant[k].t - pendant[k - 1].t)
+        // Without the sound: as a picture, ×3.
+        val sansSon = SessionRenduPc.plan(SessionRenduPc.Session(scenes(avecSon = true), "passages", SessionRenduPc.Vitesses(passage = 50.0, image = 3.0)))
+        assertTrue(sansSon.count { it is SessionRenduPc.Trame.Passe && it.t in q.debutMs - 9_000..q.debutMs + 9_000 } < pendant.size / 2)
+
+        // A recording from 10 s before the contact, 30 s long: heard where the contact goes in real time, silent elsewhere.
+        val rate = 22_050
+        val wav = File(echantillons, "qso.wav")
+        val pcm = ShortArray(30 * rate) { i -> (8000 * Math.sin(2 * Math.PI * 440 * i / rate)).toInt().toShort() }
+        RenduPc.ecritWav(fr.f4ioz.satcombo.domain.SourcePcm.de(pcm), rate, wav)
+        val de = s.fenetres[1].first
+        val sp = fr.f4ioz.satcombo.domain.SonPassage.fabrique(listOf(fr.f4ioz.satcombo.domain.SonPassage.Morceau(wav, q.debutMs - 10_000, 0L, 30_000L)),
+            de, s.fenetres[1].last, echantillons, JournalPc.decodeur)!!
+        sp.use {
+            val src = SessionRenduPc.source(s, plan, SessionRenduPc.Son(mapOf(1 to sp), mapOf(1 to de), rate))
+            val buf = ShortArray(4096); var total = 0L; var sonore = 0L
+            while (true) { val n = src.lis(buf); if (n <= 0) break; total += n; for (i in 0 until n) if (buf[i].toInt() != 0) sonore++ }
+            val attendu = (3 * SessionRenduPc.FPS + plan.size).toLong() * rate / SessionRenduPc.FPS
+            assertTrue("$total / $attendu", Math.abs(total - attendu) <= rate / SessionRenduPc.FPS + 1)
+            // The contact's 20 s, in the recording: about 20 s heard.
+            assertTrue("${sonore / rate.toDouble()} s", sonore > 18L * rate && sonore < 21L * rate)
+        }
+    }
+
+    @Test
+    fun la_session_en_gif_et_en_image() {
+        val s = SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(10_000.0, 300.0, 30.0), titre = "Essai")
+        val gif = SessionRenduPc.gif(s, File(echantillons, "session.gif")) {}!!
+        assertTrue(gif.length() > 50_000)
+        val lecteur = ImageIO.getImageReadersByFormatName("gif").next()
+        lecteur.input = ImageIO.createImageInputStream(gif)
+        val n = lecteur.getNumImages(true)
+        assertTrue("$n", n > 20 && n <= SessionRenduPc.GIF_MAX + 2)
+        val png = SessionRenduPc.png(s, s.scenes[2].marques.first().finMs + 1000, File(echantillons, "session-moment.png"))
+        assertEquals(1920, ImageIO.read(png).width)
+        // Between two passes: a moment of the turn, not a pass's end.
+        assertTrue(SessionRenduPc.trameA(s, (s.fenetres[0].last + s.fenetres[1].first) / 2) is SessionRenduPc.Trame.Entre)
     }
 }
