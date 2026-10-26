@@ -17051,7 +17051,7 @@ function bxRend() {
   txt('btx-seg', '→ ' + bxMhz(j.defaut) + ' (' + ((j.modes || []).find(m => m.cle === j.mode) || {}).nom + ')');
   if (document.activeElement !== g('btx-g') && !bxGT) g('btx-g').value = Math.round(j.gain);
   txt('btx-gv', Math.round(j.gain) + ' dB → ' + (j.emet && j.gainApplique != null ? fr1(j.gainApplique) : fr1(j.gainEffectif)) + ' dB');
-  g('btx-gv').title = 'Demandé → appliqué (plafond ' + j.plafond + ' dB, Réglages › Émission ' + j.gainMax + ' dB' + (j.charge ? ', charge ' + j.gainCharge + ' dB' : '') + ')';
+  g('btx-gv').title = 'Demandé → appliqué (plafond ' + j.plafond + ' dB, Réglages › Poste et rotor › ADALM-PLUTO ' + j.gainMax + ' dB' + (j.charge ? ', charge ' + j.gainCharge + ' dB' : '') + ')';
   if (document.activeElement !== g('btx-wpm')) g('btx-wpm').value = j.wpm;
   // Our level against the beacon's, when SatMe hears its own downlink.
   const n = j.niveau || {};
