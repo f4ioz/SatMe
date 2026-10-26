@@ -1198,6 +1198,92 @@ ${STYLE_JETONS}
   .ob-w-pas .la { color:var(--ok); }
   @media (max-width:700px) { #v-orbites.ob-tableau .ob-coin { max-width:calc(50% - 20px); } .ob-w { padding:6px 10px; } }
   @media (pointer:coarse) { .ob-tb button { min-height:36px; } .ob-infos label { min-height:40px; } }
+  .ob-infos { max-height:calc(100vh - 140px); overflow:auto; }
+  .ob-infos .ob-menu-t { font-size:var(--fs-xs); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--texte-3); margin:8px 0 2px; }
+  .ob-infos .ob-menu-t:first-child { margin-top:0; }
+  .ob-mon-pastille { display:inline-block; width:10px; height:10px; border-radius:3px; flex:none; }
+  .ob-seg .ob-tb > button { border:0; }
+  #ob-theme-l { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
+  #ob-theme-l[hidden] { display:none; }
+  /* The dashboard's extras: the Moon's face, the Kp bars, the ticker, the explanations. */
+  .ob-lune { width:2.2em; height:2.2em; flex:none; vertical-align:middle; }
+  .ob-defile .ob-lune { width:1.2em; height:1.2em; vertical-align:-.2em; }
+  .ob-w-astres { display:flex; gap:12px; align-items:center; margin-bottom:4px; }
+  .ob-kp { display:flex; align-items:flex-end; gap:2px; height:2.2em; margin-top:6px; }
+  .ob-kp i { flex:1; border-radius:2px 2px 0 0; min-width:3px; }
+  .ob-defile, .ob-bulles { display:none; }
+  #v-orbites.ob-tableau .ob-defile:not([hidden]) { display:block; position:absolute; left:0; right:0; bottom:0; z-index:2; height:2.1em; overflow:hidden; pointer-events:none;
+    font-size:clamp(14px, 1.25vw, 22px); color:var(--texte); background:rgba(8,13,18,.62); border-top:1px solid rgba(255,255,255,.14); }
+  .ob-defile-t { position:absolute; left:100%; white-space:nowrap; line-height:2.1em; font-weight:600; animation:ob-defile 40s linear infinite; }
+  .ob-defile-t span + span::before { content:'✦'; margin:0 1.4em; opacity:.6; }
+  @keyframes ob-defile { from { transform:translateX(0); } to { transform:translateX(calc(-100% - 100vw)); } }
+  #v-orbites.ob-tableau.ob-avec-defile .ob-coin-bg, #v-orbites.ob-tableau.ob-avec-defile .ob-coin-bd { bottom:calc(14px + 2.1 * clamp(14px, 1.25vw, 22px)); }
+  #v-orbites.ob-tableau.ob-th-pedago .ob-bulles { display:block; position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden; }
+  .ob-pb { position:absolute; left:0; top:0; transition:transform .25s linear; }
+  .ob-pb[hidden] { display:none; }
+  .ob-pb .pt { position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%; background:#FFD34D; border:3px solid #0a1230; box-sizing:border-box; animation:ob-pouls 1.6s ease-in-out infinite; }
+  .ob-pb-emp .pt { background:#7CF29A; } .ob-pb-nuit .pt { background:#B48CFF; } .ob-pb-station .pt { background:#FFB454; }
+  .ob-pb .bx { position:absolute; left:16px; bottom:12px; width:max-content; max-width:min(280px, 36vw); background:#fff; color:#0a1230; border:3px solid #0a1230; border-radius:18px 18px 18px 4px;
+    padding:7px 12px; font:700 clamp(13px, 1.15vw, 20px)/1.25 "Baloo 2", Nunito, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; box-shadow:0 4px 0 rgba(10,18,48,.35); }
+  .ob-pb.g .bx { left:auto; right:16px; border-radius:18px 18px 4px 18px; }
+  .ob-pb.b .bx { bottom:auto; top:12px; border-radius:4px 18px 18px 18px; } .ob-pb.g.b .bx { border-radius:18px 4px 18px 18px; }
+  @keyframes ob-pouls { 0%, 100% { transform:scale(1); } 50% { transform:scale(1.35); } }
+  .ob-w-texte { line-height:1.35; max-width:30em; }
+  .ob-points { display:flex; gap:5px; margin-top:8px; } .ob-points i { width:8px; height:8px; border-radius:50%; background:currentColor; opacity:.25; } .ob-points i.ici { opacity:.9; }
+  .ob-w.ob-entre { animation:ob-entre .5s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes ob-entre { 0% { transform:scale(.6); opacity:0; } 100% { transform:scale(1); opacity:1; } }
+  /* Dessin animé (and Pédagogique): white bubbly cards, coloured badges, floating gently. */
+  #v-orbites.ob-th-cartoon .ob-w, #v-orbites.ob-th-pedago .ob-w { background:rgba(255,255,255,.94); color:#0a1230; border:3px solid #0a1230; border-radius:22px; box-shadow:0 5px 0 rgba(10,18,48,.45);
+    text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; font-family:"Baloo 2", Nunito, Fredoka, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; animation:ob-flotte 6s ease-in-out infinite; }
+  #v-orbites.ob-th-cartoon .ob-w.ob-entre, #v-orbites.ob-th-pedago .ob-w.ob-entre { animation:ob-entre .5s cubic-bezier(.3, 1.6, .5, 1), ob-flotte 6s ease-in-out .5s infinite; }
+  #v-orbites.ob-th-cartoon .ob-coin .ob-w + .ob-w, #v-orbites.ob-th-pedago .ob-coin .ob-w + .ob-w { animation-delay:-3s; }
+  @keyframes ob-flotte { 0%, 100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+  :is(.ob-th-cartoon, .ob-th-pedago) .ob-w-t { display:inline-block; color:#fff; background:#FF6B6B; padding:2px 12px; border-radius:999px; letter-spacing:.06em; margin-bottom:6px; }
+  :is(.ob-th-cartoon, .ob-th-pedago) [data-w="station"] .ob-w-t { background:#3FA7F5; } :is(.ob-th-cartoon, .ob-th-pedago) [data-w="astres"] .ob-w-t { background:#9B7BD8; }
+  :is(.ob-th-cartoon, .ob-th-pedago) [data-w="passages"] .ob-w-t { background:#22B573; } :is(.ob-th-cartoon, .ob-th-pedago) [data-w="espace"] .ob-w-t { background:#F2A61A; }
+  :is(.ob-th-cartoon, .ob-th-pedago) [data-w="sat"] .ob-w-t { background:#0a1230; } :is(.ob-th-cartoon, .ob-th-pedago) [data-w="savais"] .ob-w-t { background:#F2B134; color:#0a1230; }
+  :is(.ob-th-cartoon, .ob-th-pedago) :is(.ob-w-g span, .ob-w-gros small, .ob-w-mono, .petit) { color:#4a5878; }
+  :is(.ob-th-cartoon, .ob-th-pedago) .ob-w-pas .m { color:#E8743B; } :is(.ob-th-cartoon, .ob-th-pedago) .ob-w-pas .la { color:#1f9d55; }
+  :is(.ob-th-cartoon, .ob-th-pedago) .ob-defile:not([hidden]) { background:#FFD34D; color:#0a1230; border-top:3px solid #0a1230; }
+  #v-orbites.ob-th-pedago .ob-w { font-size:clamp(15px, 1.45vw, 25px); }
+  #v-orbites.ob-tableau [data-w="sat"] .ob-w-gros { font-size:clamp(26px, 3.2vw, 56px); }
+  #v-orbites.ob-th-pedago .ob-coin { max-width:min(40%, 520px); }
+  /* Classique radioamateur: dense panels in a band over a flat map, monospace on black, as the station clocks. */
+  #v-orbites.ob-th-classique.ob-tableau .ob-scene { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); grid-template-rows:auto minmax(0, 1fr); gap:6px; padding:6px; box-sizing:border-box; background:#000; }
+  #v-orbites.ob-th-classique.ob-tableau .ob-scene > canvas { position:relative; inset:auto; grid-column:1 / -1; grid-row:2; width:100%; height:100%; min-height:0; }
+  #v-orbites.ob-th-classique.ob-tableau .ob-coin { position:static; grid-row:1; max-width:none; max-height:none; align-items:stretch; justify-content:flex-start; gap:6px; }
+  #v-orbites.ob-th-classique.ob-tableau .ob-coin-hd { grid-column:2; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bg { grid-column:3; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bd { grid-column:4; }
+  #v-orbites.ob-th-classique .ob-w { background:#05080c; border:1px solid #233140; border-radius:4px; padding:6px 10px; font-family:var(--mono); font-size:clamp(12px, .92vw, 17px); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+  #v-orbites.ob-th-classique .ob-w-t { color:#00E5FF; letter-spacing:.08em; }
+  .ob-th-classique [data-w="station"] .ob-w-t { color:#FFD000; } .ob-th-classique [data-w="astres"] .ob-w-t { color:#C792FF; } .ob-th-classique [data-w="passages"] .ob-w-t { color:#7CF29A; }
+  .ob-th-classique [data-w="espace"] .ob-w-t { color:#FF9F43; } .ob-th-classique [data-w="sat"] .ob-w-t { color:#FF6B9A; }
+  #v-orbites.ob-th-classique .ob-w-gros { font-size:clamp(24px, 2.8vw, 50px); color:#9CFF57; }
+  #v-orbites.ob-th-classique .ob-haut { top:auto; bottom:44px; }
+  #v-orbites.ob-th-classique.ob-tableau.ob-avec-defile .ob-coin-bg, #v-orbites.ob-th-classique.ob-tableau.ob-avec-defile .ob-coin-bd { bottom:auto; }
+  #v-orbites.ob-th-classique .ob-defile:not([hidden]) { font-family:var(--mono); color:#FFD000; background:#05080c; }
+  @media (max-aspect-ratio:1/1) {
+    #v-orbites.ob-th-classique.ob-tableau .ob-scene { grid-template-columns:repeat(2, minmax(0, 1fr)); grid-template-rows:auto auto minmax(0, 1fr); }
+    #v-orbites.ob-th-classique.ob-tableau .ob-scene > canvas { grid-row:3; }
+    #v-orbites.ob-th-classique.ob-tableau .ob-coin-hd { grid-column:2; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bg { grid-column:1; grid-row:2; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bd { grid-column:2; grid-row:2; }
+  }
+  /* Nuit: dim, warm and big, readable from across a dark room. */
+  #v-orbites.ob-th-nuit .ob-scene > canvas { filter:brightness(.55) saturate(.6); }
+  #v-orbites.ob-th-nuit .ob-w { background:rgba(0,0,0,.55); border-color:rgba(255,90,60,.16); color:#D27A6A; text-shadow:none; }
+  #v-orbites.ob-th-nuit :is(.ob-w-t, .ob-w-g span, .ob-w-gros small, .petit) { color:#8A4A40; }
+  #v-orbites.ob-th-nuit .ob-w-gros { color:#E08A70; font-weight:600; }
+  #v-orbites.ob-th-nuit [data-w="horloge"] .ob-w-gros { font-size:clamp(36px, 5.2vw, 100px); }
+  #v-orbites.ob-th-nuit.ob-tableau .ob-coin { max-width:min(46%, 640px); }
+  #v-orbites.ob-th-nuit :is(.ob-w-pas .m, .ob-w-pas .la) { color:#C9785A; }
+  #v-orbites.ob-th-nuit .ob-defile:not([hidden]) { color:#D27A6A; background:rgba(0,0,0,.6); border-top-color:rgba(255,90,60,.16); }
+  /* Rétro: parchment cards, serif ink, an old map. */
+  #v-orbites.ob-th-retro .ob-scene { background:#2b1d0e; }
+  #v-orbites.ob-th-retro .ob-w { background:rgba(239,224,184,.95); color:#3B2410; border:2px solid #6B3F17; border-radius:6px; text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none;
+    box-shadow:inset 0 0 0 3px rgba(239,224,184,1), inset 0 0 0 4px #6B3F17, 0 3px 10px rgba(0,0,0,.4); font-family:Georgia, "Times New Roman", serif; }
+  #v-orbites.ob-th-retro :is(.ob-w-gros, .ob-w-mono, .ob-w-g, .ob-w-moy, .ob-w-pas .d, .ob-w-pas .m) { font-family:Georgia, "Times New Roman", serif; }
+  #v-orbites.ob-th-retro .ob-w-t { color:#8A2D12; font-variant:small-caps; text-transform:none; letter-spacing:.08em; font-size:.85em; }
+  #v-orbites.ob-th-retro :is(.ob-w-g span, .ob-w-gros small, .petit) { color:#6B4A2A; } #v-orbites.ob-th-retro .ob-w-pas .m { color:#8A2D12; }
+  #v-orbites.ob-th-retro .ob-defile:not([hidden]) { color:#3B2410; background:rgba(239,224,184,.92); border-top:2px solid #6B3F17; font-family:Georgia, serif; }
+  @media (prefers-reduced-motion:reduce) { #v-orbites .ob-w, #v-orbites .ob-w.ob-entre, .ob-pb .pt { animation:none !important; } .ob-defile-t { animation-duration:120s !important; } }
   .ob-attente { position:absolute; inset:0; display:grid; place-items:center; color:var(--texte-2); z-index:5; background:rgba(0,0,0,.6); padding:20px; text-align:center; }
   @media (max-width:900px) {
     .ob-boite { grid-template-columns:minmax(0, 1fr); height:auto; }
@@ -3885,11 +3971,11 @@ ${rail()}
     <canvas id="ob-2d" hidden aria-label="La carte des satellites et de leurs empreintes"></canvas>
     <div class="ob-haut">
       <div class="ob-seg ob-tb-garde" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
-      <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, météo spatiale). Échap pour sortir">⛶ Tableau</button><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
+      <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, Soleil et Lune, météo spatiale). Échap pour sortir">⛶ Tableau</button><label id="ob-theme-l" hidden title="L'allure du tableau de bord">Thème <select id="ob-theme" onchange="obTheme(this.value)"></select></label><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
         <div class="ob-infos" id="ob-infos" role="dialog" aria-label="Informations du tableau de bord" hidden></div></div>
       <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
-      <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label></div>
-      <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1">×1 réel</option><option value="10">×10</option><option value="60" selected>×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
+      <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label><label title="Les monuments célèbres : aucun, les plus connus, ou tous (un à quelques-uns par pays)">Monuments <select id="ob-monuments" class="ob-mon-choix"><option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option></select></label><span class="ob-tb"><button type="button" id="ob-montypes-b" aria-expanded="false" aria-controls="ob-montypes" title="Les familles de monuments montrées">Types ▾</button><div class="ob-infos" id="ob-montypes" role="dialog" aria-label="Familles de monuments" hidden></div></span></div>
+      <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1" selected>×1 réel</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
       <div class="ob-cadreur" id="ob-cadreur" hidden>
         <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button></div>
         <div class="ob-seg"><label title="Plus haut : la caméra s'éloigne et montre plus de Terre (la molette aussi)">Hauteur <input type="range" id="ob-hauteur" class="ob-hauteur-r" min="0.6" max="8" step="0.1"></label></div>
@@ -3903,10 +3989,12 @@ ${rail()}
         <div class="ob-lecteur"><button type="button" class="ob-jouer" id="ob-jouer">▶ Jouer le passage</button><select id="ob-pvitesse" aria-label="Vitesse de l'animation"><option value="10">×10</option><option value="20" selected>×20</option><option value="40">×40</option><option value="80">×80</option></select><button type="button" id="ob-rejouer">⟲ Depuis l'AOS</button></div></div>
       <div><dl class="ob-mesures" id="ob-mesures"></dl></div>
     </div>
-    <div class="ob-coin ob-coin-hg"><div class="ob-w" data-w="horloge" hidden></div></div>
-    <div class="ob-coin ob-coin-hd"><div class="ob-w" data-w="station" hidden></div><div class="ob-w" data-w="espace" hidden></div></div>
+    <div class="ob-coin ob-coin-hg"><div class="ob-w" data-w="horloge" hidden></div><div class="ob-w" data-w="astres" hidden></div></div>
+    <div class="ob-coin ob-coin-hd"><div class="ob-w" data-w="station" hidden></div><div class="ob-w" data-w="espace" hidden></div><div class="ob-w ob-w-pedago" data-w="fiche" hidden></div></div>
     <div class="ob-coin ob-coin-b ob-coin-bg"><div class="ob-w" data-w="passages" hidden></div></div>
-    <div class="ob-coin ob-coin-b ob-coin-bd"><div class="ob-w" data-w="sat" hidden></div></div>
+    <div class="ob-coin ob-coin-b ob-coin-bd"><div class="ob-w" data-w="sat" hidden></div><div class="ob-w ob-w-pedago" data-w="savais" hidden></div></div>
+    <div class="ob-defile" data-w="defile" hidden><div class="ob-defile-t"></div></div>
+    <div class="ob-bulles" id="ob-bulles" aria-hidden="true"></div>
     <div class="ob-attente" id="ob-attente" hidden></div>
   </div>
 </div>
@@ -5668,32 +5756,87 @@ ${OrbitesJs.JS}
  * its corners the information chosen, each kept in this browser: the time, the next passes of the satellites shown,
  * the satellite chosen, the station and its Sun, the space weather the page already has (ES). Échap, or ✕, leaves.
  */
-const OB_INFOS = [['horloge', 'Heure UTC et locale'], ['passages', 'Prochains passages'], ['sat', 'Satellite choisi : az, él, distance, Doppler'],
-  ['station', 'Station et Soleil'], ['espace', 'Météo spatiale (Kp, flux)']];
-let obInfos = {}, obTbT = 0, obCalmeT = 0;
-try { obInfos = JSON.parse(localStorage.getItem('ob-infos')) || {}; } catch (x) {}
-const obInfo = k => obInfos[k] !== false;
+const OB_INFOS = [['horloge', 'Heure UTC et locale'], ['station', 'Station : lever et coucher du Soleil'], ['astres', 'Soleil et Lune (phase, sur la carte)'], ['passages', 'Prochains passages'],
+  ['sat', 'Satellite choisi : az, él, distance, Doppler'], ['espace', 'Météo spatiale (Kp, flux, rayons X)'], ['defile', 'Bandeau : le satellite du moment']];
+/* The looks: the Earth's (a look of the globe), the view, the corners' own style; the panels each one hides at first. */
+const OB_THEMES = {
+  cartoon: { nom: 'Dessin animé', style: 'cartoon', vue: 'globe', tourne: true, off: [] },
+  classique: { nom: 'Classique radioamateur', style: 'realiste', vue: 'carte', off: [] },
+  nuit: { nom: 'Nuit (sobre)', style: 'points', vue: 'globe', off: ['astres', 'espace', 'defile'] },
+  retro: { nom: 'Rétro', style: 'vintage', vue: 'carte', off: ['espace'] },
+  pedago: { nom: 'Pédagogique', style: 'cartoon', vue: 'globe', tourne: true, pedago: true, off: ['station', 'astres', 'espace', 'sat'] }
+};
+/* The explanations of the Pédagogique look: pointed at what they explain (the first four), or on cards turning by themselves. */
+const OB_PEDAGO = [['sat', 'Le satellite et son orbite'], ['emp', 'L’empreinte'], ['nuit', 'La ligne jour/nuit'], ['station', 'La station'], ['aos', 'AOS et LOS'],
+  ['terre', 'Pourquoi la trace se décale'], ['incl', 'L’inclinaison'], ['vitesse', 'Altitude et vitesse'], ['doppler', 'L’effet Doppler'], ['savais', 'Le savais-tu ?']];
+const OB_SAVAIS = [
+  'Le premier satellite, Spoutnik 1, a été lancé le 4 octobre 1957. Son « bip-bip » s’écoutait avec un simple récepteur radio.',
+  'OSCAR 1, le premier satellite radioamateur, a été lancé en décembre 1961, quatre ans seulement après Spoutnik.',
+  'La Station spatiale internationale fait environ 15 tours et demi de la Terre chaque jour.',
+  'Des élèves parlent avec les astronautes de l’ISS par radioamateur : c’est le programme ARISS.',
+  'Un satellite géostationnaire est à 35\u00a0786\u00a0km d’altitude : il tourne aussi vite que la Terre et semble immobile dans le ciel.',
+  'QO-100 est le premier satellite radioamateur géostationnaire. Lancé en 2018, il est placé vers 26° Est, au-dessus de l’Afrique.',
+  'Plus un satellite est haut, plus il va lentement : la Lune met environ 27\u00a0jours pour faire le tour de la Terre.',
+  'Un CubeSat de base est un cube de 10\u00a0cm de côté. Beaucoup de satellites radioamateurs sont des CubeSats.',
+  'La radio voyage à la vitesse de la lumière : le signal d’un satellite à 2\u00a0000\u00a0km arrive en moins de 7 millièmes de seconde.',
+  'On voit l’ISS à l’œil nu, à l’aube ou au crépuscule : le Soleil l’éclaire encore alors que tu es déjà dans l’ombre.',
+  'Vue de l’ISS, l’empreinte fait environ 4\u00a0500\u00a0km de large : de Paris, on peut parler à quelqu’un à Moscou ou au Maroc.',
+  'L’orbite de l’ISS penche de 51,6° : on la voit depuis la France, mais jamais depuis le pôle Nord.',
+  'À 435 MHz, l’effet Doppler d’un satellite en orbite basse peut décaler la fréquence d’environ 10\u00a0kHz.',
+  'La ligne grise, le long de l’aube et du crépuscule, est souvent un bon moment pour les liaisons lointaines en ondes courtes.',
+  'Un satellite ne tombe pas parce qu’il va très vite : il tombe sans cesse vers la Terre… et la rate à chaque fois !',
+  'La Terre fait un tour sur elle-même en 23\u00a0h\u00a056\u00a0min : c’est pour ça que les satellites semblent se décaler vers l’ouest.'
+];
+let obInfos = {}, obTbT = 0, obCalmeT = 0, obBulT = 0, obTh = 'cartoon', obVues = {}, obPeda = {}, obFiche = 0, obSav = Math.floor(Math.random() * OB_SAVAIS.length);
+try { obInfos = JSON.parse(localStorage.getItem('ob-infos2')) || {}; obVues = JSON.parse(localStorage.getItem('ob-th-vues')) || {}; obPeda = JSON.parse(localStorage.getItem('ob-pedago')) || {};
+  obTh = localStorage.getItem('ob-theme') || 'cartoon'; } catch (x) {}
+if (!OB_THEMES[obTh]) obTh = 'cartoon';
+const obGarde = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (x) {} };
+/** A panel shown in this look: as ticked, else the look's default. */
+const obInfo = k => { const v = obInfos[obTh + '.' + k]; return v != null ? v : !OB_THEMES[obTh].off.includes(k); };
+const obPedaOn = k => obPeda[k] !== false;
+Object.keys(OB_THEMES).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = OB_THEMES[k].nom; g('ob-theme').appendChild(o); });
+g('ob-theme').value = obTh;
+/** What the globe takes from the look: its Earth, its view (as last chosen in it), turning by itself, the Sun and Moon, the explanations. */
+function obThOpts() {
+  const T = OB_THEMES[obTh];
+  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago,
+    surVue: v => { if (v !== 'passage') { obVues[obTh] = v; obGarde('ob-th-vues', obVues); } } };
+}
 function obTableau(on) {
   const v = g('v-orbites');
   if (on && !v.classList.contains('ob-tableau')) {
-    v.classList.add('ob-tableau');
+    v.classList.add('ob-tableau', 'ob-th-' + obTh);
     const fs = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.reject(new Error('non'));
     fs.catch(() => v.classList.add('ob-pseudo'));
-    Orbites.tempsReel();
+    Orbites.tableauMode(obThOpts()); Orbites.tempsReel();
     clearInterval(obTbT); obTbT = setInterval(obTbMaj, 1000);
+    clearInterval(obBulT); obBulT = setInterval(obBulles, 250);
     v.addEventListener('pointermove', obReveil); obReveil();
   } else if (!on && v.classList.contains('ob-tableau')) {
     if (document.fullscreenElement === v) document.exitFullscreen().catch(() => {});
-    v.classList.remove('ob-tableau', 'ob-pseudo', 'ob-calme');
-    clearInterval(obTbT); clearTimeout(obCalmeT); v.removeEventListener('pointermove', obReveil);
-    g('ob-infos').hidden = true;
+    v.classList.remove('ob-tableau', 'ob-pseudo', 'ob-calme', 'ob-avec-defile', ...Object.keys(OB_THEMES).map(k => 'ob-th-' + k));
+    clearInterval(obTbT); clearInterval(obBulT); clearTimeout(obCalmeT); v.removeEventListener('pointermove', obReveil);
+    g('ob-infos').hidden = true; g('ob-bulles').innerHTML = '';
+    Orbites.tableauMode(null);
   }
   const t = v.classList.contains('ob-tableau');
-  g('ob-tableau-b').hidden = t; g('ob-infos-b').hidden = g('ob-sortir').hidden = !t;
+  g('ob-tableau-b').hidden = t; g('ob-infos-b').hidden = g('ob-sortir').hidden = g('ob-theme-l').hidden = !t;
   g('ob-infos-b').setAttribute('aria-expanded', !g('ob-infos').hidden);
   obTbMaj();
   if (t) g('ob-sortir').focus(); else g('ob-tableau-b').focus();
   pliRedim();
+}
+/** Another look for the dashboard (kept in this browser). */
+function obTheme(k) {
+  if (!OB_THEMES[k]) return;
+  const v = g('v-orbites');
+  v.classList.remove('ob-th-' + obTh); obTh = k; obGarde('ob-theme', k); g('ob-theme').value = k;
+  if (!v.classList.contains('ob-tableau')) return;
+  v.classList.add('ob-th-' + k); g('ob-bulles').innerHTML = '';
+  v.querySelectorAll('.ob-w').forEach(w => { w.dataset.h = ''; });
+  Orbites.tableauMode(obThOpts()); obTbMaj(); pliRedim();
+  if (!g('ob-infos').hidden) obMenu();
 }
 /** The bar fades after a few seconds without the mouse; a move brings it back. */
 function obReveil() {
@@ -5709,64 +5852,173 @@ document.addEventListener('keydown', e => {
   if (!g('ob-infos').hidden) { g('ob-infos').hidden = true; g('ob-infos-b').setAttribute('aria-expanded', false); g('ob-infos-b').focus(); return; }
   obTableau(false);
 });
+/** The dashboard's menu: the panels, the landmarks, the explanations (Pédagogique). */
+function obMenu() {
+  const m = g('ob-infos'), titre = t => { const d = document.createElement('div'); d.className = 'ob-menu-t'; d.textContent = t; m.appendChild(d); };
+  const coche = (texte, on, change) => { const l = document.createElement('label'), c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = on; c.onchange = () => change(c.checked); l.append(c, document.createTextNode(texte)); m.appendChild(l); };
+  m.innerHTML = '';
+  titre('Panneaux · ' + OB_THEMES[obTh].nom);
+  OB_INFOS.forEach(i => coche(i[1], obInfo(i[0]), on => { obInfos[obTh + '.' + i[0]] = on; obGarde('ob-infos2', obInfos);
+    if (i[0] === 'astres') Orbites.tableauMode(obThOpts()); obTbMaj(); }));
+  if (OB_THEMES[obTh].pedago) { titre('Explications'); OB_PEDAGO.forEach(i => coche(i[1], obPedaOn(i[0]), on => { obPeda[i[0]] = on; obGarde('ob-pedago', obPeda); obTbMaj(); obBulles(); })); }
+  titre('Monuments');
+  const l = document.createElement('label'), s = document.createElement('select');
+  s.className = 'ob-mon-choix'; s.innerHTML = '<option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option>';
+  s.value = Orbites.monumentsActifs(); s.onchange = () => Orbites.monuments(s.value); l.append(document.createTextNode('Montrer '), s); m.appendChild(l);
+  const ty = document.createElement('div'); m.appendChild(ty); Orbites.typesMonuments(ty);
+}
 g('ob-infos-b').onclick = ev => {
   ev.stopPropagation();
   const m = g('ob-infos'), ouvre = m.hidden;
   m.hidden = !ouvre; g('ob-infos-b').setAttribute('aria-expanded', ouvre);
   if (!ouvre) return;
-  m.innerHTML = '';
-  OB_INFOS.forEach(i => { const l = document.createElement('label'), c = document.createElement('input');
-    c.type = 'checkbox'; c.checked = obInfo(i[0]);
-    c.onchange = () => { obInfos[i[0]] = c.checked; try { localStorage.setItem('ob-infos', JSON.stringify(obInfos)); } catch (x) {} obTbMaj(); };
-    l.append(c, document.createTextNode(i[1])); m.appendChild(l); });
-  m.querySelector('input').focus();
+  obMenu(); m.querySelector('input').focus();
 };
 document.addEventListener('pointerdown', ev => { const m = g('ob-infos');
   if (!m.hidden && !m.contains(ev.target) && ev.target !== g('ob-infos-b')) { m.hidden = true; g('ob-infos-b').setAttribute('aria-expanded', false); } });
 const obDuree = ms => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
   return h ? h + ' h ' + String(m).padStart(2, '0') : m ? m + ' min ' + String(s % 60).padStart(2, '0') : s + ' s'; };
 const obDeux = n => String(n).padStart(2, '0');
+const obNombre = (n, d) => n.toLocaleString('fr-FR', { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 });
+/** The Moon's phase in words. */
+function obPhaseNom(p) {
+  return p < .03 || p > .97 ? 'nouvelle lune' : p < .22 ? 'premier croissant' : p < .28 ? 'premier quartier' : p < .47 ? 'gibbeuse croissante'
+    : p < .53 ? 'pleine lune' : p < .72 ? 'gibbeuse décroissante' : p < .78 ? 'dernier quartier' : 'dernier croissant';
+}
+/** The Moon's face as a little picture (lit part from obLunePath). */
+const obLuneSvg = p => '<svg class="ob-lune" viewBox="-11 -11 22 22" aria-hidden="true"><circle r="10" fill="#2b2f3a" stroke="rgba(0,0,0,.5)"/><path d="' + obLunePath(p, 10) + '" fill="#F2F0E6"/></svg>';
+/** The nearest capital (and how far, km) to a place: what the satellite flies over, for the ticker. */
+function obPres(lat, lon) {
+  let best = null, dm = 1e9;
+  const r = Math.PI / 180, km = (a, b) => 6371 * Math.acos(Math.min(1, Math.sin(lat * r) * Math.sin(a * r) + Math.cos(lat * r) * Math.cos(a * r) * Math.cos((b - lon) * r)));
+  (GLOBE_MONDE.capitales || []).forEach(c => { const d = km(c[1], c[2]); if (d < dm) { dm = d; best = c; } });
+  return best ? { nom: best[0], pays: best[3], km: dm } : null;
+}
+const obDrapeau = iso => iso && iso.length === 2 ? String.fromCodePoint(0x1F1E6 + iso.charCodeAt(0) - 65, 0x1F1E6 + iso.charCodeAt(1) - 65) : '';
 /** The corners, once a second while the dashboard is shown. */
 function obTbMaj() {
   const v = g('v-orbites');
   // Another tab opened (a shortcut, the menu): the dashboard leaves the screen with it.
   if (v.hidden && v.classList.contains('ob-tableau')) { obTableau(false); return; }
-  const on = v.classList.contains('ob-tableau');
-  const w = k => v.querySelector('.ob-w[data-w="' + k + '"]'), montre = (k, html) => { const e = w(k), vu = on && obInfo(k) && html != null;
-    e.hidden = !vu; if (vu && e.dataset.h !== html) { e.dataset.h = html; e.innerHTML = html; } };
-  if (!on) { OB_INFOS.forEach(i => { w(i[0]).hidden = true; }); return; }
-  const now = new Date(), d = Orbites.tableau();
+  const on = v.classList.contains('ob-tableau'), peda = on && !!OB_THEMES[obTh].pedago;
+  const w = k => v.querySelector('[data-w="' + k + '"]'), montre = (k, html) => { const e = w(k), vu = on && (k === 'fiche' || k === 'savais' ? peda && obPedaOn(k === 'savais' ? 'savais' : 'fiche') : obInfo(k)) && html != null;
+    if (vu && e.hidden) { e.classList.remove('ob-entre'); void e.offsetWidth; e.classList.add('ob-entre'); }
+    e.hidden = !vu; if (vu && e.dataset.h !== html) { e.dataset.h = html; if (k === 'defile') obDefile(e, html); else e.innerHTML = html; } };
+  if (!on) { v.querySelectorAll('[data-w]').forEach(e => { e.hidden = true; }); return; }
+  const now = new Date(), d = Orbites.tableau(), A = Orbites.astres(), dense = obTh === 'classique';
   montre('horloge', '<div class="ob-w-t">Heure</div><div class="ob-w-gros">' + obDeux(now.getUTCHours()) + ':' + obDeux(now.getUTCMinutes()) + ':' + obDeux(now.getUTCSeconds()) + '<small>UTC</small></div>' +
     '<div class="ob-w-mono">' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' locale · ' + now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + '</div>');
-  if (!d) { ['passages', 'sat', 'station', 'espace'].forEach(k => montre(k, null)); return; }
+  // The Sun and the Moon: their height at the station, the Moon's phase.
+  const so = A.soleil, lu = A.lune;
+  montre('astres', '<div class="ob-w-t">Soleil et Lune</div><div class="ob-w-astres">' + obLuneSvg(lu.phase) + '<div><b>' + obPhaseNom(lu.phase) + '</b><div class="ob-w-mono">éclairée à ' + Math.round(lu.lumiere * 100) + ' % · ' + obNombre(lu.age, 1) + ' j</div></div></div>' +
+    '<div class="ob-w-g">' + (so.ici ? '<span>☀ Soleil</span><b>' + (so.ici.el >= 0 ? so.ici.el.toFixed(0) + '°' : 'couché') + ' · az ' + so.ici.az.toFixed(0) + '°</b>' +
+      '<span>☾ Lune</span><b>' + (lu.ici.el >= 0 ? lu.ici.el.toFixed(0) + '°' : 'couchée') + ' · az ' + lu.ici.az.toFixed(0) + '°</b>' : '') +
+    (dense ? '<span>Sous le Soleil</span><b>' + Math.abs(so.lat).toFixed(1) + '° ' + (so.lat >= 0 ? 'N' : 'S') + ' ' + Math.abs(so.lon).toFixed(1) + '° ' + (so.lon >= 0 ? 'E' : 'O') + '</b>' : '') + '</div>');
+  if (!d) { ['passages', 'sat', 'station', 'espace', 'fiche', 'defile'].forEach(k => montre(k, null)); return; }
   // The next passes: under way (green), then the countdowns.
+  const l = d.vu ? Orbites.prochains(dense ? 8 : peda ? 4 : 6) : [];
   if (!d.vu) montre('passages', '<div class="ob-w-t">Prochains passages</div><div class="petit">Le locator de la station manque (Réglages › Station).</div>');
-  else {
-    const l = Orbites.prochains(6);
-    montre('passages', '<div class="ob-w-t">Prochains passages</div>' + (l.length ? '<div class="ob-w-pas">' + l.map(p => {
+  else montre('passages', '<div class="ob-w-t">Prochains passages</div>' + (l.length ? '<div class="ob-w-pas">' + l.map(p => {
       const la = p.aos <= d.t;
       return '<i style="background:' + p.couleur + '"></i><span class="n">' + esc(p.nom) + '</span><span class="d' + (la ? ' la' : '') + '">' +
         (la ? '↑ encore ' + obDuree(p.los - d.t) : p.aos - d.t < 3600000 ? 'dans ' + obDuree(p.aos - d.t) : hm(p.aos)) + '</span><span class="m">' + p.max.toFixed(0) + '°</span>';
     }).join('') + '</div>' : '<div class="petit">Aucun dans les 24 h (les satellites cochés, sinon les favoris).</div>'));
-  }
   // The satellite chosen in the list.
   const e = d.e, s = d.sat;
   montre('sat', s ? '<div class="ob-w-t"><span style="color:' + s.couleur + '">●</span> ' + esc(s.nom) + '</div>' + (e ? (d.vu ?
-    '<div class="ob-w-gros" style="color:' + (e.el > 0 ? 'var(--ok)' : 'var(--texte)') + '">' + e.el.toFixed(1) + '°<small>él · az ' + e.az.toFixed(0) + '°</small></div>' : '') +
+    '<div class="ob-w-gros" style="color:' + (e.el > 0 ? 'var(--ok)' : 'inherit') + '">' + e.el.toFixed(1) + '°<small>él · az ' + e.az.toFixed(0) + '°</small></div>' : '') +
     '<div class="ob-w-g">' + (d.vu ? '<span>Distance</span><b>' + Math.round(e.dist).toLocaleString('fr-FR') + ' km</b>' : '') +
     '<span>Altitude</span><b>' + Math.round(e.alt).toLocaleString('fr-FR') + ' km</b><span>Sous lui</span><b>' + e.lat.toFixed(1) + '° ' + e.lon.toFixed(1) + '°</b>' +
     (d.dop != null ? '<span>Descente</span><b>' + d.dop.toFixed(4) + ' MHz</b><span>Doppler</span><b>' + ((d.dop - s.dl) * 1e3 >= 0 ? '+' : '') + ((d.dop - s.dl) * 1e3).toFixed(1) + ' kHz</b>' : '') + '</div>'
     : '<div class="petit">Position inconnue.</div>') : null);
-  // The station and its Sun.
-  const so = d.soleil;
+  // The station: its Sun now, its next sunrise and sunset, dawn and dusk.
+  const sj = A.jour, quand = t => t ? hm(t) + (t - d.t < 3 * 3600000 ? ' <small>(dans ' + obDuree(t - d.t) + ')</small>' : '') : '—';
   montre('station', '<div class="ob-w-t">Station</div><div class="ob-w-moy">' + esc(d.indicatif || '—') + (d.locator ? ' <small class="petit">' + esc(d.locator) + '</small>' : '') + '</div>' +
-    (so ? '<div class="ob-w-mono">' + (so.el > 0 ? '☀ jour' : so.el > -6 ? '◐ crépuscule' : so.el > -18 ? '◑ crépuscule (nuit proche)' : '☾ nuit') + ' · Soleil ' + so.el.toFixed(0) + '° az ' + so.az.toFixed(0) + '°</div>' : ''));
+    (d.soleil ? '<div class="ob-w-mono">' + (d.soleil.el > 0 ? '☀ jour' : d.soleil.el > -6 ? '◐ crépuscule' : d.soleil.el > -18 ? '◑ crépuscule (nuit proche)' : '☾ nuit') + ' · Soleil ' + d.soleil.el.toFixed(0) + '° az ' + d.soleil.az.toFixed(0) + '°</div>' : '') +
+    (sj ? '<div class="ob-w-g"><span>Lever</span><b>' + quand(sj.lever) + '</b><span>Coucher</span><b>' + quand(sj.coucher) + '</b>' +
+      (dense || obTh === 'retro' ? '<span>Aube civile</span><b>' + quand(sj.aube) + '</b><span>Crépuscule</span><b>' + quand(sj.crepuscule) + '</b>' : '') + '</div>'
+      + (sj.lever == null && sj.coucher == null ? '<div class="petit">' + (d.soleil && d.soleil.el > 0 ? 'Jour polaire : le Soleil ne se couche pas.' : 'Nuit polaire : le Soleil ne se lève pas.') + '</div>' : '') : ''));
   // The space weather, as the page last read it (Météo spatiale tab).
-  const k = typeof ES !== 'undefined' && ES ? ES.kp : null, f = ES && ES.f107, x = ES && ES.rayons;
+  const k = typeof ES !== 'undefined' && ES ? ES.kp : null, f = ES && ES.f107, x = ES && ES.rayons, vt = ES && ES.vent, au = ES && ES.aurore;
+  const barres = ES && ES.barres ? ES.barres.slice(-16) : [];
   montre('espace', '<div class="ob-w-t">Météo spatiale</div>' + (k || f || x ? '<div class="ob-w-g">' +
     (k ? '<span>Kp</span><b style="color:' + (ES_COUL[k.niveau] || '') + '">' + esc(k.texte) + ' · ' + esc(ES_NIVEAU[k.niveau] || '') + '</b>' : '') +
-    (f ? '<span>Flux 10,7 cm</span><b>' + esc(f.sfu) + ' SFU</b>' : '') + (x ? '<span>Rayons X</span><b>' + esc(x.classe) + '</b>' : '') + '</div>'
+    (f ? '<span>Flux 10,7 cm</span><b>' + esc(f.sfu) + ' SFU</b>' : '') + (x ? '<span>Rayons X</span><b>' + esc(x.classe) + '</b>' : '') +
+    (vt && vt.vitesse != null ? '<span>Vent solaire</span><b>' + Math.round(vt.vitesse) + ' km/s' + (vt.bz != null ? ' · Bz ' + vt.bz : '') + '</b>' : '') +
+    (au && ES.station ? '<span>Aurore ici</span><b>' + esc(au.ici) + ' %</b>' : '') + '</div>' +
+    (barres.length > 3 ? '<div class="ob-kp" title="Kp par 3 h, prévision en clair">' + barres.map(b => '<i style="height:' + Math.max(6, b.kp / 9 * 100).toFixed(0) + '%;background:' + (ES_COUL[b.niveau] || '#5BD68A') + (b.nature === 'prevu' ? ';opacity:.45' : '') + '"></i>').join('') + '</div>' : '')
     : '<div class="petit">Pas de données (onglet Météo spatiale).</div>'));
+  // The ticker: the satellite of the moment, what it flies over, the next pass, the Moon.
+  if (on && obInfo('defile')) {
+    const bouts = [];
+    if (s && e) { const p = obPres(e.lat, e.lon);
+      bouts.push('🛰 ' + esc(s.nom) + ' file à ' + Math.round(e.alt) + ' km d’altitude' + (p ? (p.km < 600 ? ', au-dessus des environs de ' : ', à ' + obNombre(Math.round(p.km / 50) * 50) + ' km de ') + esc(p.nom) + ' ' + obDrapeau(p.pays) : '')); }
+    l.slice(0, 3).forEach(p => bouts.push((p.aos <= d.t ? '📡 ' + esc(p.nom) + ' passe en ce moment, ' : '⏱ ' + esc(p.nom) + ' à ' + hm(p.aos) + ', ') + 'jusqu’à ' + p.max.toFixed(0) + '°'));
+    bouts.push(obLuneSvg(lu.phase) + ' Lune : ' + obPhaseNom(lu.phase) + ', éclairée à ' + Math.round(lu.lumiere * 100) + ' %');
+    if (k) bouts.push('☀ Kp ' + esc(k.texte) + (f ? ' · flux ' + esc(f.sfu) + ' SFU' : ''));
+    montre('defile', '<span>' + bouts.join('</span><span>') + '</span>');
+  } else montre('defile', null);
+  v.classList.toggle('ob-avec-defile', on && !w('defile').hidden);
+  // Pédagogique: a card explaining one thing at a time (the next one every 15 s), and a fact.
+  if (peda) {
+    const cartes = obCartes(d, l).filter(c => obPedaOn(c[0]));
+    if (cartes.length) { if (now.getSeconds() % 15 === 0) obFiche++; const c = cartes[obFiche % cartes.length];
+      montre('fiche', '<div class="ob-w-t">' + c[1] + '</div><div class="ob-w-texte">' + c[2] + '</div><div class="ob-points">' + cartes.map((q, i) => '<i' + (q === c ? ' class="ici"' : '') + '></i>').join('') + '</div>'); }
+    else montre('fiche', null);
+    if (now.getSeconds() % 12 === 0) obSav++;
+    montre('savais', '<div class="ob-w-t">💡 Le savais-tu ?</div><div class="ob-w-texte">' + esc(OB_SAVAIS[obSav % OB_SAVAIS.length]) + '</div>');
+  } else { montre('fiche', null); montre('savais', null); }
+}
+/** The ticker's text, changed at the end of a run (not in the middle of a sentence). */
+function obDefile(e, html) {
+  const t = e.firstElementChild;
+  if (!t.innerHTML) { t.innerHTML = html; t.style.animationDuration = Math.max(25, html.length / 18) + 's'; return; }
+  t.dataset.suite = html;
+  t.onanimationiteration = () => { if (t.dataset.suite) { t.innerHTML = t.dataset.suite; t.dataset.suite = ''; } };
+}
+/** The explanation cards, with the figures of the satellite chosen: [key, title, html]. */
+function obCartes(d, l) {
+  const s = d.sat, e = d.e, n = s ? '<b>' + esc(s.nom) + '</b>' : 'le satellite', o = [];
+  const p = l[0];
+  o.push(['aos', 'AOS et LOS', 'AOS : le satellite se lève à l’horizon, on commence à l’entendre. LOS : il se couche, c’est fini !' +
+    (p ? '<br>' + (p.aos <= d.t ? '📡 <b>' + esc(p.nom) + '</b> est là : encore ' + obDuree(p.los - d.t) + '.' : '⏱ Prochain AOS : <b>' + esc(p.nom) + '</b> dans ' + obDuree(p.aos - d.t) + ', jusqu’à ' + p.max.toFixed(0) + '° de haut.') : '')]);
+  if (s && !s.geo && d.decalage) o.push(['terre', 'Pourquoi la trace se décale ?', 'Pendant que ' + n + ' fait un tour (' + Math.round(s.periode) + ' min), la Terre tourne en dessous de ' +
+    obNombre(d.decalage, 1) + '° vers l’est. Le tour suivant passe donc plus à l’ouest : c’est la Terre qui bouge !']);
+  if (s && s.incl != null) { const m = s.incl > 90 ? 180 - s.incl : s.incl;
+    o.push(['incl', 'L’inclinaison', s.geo ? n + ' tourne au-dessus de l’équateur, aussi vite que la Terre : il reste au même endroit du ciel.'
+      : 'L’orbite de ' + n + ' penche de ' + obNombre(s.incl, 1) + '° par rapport à l’équateur : il ne survole jamais les régions au-delà de ' + obNombre(m, 0) + '° de latitude Nord ou Sud.' +
+        (s.incl > 90 ? ' Au-delà de 90°, il tourne même « à l’envers », d’est en ouest : son orbite est dite rétrograde.' : '')]); }
+  if (e && e.vitesse) { const kmh = e.vitesse * 3600, pm = 660 / e.vitesse;
+    o.push(['vitesse', 'Altitude et vitesse', n + ' vole à <b>' + obNombre(Math.round(e.alt)) + ' km</b> de haut (' + obNombre(Math.round(e.alt * 1000 / 8849)) + ' fois l’Everest) à <b>' + obNombre(Math.round(kmh / 100) * 100) + ' km/h</b>.' +
+      (s.geo ? '' : '<br>Paris–Marseille en ' + (pm >= 60 ? Math.floor(pm / 60) + ' min ' + obDeux(Math.round(pm % 60)) : Math.round(pm) + ' s') + ' ; le tour de la Terre en ' + Math.round(s.periode) + ' min.') +
+      '<br>Sa zone d’écoute fait ' + obNombre(Math.round(e.rayon * 2 / 100) * 100) + ' km de large.']); }
+  o.push(['doppler', 'L’effet Doppler', 'Comme la sirène d’une ambulance : la fréquence monte quand le satellite approche, et descend quand il s’éloigne.' +
+    (d.dop != null && s ? '<br>En ce moment : <b>' + ((d.dop - s.dl) * 1e3 >= 0 ? '+' : '') + obNombre((d.dop - s.dl) * 1e3, 1) + ' kHz</b> sur ' + obNombre(s.dl, 3) + ' MHz.' : '')]);
+  return o;
+}
+/** The explanations pointed at the globe or the map (four times a second: they follow the camera). */
+function obBulles() {
+  const v = g('v-orbites'), b = g('ob-bulles'), on = v.classList.contains('ob-tableau') && !!OB_THEMES[obTh].pedago;
+  if (!on) { if (b.firstChild) b.innerHTML = ''; return; }
+  const R = Orbites.reperes() || {}, d = Orbites.tableau(), w = b.clientWidth, h = b.clientHeight;
+  const s = d && d.sat, e = d && d.e;
+  const textes = {
+    sat: s ? '🛰 ' + esc(s.nom) + ' : le trait est son orbite, un tour en ' + Math.round(s.periode) + ' min' : null,
+    emp: e ? 'La zone qui peut entendre le satellite (' + obNombre(Math.round(e.rayon * 2 / 100) * 100) + ' km de large)' : null,
+    nuit: 'La ligne jour/nuit : ici, le Soleil se lève ou se couche',
+    station: 'Ta station' + (d && d.indicatif ? ' ' + esc(d.indicatif) : '') + ' : elle entend le satellite quand sa zone la recouvre'
+  };
+  ['sat', 'emp', 'nuit', 'station'].forEach(k => {
+    let el = b.querySelector('[data-p="' + k + '"]');
+    const p = R[k], vu = obPedaOn(k) && p && textes[k] && p[0] > 4 && p[1] > 4 && p[0] < w - 4 && p[1] < h - 4;
+    if (!vu) { if (el) el.hidden = true; return; }
+    if (!el) { el = document.createElement('div'); el.className = 'ob-pb ob-pb-' + k; el.dataset.p = k; el.innerHTML = '<i class="pt"></i><span class="bx"></span>'; b.appendChild(el); }
+    el.hidden = false;
+    if (el.dataset.t !== textes[k]) { el.dataset.t = textes[k]; el.querySelector('.bx').innerHTML = textes[k]; }
+    el.classList.toggle('g', p[0] > w * .62); el.classList.toggle('b', p[1] < h * .3);
+    el.style.transform = 'translate(' + Math.round(p[0]) + 'px,' + Math.round(p[1]) + 'px)';
+  });
 }
 const ETQ_H = 14;
 function pointsDuPassage(m) {

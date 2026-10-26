@@ -1,7 +1,7 @@
 // The globes' pure part (OrbitesJs.JS), run under node (OrbitesJsTest).
 // By hand: node orbites-test.js orbites.js (orbites.js: OrbitesJs.JS + module.exports).
 const assert = require('assert');
-const { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA } = require(require('path').resolve(process.argv[2]));
+const { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour } = require(require('path').resolve(process.argv[2]));
 
 const ecart = (la1, lo1, la2, lo2) => {
   const r = Math.PI / 180;
@@ -87,5 +87,33 @@ const ecart = (la1, lo1, la2, lo2) => {
   assert.strictEqual(obPisteA(s, 3600000), null);
   assert(Math.abs(obPisteA(s, 30000).lat - 10.5) < 1e-9 && Math.abs(obPisteA(s, 7230000).lat - 40.5) < 1e-9);
   assert(obPisteA(s, 3600000, 9e6) !== null);
+}
+// The Moon: new, first quarter, full and last quarter of April 2024 (published times, UTC), its phase and lit share.
+{
+  const l = t => obLune(Date.parse(t)), pres = (a, b, e, m) => assert(Math.abs(a - b) < e, m + ' ' + a);
+  pres(l('2024-04-08T18:21:00Z').lumiere, 0, .01, 'nouvelle lune');
+  pres(l('2024-04-15T19:13:00Z').phase, .25, .015, 'premier quartier');
+  const p = l('2024-04-23T23:49:00Z'); pres(p.phase, .5, .015, 'pleine lune'); assert(p.lumiere > .99, 'pleine ' + p.lumiere);
+  // Full: opposite the Sun in the sky (right ascension 180° away from the Sun's, about 31° then).
+  pres(Math.abs(p.ra - 211), 0, 3, 'ascension droite');
+  pres(l('2024-05-01T11:27:00Z').phase, .75, .015, 'dernier quartier');
+  for (let t = Date.parse('2024-01-01T00:00:00Z'); t < Date.parse('2025-01-01T00:00:00Z'); t += 86400000 * 3) {
+    const m = obLune(t); assert(Math.abs(m.dec) < 29.5 && m.lon >= -180 && m.lon <= 180 && m.dist > 355000 && m.dist < 407000, JSON.stringify(m));
+  }
+  // The lit part: a closed path, the crescent's terminator on the lit side, the gibbous one on the other.
+  assert(/^M0,-10\.00A10\.00,10\.00 0 0 1 0,10\.00A3\.09,10\.00 0 0 0 0,-10\.00Z$/.test(obLunePath(.2, 10)), obLunePath(.2, 10));
+  assert(/ 0 0 1 0,-10\.00Z$/.test(obLunePath(.4, 10)) && / 0 0 0 0,10\.00A/.test(obLunePath(.8, 10)));
+}
+// The Sun at the station: Paris on 21 June 2024, sunrise 03:47 and sunset 19:58 UTC (published times), polar day at 80° N.
+{
+  const j = obSoleilJour(Date.parse('2024-06-21T00:00:00Z'), 48.857, 2.352), m = t => new Date(t).toISOString().slice(11, 16);
+  assert(Math.abs(j.lever - Date.parse('2024-06-21T03:47:00Z')) < 180000, 'lever ' + m(j.lever));
+  assert(Math.abs(j.coucher - Date.parse('2024-06-21T19:58:00Z')) < 180000, 'coucher ' + m(j.coucher));
+  assert(j.aube < j.lever && j.crepuscule > j.coucher, 'aube et crépuscule');
+  const p = obSoleilJour(Date.parse('2024-06-21T00:00:00Z'), 80, 0);
+  assert(p.lever === null && p.coucher === null, 'jour polaire');
+  // Noon at Greenwich on an equinox: the Sun high, near 90° − the latitude.
+  assert(Math.abs(obHauteurSoleil(Date.parse('2024-03-20T12:07:00Z'), 45, 0) - 45) < 1.5);
+  assert(obGmst(0) >= 0 && obGmst(0) < 2 * Math.PI);
 }
 console.log('ok');

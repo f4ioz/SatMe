@@ -849,7 +849,7 @@ object GlobeRenduPc {
         }
         if (style != "holo" && style != "radar" && style != "points") for (d in GlobeDonnees.DECOR.filter { detail >= 2 || it.type == "bateau" })
             ajoute(d.lat, d.lon, k * if (d.type == "foret") 0.06f else 0.048f) { decor(it, d.type) }
-        for (m in GlobeDonnees.MONUMENTS) ajoute(m.lat, m.lon, k * 0.095f) { monument(it, m.id) }
+        for (m in GlobeDonnees.MONUMENTS) { val mo = m.modele?.takeIf { m.rang == 1 } ?: continue; ajoute(m.lat, m.lon, k * 0.095f) { monument(it, mo) } }
         dessins.sortBy { it.first }
         dessins.forEach { it.second() }
     }

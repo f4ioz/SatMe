@@ -65,8 +65,12 @@ object GlobeDonnees {
      */
     data class Sommet(val lat: Double, val lon: Double, val altitude: Int)
 
-    /** A landmark drawn on the cartoon globe: [id] says which drawing. */
-    data class Monument(val id: String, val nom: String, val lat: Double, val lon: Double)
+    /**
+     * A landmark: [id] its own, [type] its family (a key of [TYPES_MONUMENTS], the drawing when it has none of its own),
+     * [pays] its country's ISO code, [rang] 1 the world's most famous (« principaux »), 2 the others,
+     * [modele] its own drawing, null for its type's (the journal's videos draw the main ones that have their own).
+     */
+    data class Monument(val id: String, val nom: String, val lat: Double, val lon: Double, val type: String, val pays: String, val rang: Int, val modele: String?)
 
     /** The cartoon's scenery: [type] "bateau", "baleine", "foret", "manchot". */
     data class Decor(val type: String, val lat: Double, val lon: Double)
@@ -146,16 +150,81 @@ object GlobeDonnees {
         "23.25 57.25 954;66.75 167.50 953;-13.75 -47.50 949;38.50 -80.00 947;23.50 26.00 945;19.00 36.50 939;27.75 119.50 939;55.50 106.50 938;-15.50 -42.50 933;65.50 165.50 924;" +
         "68.00 -137.25 924;-33.75 149.75 920;53.75 105.25 920;17.00 52.75 920;5.00 -66.75 914;57.00 -119.25 910;60.25 -149.75 906;23.75 46.50 900"
 
-    val MONUMENTS = listOf(
-        Monument("tour_eiffel", "Tour Eiffel", 48.858, 2.294), Monument("liberte", "Statue de la Liberté", 40.689, -74.045),
-        Monument("pyramides", "Pyramides de Gizeh", 29.979, 31.134), Monument("big_ben", "Big Ben", 51.501, -0.125),
-        Monument("taj_mahal", "Taj Mahal", 27.175, 78.042), Monument("opera_sydney", "Opéra de Sydney", -33.857, 151.215),
-        Monument("christ", "Christ Rédempteur", -22.952, -43.211), Monument("fuji", "Mont Fuji", 35.361, 138.727),
-        Monument("kremlin", "Kremlin", 55.752, 37.617), Monument("colisee", "Colisée", 41.890, 12.492),
-        Monument("golden_gate", "Golden Gate", 37.820, -122.478), Monument("moulin", "Moulins de Hollande", 52.0, 4.7),
-        Monument("muraille", "Grande Muraille", 40.43, 116.57), Monument("moai", "Moaï de l'île de Pâques", -27.12, -109.35),
-        Monument("fusee", "Kourou", 5.236, -52.768), Monument("fusee", "Cap Canaveral", 28.573, -80.649),
-        Monument("fusee", "Baïkonour", 45.920, 63.342), Monument("phare", "Phare d'Eckmühl", 47.797, -4.372))
+    /** The landmarks' families, as the globes' filter shows them. */
+    val TYPES_MONUMENTS = linkedMapOf(
+        "tour" to "Tours et phares", "pont" to "Ponts", "chateau" to "Châteaux, palais, portes", "religieux" to "Temples, églises, mosquées",
+        "ancien" to "Sites antiques", "statue" to "Statues", "naturel" to "Merveilles naturelles", "moderne" to "Architecture moderne",
+        "espace" to "Bases spatiales, observatoires")
+
+    /** One to a few famous landmarks of most countries (« id|nom|lat|lon|type|pays|rang|modele » separated by « ; »). */
+    val MONUMENTS: List<Monument> by lazy {
+        MONUMENTS_TEXTE.split(';').map { s -> s.split('|').let { Monument(it[0], it[1], it[2].toDouble(), it[3].toDouble(), it[4], it[5], it[6].toInt(), it[7].ifEmpty { null }) } }
+    }
+
+    private const val MONUMENTS_TEXTE =
+        "tour_eiffel|Tour Eiffel|48.858|2.294|tour|FR|1|tour_eiffel;mont_saint_michel|Mont-Saint-Michel|48.636|-1.511|religieux|FR|1|;versailles|Château de Versailles|48.805|2.120|chateau|FR|2|;arc_triomphe|Arc de Triomphe|48.874|2.295|chateau|FR|2|;" +
+        "pont_du_gard|Pont du Gard|43.947|4.535|pont|FR|2|;mont_blanc|Mont Blanc|45.833|6.865|naturel|FR|1|;chambord|Château de Chambord|47.616|1.517|chateau|FR|2|;viaduc_millau|Viaduc de Millau|44.077|3.022|pont|FR|2|;" +
+        "carcassonne|Cité de Carcassonne|43.206|2.364|chateau|FR|2|;lascaux|Grotte de Lascaux|45.054|1.168|ancien|FR|2|;pic_du_midi|Observatoire du Pic du Midi|42.936|0.142|espace|FR|2|;phare_eckmuhl|Phare d'Eckmühl|47.797|-4.372|tour|FR|1|phare;" +
+        "kourou|Centre spatial de Kourou|5.236|-52.768|espace|FR|1|fusee;big_ben|Big Ben|51.501|-0.125|tour|GB|1|big_ben;tower_bridge|Tower Bridge|51.506|-0.075|pont|GB|2|;stonehenge|Stonehenge|51.179|-1.826|ancien|GB|1|;" +
+        "edimbourg|Château d'Édimbourg|55.949|-3.200|chateau|GB|2|;chaussee_geants|Chaussée des Géants|55.241|-6.512|naturel|GB|2|;jodrell_bank|Radiotélescope de Jodrell Bank|53.237|-2.307|espace|GB|2|;moher|Falaises de Moher|52.972|-9.426|naturel|IE|2|;" +
+        "newgrange|Newgrange|53.695|-6.475|ancien|IE|2|;sagrada_familia|Sagrada Família|41.404|2.174|religieux|ES|1|;alhambra|Alhambra|37.176|-3.588|chateau|ES|1|;cordoue|Mosquée-cathédrale de Cordoue|37.879|-4.779|religieux|ES|2|;" +
+        "guggenheim|Musée Guggenheim de Bilbao|43.268|-2.934|moderne|ES|2|;segovie|Aqueduc de Ségovie|40.948|-4.118|pont|ES|2|;teide|Teide|28.272|-16.642|naturel|ES|2|;belem|Tour de Belém|38.692|-9.216|tour|PT|1|;" +
+        "pena|Palais de Pena|38.788|-9.391|chateau|PT|2|;colisee|Colisée|41.890|12.492|ancien|IT|1|colisee;pise|Tour de Pise|43.723|10.396|tour|IT|1|;saint_marc|Basilique Saint-Marc|45.434|12.340|religieux|IT|2|;" +
+        "dome_milan|Dôme de Milan|45.464|9.192|religieux|IT|2|;vesuve|Vésuve|40.821|14.426|naturel|IT|2|;pompei|Pompéi|40.749|14.485|ancien|IT|2|;etna|Etna|37.751|14.993|naturel|IT|2|;" +
+        "saint_pierre|Basilique Saint-Pierre|41.902|12.454|religieux|VA|1|;parthenon|Parthénon|37.972|23.726|ancien|GR|1|;meteores|Météores|39.721|21.631|religieux|GR|2|;delphes|Delphes|38.482|22.501|ancien|GR|2|;" +
+        "brandebourg|Porte de Brandebourg|52.516|13.378|chateau|DE|1|;neuschwanstein|Château de Neuschwanstein|47.558|10.750|chateau|DE|1|;cologne|Cathédrale de Cologne|50.941|6.958|religieux|DE|2|;kinderdijk|Moulins de Kinderdijk|51.884|4.637|tour|NL|1|moulin;" +
+        "atomium|Atomium|50.895|4.341|moderne|BE|1|;bock|Casemates du Bock|49.612|6.137|chateau|LU|2|;cervin|Cervin|45.976|7.658|naturel|CH|1|;chillon|Château de Chillon|46.414|6.927|chateau|CH|2|;" +
+        "schonbrunn|Château de Schönbrunn|48.185|16.312|chateau|AT|2|;pont_charles|Pont Charles|50.086|14.411|pont|CZ|2|;wawel|Château du Wawel|50.054|19.935|chateau|PL|2|;parlement_budapest|Parlement de Budapest|47.507|19.046|chateau|HU|2|;" +
+        "bratislava|Château de Bratislava|48.142|17.100|chateau|SK|2|;bled|Île de Bled|46.362|14.090|religieux|SI|2|;dubrovnik|Remparts de Dubrovnik|42.641|18.108|chateau|HR|2|;plitvice|Lacs de Plitvice|44.880|15.616|naturel|HR|2|;" +
+        "mostar|Vieux pont de Mostar|43.337|17.815|pont|BA|2|;belgrade|Forteresse de Belgrade|44.823|20.450|chateau|RS|2|;kotor|Bouches de Kotor|42.425|18.771|naturel|ME|2|;butrint|Butrint|39.746|20.020|ancien|AL|2|;" +
+        "kaneo|Saint-Jean de Kaneo, Ohrid|41.111|20.789|religieux|MK|2|;rila|Monastère de Rila|42.134|23.340|religieux|BG|2|;bran|Château de Bran|45.515|25.367|chateau|RO|2|;orheiul|Orheiul Vechi|47.302|28.966|religieux|MD|2|;" +
+        "laure_kiev|Laure des Grottes de Kiev|50.434|30.557|religieux|UA|2|;mir|Château de Mir|53.451|26.473|chateau|BY|2|;trakai|Château de Trakai|54.652|24.934|chateau|LT|2|;riga|Maison des Têtes noires|56.947|24.107|chateau|LV|2|;" +
+        "tallinn|Vieille ville de Tallinn|59.437|24.745|chateau|EE|2|;suomenlinna|Suomenlinna|60.145|24.988|chateau|FI|2|;stockholm|Hôtel de ville de Stockholm|59.327|18.054|tour|SE|2|;geiranger|Geirangerfjord|62.101|7.094|naturel|NO|1|;" +
+        "svalbard|Réserve mondiale de semences|78.236|15.491|moderne|NO|2|;petite_sirene|La Petite Sirène|55.693|12.599|statue|DK|2|;geysir|Geysir|64.313|-20.300|naturel|IS|1|;ilulissat|Fjord glacé d'Ilulissat|69.130|-49.900|naturel|GL|2|;" +
+        "kremlin|Kremlin|55.752|37.617|chateau|RU|1|kremlin;ermitage|Ermitage|59.940|30.314|chateau|RU|2|;baikal|Lac Baïkal|53.500|108.000|naturel|RU|1|;elbrouz|Elbrouz|43.355|42.439|naturel|RU|2|;" +
+        "plesetsk|Cosmodrome de Plessetsk|62.925|40.577|espace|RU|2|fusee;vostotchny|Cosmodrome Vostotchny|51.884|128.333|espace|RU|2|fusee;sainte_sophie|Sainte-Sophie|41.008|28.980|religieux|TR|1|;cappadoce|Cappadoce|38.643|34.828|naturel|TR|2|;" +
+        "pamukkale|Pamukkale|37.924|29.121|naturel|TR|2|;ephese|Éphèse|37.940|27.341|ancien|TR|2|;tombeaux_rois|Tombeaux des Rois, Paphos|34.786|32.405|ancien|CY|2|;hagar_qim|Temples de Ħaġar Qim|35.828|14.442|ancien|MT|2|;" +
+        "guergueti|Trinité de Guerguéti|42.662|44.620|religieux|GE|2|;khor_virap|Monastère de Khor Virap|39.878|44.576|religieux|AM|2|;flame_towers|Flame Towers|40.360|49.826|moderne|AZ|2|;baikonour|Baïkonour|45.920|63.342|espace|KZ|1|fusee;" +
+        "baiterek|Tour Baïterek|51.128|71.431|tour|KZ|2|;registan|Registan de Samarcande|39.655|66.976|religieux|UZ|1|;darvaza|Cratère de Darvaza|40.253|58.440|naturel|TM|2|;issyk_koul|Lac Issyk-Koul|42.450|77.250|naturel|KG|2|;" +
+        "ismail_samani|Pic Ismail Samani|38.943|72.016|naturel|TJ|2|;bamiyan|Vallée de Bamiyan|34.832|67.827|ancien|AF|2|;persepolis|Persépolis|29.935|52.891|ancien|IR|1|;ispahan|Place Naghsh-e Jahan|32.657|51.677|religieux|IR|2|;" +
+        "ur|Ziggourat d'Ur|30.963|46.103|ancien|IQ|2|;palmyre|Palmyre|34.551|38.269|ancien|SY|2|;baalbek|Baalbek|34.007|36.204|ancien|LB|2|;massada|Massada|31.316|35.354|ancien|IL|2|;" +
+        "petra|Pétra|30.329|35.444|ancien|JO|1|;hegra|Hégra (Al-Ula)|26.791|37.953|ancien|SA|2|;burj_khalifa|Burj Khalifa|25.197|55.274|moderne|AE|1|;doha_mia|Musée d'art islamique|25.295|51.539|moderne|QA|2|;" +
+        "qalat_bahrein|Qal'at al-Bahreïn|26.233|50.520|chateau|BH|2|;tours_koweit|Tours de Koweït|29.389|48.004|tour|KW|2|;qabus|Mosquée Sultan Qabus|23.584|58.388|religieux|OM|2|;shibam|Shibam|15.927|48.627|ancien|YE|2|;" +
+        "pyramides|Pyramides de Gizeh|29.979|31.134|ancien|EG|1|pyramides;abou_simbel|Abou Simbel|22.337|31.626|ancien|EG|2|;leptis|Leptis Magna|32.638|14.291|ancien|LY|2|;el_jem|Amphithéâtre d'El Jem|35.296|10.707|ancien|TN|2|;" +
+        "timgad|Timgad|35.484|6.468|ancien|DZ|2|;hassan2|Mosquée Hassan-II|33.608|-7.633|religieux|MA|1|;richat|Œil du Sahara (Richat)|21.124|-11.395|naturel|MR|2|;chinguetti|Mosquée de Chinguetti|20.462|-12.364|religieux|MR|2|;" +
+        "djenne|Grande Mosquée de Djenné|13.905|-4.556|religieux|ML|1|;renaissance|Monument de la Renaissance africaine|14.722|-17.495|statue|SN|2|;agadez|Grande Mosquée d'Agadez|16.973|7.991|religieux|NE|2|;loropeni|Ruines de Loropéni|10.300|-3.567|ancien|BF|2|;" +
+        "cape_coast|Château de Cape Coast|5.103|-1.243|chateau|GH|2|;yamoussoukro|Notre-Dame de la Paix|6.811|-5.297|religieux|CI|2|;zuma|Zuma Rock|9.128|7.234|naturel|NG|2|;mont_cameroun|Mont Cameroun|4.203|9.170|naturel|CM|2|;" +
+        "lalibela|Églises de Lalibela|12.032|39.041|religieux|ET|1|;aksoum|Obélisques d'Aksoum|14.131|38.719|ancien|ET|2|;meroe|Pyramides de Méroé|16.938|33.749|ancien|SD|2|;mont_kenya|Mont Kenya|-0.152|37.308|naturel|KE|2|;" +
+        "kilimandjaro|Kilimandjaro|-3.067|37.356|naturel|TZ|1|;source_nil|Source du Nil (Jinja)|0.424|33.204|naturel|UG|2|;karisimbi|Volcans des Virunga|-1.508|29.445|naturel|RW|2|;nyiragongo|Nyiragongo|-1.520|29.250|naturel|CD|2|;" +
+        "victoria|Chutes Victoria|-17.925|25.857|naturel|ZW|1|;grand_zimbabwe|Grand Zimbabwe|-20.268|30.934|ancien|ZW|2|;ile_mozambique|Île de Mozambique|-15.035|40.735|chateau|MZ|2|;baobabs|Allée des Baobabs|-20.251|44.419|naturel|MG|1|;" +
+        "table|Montagne de la Table|-33.963|18.403|naturel|ZA|1|;bonne_esperance|Cap de Bonne-Espérance|-34.357|18.474|naturel|ZA|2|;sossusvlei|Dunes de Sossusvlei|-24.730|15.340|naturel|NA|2|;okavango|Delta de l'Okavango|-19.300|22.900|naturel|BW|2|;" +
+        "kalandula|Chutes de Kalandula|-9.075|16.000|naturel|AO|2|;morne|Le Morne Brabant|-20.453|57.318|naturel|MU|2|;fogo|Pico do Fogo|14.950|-24.350|naturel|CV|2|;taj_mahal|Taj Mahal|27.175|78.042|religieux|IN|1|taj_mahal;" +
+        "porte_inde|Porte de l'Inde|18.922|72.835|chateau|IN|2|;temple_or|Temple d'or d'Amritsar|31.620|74.876|religieux|IN|2|;qutb|Qutb Minar|28.524|77.185|tour|IN|2|;sriharikota|Base de Sriharikota|13.733|80.235|espace|IN|2|fusee;" +
+        "badshahi|Mosquée Badshahi|31.588|74.310|religieux|PK|2|;k2|K2|35.881|76.513|naturel|PK|2|;everest|Everest|27.988|86.925|naturel|NP|1|;taktshang|Monastère de Taktshang|27.492|89.363|religieux|BT|2|;" +
+        "sangsad|Parlement de Dacca|23.762|90.378|moderne|BD|2|;sigiriya|Rocher de Sigiriya|7.957|80.760|ancien|LK|2|;muraille|Grande Muraille|40.430|116.570|ancien|CN|1|muraille;cite_interdite|Cité interdite|39.916|116.397|chateau|CN|2|;" +
+        "terre_cuite|Armée de terre cuite|34.385|109.279|ancien|CN|2|;perle_orient|Tour de la Perle de l'Orient|31.240|121.500|tour|CN|2|;potala|Palais du Potala|29.658|91.117|chateau|CN|2|;jiuquan|Base de Jiuquan|40.958|100.291|espace|CN|2|fusee;" +
+        "wenchang|Base de Wenchang|19.614|110.951|espace|CN|2|fusee;gengis_khan|Statue de Gengis Khan|47.808|107.530|statue|MN|2|;gyeongbokgung|Palais Gyeongbokgung|37.580|126.977|chateau|KR|2|;fuji|Mont Fuji|35.361|138.727|naturel|JP|1|fuji;" +
+        "skytree|Tokyo Skytree|35.710|139.811|tour|JP|2|;itsukushima|Torii d'Itsukushima|34.296|132.320|religieux|JP|2|;himeji|Château de Himeji|34.839|134.694|chateau|JP|2|;tanegashima|Base de Tanegashima|30.400|130.970|espace|JP|2|fusee;" +
+        "taipei101|Taipei 101|25.034|121.565|moderne|TW|2|;banaue|Rizières de Banaue|16.919|121.058|naturel|PH|2|;mayon|Volcan Mayon|13.257|123.685|naturel|PH|2|;ha_long|Baie d'Ha Long|20.910|107.184|naturel|VN|1|;" +
+        "that_luang|That Luang|17.976|102.634|religieux|LA|2|;angkor|Angkor Vat|13.412|103.867|religieux|KH|1|;wat_arun|Wat Arun|13.744|100.489|religieux|TH|2|;shwedagon|Pagode Shwedagon|16.798|96.150|religieux|MM|2|;" +
+        "petronas|Tours Petronas|3.158|101.712|moderne|MY|1|;marina_bay|Marina Bay Sands|1.284|103.861|moderne|SG|2|;borobudur|Borobudur|-7.608|110.204|religieux|ID|1|;bromo|Volcan Bromo|-7.942|112.953|naturel|ID|2|;" +
+        "omar_ali|Mosquée Omar Ali Saifuddin|4.890|114.939|religieux|BN|2|;cristo_rei|Cristo Rei de Dili|-8.517|125.608|statue|TL|2|;opera_sydney|Opéra de Sydney|-33.857|151.215|moderne|AU|1|opera_sydney;uluru|Uluru|-25.345|131.036|naturel|AU|1|;" +
+        "barriere_corail|Grande Barrière de corail|-18.290|147.700|naturel|AU|2|;milford|Milford Sound|-44.641|167.897|naturel|NZ|2|;sky_tower|Sky Tower|-36.848|174.762|tour|NZ|2|;mahia|Base de lancement de Mahia|-39.262|177.865|espace|NZ|2|fusee;" +
+        "liberte|Statue de la Liberté|40.689|-74.045|statue|US|1|liberte;empire_state|Empire State Building|40.748|-73.986|moderne|US|2|;golden_gate|Golden Gate|37.820|-122.478|pont|US|1|golden_gate;grand_canyon|Grand Canyon|36.107|-112.113|naturel|US|1|;" +
+        "rushmore|Mont Rushmore|43.879|-103.459|statue|US|2|;maison_blanche|Maison-Blanche|38.898|-77.037|chateau|US|2|;old_faithful|Old Faithful (Yellowstone)|44.460|-110.828|naturel|US|2|;gateway_arch|Gateway Arch|38.625|-90.185|moderne|US|2|;" +
+        "space_needle|Space Needle|47.620|-122.349|tour|US|2|;monument_valley|Monument Valley|36.998|-110.098|naturel|US|2|;kilauea|Kīlauea|19.421|-155.287|naturel|US|2|;canaveral|Cap Canaveral|28.573|-80.649|espace|US|1|fusee;" +
+        "vandenberg|Base de Vandenberg|34.742|-120.573|espace|US|2|fusee;houston|Centre spatial de Houston|29.552|-95.097|espace|US|2|;tour_cn|Tour CN|43.643|-79.387|tour|CA|1|;niagara|Chutes du Niagara|43.079|-79.075|naturel|CA|1|;" +
+        "frontenac|Château Frontenac|46.812|-71.205|chateau|CA|2|;lac_louise|Lac Louise|51.417|-116.217|naturel|CA|2|;chichen_itza|Chichén Itzá|20.684|-88.568|ancien|MX|1|;teotihuacan|Teotihuacan|19.692|-98.844|ancien|MX|2|;" +
+        "tikal|Tikal|17.222|-89.623|ancien|GT|2|;trou_bleu|Grand Trou bleu|17.316|-87.535|naturel|BZ|2|;copan|Copán|14.840|-89.142|ancien|HN|2|;santa_ana|Volcan Santa Ana|13.853|-89.630|naturel|SV|2|;" +
+        "masaya|Volcan Masaya|11.984|-86.161|naturel|NI|2|;arenal|Volcan Arenal|10.463|-84.703|naturel|CR|2|;canal_panama|Canal de Panama|8.997|-79.591|moderne|PA|1|;capitole_havane|Capitole de La Havane|23.135|-82.359|chateau|CU|2|;" +
+        "citadelle|Citadelle Laferrière|19.573|-72.244|chateau|HT|2|;zipaquira|Cathédrale de sel de Zipaquirá|5.019|-74.006|religieux|CO|2|;salto_angel|Salto Ángel|5.967|-62.535|naturel|VE|1|;kaieteur|Chutes de Kaieteur|5.175|-59.481|naturel|GY|2|;" +
+        "galapagos|Îles Galápagos|-0.650|-90.400|naturel|EC|2|;mitad_mundo|Mitad del Mundo|-0.002|-78.456|statue|EC|2|;machu_picchu|Machu Picchu|-13.163|-72.545|ancien|PE|1|;nazca|Lignes de Nazca|-14.739|-75.130|ancien|PE|2|;" +
+        "uyuni|Salar d'Uyuni|-20.134|-67.489|naturel|BO|1|;christ|Christ Rédempteur|-22.952|-43.211|statue|BR|1|christ;iguacu|Chutes d'Iguaçu|-25.695|-54.437|naturel|BR|1|;congres_brasilia|Congrès national de Brasilia|-15.800|-47.864|moderne|BR|2|;" +
+        "teatro_amazonas|Théâtre Amazonas|-3.130|-60.023|chateau|BR|2|;itaipu|Barrage d'Itaipu|-25.408|-54.589|moderne|PY|2|;la_mano|La Main de Punta del Este|-34.962|-54.943|statue|UY|2|;perito_moreno|Glacier Perito Moreno|-50.496|-73.138|naturel|AR|1|;" +
+        "obelisque_ba|Obélisque de Buenos Aires|-34.604|-58.382|statue|AR|2|;aconcagua|Aconcagua|-32.653|-70.011|naturel|AR|2|;moai|Moaï de l'île de Pâques|-27.120|-109.350|statue|CL|1|moai;torres_paine|Torres del Paine|-50.942|-72.990|naturel|CL|2|;" +
+        "paranal|Observatoire du Paranal|-24.627|-70.404|espace|CL|2|;brooklyn|Pont de Brooklyn|40.706|-73.997|pont|US|2|;oresund|Pont de l'Øresund|55.575|12.827|pont|DK|2|;bosphore|Pont du Bosphore|41.045|29.034|pont|TR|2|;" +
+        "harbour_bridge|Pont du port de Sydney|-33.852|151.211|pont|AU|2|;unite|Statue de l'Unité|21.838|73.719|statue|IN|2|;leshan|Bouddha géant de Leshan|29.545|103.773|statue|CN|2|;mere_patrie|La Mère-Patrie, Volgograd|48.742|44.537|statue|RU|2|;" +
+        "manneken_pis|Manneken-Pis|50.845|4.350|statue|BE|2|"
 
     val DECOR = listOf(
         Decor("bateau", 45.0, -35.0), Decor("bateau", 30.0, -48.0), Decor("bateau", 50.0, -20.0), Decor("bateau", -20.0, -15.0),
@@ -168,12 +237,13 @@ object GlobeDonnees {
         Decor("foret", 63.0, 26.0), Decor("foret", 48.5, 10.0), Decor("foret", 45.0, -122.5),
         Decor("manchot", -74.0, 0.0), Decor("manchot", -70.0, 140.0), Decor("manchot", -72.0, -100.0), Decor("manchot", -67.0, 60.0))
 
-    /** All of it for the page: `{villes: [[nom, lat, lon, rang]], sommets: [[lat, lon, altitude]], capitales: [[nom, lat, lon, pays, population]], monuments: [[id, nom, lat, lon]], decor: [[type, lat, lon]]}`. */
+    /** All of it for the page: `{villes: [[nom, lat, lon, rang]], sommets: [[lat, lon, altitude]], capitales: [[nom, lat, lon, pays, population]], monuments: [[id, nom, lat, lon, type, pays, rang, modele]], typesMonuments: [[type, nom]], decor: [[type, lat, lon]]}`. */
     fun json(): String = JSONObject()
         .put("villes", JSONArray(VILLES.map { JSONArray(listOf(it.nom, it.lat, it.lon, it.rang)) }))
         .put("sommets", JSONArray(SOMMETS.map { JSONArray(listOf(it.lat, it.lon, it.altitude)) }))
         .put("capitales", JSONArray(CAPITALES.map { JSONArray(listOf(it.nom, it.lat, it.lon, it.pays, it.population)) }))
-        .put("monuments", JSONArray(MONUMENTS.map { JSONArray(listOf(it.id, it.nom, it.lat, it.lon)) }))
+        .put("monuments", JSONArray(MONUMENTS.map { JSONArray(listOf(it.id, it.nom, it.lat, it.lon, it.type, it.pays, it.rang, it.modele ?: "")) }))
+        .put("typesMonuments", JSONArray(TYPES_MONUMENTS.map { JSONArray(listOf(it.key, it.value)) }))
         .put("decor", JSONArray(DECOR.map { JSONArray(listOf(it.type, it.lat, it.lon)) }))
         .toString()
 }
