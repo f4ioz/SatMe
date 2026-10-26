@@ -26,6 +26,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Suivi › Polarisation**: the V / H / D / G buttons, the real state (including « manuel (sélecteur) » and « bloqué : émission »), and each satellite's polarisation **at AOS** (fixed, or the best known). The front panel selector has the last word, and never a switch on the antenna that transmits.
 - **Sonder H/V** (probe H/V): in AUTO, the receiving antenna tries H then V, measured by the rig's S-meter or the SDR, and keeps the best (hysteresis). Every measurement is kept: per satellite and elevation, SatMe learns the best polarisation and starts the next pass with it.
 - **Virtual ESP32**: the same rules without the box, its front panel on screen and a simulated pass, to try everything before soldering.
+- **Démonstration : `satme --demo`.** Une station fictive (indicatif QF4DMO, tous les indicatifs en série Q, attribuée à personne) avec un carnet, un journal de passages et des images SSTV inventés mais crédibles, toujours aux dates des derniers jours ; poste, rotor, SDR, avions, navires et une mire SSTV virtuels. Rien de réel n'est ouvert, rien n'émet, rien n'est envoyé sous l'indicatif fictif ; un bandeau « DÉMO — données fictives » et son bouton **Remettre à neuf** sur chaque page. Dossier à part (`~/.satme-demo`), marche hors ligne.
+- **Sur une VM ou un Raspberry Pi** : l'archive `satme-demo.tar.gz` et son `installe-demo.sh` (essai à sec avec `--sec`) installent le service `satme-demo` (port 8090, ouvert au réseau avec mot de passe).
+
+### en
+- **Demonstration: `satme --demo`.** A made-up station (callsign QF4DMO, every callsign in the Q series, nobody's) with an invented but believable log, pass journal and SSTV pictures, always dated in the last few days; virtual rig, rotator, SDR, aircraft, ships and an SSTV test card. Nothing real is opened, nothing transmits, nothing is sent under the made-up callsign; a « DÉMO — données fictives » band and its **Remettre à neuf** button on every page. A folder of its own (`~/.satme-demo`), works offline.
+- **On a VM or a Raspberry Pi**: the `satme-demo.tar.gz` archive and its `installe-demo.sh` (dry run with `--sec`) install the `satme-demo` service (port 8090, open to the network with a password).
 
 ## 2026.10.31
 

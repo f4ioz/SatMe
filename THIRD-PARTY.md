@@ -93,7 +93,9 @@ K1JT, which is in the public domain. **No WSJT-X code is used**: WSJT-X is GPL
 and appears neither in the code nor in the app's credits.
 
 **Orbital elements** come from Celestrak and the AMSAT bulletin, under their
-respective publishers' terms.
+respective publishers' terms. SatMe-PC's demonstration (`--demo`) carries a copy of
+the AMSAT bulletin of 25 October 2026 (`pc/src/main/resources/…/demo/elements.json`), so that it works
+offline; it is replaced by a fresh one as soon as the network answers.
 
 **Satellite status** comes from AMSAT Live OSCAR Status and SatNOGS.
 

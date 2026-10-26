@@ -75,3 +75,22 @@ tasks.processResources {
         into("nouveautes")
     }
 }
+
+// The demonstration's package (`satme --demo` as a service on a Linux VM or a Raspberry Pi):
+// the program as installDist makes it, its installer and its notes, in satme-demo/.
+val demoTar by tasks.registering(Tar::class) {
+    group = "distribution"
+    description = "satme-demo.tar.gz: SatMe-PC, installe-demo.sh and its README"
+    dependsOn(tasks.installDist)
+    archiveFileName.set("satme-demo.tar.gz")
+    compression = Compression.GZIP
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    into("satme-demo") {
+        from("demo") {
+            include("installe-demo.sh")
+            filePermissions { unix("rwxr-xr-x") }
+        }
+        from("demo") { include("README.md") }
+        into("satme") { from(layout.buildDirectory.dir("install/satme")) }
+    }
+}

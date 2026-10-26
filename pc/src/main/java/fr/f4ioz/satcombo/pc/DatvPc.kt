@@ -170,6 +170,7 @@ class DatvPc(
     /** Starts receiving with [r] (LongMynd started again when it ran); null when started, else why not. */
     @Synchronized
     fun demarre(r: ReglageDatv = reglage): String? {
+        ModeDemo.refus("la réception DATV")?.let { return it }
         arreteIci()
         val rec = recepteur
         if (rec != Datv.MINITIOUNER) {
@@ -426,7 +427,7 @@ class DatvPc(
     val distant: Boolean get() = client.associe
 
     /** Joins a SatMe-Node with its code (an empty address: the MiniTiouner on this PC again); null when done. */
-    fun rejoins(adresse: String, code: String): String? { arrete(); return client.rejoins(adresse, code) }
+    fun rejoins(adresse: String, code: String): String? { ModeDemo.refus("un SatMe-Node")?.let { return it }; arrete(); return client.rejoins(adresse, code) }
 
     /** Receiving through the node: it starts LongMynd there; its status and stream come here. */
     private fun demarreDistant(r: ReglageDatv): String? {

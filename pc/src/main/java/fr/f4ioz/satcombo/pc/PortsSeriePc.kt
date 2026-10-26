@@ -40,7 +40,8 @@ class PortsSeriePc : PortsSerie {
         runCatching { SerialPort.getCommPorts().toList() }.getOrDefault(emptyList())
             .sortedBy { it.systemPortPath }
 
-    override fun liste(): List<PortSerie> = decrit(ports()).map { it.first }
+    // The demonstration lists none: not even the native library loaded.
+    override fun liste(): List<PortSerie> = if (ModeDemo.actif) emptyList() else decrit(ports()).map { it.first }
 
     override fun autorise(p: PortSerie): Boolean = true
     override fun demande(p: PortSerie) {}

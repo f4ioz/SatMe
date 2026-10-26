@@ -34,7 +34,7 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
     init {
         poste.ecrisJournal = { ligne -> ecrisTrace(ligne) }
         son.virtuelles += SonPc.SourceVirtuelle(PosteIcomReseau.NOM_SOURCE, "Icom par le réseau (réception)",
-            disponible = { s.icomHote.isNotBlank() },
+            disponible = { s.icomHote.isNotBlank() && !ModeDemo.actif },
             demarre = { distribue ->
                 // Set to IF, the rig's sound is no sound: the decoders would only get noise.
                 if (sonFi) FI_PAS_SON else {

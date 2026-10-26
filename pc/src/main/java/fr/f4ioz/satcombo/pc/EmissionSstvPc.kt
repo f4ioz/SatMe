@@ -204,6 +204,7 @@ class EmissionSstvPc(
      */
     @Synchronized
     fun demarre(confirme: Boolean, interieur: Boolean = false, charge: Boolean = false, satellite: Boolean = false): String? {
+        ModeDemo.refus("l'émission SSTV")?.let { return it }
         if (!confirme) return "émission non confirmée"
         if (etat.emet) return "déjà en émission"
         autreEmission()?.let { return it }

@@ -1052,6 +1052,8 @@ class StationPc(
                 val p = liste.getOrNull(c.port)
                 val pTx = liste.getOrNull(c.portTx)
                 fun echec(pourquoi: String) = change { copy(catModele = m, catConnecte = false, catSimule = false, catStatut = "échec : $pourquoi") }
+                // The demonstration: the simulated rigs only, no port nor network opened.
+                if (m !in SIMULES) ModeDemo.refus("un vrai poste")?.let { echec(it); return@withLock }
                 // An Icom by its LAN server (Réglages › Poste › Liaison « Réseau »): no serial port opened at all.
                 if (settings.icomLiaison == "RESEAU" && m in ICOMS) {
                     if (m != "IC9700") { echec("la liaison réseau sert l'IC-9700 seulement (Liaison : USB pour les autres)"); return@withLock }

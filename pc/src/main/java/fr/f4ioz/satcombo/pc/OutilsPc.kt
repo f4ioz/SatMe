@@ -17,6 +17,9 @@ import java.io.File
  */
 object OutilsPc {
 
+    /** The programs that open hardware (a receiver, a sound output): never found in the demonstration. */
+    val MATERIEL = setOf("rtl_tcp", "bladeRF-cli", "aplay", "ffplay", "vlc", "espeak-ng", "spd-say", "hackrf_transfer", "hackrf_info", "longmynd")
+
     val windows: Boolean = System.getProperty("os.name").orEmpty().startsWith("Windows")
 
     /** The folder next to SatMe-PC's jar (`app/` on Windows, `lib/` in the tar), and its parent. */
@@ -39,6 +42,8 @@ object OutilsPc {
 
     /** [nom] as a file that runs, or null. */
     fun trouve(nom: String): String? {
+        // The demonstration: no program that opens a receiver or a sound output.
+        if (ModeDemo.actif && nom in MATERIEL) return null
         val fichier = if (windows) "$nom.exe" else nom
         val chemins = dossiersAppli.map { File(it, fichier).path } +
             System.getenv("PATH").orEmpty().split(File.pathSeparatorChar).filter { it.isNotBlank() }.map { File(it, fichier).path } +

@@ -44,7 +44,7 @@ class MirePc(private val dossierExports: File, private val horloge: () -> Long =
     @Volatile private var fil: Thread? = null
 
     /** The outputs a 16-bit mono line can play on (the system's default first, as ""). */
-    fun sorties(): List<Pair<String, String>> = listOf("" to "sortie par défaut") + runCatching {
+    fun sorties(): List<Pair<String, String>> = if (ModeDemo.actif) emptyList() else listOf("" to "sortie par défaut") + runCatching {
         AudioSystem.getMixerInfo().filter { info ->
             AudioSystem.getMixer(info).isLineSupported(DataLine.Info(SourceDataLine::class.java, FORMAT))
         }.map { it.name to it.description }
@@ -58,6 +58,7 @@ class MirePc(private val dossierExports: File, private val horloge: () -> Long =
     /** Plays the card on [sortie] ("" = the default output), in the background; another one stops the first. */
     fun joue(mode: SstvMode, c: SstvConditions, sortie: String, indicatif: String, locator: String) {
         arrete()
+        ModeDemo.refus("la lecture sur une sortie son (le WAV reste possible)")?.let { _etat.value = Etat(erreur = it); return }
         arret = false
         _etat.value = Etat(joue = true, mode = mode.name, sortie = sortie)
         fil = Thread({

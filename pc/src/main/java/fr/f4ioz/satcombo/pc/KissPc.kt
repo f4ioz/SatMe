@@ -55,6 +55,7 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
 
     /** The port [index] opened at [vitesse] and the radio put in KISS; null when done, else why not. */
     suspend fun connecte(index: Int, vitesse: Int, lever: Boolean): String? {
+        ModeDemo.refus("le poste KISS")?.let { return it }
         val s = station.settings
         val p = station.ports.liste().firstOrNull { it.index == index } ?: return "port inconnu"
         if (p.portPttRigExpert()) return "c'est la commande d'émission d'un RigExpert : jamais ouvert"
@@ -106,6 +107,7 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
      * frequency when SatMe could not read it.
      */
     suspend fun emet(type: String, dest: String, texte: String, numero: Boolean, choixChemin: String, frequenceConfirmee: Boolean): String? {
+        ModeDemo.refus("l'émission APRS")?.let { return it }
         val s = station.settings
         val info = when (type) {
             "message" -> {

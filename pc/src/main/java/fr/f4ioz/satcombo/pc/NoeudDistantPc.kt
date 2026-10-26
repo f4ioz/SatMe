@@ -94,6 +94,7 @@ class NoeudDistantPc(
 
     /** The node's SDR, opened as a receiver at [centreHz] with [gain] (tenths of dB, null: AGC) and [ppm]. */
     fun ouvreSdr(centreHz: Long, gain: Int?, ppm: Int): SourceNoeudIq {
+        ModeDemo.refus("le SDR du SatMe-Node")?.let { throw java.io.IOException(it) }
         if (!client.associe) throw java.io.IOException("aucun SatMe-Node associé : l'associer dans l'onglet DATV (Changer : son adresse et son code)")
         val (h, p) = client.hotePort()
         return SourceNoeudIq.connecte(h, p, client.cheminAvecCle("/noeud/sdr/flux"), etages, centreHz, gain, ppm, horloge)
@@ -101,7 +102,7 @@ class NoeudDistantPc(
 
     /** The node's transmitter when « Émettre par le SatMe-Node » is chosen and a node is joined; null otherwise (cheap: no network). */
     fun fabriqueTx(gainMaxDb: () -> Double): EmetteurNoeud.Fabrique? {
-        if (!emissionParNoeud || !client.associe) return null
+        if (!emissionParNoeud || !client.associe || ModeDemo.actif) return null
         return EmetteurNoeud.Fabrique {
             val (h, p) = client.hotePort()
             EmetteurNoeud(h, p, client.cheminAvecCle("/noeud/tx/flux"), minOf(gainMaxDb(), 0.0), horloge)

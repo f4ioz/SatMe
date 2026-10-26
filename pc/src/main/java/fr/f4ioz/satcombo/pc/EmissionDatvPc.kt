@@ -311,6 +311,7 @@ class EmissionDatvPc(
 
     /** One of the HackRF's tools: in the folder set, else where [outilParDefaut] finds it; null when missing. */
     fun outilHackrf(nom: String): String? {
+        if (ModeDemo.actif) return null
         val r = hackrfOutil
         if (r.isNotEmpty()) {
             val f = File(r)
@@ -373,6 +374,7 @@ class EmissionDatvPc(
     /** Reads what the bladeRF is (read-only: `bladeRF-cli -e info -e version`). Never while it transmits or receives. */
     fun detecteBladerf(): InfoBladerf {
         if (etat.emet) return infoBladerf
+        ModeDemo.refus("le bladeRF")?.let { return InfoBladerf(message = it, lu = true).also { i -> infoBladerf = i } }
         bladerfOccupe()?.let { return InfoBladerf(infoBladerf.carte, it, true).also { i -> infoBladerf = i } }
         val prog = bladerfProgramme()
         val i = if (prog == null) InfoBladerf(message = conseilBladerf(), lu = true)
@@ -450,6 +452,7 @@ class EmissionDatvPc(
      */
     @Synchronized
     fun demarre(confirme: Boolean, chargeFictive: Boolean, interieur: Boolean = false): String? {
+        ModeDemo.refus("l'émission DATV")?.let { return it }
         if (!confirme) return "émission non confirmée"
         if (etat.emet) return "déjà en émission"
         autreEmission()?.let { return it }

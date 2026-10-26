@@ -303,7 +303,7 @@ class MoletteUsbPc(
     @Volatile private var contexteMs = 0L
 
     fun demarre() {
-        if (!dispo) return
+        if (!dispo || ModeDemo.actif) return
         Thread({ while (true) runCatching { tour() }.onFailure { etat = "erreur"; message = it.message ?: "erreur"; attends(3_000) } },
             "satme-molette").apply { isDaemon = true; start() }
     }

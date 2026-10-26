@@ -102,6 +102,8 @@ class HautParleurPc(private val rate: Int,
 
         /** A playback line at [rate] on the card [mixer] (Java's name; null: the default one), 100 ms of buffer. */
         fun ligne(rate: Int, mixer: String?): SourceDataLine? {
+            // The demonstration plays nothing on this computer: the browsers listening get the sound.
+            if (ModeDemo.actif) return null
             val f = AudioFormat(rate.toFloat(), 16, 1, true, false)
             val di = DataLine.Info(SourceDataLine::class.java, f)
             val l = if (mixer == null) AudioSystem.getLine(di)

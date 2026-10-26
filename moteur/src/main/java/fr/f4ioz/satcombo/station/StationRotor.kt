@@ -372,8 +372,9 @@ class StationRotor(
     }
 
     fun setRotorSim(v: Boolean) {
-        settings.rotorSim = v
-        change { copy(rotorSim = v) }
+        val w = v || simulationSeule
+        settings.rotorSim = w
+        change { copy(rotorSim = w) }
     }
 
     fun setRotorAutoPort(v: Boolean) = change { copy(rotorAutoPort = v) }
@@ -401,10 +402,13 @@ class StationRotor(
         portee.launch { rotorGuard("rotor_connect") { connectRotorInner() } }
     }
 
+    /** A demonstration (SatMe-PC's `--demo`): the simulated mast only, whatever the link chosen (no port, no rotctld). */
+    @Volatile var simulationSeule = false
+
     private suspend fun connectRotorInner() {
         disconnectRotor()
         val u = _etat.value
-        if (u.rotorSim) {
+        if (u.rotorSim || simulationSeule) {
             // A mast that does not exist: everything shows, nothing moves.
             // Its frames are the ring's own numbers: a south-stop mast is sent 180 to 540.
             val l = rotorLimits(u)

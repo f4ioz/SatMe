@@ -138,6 +138,7 @@ class CalibrationIqPc(
      */
     @Synchronized
     fun demarre(e: Emetteur, auto: Boolean, mesurer: Boolean, confirme: Boolean): String? {
+        ModeDemo.refus("la correction I/Q (elle émet)")?.let { return it }
         if (!confirme) return "émission non confirmée"
         if (etat.actif) return "une correction I/Q est déjà en cours"
         materiel.refus(e)?.let { return it }

@@ -18,6 +18,8 @@ data class ArgumentsPc(
     val version: Boolean = false, val aide: Boolean = false,
     /** Started again by « Redémarrer SatMe-PC »: the previous one's process, waited for. */
     val apres: Long? = null,
+    /** The demonstration ([ModeDemo]); [demoReset]: begun again from nothing. */
+    val demo: Boolean = false, val demoReset: Boolean = false,
 ) {
     companion object {
         fun lit(args: Array<String>): ArgumentsPc {
@@ -33,6 +35,8 @@ data class ArgumentsPc(
                     "--console" -> a = a.copy(bureau = false)
                     "--dossier" -> args.getOrNull(++i)?.takeIf { it.isNotBlank() }?.let { a = a.copy(dossier = File(it)) }
                     "--apres" -> args.getOrNull(++i)?.toLongOrNull()?.let { a = a.copy(apres = it) }
+                    "--demo" -> a = a.copy(demo = true)
+                    "--demo-reset" -> a = a.copy(demo = true, demoReset = true)
                     "-v", "--version" -> a = a.copy(version = true)
                     "-h", "--help", "--aide" -> a = a.copy(aide = true)
                 }

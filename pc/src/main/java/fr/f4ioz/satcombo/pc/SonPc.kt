@@ -70,6 +70,8 @@ class SonPc {
 
     /** The cards that can record in one of [formats] (the sound server's playback-only entry left out). */
     fun appareils(): List<Appareil> = runCatching {
+        // The demonstration: no real card listed, the virtual sources only.
+        if (ModeDemo.actif) return@runCatching emptyList()
         AudioSystem.getMixerInfo().toList().filter { info ->
             if (CartesSonLinux.lectureSeule(info.name)) return@filter false
             val m = AudioSystem.getMixer(info)
@@ -93,6 +95,7 @@ class SonPc {
             _etat.update { Etat(actif = true, appareil = nom, rate = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.SORTIE_HZ) }
             return true
         }
+        ModeDemo.refus("une vraie carte son")?.let { e -> _etat.update { it.copy(erreur = e) }; return false }
         val info = AudioSystem.getMixerInfo().firstOrNull { it.name == nom }
             ?: run { _etat.update { it.copy(erreur = "carte son introuvable : $nom") }; return false }
         val m = AudioSystem.getMixer(info)
@@ -117,6 +120,7 @@ class SonPc {
      * The rate and a closer, or null and why.
      */
     fun capture(nom: String, recoit: (ShortArray, Int, Int) -> Unit): Pair<Pair<Int, () -> Unit>?, String> {
+        ModeDemo.refus("une vraie carte son")?.let { return null to it }
         val info = AudioSystem.getMixerInfo().firstOrNull { it.name == nom } ?: return null to "carte son introuvable : $nom"
         // The decoders' card on the same card: let go first (one line a card on some systems).
         if (_etat.value.appareil == nom && ligne != null) arrete()

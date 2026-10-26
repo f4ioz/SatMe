@@ -34,6 +34,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 22. [Encore sur le PC](#encore-sur-le-pc)
 23. [Sécurité du matériel](#sécurité-du-matériel)
 24. [Avant le premier essai](#avant-le-premier-essai)
+25. [Démonstration : données fictives, matériel virtuel](#démonstration--données-fictives-matériel-virtuel) — `--demo`, VM ou Raspberry Pi, remise à neuf
 
 ## L'installer
 
@@ -50,6 +51,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | `--noeud` | SatMe-Node : seulement le récepteur DATV, piloté par le réseau |
 | `--bureau` · `--console` | ouvrir la page dans le navigateur, une icône près de l'horloge (d'origine sous Windows) ; ou pas |
 | `--local` | ce PC seulement, même si le fichier de démarrage dit le contraire |
+| `--demo` · `--demo-reset` | une station de démonstration, données fictives et matériel virtuel (voir [Démonstration](#démonstration--données-fictives-matériel-virtuel)) ; remise à neuf |
 
 `--port`, `--reseau` et `--dossier` se règlent aussi dans la page (*Réglages › Démarrage*, gardés dans `~/.config/satme/satme-pc.properties`, `%APPDATA%\SatMe\satme-pc.properties` sous Windows) ; la ligne de commande passe avant (voir [Démarrage, mises à jour et déploiement](#démarrage-mises-à-jour-et-déploiement)).
 
@@ -1078,3 +1080,18 @@ Pour la page ouverte de loin (un VPN, une autre maison) : le bouton **Distant** 
 - Commencer avec le **poste simulé** et le **rotor simulé**, puis brancher le vrai matériel un élément à la fois.
 - Pour essayer **une deuxième copie** de SatMe-PC à côté de la station (autre port, autre dossier), la lancer avec `SATME_SANS_SERIE=1` (ou `-Dsatme.sansSerie=true`) : elle n'ouvre alors aucun port série, et ne peut pas lever RTS/DTR sur un poste ou une carte.
 - Sans matériel du tout : le **générateur d'essai** du récepteur SDR, et les boutons **Essai** de la télémesure et des navires.
+
+## Démonstration : données fictives, matériel virtuel
+
+Pour montrer SatMe-PC sans station (un stand, une VM, un Raspberry Pi dans une valise) : **`satme --demo`**.
+
+- **Une station inventée** : l'indicatif **QF4DMO**, à Clermont-Ferrand (JN15MS). Tous les indicatifs de la démonstration commencent par **Q** — série que l'UIT garde pour les codes Q et n'attribue à aucun pays : aucun ne peut appartenir à quelqu'un. Les correspondants n'ont qu'un prénom.
+- **Des données qui ont l'air vraies** : favoris (ISS, SO-50, AO-91, RS-44, AO-7, FO-29, QO-100, AO-123, PO-101), un carnet d'environ deux cents contacts sur quarante jours (dans l'empreinte du satellite à ce moment-là), un journal d'une vingtaine de passages des dix derniers jours — la plupart suivis avec le poste et le rotor virtuels (Doppler, S-mètre, rotor), quelques-uns reconstitués —, une campagne SSTV en cours et ses images (une série de douze dessinée par SatMe, aucune photo de personne), le montage de la station.
+- **Toujours récentes** : ce sont les vrais passages des jours précédents, calculés au premier lancement ; passages, carnet et images sont refaits quand ils ont plus de deux jours (au démarrage, et chaque heure). Les éléments orbitaux sont dans le programme : **pas besoin d'Internet** ; avec, ils sont mis à jour.
+- **Du matériel virtuel branché** : IC-9700 simulé (Doppler, PTT sans rien ouvrir), rotor simulé qui suit, récepteur SDR sur le **générateur d'essai**, avions et navires d'essai, et comme carte son une **mire SSTV** : une image de la série toutes les quarante secondes environ, décodée en direct dans l'onglet SSTV (jamais gardée).
+- **Rien de réel** : aucun port série, aucune carte son (entrée ni sortie), aucun SDR, MiniTiouner, SatMe-Node ou IC-9700 par le réseau ; DATV, SSTV, correction I/Q et APRS n'émettent pas ; rien n'est envoyé sous l'indicatif fictif (PSK Reporter, AMSAT, carnet en ligne, SatNOGS, salon). Ouverte au réseau (`--reseau`), la page garde son mot de passe : il ne peut pas être retiré.
+- **Un bandeau « DÉMO — données fictives »** sur chaque page, avec **Remettre à neuf** : tout est refait (réglages compris ; le mot de passe d'accès à distance est gardé) et SatMe-PC redémarre. Ou au lancement : `satme --demo-reset`.
+- **Ses propres dossier et options** : `~/.satme-demo` (ou `--dossier`), jamais `~/.satme` ; un dossier qui contient déjà d'autres données est refusé.
+- **Sur une VM ou un Raspberry Pi** (x86_64 ou arm64, Raspberry Pi OS 64 bits) : l'archive `satme-demo.tar.gz` (`./gradlew :pc:demoTar`) contient le programme, `installe-demo.sh` et un mode d'emploi. `./installe-demo.sh --sec` montre ce qui serait fait ; `sudo ./installe-demo.sh` installe Java 17+ s'il manque, le programme dans `/opt/satme-demo`, un compte `satme-demo` sans connexion et le service **`satme-demo`** (`satme --demo --port 8090 --reseau`, données dans `/var/lib/satme-demo`, aucun périphérique visible), ouvre le port dans ufw ou firewalld s'ils tournent, et affiche l'adresse et le mot de passe. `--port`, `--desinstalle`. Seul Java est nécessaire : pas de bibliothèque native (ffmpeg facultatif, pour les vidéos).
+- **Polarisation (ESP32)** : la démonstration pose `pc_pol_port=virtuel`, `pc_pol_uhf=WIMO`, `pc_pol_vhf=AUCUN` dans ses réglages : un commutateur de polarisation virtuel, pris en compte quand SatMe-PC saura le piloter.
+

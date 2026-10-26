@@ -99,6 +99,8 @@ class AisPc(private val station: StationPc, private val sdr: SdrPc, private val 
     }
 
     @Synchronized fun demarre(prendre: Boolean = false): String? {
+        // The demonstration: the trial navires, no receiver.
+        if (ModeDemo.actif) return essai()
         arrete()
         val s = source
         occupe(s)?.let { o ->
