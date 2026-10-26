@@ -1315,21 +1315,22 @@ ${STYLE_JETONS}
   #v-orbites.ob-tableau.ob-th-vitrine .ob-vitrine:not([hidden]) { display:block; position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden;
     font:700 clamp(17px, 1.85vw, 38px)/1.3 "Baloo 2", Nunito, Fredoka, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; color:#0a1230; }
   #v-orbites.ob-th-vitrine.ob-calme .ob-haut:not(:hover):not(:focus-within) { opacity:0; }
-  .ob-vit-tete { position:absolute; left:2.5vw; right:2.5vw; top:2vh; display:flex; justify-content:space-between; align-items:center; gap:1em; color:#fff;
+  .ob-vit-tete { position:absolute; left:2.5vw; right:2.5vw; top:calc(52px + 1vh); display:flex; justify-content:space-between; align-items:center; gap:1em; color:#fff;
     font-size:1.35em; font-weight:800; text-shadow:0 3px 0 #0a1230, 0 0 18px rgba(0,0,0,.6); }
   .ob-vit-tete span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .ob-vit-heure { font-family:var(--mono); flex:none; }
-  .ob-vit-carte { position:absolute; left:3vw; top:52%; transform:translateY(-50%); width:min(48vw, 960px); max-height:calc(100% - 13vh - 3.6em); overflow:hidden; box-sizing:border-box;
+  .ob-vit-carte { position:absolute; left:3vw; top:52%; transform:translateY(-50%); width:min(48vw, 960px); max-height:calc(100% - 15vh - 120px); overflow:hidden; box-sizing:border-box;
     background:rgba(255,255,255,.96); border:4px solid #0a1230; border-radius:28px; padding:clamp(14px, 1.6vw, 34px); box-shadow:0 8px 0 rgba(10,18,48,.45); animation:ob-vit-entre .7s cubic-bezier(.3, 1.5, .5, 1); }
   @keyframes ob-vit-entre { 0% { opacity:0; transform:translateY(-50%) translateX(-6vw) scale(.92); } 100% { opacity:1; transform:translateY(-50%); } }
   .ob-vit-carte.ob-vit-legende { top:auto; bottom:calc(2.6em + 2vh); left:50%; transform:translateX(-50%); width:max-content; max-width:92vw; text-align:center; border-radius:999px; padding:.4em 1.2em; animation:ob-entre .6s ease-out; }
-  .ob-vit-t { display:inline-block; background:#FF6B6B; color:#fff; border-radius:999px; padding:.1em .8em; font-size:.8em; margin-bottom:.4em; }
+  .ob-vit-t { display:inline-block; white-space:nowrap; background:#FF6B6B; color:#fff; border-radius:999px; padding:.1em .8em; font-size:.8em; margin-bottom:.4em; }
   .ob-vit-gros { font-size:2.3em; font-weight:800; line-height:1.05; color:#E8743B; overflow-wrap:anywhere; }
   .ob-vit-vivant { font-size:1.35em; font-weight:800; margin:.15em 0; }
   .ob-vit-sous { font-weight:600; }
   .ob-vit-ind { font-family:var(--mono); font-size:1.6em; font-weight:800; letter-spacing:.06em; }
   .ob-vit-lien { font-family:var(--mono); font-size:.8em; overflow-wrap:anywhere; margin-top:.3em; color:#3a4a6b; }
-  .ob-vit-duo { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); gap:1em; align-items:center; }
+  .ob-vit-duo { display:grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.4fr); gap:1em; align-items:center; }
+  .ob-vit-passage .ob-vit-gros { font-size:2.6em; } .ob-vit-passage .ob-vit-vivant { font-size:1.5em; line-height:1.15; }
   .ob-vit-contact .ob-vit-duo { grid-template-columns:minmax(0, 1fr) auto; }
   .ob-vit-qr { width:min(26vh, 20vw); height:auto; background:#fff; border-radius:12px; border:3px solid #0a1230; }
   .ob-vit-liste { margin:.2em 0 0; padding-left:1.1em; } .ob-vit-liste li { margin:.25em 0; }
@@ -6281,7 +6282,16 @@ function obVitrine(d, l) {
     b.dataset.k = k.cle; b.insertAdjacentHTML('beforeend', '<div class="ob-vit-carte ob-vit-' + k.type + '">' + k.html + '</div>');
     c = b.querySelector('.ob-vit-carte');
   }
-  const v = c.querySelector('.ob-vit-vivant'); if (v && k.vivant != null && v.textContent !== k.vivant) v.textContent = k.vivant;
+  const v = c.querySelector('.ob-vit-vivant'), taille = innerWidth + 'x' + innerHeight;
+  let refait = c.dataset.taille !== taille;
+  if (v && k.vivant != null && v.textContent !== k.vivant) { v.textContent = k.vivant; refait = true; }
+  if (refait) { c.dataset.taille = taille; obVitAjuste(c); c.querySelectorAll('img').forEach(i => { i.onload = () => obVitAjuste(c); }); }
+}
+/** A Vitrine card's text made smaller until all of it fits (never cut), from its full size each time. */
+function obVitAjuste(c) {
+  c.style.fontSize = '';
+  let f = parseFloat(getComputedStyle(c).fontSize), n = 0;
+  while (c.scrollHeight > c.clientHeight + 1 && f > 11 && n++ < 40) { f *= .94; c.style.fontSize = f.toFixed(1) + 'px'; }
 }
 const ETQ_H = 14;
 function pointsDuPassage(m) {
