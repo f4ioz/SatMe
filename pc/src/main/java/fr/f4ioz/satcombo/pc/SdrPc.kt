@@ -585,8 +585,30 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         _etat.update { Etat() }
     }
 
+    /** The DATV tab's local spectrum holds the receiver now: this tab may not start on it meanwhile. */
+    @Volatile var spectreDatvTient = false; private set
+
+    /**
+     * The receiver as set in this tab, opened for the DATV tab's local
+     * spectrum (receive only, its own tuning): refused while this tab
+     * receives or another holds it, and for what has no wide band to show
+     * (a recording, the rig's IF). Given back by [rendSpectreDatv].
+     */
+    @Synchronized fun ouvrePourSpectreDatv(): SourceIq {
+        if (spectreDatvTient) throw java.io.IOException("le spectre DATV tient déjà le récepteur")
+        if (etat.value.actif) throw java.io.IOException("l'onglet SDR reçoit avec ce récepteur : l'y arrêter d'abord")
+        if (recepteur == FICHIER || recepteur == FI_POSTE) throw java.io.IOException("choisir dans l'onglet SDR un récepteur branché sur la tête QO-100 (RTL-SDR, ADALM-PLUTO, bladeRF, SatMe-Node)")
+        val r = connecte()
+        spectreDatvTient = true
+        return r
+    }
+
+    /** The receiver given back by the DATV tab's spectrum (closed already). */
+    @Synchronized fun rendSpectreDatv() { spectreDatvTient = false; arreteProcessus() }
+
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
     private fun connecte(): SourceIq {
+        if (spectreDatvTient) throw java.io.IOException("le récepteur sert au spectre de l'onglet DATV : l'y couper d'abord")
         // The demonstration: the test generator or a recording, never a receiver.
         if (recepteur != GENERATEUR && recepteur != FICHIER) ModeDemo.refus("ce récepteur")?.let { throw java.io.IOException(it + " : choisir « Générateur d'essai »") }
         // No hardware: nothing to lend to DATV, nothing that could transmit.

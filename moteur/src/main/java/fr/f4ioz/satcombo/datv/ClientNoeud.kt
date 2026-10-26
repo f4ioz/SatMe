@@ -83,7 +83,9 @@ class ClientNoeud(private val stockage: Stockage) {
                 return "ce SatMe-Node ne sait pas recevoir avec " + Datv.libelleRecepteur(recepteur) + " : le mettre à jour"
         }
         val q = "?ciel=" + r.cielKhz / 1000.0 + "&sr=" + r.srKs + "&ol=" + r.olKhz / 1000.0 + "&entree=" + (if (r.entreeB) "b" else "a") + "&lnb=" + r.lnb +
-            "&recepteur=" + recepteur + (if (r.balayage.isEmpty()) "" else "&balayage=" + r.balayage.joinToString(","))
+            "&recepteur=" + recepteur + (if (r.balayage.isEmpty()) "" else "&balayage=" + r.balayage.joinToString(",")) +
+            // LongMynd's own settings: an older node ignores them.
+            (if (r.demiLargeur > 0) "&demi=" + r.demiLargeur else "") + (if (r.attenteMs > 0) "&attente=" + r.attenteMs else "")
         val rep = runCatching { post("/noeud/datv/demarre$q") }.getOrElse { return "node injoignable : " + (it.message ?: "") }
         return if (rep.optBoolean("ok", true)) null else rep.optString("erreur", "le node refuse")
     }

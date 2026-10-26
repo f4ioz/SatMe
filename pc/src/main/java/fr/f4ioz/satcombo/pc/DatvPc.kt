@@ -111,13 +111,104 @@ class DatvPc(
         analyse = AnalyseTs(); suivi = SuiviQualite()
         journalImages.saute(); journalSon.saute()
         thread(isDaemon = true, name = "satme-datv-qualite") {
+            var n = 0
             while (generation == gen) {
-                Thread.sleep(1000)
+                // The pointing aid four times a second, the rest each second.
+                Thread.sleep(250)
                 if (generation != gen) break
+                runCatching { echantillonPointage() }
+                if (++n % 4 != 0) continue
                 runCatching { mesureQualite() }
                 runCatching { gardeImage(gen) }
+                runCatching { chaqueSeconde() }
             }
         }
+    }
+
+    // ------------------------------------------------------------ pointing, history, the beacon's calibration, the level
+
+    /** The pointing aid's two minutes (MER, margin, trend, best). */
+    val pointage = fr.f4ioz.satcombo.datv.SuiviPointage()
+    /** The day's reception, a point every 10 s, with its marks. */
+    val historique = fr.f4ioz.satcombo.datv.HistoriqueDatv()
+    /** The LNB's oscillator as the beacon says it is. */
+    val calage = fr.f4ioz.satcombo.datv.CalageBalise()
+
+    /**
+     * The oscillator measured on the beacon taken at each start (off unless
+     * chosen): LongMynd cannot be retuned while it runs, so the correction
+     * waits for the next tuning — another station, a restart.
+     */
+    var caleAuto: Boolean
+        get() = stockage.getBoolean("datv_cale_auto", false)
+        set(v) { stockage.edit().putBoolean("datv_cale_auto", v).apply() }
+
+    /** ffmpeg and ffplay told to go on through a damaged stream (off unless chosen; from the players' next start). */
+    var decodageTolerant: Boolean
+        get() = stockage.getBoolean("datv_tolerant", false)
+        set(v) { stockage.edit().putBoolean("datv_tolerant", v).apply() }
+
+    /** The input level the AGCs say (≈ dBm, indicative), or null. */
+    fun niveauDb(e: EtatDatv = etat): Double? = if (e.actif) fr.f4ioz.satcombo.datv.NiveauAgc.indicationDb(e.agc1, e.agc2) else null
+
+    /** The margin now: the MER less what the MODCOD needs, or null. */
+    fun marge(e: EtatDatv = etat): Double? {
+        val mer = e.merDb?.takeIf { e.verrouille } ?: return null
+        return fr.f4ioz.satcombo.datv.QualiteDatv.seuilDb(e.modcod, e.etat, e.trames)?.let { Math.round((mer - it) * 10) / 10.0 }
+    }
+
+    private fun echantillonPointage() {
+        val e = etat
+        if (!e.actif) return
+        pointage.ajoute(fr.f4ioz.satcombo.datv.SuiviPointage.Point(horloge(), e.merDb?.takeIf { e.verrouille }, marge(e), niveauDb(e), e.verrouille))
+    }
+
+    private fun chaqueSeconde() {
+        val e = etat
+        val t = horloge()
+        if (!e.actif) return
+        historique.echantillon(t, e.verrouille, e.merDb?.takeIf { e.verrouille }, marge(e), niveauDb(e))
+        calage.mesure(t, e, reglage, verrouDepuisMs)
+    }
+
+    /** The pointing view's figures, light enough to be asked four times a second (a phone on the mast too). */
+    fun pointageJson(): JSONObject {
+        val e = etat; val r = reglage; val t = horloge()
+        fun nul(x: Any?) = x ?: JSONObject.NULL
+        val niv = niveauDb(e)
+        return JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", if (e.actif) e.libelle else "arrêté")
+            .put("verrouille", e.verrouille).put("mer", nul(e.merDb?.takeIf { e.verrouille })).put("marge", nul(marge(e)))
+            .put("seuil", nul(fr.f4ioz.satcombo.datv.QualiteDatv.seuilDb(e.modcod, e.etat, e.trames)?.takeIf { e.verrouille }))
+            .put("modcod", if (e.verrouille) e.modcod else "").put("service", e.service)
+            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("balise", Math.abs(r.cielKhz - Datv.BALISE_KHZ) <= 100)
+            .put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
+            .put("niveau", nul(niv)).put("zone", nul(niv?.let { fr.f4ioz.satcombo.datv.NiveauAgc.zone(it) })).put("agc1", e.agc1).put("agc2", e.agc2)
+            .put("erreur", e.erreur).put("pointage", pointage.json(t))
+            .put("calage", calage.json(r.olKhz, t)).put("caleAuto", caleAuto)
+    }
+
+    /** What was last tuned, for the history's marks. */
+    @Volatile private var accordNote = ""
+    @Volatile private var recepteurCale = ""
+
+    /** A start: the history marked when the station changes, the oscillator taken from the beacon when chosen. */
+    private fun avantDemarrage(r0: ReglageDatv, rec: String): ReglageDatv {
+        val t = horloge()
+        if (rec != recepteurCale) { if (recepteurCale.isNotEmpty()) calage.oublie(); recepteurCale = rec }
+        var r = r0
+        val ol = calage.olReel(20)
+        // A fresh measure (6 h) of the same LNB (an oscillator typed far from it is another LNB, kept).
+        if (caleAuto && ol != null && t - calage.derniereMs < 6 * 3_600_000L && Math.abs(ol - r.olKhz) in fr.f4ioz.satcombo.datv.CalageBalise.SEUIL_KHZ..fr.f4ioz.satcombo.datv.CalageBalise.ECART_MAX_KHZ) {
+            historique.marque(t, "OL calé sur la balise : " + String.format(java.util.Locale.FRANCE, "%.3f MHz (%+d kHz)", ol / 1000.0, ol - r.olKhz), "ol")
+            r = r.copy(olKhz = ol)
+        }
+        val a = String.format(java.util.Locale.FRANCE, "%.3f MHz · %d kS/s", r.cielKhz / 1000.0, r.srKs)
+        if (a != accordNote) {
+            accordNote = a
+            historique.marque(t, (if (r.cielKhz == Datv.BALISE_KHZ) "balise " else "") + a, "station")
+            pointage.oublie()
+        }
+        return r
     }
 
     /** One second of quality: the stream's analysis, the decoders' logs, the receiver's words. */
@@ -165,11 +256,14 @@ class DatvPc(
         entreeB = stockage.getBoolean("datv_entree_b", false),
         lnb = "",   // never kept: the supply is asked for each time
         son = stockage.getBoolean("datv_son", true),
-        balayage = Datv.balayageDe(stockage.getString("datv_balayage", "")))
+        balayage = Datv.balayageDe(stockage.getString("datv_balayage", "")),
+        demiLargeur = Datv.demiLargeurDe(stockage.getString("datv_demi_largeur", "")),
+        attenteMs = Datv.attenteDe(stockage.getInt("datv_attente_ts", 0).toString()))
 
     private fun garde(r: ReglageDatv) {
         stockage.edit().putLong("datv_ciel_khz", r.cielKhz).putInt("datv_sr", r.srKs).putLong("datv_ol_khz", r.olKhz)
-            .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).putString("datv_balayage", r.balayage.joinToString(",")).apply()
+            .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).putString("datv_balayage", r.balayage.joinToString(","))
+            .putString("datv_demi_largeur", if (r.demiLargeur > 0) r.demiLargeur.toString() else "").putInt("datv_attente_ts", r.attenteMs).apply()
     }
 
     /** The receiver: [Datv.MINITIOUNER] (LongMynd), [Datv.PLUTO] or [Datv.BLADERF] (SatMe's demodulator); taken at the next start. */
@@ -200,10 +294,11 @@ class DatvPc(
 
     /** Starts receiving with [r] (LongMynd started again when it ran); null when started, else why not. */
     @Synchronized
-    fun demarre(r: ReglageDatv = reglage): String? {
+    fun demarre(r0: ReglageDatv = reglage): String? {
         ModeDemo.refus("la réception DATV")?.let { return it }
         arreteIci()
         val rec = recepteur
+        val r = if (parRelance) r0 else avantDemarrage(r0, rec)
         if (rec != Datv.MINITIOUNER) {
             ReceptionSdrDatv.refus(r)?.let { return it }
             return if (distant) demarreDistant(r) else demarreLogiciel(r, rec)
@@ -256,6 +351,7 @@ class DatvPc(
     fun arrete() {
         val etaitActif = etat.actif
         arreteIci()
+        if (etaitActif) { historique.marque(horloge(), "arrêt", "arret"); accordNote = "" }
         if (distant && etaitActif) thread(isDaemon = true) { client.arrete() }
     }
 
@@ -525,7 +621,9 @@ class DatvPc(
             runCatching { client.etat() }.onSuccess { j ->
                 echecs = 0
                 synchronized(points) { points.clear(); Datv.points(j).forEach { points.addLast(it) } }
+                val avant = etat
                 etat = Datv.etatDe(j, etat)
+                if (etat.verrouille && !avant.verrouille) verrouDepuisMs = horloge()
                 // What the node really receives with (the phone may have tuned it, the LNB supply is its own).
                 if (j.optBoolean("actif") && generation == gen) reglage = Datv.reglageDe(j, reglage)
                 if (!j.optBoolean("actif") && j.optString("erreur").isNotBlank()) {
@@ -617,9 +715,9 @@ class DatvPc(
         val ff = RenduPc.ffmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (" + OutilsPc.conseil("ffmpeg") + ")"); return }
         // The logs start again with the players.
         journalImages.reprends(); journalSon.reprends()
-        val p = ProcessBuilder(ff, "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000",
-            "-f", "mpegts", "-i", "pipe:0", "-map", "0:v:0", "-an", "-vf", "scale=-2:'min(720,ih)'", "-q:v", "5", "-r", "25",
-            "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1")
+        val p = ProcessBuilder(listOf(ff, "-loglevel", "error") + entreeLecteur() +
+            listOf("-i", "pipe:0", "-map", "0:v:0", "-an", "-vf", "scale=-2:'min(720,ih)'", "-q:v", "5", "-r", "25",
+            "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1"))
             .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffmpeg.log")).start()
         ffmpeg = p
         lecteursDepuisMs = horloge()
@@ -627,11 +725,14 @@ class DatvPc(
         if (reglage.son && !sonReglable) demarreSon(ff)
     }
 
+    /** The players' input options: low delay; with [decodageTolerant], damaged packets dropped and errors concealed rather than stopped on. */
+    private fun entreeLecteur(): List<String> = lecteurEntree(decodageTolerant)
+
     /** ffplay for the sound on this PC. */
     private fun demarreSon(ff: String) {
         val play = OutilsPc.trouve("ffplay") ?: File(File(ff).parentFile, "ffplay").takeIf { it.canExecute() }?.path ?: "ffplay"
         ffplay = runCatching {
-            ProcessBuilder(play, "-loglevel", "error", "-nodisp", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000", "-f", "mpegts", "-i", "pipe:0")
+            ProcessBuilder(listOf(play, "-loglevel", "error", "-nodisp") + entreeLecteur() + listOf("-i", "pipe:0"))
                 .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffplay.log")).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
         }.getOrNull()
     }
@@ -798,6 +899,13 @@ class DatvPc(
         return nom
     }
 
+    /** LongMynd's search half-width and timeout (null: unchanged), kept for the next start. */
+    @Synchronized
+    fun regleLongMynd(demiLargeur: Double?, attenteMs: Int?) {
+        reglage = reglage.copy(demiLargeur = demiLargeur ?: reglage.demiLargeur, attenteMs = attenteMs ?: reglage.attenteMs)
+        garde(reglage)
+    }
+
     /** The sound on this PC, or not (from the next start). */
     fun regleSon(on: Boolean) { reglage = reglage.copy(son = on); garde(reglage) }
 
@@ -882,13 +990,26 @@ class DatvPc(
 
 
         val LONGMYND = "LongMynd (BATC, GPL-3), program run apart"
+
+        /**
+         * ffmpeg's and ffplay's input options for the received stream. Tolerant:
+         * packets the demuxer knows damaged dropped (`+discardcorrupt`), decoding
+         * errors ignored rather than stopped on (`-err_detect ignore_err`), the
+         * missing parts of a picture guessed from the motion around
+         * (`-ec guess_mvs+deblock`).
+         */
+        fun lecteurEntree(tolerant: Boolean): List<String> =
+            listOf("-fflags", if (tolerant) "nobuffer+discardcorrupt" else "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000") +
+                (if (tolerant) listOf("-err_detect", "ignore_err", "-ec", "guess_mvs+deblock") else emptyList()) + listOf("-f", "mpegts")
         private val JOURNAL = File(System.getProperty("java.io.tmpdir"), "satme-longmynd.log")
 
         /** LongMynd's command line for [r]: TS and status to us on UDP, retried every 5 s without packets. */
         fun commande(prog: String, r: ReglageDatv, portTs: Int, portEtat: Int): List<String> {
             // Scanning: LongMynd tries each rate in turn ("1500,1000,500"), each for the timeout.
             val debits = Datv.debitsEssayes(r)
-            return listOf(prog, "-i", "127.0.0.1", portTs.toString(), "-I", "127.0.0.1", portEtat.toString(), "-r", Datv.delaiTsMs(debits).toString()) +
+            return listOf(prog, "-i", "127.0.0.1", portTs.toString(), "-I", "127.0.0.1", portEtat.toString(),
+                "-r", (r.attenteMs.takeIf { it > 0 } ?: Datv.delaiTsMs(debits)).toString()) +
+                (if (r.demiLargeur > 0) listOf("-S", String.format(java.util.Locale.ROOT, "%.2f", r.demiLargeur)) else emptyList()) +
                 (if (r.entreeB) listOf("-w") else emptyList()) +
                 (if (r.lnb == "v" || r.lnb == "h") listOf("-p", r.lnb) else emptyList()) +
                 listOf(r.fiKhz.toString(), debits.joinToString(","))

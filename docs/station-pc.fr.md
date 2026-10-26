@@ -399,6 +399,7 @@ L'onglet **DATV** reçoit le DVB-S / DVB-S2 sur la bande large de QO-100 (ou tou
 
 - **Essayer aussi** : d'autres débits de symboles (3 au plus) que LongMynd essaie à tour de rôle quand le débit choisi ne trouve rien, chacun 5 s — 10 s à 250 kS/s et moins, 20 s à 125 kS/s et moins, ces débits étant plus lents à accrocher —, puis il revient au premier et reste sur celui qui accroche (comme les préréglages de balayage de Ryde, BATC). Pris au prochain **Recevoir**, transmis au SatMe-Node (un node plus ancien les ignore et reçoit au seul débit choisi). Le débit accroché sert à la qualité, aux stations entendues et au rapport.
 - **Relance automatique** (cochée d'origine) : LongMynd arrêté de lui-même en pleine réception (liaison USB, MiniTiouner réinitialisé) est relancé après 3 s, puis 10 s, puis 30 s — jamais s'il dit ne pas trouver le MiniTiouner ou ne pas y avoir accès ; l'image **figée** alors que c'est accroché et que le flux passe : les lecteurs sont relancés (20 s au moins entre deux).
+- **Réglages LongMynd et décodage** (carte Réception, repliés) : la **largeur de recherche** (`-S` : ±1,5 × le débit d'origine, ou 1, 0,6, 0,4 × le débit — plus étroit, LongMynd ne part pas sur un voisin, mais l'OL doit être juste), l'**attente** sans paquets avant de recommencer (`-r` : auto, ou 10, 20, 30 s, utile pour un débit bas seul, plus lent à accrocher), et le **décodage tolérant** (ffmpeg et ffplay jettent les paquets abîmés, ignorent les erreurs au lieu de s'y arrêter et devinent les morceaux d'image perdus : moins de gris et de blocs sur un signal juste). Recherche et attente sont prises au prochain **Recevoir** et transmises au SatMe-Node (un node plus ancien les ignore).
 
 ### SatMe-Node : le récepteur à côté de l'antenne
 
@@ -450,6 +451,12 @@ Le Montage propose ce câblage dès qu'un node associé annonce un MiniTiouner e
 
 <p align="center"><img src="images/pc-datv-bande-large.webp" width="100%" alt="Le spectre de la bande large reçu de la station sol (réception réelle, 23 octobre 2026) : la balise A71A à 1,5 MS/s, PA0WCH à 333 kS/s nommé au-dessus de son signal, le repère RX du récepteur, la ligne « balise − 1 dB »"></p>
 
+### Mon spectre : un SDR sur la même tête
+
+*Mon spectre — SDR sur la même tête (répartiteur)*, décoché d'origine : **votre** bande large, vue par le récepteur de l'onglet SDR (RTL-SDR par rtl_tcp, ADALM-PLUTO, bladeRF, ou le SDR du SatMe-Node) branché par un **répartiteur** sur la même tête que le MiniTiouner (sa FI, 740 à 750 MHz avec un OL de 9750 MHz). Les 9 MHz sont balayés en quelques pas (cinq à 2,4 MS/s pour un RTL-SDR), environ une fois par seconde, et montrés **à la même échelle que la station sol** (son trait en gris par-dessus quand elle est affichée) : les signaux y sont trouvés de la même façon, leur débit estimé d'après leur largeur, et **un clic accorde le MiniTiouner** dessus. Rien n'est ouvert sans la case ; le récepteur n'est tenu que tant que l'onglet DATV est ouvert, et refusé si l'onglet SDR reçoit avec lui. Si la balise n'apparaît pas, ou pas là où le MiniTiouner la trouve, un avertissement le dit (le SDR n'est pas sur la même tête, son gain, sa correction ppm). Le répartiteur ne doit laisser passer l'alimentation du LNB que vers une sortie. *Bande simulée (essai)* : une bande inventée, pour voir sans matériel.
+
+Sans SDR, le MiniTiouner ne peut pas tenir lieu d'analyseur : LongMynd doit être relancé à chaque accord (une à deux secondes, plus son attente), et son niveau d'AGC mesure toute la bande du tuner (une dizaine de MHz) ; un balayage serait lent, flou et couperait la réception.
+
 ### Son, salon et accord par UDP
 
 Chacun coupé tant qu'on ne le choisit pas dans la carte Réception.
@@ -477,6 +484,13 @@ Le sous-onglet **Qualité** dit si l'image est bonne, et pourquoi :
 <img src="images/pc-datv-qualite.webp" width="49%" alt="DATV, sous-onglet Qualité : marge +6,6 dB, seuil du MODCOD 3,1 dB, 856 paquets sur 858 par seconde, les tables, les courbes sur deux minutes, les PID, la constellation">
 <img src="images/pc-datv-emission.webp" width="49%" alt="DATV, sous-onglet Émission pendant un essai en intérieur : ADALM-PLUTO, QPSK 2/3, 1000 kS/s, une vidéo en boucle en H.265, gain −40 dB, l'avertissement orange de l'essai en intérieur, les réglages du MiniTiouner pour l'essai">
 </p>
+
+### Pointer la parabole, historique, niveau, calage
+
+- **Pointage** (bouton en haut de l'onglet DATV, ou directement `http://<adresse>:8090/pc?pointage=1`, sur le téléphone aussi) : une vue plein écran lisible de loin — le **MER en très gros** (couleur de la marge), **la marge D**, **la tendance** (▲ mieux / ▼ moins bien qu'il y a 5 s, stable à ±0,15 dB près), **le maximum** atteint (et quand ; *Max à zéro* pour repartir), le **niveau** estimé, une **courbe des 2 dernières minutes**, et un **son** dont la hauteur suit le MER (une octave pour 3 dB, plus aigu = mieux ; décroché : des bips graves), démarré par son bouton. Décroché, l'état le dit en rouge (« DÉCROCHÉ depuis 12 s »). Le rappel : **balise seule = référence, une seule retouche à la fois**, puis attendre 5 s. *Marquer une retouche* la note dans l'historique (« azimut + », « tête 5 mm vers l'avant »…).
+- **Historique** (sous-onglet Qualité) : MER, marge D et niveau, un point toutes les 10 s (la médiane), sur 10 min, 1 h, 6 h ou 24 h, le temps décroché en rouge, et des **marques** : changement de station, arrêt, OL calé, retouches. Pour voir l'effet de la pluie, de l'activité du transpondeur, de chaque retouche. Gardé en mémoire tant que SatMe tourne.
+- **Niveau** (≈ dBm, indicatif) : tiré des deux AGC du tuner d'après les mesures publiées par le BATC (G8GKQ), sur l'échelle de MiniTioune et de Portsdown — **−70 à −35 : bon** ; en dessous, le tuner est à son gain maximal (LNB non alimenté, câble, répartiteur) ; au-dessus, le gain de son LNA est réduit. Il mesure une dizaine de MHz bruit compris : il sert à vérifier la chaîne, pas à pointer (le MER, si).
+- **Calage auto sur la balise** (carte Réception, décoché d'origine) : accroché à la balise (DVB-S2, 1500 kS/s, tenue 5 s), l'écart mesuré donne l'**OL réel** du LNB — erreur du LNB et du quartz du MiniTiouner ensemble, la même pour toutes les stations —, suivi lentement (médiane de la dernière demi-minute) avec sa **dérive** en kHz/h, toujours affichés. Coché, cet OL est pris **au prochain accord** (LongMynd ne se réaccorde pas en marche), si l'écart dépasse 3 kHz et reste sous 600 kHz (au-delà, ce n'est pas la balise) et que la mesure a moins de 6 h ; l'historique le marque.
 
 ### Sous-titres et indicatifs dans l'image
 

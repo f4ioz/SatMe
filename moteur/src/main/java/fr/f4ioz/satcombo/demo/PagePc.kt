@@ -1091,6 +1091,10 @@ ${STYLE_JETONS}
     #v-datv .wb-spectre { flex:1 1 auto; min-height:100px; max-height:150px; }
     #v-datv .wb-grand .wb-spectre { min-height:150px; max-height:260px; }
     #v-datv .wb-chute, #v-datv .wb-tete, #v-datv .wb-bas, #v-datv .wb-moi { flex:none; }
+    /* Our own SDR's strip under it: each grows only when shown. */
+    #v-datv #ws-zone:not([hidden]) { flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
+    #v-datv .wb-boite:has(> #wb-zone[hidden]), #v-datv .wb-boite:has(> #ws-zone[hidden]) { flex:none; }
+    #v-datv #ws-zone .wb-aide, #v-datv #ws-avert { flex:none; }
     .vue > .grille2, .vue > .grille3c { height:100%; }
     .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
@@ -1578,6 +1582,35 @@ ${STYLE_JETONS}
   #q-resume #q-verdict { font-size:14px; }
   #dq-carte #q-boite { margin-top:0; border-top:0; padding-top:0; margin-bottom:10px; }
   .wb-boite { margin-top:8px; border-top:1px solid var(--bord); padding-top:5px; }
+  /* The pointing view: readable from the mast, on a phone too. */
+  .d-pt { position:fixed; inset:0; z-index:6000; background:var(--s0); overflow:auto; display:flex; flex-direction:column; gap:10px; padding:12px 16px 16px; }
+  .d-pt[hidden] { display:none; }
+  .pt-haut { display:flex; align-items:center; gap:6px 12px; flex-wrap:wrap; }
+  .pt-etat { font-weight:800; font-size:clamp(18px,4.5vw,30px); letter-spacing:.02em; padding:2px 12px; border-radius:8px; background:var(--s2); }
+  .pt-etat.ok { color:var(--vert); background:rgba(91,214,138,.14); } .pt-etat.cherche { color:var(--ambre); background:rgba(255,180,84,.14); }
+  .pt-etat.perdu { color:#fff; background:var(--rose); animation:pt-clign 1s steps(2) infinite; } .pt-etat.arret { color:var(--gris); }
+  @keyframes pt-clign { 50% { opacity:.55; } }
+  .pt-freq { color:var(--gris); font-size:clamp(13px,2.6vw,17px); flex:1 1 100%; min-width:0; overflow-wrap:anywhere; order:3; }
+  .pt-x { margin-left:auto; font-size:15px; padding:6px 14px; }
+  .pt-centre { display:flex; align-items:center; justify-content:center; gap:4px 28px; flex-wrap:wrap; }
+  .pt-mer { font-family:var(--mono); font-weight:800; line-height:.95; display:flex; align-items:baseline; gap:10px; }
+  .pt-mer span { font-size:clamp(84px,24vw,230px); font-variant-numeric:tabular-nums; }
+  .pt-mer small { font-size:clamp(14px,3vw,22px); color:var(--gris); font-weight:600; }
+  .pt-tend { font-size:clamp(28px,8vw,64px); font-weight:800; text-align:center; line-height:1.1; min-width:4ch; }
+  .pt-tend small { display:block; font-size:clamp(12px,2.4vw,16px); font-weight:500; color:var(--gris); }
+  .pt-cases { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  .pt-case { background:var(--s2); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; min-width:0; }
+  .pt-case span { color:var(--gris); font-size:clamp(12px,2.4vw,15px); }
+  .pt-case b { font-family:var(--mono); font-size:clamp(24px,6.5vw,46px); font-weight:800; white-space:nowrap; }
+  .pt-case small { color:var(--gris); font-size:clamp(11px,2.2vw,14px); overflow-wrap:anywhere; }
+  .pt-courbe { width:100%; height:clamp(110px,22vh,220px); background:#0E1720; border-radius:10px; display:block; flex:none; }
+  .pt-boutons { display:flex; flex-wrap:wrap; gap:8px; }
+  .pt-boutons button { font-size:15px; padding:9px 14px; flex:1 1 150px; }
+  #pt-son.actif { background:rgba(63,224,200,.18); color:var(--cyan); border-color:var(--cyan); }
+  .pt-rappel { font-size:clamp(14px,2.8vw,18px); color:var(--clair); background:rgba(111,140,255,.12); border-left:3px solid var(--info); padding:8px 12px; border-radius:6px; }
+  .pt-cal { line-height:1.5; }
+  @media (max-width:520px) { .pt-cases { grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; } .pt-case { padding:6px; } .d-pt { padding:8px 10px 12px; gap:8px; } }
+  .dh-c { width:100%; height:150px; background:#0E1720; border-radius:8px; display:block; margin-top:4px; }
   .d-vu { width:140px; height:18px; border-radius:4px; background:#0E1720; }
   .d-chat-liste { max-height:190px; overflow-y:auto; font-size:12px; line-height:1.35; margin-top:2px; overflow-wrap:anywhere; }
   .d-chat-liste .h { color:var(--gris); margin-right:6px; } .d-chat-liste b { color:var(--ambre); margin-right:6px; }
@@ -3155,9 +3188,31 @@ ${rail()}
 </div>
 </div>
 <div class="vue" id="v-datv" hidden>
+<div id="d-pt" class="d-pt" hidden role="dialog" aria-label="Pointage de la parabole">
+  <div class="pt-haut"><span id="pt-etat" class="pt-etat">—</span><span id="pt-freq" class="pt-freq"></span>
+    <button class="pt-x" onclick="dPtFerme()" title="Revenir à l’onglet DATV (Échap aussi)">Fermer</button></div>
+  <div class="pt-centre">
+    <div class="pt-mer" title="MER : le rapport signal à bruit mesuré par le démodulateur du MiniTiouner, en dB — c’est lui qu’il faut pousser au maximum"><span id="pt-mer">—</span><small>dB MER</small></div>
+    <div id="pt-tend" class="pt-tend" title="Le MER des 2 dernières secondes comparé à celui d’il y a 5 secondes (stable à ±0,15 dB près)"></div>
+  </div>
+  <div class="pt-cases">
+    <div class="pt-case" title="Marge D : le MER moins celui qu’il faut au MODCOD reçu pour une image sans erreur"><span>Marge D</span><b id="pt-marge">—</b><small id="pt-seuil"></small></div>
+    <div class="pt-case" title="Le meilleur MER vu depuis la dernière remise à zéro (ou le dernier changement de station)"><span>Maximum</span><b id="pt-max">—</b><small id="pt-max-t"></small></div>
+    <div class="pt-case" title="Niveau d’entrée estimé à partir des deux AGC du tuner, sur l’échelle de MiniTioune / Portsdown (indicatif, pas absolu). Il mesure environ 10 MHz bruit compris : inutile pour pointer un signal faible, utile pour voir que le niveau est dans la bonne plage (−70 à −35)"><span>Niveau (AGC)</span><b id="pt-niv">—</b><small id="pt-niv-t"></small></div>
+  </div>
+  <canvas id="pt-courbe" class="pt-courbe" title="Le MER des 2 dernières minutes ; pointillés : le maximum (vert) et le seuil du MODCOD (gris)"></canvas>
+  <div class="pt-boutons">
+    <button id="pt-son" onclick="dPtSon()" title="Un son dont la hauteur suit le MER (plus aigu = mieux) ; décroché : des bips graves. Il démarre par ce bouton (le navigateur l’exige)">Son : coupé</button>
+    <button onclick="dPtRaz()" title="Oublier le maximum : une nouvelle référence">Max à zéro</button>
+    <button onclick="dPtMarque()" title="Une marque dans l’historique (sous-onglet Qualité) : on y verra l’effet de cette retouche">Marquer une retouche</button>
+    <button id="pt-balise" onclick="dPtBalise()" title="Accorder le récepteur sur la balise large bande : 10 491,500 MHz à 1500 kS/s (même OL, même entrée)">Accorder la balise</button>
+  </div>
+  <div class="pt-rappel">Balise seule = référence. Une seule retouche à la fois (azimut, élévation, tête sur le bras), puis attendre 5 s : la flèche dit si c’est mieux.</div>
+  <div class="petit pt-cal" id="pt-cal"></div>
+</div>
 <div class="d-grille">
   <div class="carte d-ecran">
-    <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span><button class="mt-pop-b" id="d-duo-b" hidden style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="dDuoBascule()" aria-pressed="true" title="L’image émise et l’image reçue de QO-100 côte à côte, pendant l’émission">Émis | Reçu</button><button class="mt-pop-b" data-o="datv" style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="mtPopBascule('datv')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button></div>
+    <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span><button class="mt-pop-b" id="d-duo-b" hidden style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="dDuoBascule()" aria-pressed="true" title="L’image émise et l’image reçue de QO-100 côte à côte, pendant l’émission">Émis | Reçu</button><button class="mt-pop-b" data-o="datv" style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="mtPopBascule('datv')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button><button class="mt-pop-b" id="d-pt-b" style="margin-left:6px;text-transform:none;letter-spacing:0" onclick="dPtOuvre()" title="Pointer la parabole : le MER en très gros (lisible de loin et sur le téléphone), la tendance, le maximum, un son dont la hauteur suit le MER. Adresse directe : pc?pointage=1">${IconesPc.svg("explore")}<span>Pointage</span></button></div>
     <div class="d-haut">
     <div id="d-cadre-tx" class="d-cadre" hidden ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><img id="d-video-tx" alt="Image émise" hidden><div id="d-vide-tx" class="d-vide">en attente de l’image émise…</div><span class="d-nom d-nom-tx">Émis</span><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
     <div id="d-leg-tx" class="petit d-leg" hidden></div>
@@ -3219,6 +3274,18 @@ ${rail()}
         </div></div>
       </div>
     </div>
+    <div id="ws-boite" class="wb-boite" hidden>
+      <div class="paire wb-tete">
+        <label class="petit" title="Votre propre spectre : un SDR (celui de l’onglet SDR : RTL-SDR, ADALM-PLUTO, bladeRF ou celui du SatMe-Node) branché par un répartiteur sur la même tête que le MiniTiouner (sa FI, 740 à 750 MHz), balayé en quelques pas. Rien n’est ouvert sans cette case ; le récepteur est rendu dès que l’onglet DATV se ferme. Le répartiteur doit laisser passer l’alimentation du LNB vers une seule sortie."><input type="checkbox" id="ws-on" onchange="wsRegle('on=' + (this.checked ? 1 : 0))"> Mon spectre — <b>SDR sur la même tête</b> (répartiteur)</label>
+        <select id="ws-source" style="max-width:210px" onchange="wsRegle('source=' + this.value)"><option value="sdr">le récepteur de l’onglet SDR</option><option value="essai">bande simulée (essai)</option></select>
+        <span class="petit" id="ws-etat"></span>
+      </div>
+      <div id="ws-zone" hidden>
+        <div class="petit wb-aide">même échelle que la station sol (trait gris : la station sol) ; un clic sur un signal : le MiniTiouner s’y accorde, débit estimé d’après sa largeur</div>
+        <div class="wb-bande"><canvas id="ws-spectre" class="wb-spectre"></canvas><div id="ws-bulle" class="wb-bulle" hidden></div></div>
+        <div class="avert" id="ws-avert" hidden></div>
+      </div>
+    </div>
   </div>
   <div class="d-cote">
     <div class="st" data-st="datv">
@@ -3244,6 +3311,8 @@ ${rail()}
       <div class="ligne" id="d-balayage-l"><span class="petit" style="min-width:86px" title="Si rien n’est trouvé au débit choisi, LongMynd essaie ceux-ci à tour de rôle (3 au plus), chacun 5 s (10 s à 250 kS/s et moins, 20 s à 125 kS/s et moins), puis revient au premier ; il reste sur celui qui accroche. Pris au prochain « Recevoir ». MiniTiouner seulement.">Essayer aussi</span><div id="d-balayage" class="o-puces" style="flex:1"></div></div>
       <div class="ligne"><span class="petit" style="min-width:86px">OL du LNB (MHz)</span><input id="d-ol" style="max-width:130px">
         <button onclick="dCale()" title="Accrocher la balise, puis : l'oscillateur est corrigé pour qu'elle tombe à sa fréquence">Caler sur le signal</button></div>
+      <div class="ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Accroché à la balise (DVB-S2, 1500 kS/s, tenue 5 s), l’écart mesuré donne l’OL réel du LNB (avec l’erreur du quartz du MiniTiouner), suivi lentement. Coupé : il est seulement affiché. Coché : il est pris au prochain accord (une autre station, un redémarrage) — LongMynd ne se réaccorde pas en marche. Jamais plus de 600 kHz d’écart (au-delà, ce n’est pas la balise)."><input type="checkbox" id="d-cale-auto" onchange="dOption('caleAuto=' + (this.checked ? 1 : 0))"> Calage auto sur la balise</label>
+        <span class="petit" id="d-calage"></span></div>
       <div class="ligne" id="d-ligne-entree"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
         <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
       <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
@@ -3260,6 +3329,14 @@ ${rail()}
           <input id="d-ua-port" style="max-width:70px" onchange="dAccordUdp()">
           <label class="petit" id="d-ua-res-l" title="Accepter aussi les machines du réseau local (seulement avec --reseau) ; sinon ce PC seulement"><input type="checkbox" id="d-ua-res" onchange="dAccordUdp()"> réseau local</label></div>
         <div class="petit" id="d-ua-etat"></div></details>
+      <details id="d-lm"><summary class="petit" style="cursor:pointer">Réglages LongMynd et décodage</summary>
+        <div class="ligne"><span class="petit" style="min-width:86px" title="LongMynd cherche la porteuse jusqu’à ± cette part du débit autour de la fréquence demandée (-S). Plus étroit : il ne s’accroche pas à un voisin, mais l’OL doit être juste (voir le calage).">Recherche ±</span>
+          <select id="d-lm-demi" style="max-width:230px" onchange="dOption('demi=' + this.value)"><option value="0">LongMynd : 1,5 × le débit</option><option value="1">1 × le débit</option><option value="0.6">0,6 × le débit</option><option value="0.4">0,4 × le débit</option></select></div>
+        <div class="ligne"><span class="petit" style="min-width:86px" title="Sans paquet valable pendant ce temps, LongMynd réinitialise le NIM et recommence (-r). Aux bas débits (125 kS/s et moins), l’accroche est plus lente : un délai plus long l’aide.">Attente</span>
+          <select id="d-lm-attente" style="max-width:230px" onchange="dOption('attente=' + this.value)"><option value="0">auto (5 s ; plus en balayant les bas débits)</option><option value="10000">10 s</option><option value="20000">20 s</option><option value="30000">30 s</option></select></div>
+        <label class="petit" style="display:block" title="ffmpeg et ffplay jettent les paquets que le démultiplexeur sait abîmés (+discardcorrupt), ignorent les erreurs au lieu de s’y arrêter (-err_detect ignore_err) et devinent les morceaux d’image perdus d’après le mouvement autour (-ec guess_mvs+deblock). Moins de gris et de blocs sur un signal juste ; pris au redémarrage des lecteurs."><input type="checkbox" id="d-tolerant" onchange="dOption('tolerant=' + (this.checked ? 1 : 0))"> Décodage tolérant (flux abîmés)</label>
+        <div class="petit aide">Recherche et attente : pris au prochain « Recevoir », transmis au SatMe-Node (un node plus ancien les ignore). Sources : manuel de LongMynd (BATC).</div>
+      </details>
       <div class="ligne"><button class="primaire" data-marche="d" onclick="dDemarre()">Recevoir</button><button class="arret" data-arret="d" hidden onclick="dPost('arrete')">Arrêter</button>
         <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPhoto()" title="L’image reçue, enregistrée en PNG sur cet ordinateur">Photo</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
@@ -3396,6 +3473,13 @@ ${rail()}
         <div><div class="petit">Erreurs de continuité /s</div><canvas id="q-c-cc" width="340" height="44"></canvas></div>
       </div>
       <div id="q-pids"></div>
+    </div>
+    <div id="dh-boite" style="margin-bottom:10px">
+      <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Historique</span>
+        <select id="dh-fen" style="max-width:110px;text-transform:none;letter-spacing:0" onchange="dhTic(true)"><option value="600000">10 min</option><option value="3600000" selected>1 heure</option><option value="21600000">6 heures</option><option value="86400000">24 heures</option></select>
+        <button style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="dPtMarque()" title="Une marque ici, maintenant (une retouche du pointage, la pluie qui arrive…)">Marquer</button></div>
+      <canvas id="dh-c" class="dh-c" title="MER (cyan) et marge D (ambre) à gauche, niveau AGC (violet) à droite ; en rouge en bas : le temps décroché ; traits verticaux : les marques"></canvas>
+      <div class="petit" id="dh-leg"></div>
     </div>
     <div>
       <div class="t">Constellation</div>
@@ -8655,6 +8739,12 @@ async function ticDatv(premier) {
   g('d-balayage-l').hidden = g('d-recepteur').value !== 'minitiouner';
   dPose('d-balayage', D.debits.filter(s => s !== dSr).map(s => '<button class="' + (dBal.includes(s) ? 'ici' : '') + '" onclick="dBalBascule(' + s + ')">' + s + '</button>').join(''));
   if (document.activeElement !== g('d-relance')) g('d-relance').checked = D.relance !== false;
+  // The oscillator the receiver works with (the beacon's calibration may have changed it): shown, so that « Recevoir » keeps it.
+  if (!premier && D.ol !== dOlVu && document.activeElement !== g('d-ol')) g('d-ol').value = mhz3(D.ol);
+  dOlVu = D.ol;
+  dOptionsVu();
+  // The pointing view asks SatMe-PC's own routes: not served by the phone.
+  g('d-pt-b').hidden = !!window.SATME_TELEPHONE;
   const e = g('d-etat'); e.textContent = D.actif ? D.libelle : 'arrêté';
   etatMarche('d', D.actif, 'aucune');
   e.style.background = D.verrouille ? 'rgba(91,214,138,.2)' : (D.actif ? 'rgba(255,180,84,.2)' : ''); e.style.color = D.verrouille ? 'var(--vert)' : (D.actif ? 'var(--ambre)' : 'var(--gris)');
@@ -8686,7 +8776,8 @@ async function ticDatv(premier) {
   txt('d-details', D.actif ? '' : '');
   // BER, frames and pilots are measured once locked only: shown then.
   const vr = D.verrouille;
-  g('d-details').innerHTML = D.actif ? ['AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, vr && D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
+  g('d-details').innerHTML = D.actif ? [D.niveau != null ? 'Niveau ≈ ' + dNiv(D.niveau) + ' <span title="Estimé depuis les AGC (échelle MiniTioune / Portsdown, indicative)">(' + dNivZone(D.niveau) + ')</span>' : '',
+    'AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, vr && D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
     vr && D.courtes != null ? (D.courtes ? 'trames courtes' : 'trames normales') : '', vr && D.pilotes != null ? (D.pilotes ? 'pilotes' : 'sans pilotes') : '',
     D.images ? D.images + ' images' : '',
     D.s2 ? 'trames ' + D.s2.trames + ' · échecs ' + D.s2.echecs + (D.s2.sautees ? ' · sautées ' + D.s2.sautees : '') : '',
@@ -8884,6 +8975,198 @@ function dBalise() { g('d-ciel').value = mhz3(D ? D.balise : 10491500); dSr = 15
 async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-msg', 'oscillateur corrigé de ' + (-j.ecart) + ' kHz'); setTimeout(() => ticDatv(true), 600); } }
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
+// ------------------------------------------------------------------ DATV: the level from the AGCs, the beacon's calibration, LongMynd's options
+let dOlVu = null;
+const dNiv = x => (x < 0 ? '−' : '') + Math.abs(Math.round(x)) + ' dBm';
+const dNivZone = x => x < -70 ? 'faible : tuner au maximum' : x >= -35 ? 'fort : gain du LNA réduit' : 'bon';
+const sgn1 = x => (x > 0 ? '+' : x < 0 ? '−' : '±') + fr1(Math.abs(x));
+function dCalageTexte(c, avecOl) {
+  if (!c || c.ecart == null) return '';
+  return 'balise à ' + (c.ecart > 0 ? '+' : c.ecart < 0 ? '−' : '±') + Math.abs(c.ecart) + ' kHz de 10 491,500' +
+    (avecOl ? ' · OL réel ≈ ' + mhz3(c.olReel) + ' MHz' : '') + (c.derive != null ? ' · dérive ' + sgn1(c.derive) + ' kHz/h' : '') +
+    (c.ilYa > 120 ? ' · mesuré il y a ' + duree(c.ilYa * 1000) : '');
+}
+function dOptionsVu() {
+  const a = document.activeElement;
+  if (a !== g('d-cale-auto')) g('d-cale-auto').checked = !!D.caleAuto;
+  if (a !== g('d-tolerant')) g('d-tolerant').checked = !!D.tolerant;
+  if (a !== g('d-lm-demi')) { const v = String(D.demiLargeur || 0), o = g('d-lm-demi');
+    if (![...o.options].some(x => x.value === v)) o.insertAdjacentHTML('beforeend', '<option value="' + v + '">' + v.replace('.', ',') + ' × le débit</option>'); o.value = v; }
+  if (a !== g('d-lm-attente')) { const v = String(D.attenteTs || 0), o = g('d-lm-attente');
+    if (![...o.options].some(x => x.value === v)) o.insertAdjacentHTML('beforeend', '<option value="' + v + '">' + Math.round(v / 1000) + ' s</option>'); o.value = v; }
+  const c = D.calage, t = dCalageTexte(c, true);
+  txt('d-calage', t ? t + (D.caleAuto && c.ecart != null && Math.abs(c.ecart) >= 3 ? ' — pris au prochain accord' : '') : D.caleAuto ? 'en attente de la balise' : '');
+}
+async function dOption(q) { await dPost('options?' + q); }
+// ------------------------------------------------------------------ DATV: the pointing view (big MER, trend, best, a tone that follows the MER)
+let PT = null, ptOuvert = false, ptSonA = null, ptEnCours = false;
+function dPtOuvre() { ptOuvert = true; g('d-pt').hidden = false; dPtTic(); }
+function dPtFerme() { ptOuvert = false; g('d-pt').hidden = true; dPtSonArret(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && ptOuvert) dPtFerme(); });
+async function dPtTic() {
+  if (!ptOuvert || ptEnCours) return;
+  if (g('v-datv').hidden) { dPtFerme(); return; }
+  ptEnCours = true;
+  let j = null;
+  try { j = await (await fetch('api/datv/pointage')).json(); } catch (x) {}
+  ptEnCours = false;
+  if (!j || !j.ok) { const e = g('pt-etat'); e.className = 'pt-etat arret'; txt('pt-etat', j ? 'indisponible ici' : 'SatMe ne répond pas'); PT = null; dPtSonMaj(); return; }
+  PT = j;
+  const p = j.pointage || {}, e = g('pt-etat');
+  let cl, et;
+  if (!j.actif) { cl = 'arret'; et = 'RÉCEPTION ARRÊTÉE'; }
+  else if (j.verrouille) { cl = 'ok'; et = 'ACCROCHÉ' + (j.balise ? ' · BALISE' : ''); }
+  else if (p.decroche != null) { cl = 'perdu'; et = 'DÉCROCHÉ depuis ' + duree(p.decroche * 1000); }
+  else { cl = 'cherche'; et = (j.libelle || 'recherche').toUpperCase() + '…'; }
+  e.className = 'pt-etat ' + cl; txt('pt-etat', et);
+  const k = j.verrouille && j.cielTrouve ? j.cielTrouve : j.ciel;
+  txt('pt-freq', mhz3(k) + ' MHz · ' + (j.verrouille && j.srTrouve ? j.srTrouve : j.sr) + ' kS/s' + (j.modcod ? ' · ' + j.modcod : '') + (j.service ? ' · ' + j.service : '') +
+    (j.erreur ? ' — ' + j.erreur : ''));
+  const m = j.marge, coul = m == null ? 'var(--gris)' : m < 1 ? 'var(--rose)' : m < 3 ? 'var(--ambre)' : 'var(--vert)';
+  txt('pt-mer', j.mer == null ? '—' : fr1(j.mer)); g('pt-mer').style.color = j.mer == null ? 'var(--gris)' : coul;
+  const td = p.tendance, te = g('pt-tend');
+  const th = !j.verrouille ? '' : td == null ? '<small>tendance dans 5 s</small>' :
+    td.sens > 0 ? '<span style="color:var(--vert)">▲ ' + sgn1(td.delta) + '</span><small>mieux qu’il y a 5 s</small>' :
+    td.sens < 0 ? '<span style="color:var(--rose)">▼ ' + sgn1(td.delta) + '</span><small>moins bien qu’il y a 5 s</small>' :
+    '<span style="color:var(--gris)">► =</span><small>stable</small>';
+  if (te.dataset.h !== th) { te.dataset.h = th; te.innerHTML = th; }
+  txt('pt-marge', m == null ? '—' : sgn1(m)); g('pt-marge').style.color = coul;
+  txt('pt-seuil', j.seuil != null ? 'seuil ' + j.modcod + ' ' + fr1(j.seuil) + ' dB' : '');
+  txt('pt-max', p.max == null ? '—' : fr1(p.max));
+  txt('pt-max-t', p.max == null ? '' : (p.maxMarge != null ? 'D ' + sgn1(p.maxMarge) + ' · ' : '') + 'il y a ' + duree(p.maxIlYa * 1000));
+  txt('pt-niv', j.niveau == null ? '—' : dNiv(j.niveau));
+  g('pt-niv').style.color = j.zone === -1 ? 'var(--rose)' : j.zone === 1 ? 'var(--ambre)' : '';
+  txt('pt-niv-t', j.niveau == null ? '' : dNivZone(j.niveau) + ' (indicatif)');
+  g('pt-balise').hidden = j.actif && j.balise;
+  txt('pt-cal', j.balise && j.calage && j.calage.ecart != null ? 'Calage : ' + dCalageTexte(j.calage, true) + (j.caleAuto ? ' · calage auto : pris au prochain accord' : '') : '');
+  dPtCourbe();
+  dPtSonMaj();
+}
+setInterval(dPtTic, 300);
+function dPtCourbe() {
+  const c = g('pt-courbe'); wbTaille(c);
+  const x = c.getContext('2d'), w = c.width, h = c.height, p = (PT && PT.pointage) || {}, l = (p.serie || []).filter(q => q[1] != null);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  x.font = '12px sans-serif'; x.fillStyle = '#6F7D8A'; x.textAlign = 'right'; x.fillText('2 min', w - 4, h - 4);
+  if (!l.length) { x.textAlign = 'center'; x.fillText(PT && PT.actif ? 'en attente d’un MER…' : 'réception arrêtée', w / 2, h / 2); return; }
+  const v = l.map(q => q[1]).concat(p.max != null ? [p.max] : []).concat(PT.seuil != null ? [PT.seuil] : []);
+  let lo = Math.min(...v), hi = Math.max(...v); if (hi - lo < 2) { const mi = (hi + lo) / 2; lo = mi - 1; hi = mi + 1; }
+  lo -= 0.2; hi += 0.2;
+  const X = t => w - 4 + t / 120 * (w - 8), Y = y => h - 8 - (y - lo) / (hi - lo) * (h - 16);
+  const ligne = (y, coul) => { x.strokeStyle = coul; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(0, Y(y)); x.lineTo(w, Y(y)); x.stroke(); x.setLineDash([]); };
+  if (PT.seuil != null) ligne(PT.seuil, '#4A5A68');
+  if (p.max != null) ligne(p.max, 'rgba(91,214,138,.7)');
+  x.strokeStyle = '#3FE0C8'; x.lineWidth = 2.5; x.beginPath();
+  let avant = null;
+  (p.serie || []).forEach(q => { if (q[1] == null) { avant = null; return; } const px = X(q[0]), py = Y(q[1]); if (avant == null) x.moveTo(px, py); else x.lineTo(px, py); avant = q; });
+  x.stroke(); x.lineWidth = 1;
+  x.textAlign = 'left'; x.fillStyle = '#9AA7B4';
+  x.fillText(fr1(hi) + ' dB', 4, 13); x.fillText(fr1(lo) + ' dB', 4, h - 4);
+}
+// The tone: its pitch follows the MER (an octave every 3 dB, 440 Hz at 6 dB); lost: low beeps.
+function dPtSon() {
+  if (ptSonA) { dPtSonArret(); return; }
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) { txt('pt-son', 'Son : indisponible ici'); return; }
+  const ac = new C(), o = ac.createOscillator(), gn = ac.createGain();
+  o.type = 'sine'; o.frequency.value = 440; gn.gain.value = 0;
+  o.connect(gn); gn.connect(ac.destination); o.start();
+  ptSonA = { ac: ac, o: o, gn: gn };
+  if (ac.resume) ac.resume();
+  g('pt-son').classList.add('actif'); txt('pt-son', 'Son : actif (aigu = mieux)');
+  dPtSonMaj();
+}
+function dPtSonArret() {
+  if (ptSonA) { try { ptSonA.o.stop(); ptSonA.ac.close(); } catch (x) {} ptSonA = null; }
+  g('pt-son').classList.remove('actif'); txt('pt-son', 'Son : coupé');
+}
+function dPtSonMaj() {
+  const a = ptSonA; if (!a) return;
+  const t = a.ac.currentTime;
+  a.gn.gain.cancelScheduledValues(t);
+  if (PT && PT.verrouille && PT.mer != null) {
+    a.o.frequency.setTargetAtTime(Math.max(110, Math.min(3520, 440 * Math.pow(2, (PT.mer - 6) / 3))), t, 0.06);
+    a.gn.gain.setTargetAtTime(0.12, t, 0.03);
+  } else if (PT && PT.actif) {
+    a.o.frequency.setValueAtTime(160, t);
+    a.gn.gain.setValueAtTime(0.1, t); a.gn.gain.setValueAtTime(0, t + 0.08);
+  } else a.gn.gain.setTargetAtTime(0, t, 0.03);
+}
+async function dPtRaz() { try { await fetch('api/datv/pointage/raz', { method: 'POST' }); } catch (x) {} dPtTic(); }
+async function dPtMarque() {
+  const t = prompt('La retouche (par exemple « azimut + », « tête 5 mm vers l’avant ») :', '');
+  if (t === null) return;
+  try { await fetch('api/datv/pointage/marque?texte=' + enc(t), { method: 'POST' }); } catch (x) {}
+  dhTic(true);
+}
+function dPtBalise() { dBalise(); dDemarre(); }
+// ------------------------------------------------------------------ DATV: the reception over hours
+let DH = null, dhT = 0;
+async function dhTic(force) {
+  if (g('v-datv').hidden || g('d-p-q').hidden) return;
+  if (!force && Date.now() - dhT < 10000) return;
+  dhT = Date.now();
+  try { DH = await (await fetch('api/datv/historique?fenetre=' + g('dh-fen').value)).json(); } catch (x) { DH = null; }
+  g('dh-boite').hidden = !DH || !DH.ok;
+  if (DH && DH.ok) dhDessine();
+}
+setInterval(() => dhTic(false), 2000);
+function dhDessine() {
+  const c = g('dh-c'); wbTaille(c);
+  const x = c.getContext('2d'), w = c.width, h = c.height, l = DH.points, fen = DH.fenetre, t1 = DH.t, t0 = t1 - fen;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const X = t => 4 + (t - t0) / fen * (w - 8), bas = h - 14;
+  x.font = '10px sans-serif'; x.fillStyle = '#6F7D8A'; x.textAlign = 'center';
+  // The time axis: a few ticks at round times.
+  const pasT = [60e3, 300e3, 600e3, 1800e3, 3600e3, 7200e3, 14400e3].find(p => fen / p <= 7) || 14400e3;
+  for (let t = Math.ceil(t0 / pasT) * pasT; t <= t1; t += pasT) {
+    const d = new Date(t), px = X(t);
+    x.strokeStyle = '#1C2934'; x.beginPath(); x.moveTo(px, 0); x.lineTo(px, bas); x.stroke();
+    x.fillText(utc() ? p2c(d.getUTCHours()) + ':' + p2c(d.getUTCMinutes()) : p2c(d.getHours()) + ':' + p2c(d.getMinutes()), px, h - 3);
+  }
+  if (!l.length) { x.fillText('rien encore : l’historique se remplit pendant la réception (un point toutes les 10 s)', w / 2, h / 2); txt('dh-leg', ''); return; }
+  const mers = l.map(p => p[1]).concat(l.map(p => p[2])).filter(v => v != null);
+  let lo = mers.length ? Math.min(...mers, 0) : 0, hi = mers.length ? Math.max(...mers) : 10; if (hi - lo < 4) hi = lo + 4;
+  const Y = v => bas - 4 - (v - lo) / (hi - lo) * (bas - 10);
+  const nivs = l.map(p => p[3]).filter(v => v != null);
+  let nlo = nivs.length ? Math.min(...nivs) : -80, nhi = nivs.length ? Math.max(...nivs) : -60; if (nhi - nlo < 6) { const m = (nhi + nlo) / 2; nlo = m - 3; nhi = m + 3; }
+  const YN = v => bas - 4 - (v - nlo) / (nhi - nlo) * (bas - 10);
+  const larg = Math.max(1, (DH.pas / fen) * (w - 8));
+  // The time unlocked, in red along the bottom.
+  l.forEach(p => { if (p[4] < 100) { x.fillStyle = 'rgba(229,72,77,' + (0.25 + 0.6 * (100 - p[4]) / 100) + ')'; x.fillRect(X(p[0]), bas - 4, larg, 4); } });
+  if (lo < 0) { x.strokeStyle = '#4A5A68'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(0, Y(0)); x.lineTo(w, Y(0)); x.stroke(); x.setLineDash([]); }
+  // A line per series; a gap where nothing was measured (stopped, unlocked).
+  const trace = (k, f, coul, lw) => {
+    x.strokeStyle = coul; x.lineWidth = lw; x.beginPath(); let av = null;
+    l.forEach(p => {
+      const v = p[k]; if (v == null) { av = null; return; }
+      const px = X(p[0]) + larg / 2, py = f(v);
+      if (av == null || p[0] - av > DH.pas * 2.5) x.moveTo(px, py); else x.lineTo(px, py);
+      av = p[0];
+    });
+    x.stroke(); x.lineWidth = 1;
+  };
+  trace(3, YN, 'rgba(192,132,252,.8)', 1);
+  trace(2, Y, '#FFB454', 1.5);
+  trace(1, Y, '#3FE0C8', 2);
+  x.textAlign = 'left'; x.fillStyle = '#9AA7B4'; x.fillText(fr1(hi) + ' dB', 4, 11); x.fillText(fr1(lo) + ' dB', 4, bas - 6);
+  x.textAlign = 'right'; x.fillStyle = 'rgba(192,132,252,.9)'; x.fillText(dNiv(nhi), w - 4, 11); x.fillText(dNiv(nlo), w - 4, bas - 6);
+  // The marks: a station tuned (blue), a touch-up (white), the oscillator calibrated (green), a stop (grey).
+  const coulM = { station: '#6F8CFF', retouche: '#E8F0F7', ol: '#5BD68A', arret: '#6B7C8F' };
+  let dernierX = -99, rang = 0;
+  DH.marques.forEach(m => {
+    const px = X(m.t); x.strokeStyle = coulM[m.genre] || '#9AA7B4'; x.setLineDash(m.genre === 'arret' ? [2, 3] : []);
+    x.beginPath(); x.moveTo(px, 14); x.lineTo(px, bas); x.stroke(); x.setLineDash([]);
+    rang = px - dernierX < 90 ? (rang + 1) % 3 : 0; dernierX = px;
+    x.fillStyle = coulM[m.genre] || '#9AA7B4'; x.textAlign = px > w - 120 ? 'right' : 'left';
+    x.fillText(m.texte.length > 26 ? m.texte.slice(0, 25) + '…' : m.texte, px + (px > w - 120 ? -3 : 3), 22 + rang * 11);
+  });
+  const der = l[l.length - 1], vus = l.filter(p => p[1] != null);
+  txt('dh-leg', (vus.length ? 'MER ' + fr1(Math.min(...vus.map(p => p[1]))) + ' à ' + fr1(Math.max(...vus.map(p => p[1]))) + ' dB' : 'jamais accroché') +
+    ' sur la fenêtre · un point ' + (DH.pas >= 60000 ? 'toutes les ' + Math.round(DH.pas / 60000) + ' min' : 'toutes les ' + Math.round(DH.pas / 1000) + ' s') +
+    (der && der[1] != null ? ' · dernier : MER ' + fr1(der[1]) + (der[2] != null ? ', D ' + sgn1(der[2]) : '') + (der[3] != null ? ', niveau ' + dNiv(der[3]) : '') : '') +
+    ' · en mémoire tant que SatMe tourne (24 h au plus).');
+}
 // ------------------------------------------------------------------ DATV: QO-100's wide band, the ground station's spectrum
 let WB = null, wbN = -1, wbVals = null, wbDernier = 0;
 const WB_MIN = 8000, WB_MAX = 44000;
@@ -9077,15 +9360,60 @@ function wbSpectre(id) {
 function wbSous(c, px) {
   return (c._b || []).filter(b => px >= b.x0 - 6 && px <= b.x1 + 6).sort((a, z) => Math.abs((a.x0 + a.x1) / 2 - px) - Math.abs((z.x0 + z.x1) / 2 - px))[0];
 }
+// The local SDR's strip drawn by the same code, its sweep in the place of the ground station's.
+let SDRL = null, wlN = -1, wlVals = null, wlDernier = 0;
+function wbAvec(id, f) {
+  if (!id.startsWith('ws')) return f();
+  const s = [WB, wbVals]; WB = SDRL; wbVals = wlVals;
+  try { return f(); } finally { WB = s[0]; wbVals = s[1]; }
+}
+function wbDessine(id) { if (id.startsWith('ws')) wsSpectre(); else wbSpectre(id); }
+function wsSpectre() {
+  if (!SDRL) return;
+  // My reception over it too (the ground station's figures, else none).
+  const mn = WB && WB.monNiveau, batc = WB && WB.on && wbVals ? wbVals : null;
+  wbAvec('ws', () => { WB.monNiveau = mn; wbSpectre('ws-spectre'); });
+  if (!batc) return;
+  // The ground station's trace, thin and grey, for comparison.
+  const c = g('ws-spectre'), x = c.getContext('2d'), w = c.width, h = c.height, n = batc.length;
+  x.strokeStyle = 'rgba(232,240,247,.35)'; x.lineWidth = 1; x.beginPath();
+  for (let i = 0; i < n; i++) { const px = i * w / n, py = wbY(batc[i], h); if (i) x.lineTo(px, py); else x.moveTo(px, py); }
+  x.stroke();
+}
+async function ticSdrLarge() {
+  if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
+  const t = Date.now();
+  if ((!SDRL || !SDRL.on) && t - wlDernier < 3000) return;
+  wlDernier = t;
+  let j; try { j = await (await fetch('api/datv/sdr?depuis=' + wlN)).json(); } catch (x) { return; }
+  if (!j.ok) { g('ws-boite').hidden = true; return; }
+  SDRL = j; g('ws-boite').hidden = false;
+  if (document.activeElement !== g('ws-on')) g('ws-on').checked = j.on;
+  if (document.activeElement !== g('ws-source')) g('ws-source').value = j.source;
+  g('ws-zone').hidden = !j.on;
+  txt('ws-etat', !j.on ? '' : (j.recepteur ? j.recepteur + ' · ' : '') + j.etat + (j.frais ? ' · ' + j.signaux.length + (j.signaux.length > 1 ? ' signaux' : ' signal') + (j.pas > 1 ? ' · ' + j.pas + ' pas' : '') : ''));
+  g('ws-avert').hidden = !j.avertissement; txt('ws-avert', j.avertissement || '');
+  if (!j.on) return;
+  if (j.valeurs) { wlN = j.n; wlVals = j.valeurs; }
+  if (!j.frais) wlVals = null;
+  wsSpectre();
+}
+setInterval(() => { if (!mdSaute('sdrlarge', 2000)) ticSdrLarge(); }, 500);
+async function wsRegle(q) {
+  let j = null;
+  try { j = await (await fetch('api/datv/sdr/reglage?' + q, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false && j.erreur) txt('ws-etat', j.erreur);
+  wlDernier = 0; wlN = -1; setTimeout(ticSdrLarge, 200);
+}
 // The same strip in each tab: a click tunes the DATV receiver, a bubble names what is under the mouse.
 function wbBranche(id, bulle) {
 const c = g(id);
-c.onclick = e => {
+c.onclick = e => wbAvec(id, () => {
   if (!WB || !(c._b || []).length) return;
   const r = c.getBoundingClientRect(), b = wbSous(c, (e.clientX - r.left) * c.width / r.width);
   if (b) wbAccorde(b.s);
-};
-c.onmousemove = e => {
+});
+c.onmousemove = e => wbAvec(id, () => {
   if (!WB) return;
   const r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, b = wbSous(c, px);
   c._s = px;
@@ -9098,11 +9426,12 @@ c.onmousemove = e => {
   const l = px + 14 + bu.offsetWidth > r.width ? px - 14 - bu.offsetWidth : px + 14;
   bu.style.left = Math.max(0, l) + 'px';
   c.style.cursor = b ? 'pointer' : 'crosshair';
-  if (WB.on) wbSpectre(id);
-};
-c.onmouseleave = () => { g(bulle).hidden = true; c._s = null; if (WB && WB.on) wbSpectre(id); };
+  if (WB.on) setTimeout(() => wbDessine(id), 0);
+});
+c.onmouseleave = () => { g(bulle).hidden = true; c._s = null; wbAvec(id, () => { if (WB && WB.on) setTimeout(() => wbDessine(id), 0); }); };
 }
 wbBranche('wb-spectre', 'wb-bulle');
+wbBranche('ws-spectre', 'ws-bulle');
 wbBranche('tq-wb-spectre', 'tq-wb-bulle');
 function wbTitre(s) {
   return (s.balise ? 'Balise · ' : '') + mhz3(s.centre) + ' MHz · ' + wbSr(s.sr) + (s.nom ? ' · ' + s.nom : '') +
@@ -18308,7 +18637,9 @@ if (document.querySelector('#onglets button[data-v="' + location.hash.slice(1).r
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 // Ctrl+K or « ? » from the journal's or the sheet's page: opened here.
 { const q = new URLSearchParams(location.search);
-  if (q.has('k') || q.has('aide')) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (x) {} setTimeout(() => q.has('k') ? palette() : aideClavier(), 300); } }
+  if (q.has('k') || q.has('aide')) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (x) {} setTimeout(() => q.has('k') ? palette() : aideClavier(), 300); }
+  // « pc?pointage=1 »: the DATV tab's pointing view at once (a phone on the mast).
+  if (q.has('pointage')) setTimeout(() => { vue('datv'); dPtOuvre(); }, 300); }
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
 setInterval(tic, 1000);

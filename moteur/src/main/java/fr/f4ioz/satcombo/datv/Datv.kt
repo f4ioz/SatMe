@@ -29,6 +29,13 @@ data class ReglageDatv(
      * (LongMynd cycles through them, [Datv.debitsEssayes]); empty: the one rate.
      */
     val balayage: List<Int> = emptyList(),
+    /**
+     * LongMynd's search half-width (`-S`), as a share of the rate: 0 its
+     * own (±1.5 × the rate). Narrower keeps it off a neighbour.
+     */
+    val demiLargeur: Double = 0.0,
+    /** How long LongMynd waits without packets before starting again (`-r`, ms): 0 [Datv.delaiTsMs]'s. */
+    val attenteMs: Int = 0,
 ) {
     val fiKhz: Long get() = cielKhz - olKhz
 
@@ -166,13 +173,21 @@ object Datv {
         srKs = j.optInt("sr", ici.srKs).takeIf { it > 0 } ?: ici.srKs,
         olKhz = j.optLong("ol", ici.olKhz).takeIf { it > 0 } ?: ici.olKhz,
         entreeB = if (j.has("entree")) j.optString("entree") == "b" else ici.entreeB,
-        lnb = if (j.has("lnb")) j.optString("lnb").takeIf { it in setOf("", "v", "h") } ?: ici.lnb else ici.lnb)
+        lnb = if (j.has("lnb")) j.optString("lnb").takeIf { it in setOf("", "v", "h") } ?: ici.lnb else ici.lnb,
+        demiLargeur = if (j.has("demiLargeur")) demiLargeurDe(j.optString("demiLargeur")) else ici.demiLargeur,
+        attenteMs = if (j.has("attenteTs")) attenteDe(j.optString("attenteTs")) else ici.attenteMs)
+
+    /** LongMynd's `-S` from the page or a node's request: 0.2 to 3 (× the rate), else 0 (its own). */
+    fun demiLargeurDe(t: String?): Double = t?.replace(',', '.')?.trim()?.toDoubleOrNull()?.takeIf { it in 0.2..3.0 }?.let { Math.round(it * 100) / 100.0 } ?: 0.0
+
+    /** LongMynd's `-r` from the page or a node's request: 2 to 60 s (ms), else 0 (the usual). */
+    fun attenteDe(t: String?): Int = t?.trim()?.toIntOrNull()?.takeIf { it in 2_000..60_000 } ?: 0
 
     /** The status as JSON, as a node and SatMe-PC's page give it. */
     fun json(e: EtatDatv, r: ReglageDatv, points: List<Pair<Int, Int>>): JSONObject =
         JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
             .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son).put("lnb", r.lnb)
-            .put("balayage", r.balayage.joinToString(","))
+            .put("balayage", r.balayage.joinToString(",")).put("demiLargeur", r.demiLargeur).put("attenteTs", r.attenteMs)
             .put("fiTrouvee", e.fiTrouveeKhz).put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
             .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
             .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)

@@ -352,6 +352,10 @@ fun main(args: Array<String>) {
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
+    // The wide band from our own SDR on the same LNB: off unless chosen, the receiver held only while the DATV tab shows it.
+    val spectreSdr = SpectreSdrDatvPc(station.stockage, datv, sdr, { k, sr -> large.noms.nom(k, sr, System.currentTimeMillis()) })
+    spectreSdr.demarre()
+    serveur.spectreSdr = spectreSdr
     serveur.montage = MontagePc(dossier, { serveur.lecturesMontage() }, { serveur.fonctionsMontage.instantane(it) }, serveur.fonctionsMontage)
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
     // The SDR tab's scan (run here until stopped) and band stack (noted every second); receive only.

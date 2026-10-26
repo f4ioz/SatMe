@@ -398,6 +398,7 @@ The **DATV** tab receives DVB-S / DVB-S2 on QO-100's wide band (or any frequency
 
 - **Essayer aussi**: other symbol rates (3 at most) that LongMynd tries in turn when the chosen rate finds nothing, each for 5 s — 10 s at 250 kS/s and below, 20 s at 125 kS/s and below, those rates being slower to lock —, then back to the first; it stays on the one that locks (like BATC Ryde's scan presets). Taken at the next **Recevoir**, passed on to the SatMe-Node (an older node ignores them and receives at the chosen rate only). The rate locked on is used for the quality, the stations heard and the report.
 - **Relance automatique** (ticked by default): LongMynd gone by itself in the middle of a reception (USB link, MiniTiouner reset) is started again after 3 s, then 10 s, then 30 s — never when it says it cannot find the MiniTiouner or has no access to it; a picture **frozen** while locked with the stream flowing: the players are started again (20 s at least between two).
+- **LongMynd settings and decoding** (Reception card, folded): the **search width** (`-S`: ±1.5 × the rate by default, or 1, 0.6, 0.4 × the rate — narrower keeps LongMynd off a neighbour, but the LO must be right), the **wait** without packets before starting again (`-r`: auto, or 10, 20, 30 s, useful for a low rate alone, slower to lock), and **tolerant decoding** (ffmpeg and ffplay drop damaged packets, ignore errors instead of stopping on them and guess the lost parts of a picture: less grey and fewer blocks on a weak signal). Search and wait are taken at the next **Recevoir** and passed to the SatMe-Node (an older node ignores them).
 
 ### SatMe-Node: the receiver next to the antenna
 
@@ -449,6 +450,12 @@ Montage proposes this wiring as soon as a joined node reports a MiniTiouner and 
 
 <p align="center"><img src="images/pc-datv-bande-large.webp" width="100%" alt="The wide band spectrum from the ground station (real reception, 23 October 2026): the A71A beacon at 1.5 MS/s, PA0WCH at 333 kS/s named above its signal, the receiver's RX mark, the « balise − 1 dB » line"></p>
 
+### My spectrum: an SDR on the same LNB
+
+*Mon spectre — SDR sur la même tête (répartiteur)*, unticked by default: **your own** wide band, seen by the SDR tab's receiver (an RTL-SDR through rtl_tcp, an ADALM-PLUTO, a bladeRF, or the SatMe-Node's SDR) connected by a **splitter** on the same LNB as the MiniTiouner (its IF, 740 to 750 MHz with a 9750 MHz LO). The 9 MHz are swept in a few steps (five at 2.4 MS/s for an RTL-SDR), about once a second, and shown **on the ground station's scale** (its trace in grey over it when shown): signals are found the same way, their rate estimated from their width, and **a click tunes the MiniTiouner** to one. Nothing is opened without the box; the receiver is held only while the DATV tab is open, and refused while the SDR tab receives with it. When the beacon does not show, or not where the MiniTiouner finds it, a warning says so (the SDR is not on the same LNB, its gain, its ppm correction). The splitter must pass the LNB supply to one output only. *Bande simulée (essai)*: a made-up band, to see it without hardware.
+
+Without an SDR, the MiniTiouner cannot stand in for an analyser: LongMynd has to be restarted for every tuning (one to two seconds, plus its wait), and its AGC level measures the tuner's whole band (some 10 MHz); a sweep would be slow, blurred, and would cut the reception.
+
 ### Sound, chat and tuning by UDP
 
 Each off until chosen in the Réception card.
@@ -476,6 +483,13 @@ The **Qualité** sub-tab says whether the picture is good and why:
 <img src="images/pc-datv-qualite.webp" width="49%" alt="DATV, Qualité sub-tab: margin +6.6 dB, MODCOD threshold 3.1 dB, 856 of 858 packets a second, tables, curves over two minutes, the PIDs, the constellation">
 <img src="images/pc-datv-emission.webp" width="49%" alt="DATV, Émission sub-tab during an indoor test: ADALM-PLUTO, QPSK 2/3, 1000 kS/s, a looped video in H.265, gain −40 dB, the orange indoor-test warning, the MiniTiouner settings for the test">
 </p>
+
+### Pointing the dish, history, level, calibration
+
+- **Pointage** (button at the top of the DATV tab, or straight to `http://<address>:8090/pc?pointage=1`, on the phone too): a full-screen view readable from a distance — the **MER very large** (coloured by the margin), **the D margin**, **the trend** (▲ better / ▼ worse than 5 s ago, steady within ±0.15 dB), **the best** reached (and when; *Max à zéro* to start again), the estimated **level**, a **curve of the last 2 minutes**, and a **tone** whose pitch follows the MER (an octave per 3 dB, higher = better; unlocked: low beeps), started by its button. Unlocked, the state says so in red (« DÉCROCHÉ depuis 12 s »). The reminder: **the beacon alone is the reference, one touch-up at a time**, then wait 5 s. *Marquer une retouche* notes it in the history (« azimut + », « tête 5 mm vers l'avant »…).
+- **History** (Quality sub-tab): MER, D margin and level, a point every 10 s (the median), over 10 min, 1 h, 6 h or 24 h, the time unlocked in red, and **marks**: station changed, stop, LO calibrated, touch-ups. To see the effect of rain, of the transponder's activity, of each touch-up. Kept in memory while SatMe runs.
+- **Level** (≈ dBm, indicative): from the tuner's two AGCs after the measurements BATC published (G8GKQ), on MiniTioune's and Portsdown's scale — **−70 to −35: good**; below, the tuner is at full gain (LNB unpowered, a cable, a splitter); above, its LNA's gain is cut. It measures some 10 MHz noise included: for checking the chain, not for pointing (the MER is).
+- **Calage auto sur la balise** (Reception card, unticked by default): locked on the beacon (DVB-S2, 1500 kS/s, held 5 s), the offset measured gives the LNB's **real LO** — the LNB's and the MiniTiouner's crystal errors together, the same for every station —, followed slowly (the median of the last half minute) with its **drift** in kHz/h, always shown. Ticked, that LO is taken **at the next tuning** (LongMynd is not retuned while running), when off by more than 3 kHz and less than 600 kHz (beyond, it is not the beacon) and the measure is less than 6 h old; the history marks it.
 
 ### Subtitles and callsigns in the picture
 

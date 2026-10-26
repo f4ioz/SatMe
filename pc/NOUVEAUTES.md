@@ -15,6 +15,22 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **DATV › Pointage** (bouton en haut de l'onglet, ou `pc?pointage=1` sur le téléphone) : le **MER en très gros**, la marge D, la **tendance** (▲ mieux / ▼ moins bien qu'il y a 5 s), le **maximum** (remise à zéro), le niveau, 2 minutes de courbe et un **son dont la hauteur suit le MER** ; « DÉCROCHÉ depuis… » en rouge s'il lâche. Rappel : balise seule = référence, une retouche à la fois.
+- **DATV › Qualité › Historique** : MER, marge D et niveau sur 10 min à 24 h, le temps décroché en rouge, des marques (station changée, arrêt, OL calé, **Marquer une retouche**).
+- **Niveau du signal** estimé depuis les AGC du MiniTiouner (≈ dBm, échelle MiniTioune / Portsdown d'après les mesures du BATC) : bon de −70 à −35, trop faible ou trop fort dit en clair.
+- **Calage auto sur la balise** (carte Réception, décoché d'origine) : l'OL réel du LNB et sa dérive mesurés sur la balise, toujours affichés ; coché, pris au prochain accord.
+- **Mon spectre — SDR sur la même tête** (décoché d'origine) : le SDR de l'onglet SDR (RTL-SDR, Pluto, bladeRF, SatMe-Node) sur un répartiteur balaie la bande large, à l'échelle de la station sol ; un clic accorde le MiniTiouner. Avertit si la balise n'y est pas.
+- **Réglages LongMynd et décodage** : largeur de recherche (`-S`), attente sans paquets (`-r`), transmises au SatMe-Node ; **décodage tolérant** pour les flux abîmés.
+
+### en
+- **DATV › Pointage** (button at the top of the tab, or `pc?pointage=1` on the phone): the **MER very large**, the D margin, the **trend** (▲ better / ▼ worse than 5 s ago), the **best** (reset), the level, a 2-minute curve and a **tone whose pitch follows the MER**; « DÉCROCHÉ depuis… » in red if the lock goes. Reminder: the beacon alone is the reference, one touch-up at a time.
+- **DATV › Quality › History**: MER, D margin and level over 10 min to 24 h, the time unlocked in red, marks (station changed, stop, LO calibrated, **Marquer une retouche**).
+- **Signal level** estimated from the MiniTiouner's AGCs (≈ dBm, MiniTioune / Portsdown scale after BATC's measurements): good from −70 to −35, too weak or too strong said plainly.
+- **Calage auto sur la balise** (Reception card, unticked by default): the LNB's real LO and its drift measured on the beacon, always shown; ticked, taken at the next tuning.
+- **Mon spectre — SDR on the same LNB** (unticked by default): the SDR tab's receiver (RTL-SDR, Pluto, bladeRF, SatMe-Node) on a splitter sweeps the wide band, on the ground station's scale; a click tunes the MiniTiouner. Warns when the beacon is not in it.
+- **LongMynd settings and decoding**: search width (`-S`), wait without packets (`-r`), passed to the SatMe-Node; **tolerant decoding** for damaged streams.
+
 ## 2026.10.32
 
 ### fr
