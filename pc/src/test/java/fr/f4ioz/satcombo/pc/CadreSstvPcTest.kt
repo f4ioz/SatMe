@@ -98,6 +98,12 @@ class CadreSstvPcTest {
         assertFalse(rouge(auto, 1392, 522)); assertFalse(rouge(auto, 384, 643))
         assertTrue(rouge(auto, 300, 150) || rouge(auto, 1620, 150))
 
+        // A phone's 9:16 (1080×1920): the same shares of its taller view — 270 px wide from 60 % across, 40 % down.
+        val tel = image(mapOf("cadreSstv" to "0.6,0.4,0.25", "format" to "telephone"))
+        assertEquals(1080, tel.width); assertEquals(1920, tel.height)
+        val rouges = (0 until 1920).filter { rouge(tel, 783, it) }
+        assertTrue(rouges.toString(), rouges.size in 190..215 && rouges.first() in 500..740)
+        assertTrue(rouge(tel, 660, rouges.first() + 100)); assertFalse(rouge(tel, 620, rouges.first() + 100))
         // Back to by itself.
         lit("/cadreSstv", mapOf("v" to ""))
         assertEquals("", st.settings.journalCadreSstv)

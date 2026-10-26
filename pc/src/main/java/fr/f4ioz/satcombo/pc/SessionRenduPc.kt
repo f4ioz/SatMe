@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Marque
 import fr.f4ioz.satcombo.domain.JournalPassage.TypeMarque
 import fr.f4ioz.satcombo.pc.RenduPc.texte
@@ -125,8 +126,18 @@ object SessionRenduPc {
                   val ouverture: Boolean = true, val recap: Boolean = true, val transition: Double = TRANSITION_S,
                   val zHors: Double = Z_HORS, val zPassage: Double = Z_PASSAGE,
                   val autres: List<GlobeRenduPc.Autre> = emptyList(), val tachesAutres: Boolean = false, val son: Boolean = false,
-                  val avant: Long = MARGE_MS, val apres: Long = MARGE_MS) {
+                  val avant: Long = MARGE_MS, val apres: Long = MARGE_MS,
+                  /**
+                   * The stretch chosen on the page (de..a): each window cut to it — the passes given must reach it
+                   * ([touche]); played in real time with its sound, as a pass's stretch always was.
+                   */
+                  val morceau: LongRange? = null,
+                  /** The accelerated replay: its stretches' paces (1: real time with the sound, else faster), in place of the paces in the passes. */
+                  accelere: List<JournalPassage.Segment>? = null) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
+            .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
+        /** The paces imposed in the windows (the stretch's real time, or the accelerated replay's); null: the three paces. */
+        val imposes: List<JournalPassage.Segment>? = morceau?.let { listOf(JournalPassage.Segment(it.first, it.last, 1)) } ?: accelere?.sortedBy { it.deMs }
         /** The passes themselves, AOS to LOS: the zoom comes near around them (the satellite seen coming from afar in the margin). */
         val passages: List<LongRange> = scenes.map { it.e.debutMs..it.e.finMs }
         /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */
@@ -137,15 +148,22 @@ object SessionRenduPc {
         }.distinctBy { it.first.fichier }.sortedBy { it.first.finMs }
         /** When the pace slows to [Vitesses.image]. */
         val actifs: List<LongRange> = actifs(scenes)
-        /** With the sound: when a contact is heard, played in real time. */
-        val ecoute: List<LongRange> = if (son) ecoute(scenes) else emptyList()
+        /** With the sound: when a contact is heard (or a real-time stretch imposed), played in real time. */
+        val ecoute: List<LongRange> = if (!son) emptyList() else imposes?.filter { it.vitesse <= 1 }?.map { it.deMs..it.aMs } ?: ecoute(scenes)
+        /** The first scene's: its format (16:9, 9:16 or 3:4) and resolution for every frame. */
+        val format: RenduPc.Scene? get() = scenes.firstOrNull()
         val paysage get() = scenes.firstOrNull()?.paysage ?: true
         val resolution get() = scenes.firstOrNull()?.resolution ?: "M"
         init {
-            // A picture received stays shown as long as in a pass's video at the pass's pace.
-            scenes.forEach { it.flashMs = (it.flashS * 1000.0 * v.passage).toLong() }
+            // A picture received stays shown as long as in a pass's video at the pass's pace (the fastest imposed one).
+            val k = imposes?.maxOfOrNull { it.vitesse }?.toDouble()?.coerceAtLeast(1.0) ?: v.passage
+            scenes.forEach { it.flashMs = (it.flashS * 1000.0 * k).toLong() }
         }
     }
+
+    /** Does pass [e]'s window (from [avant] ms before its AOS to [apres] ms after its LOS) reach the stretch [m] (none: always)? */
+    fun touche(e: JournalPassage.Entree, avant: Long, apres: Long, m: LongRange?): Boolean =
+        m == null || (e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS) <= m.last && e.finMs + apres.coerceIn(0L, MARGE_MAX_MS) >= m.first)
 
     /**
      * When something is coming: each SSTV picture being received (3 s before to 3 s after),
@@ -184,18 +202,24 @@ object SessionRenduPc {
      * pace at [t] the lowest of each stretch's plus [EASE] × its distance (s): it slows down
      * before reaching a slower stretch and speeds up after it, by e every 1/[EASE] s of video.
      */
-    class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses, ecoute: List<LongRange> = emptyList()) {
+    class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses, ecoute: List<LongRange> = emptyList(),
+                 /** Imposed in the windows: each stretch's pace (the accelerated replay, a stretch in real time); the margins round them at [Vitesses.passage]. */
+                 imposes: List<JournalPassage.Segment>? = null) {
         private val morceaux: List<Triple<Long, Long, Double>>
         init {
             val bornes = sortedSetOf<Long>()
             fenetres.forEach { bornes += it.first; bornes += it.last + 1 }
-            (actifs + ecoute).forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
+            val dedans = (if (imposes != null) imposes.map { it.deMs..it.aMs } else actifs + ecoute)
+            dedans.forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
             val l = ArrayList<Triple<Long, Long, Double>>()
             val b = bornes.toList()
             for (k in 0 until b.size - 1) {
                 val m = (b[k] + b[k + 1]) / 2
                 val dans = fenetres.any { m in it }
-                val r = when { dans && ecoute.any { m in it } -> minOf(1.0, v.image); dans && actifs.any { m in it } -> v.image; dans -> v.passage; continu -> v.hors; else -> continue }
+                val r = when {
+                    !dans -> if (continu) v.hors else continue
+                    imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.vitesse?.toDouble()?.coerceAtLeast(1.0) ?: v.passage
+                    ecoute.any { m in it } -> minOf(1.0, v.image); actifs.any { m in it } -> v.image; else -> v.passage }
                 val der = l.lastOrNull()
                 if (der != null && der.third == r && der.second == b[k]) l[l.size - 1] = Triple(der.first, b[k + 1], r) else l += Triple(b[k], b[k + 1], r)
             }
@@ -214,9 +238,9 @@ object SessionRenduPc {
 
     /** Every frame of the session's passes, [fps] a second, each moment at its pace ([Allure]). */
     fun plan(fenetres: List<LongRange>, actifs: List<LongRange>, mode: String, v: Vitesses, fps: Int = FPS, transition: Double = TRANSITION_S,
-             ecoute: List<LongRange> = emptyList()): List<Trame> {
+             ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null): List<Trame> {
         if (fenetres.isEmpty()) return emptyList()
-        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute)
+        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes)
         fun pas(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
         val l = ArrayList<Trame>()
         if (mode == "continu") {
@@ -244,8 +268,8 @@ object SessionRenduPc {
         return l
     }
 
-    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute)
-    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute)
+    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes)
+    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes)
 
     // ---------------------------------------------------------------- the zoom
 
@@ -454,7 +478,7 @@ object SessionRenduPc {
     fun video(s: Session, sortie: File, son: Son? = null, travail: File? = null, progres: (Float) -> Unit): File? {
         val ff = RenduPc.ffmpeg() ?: return null
         if (s.scenes.isEmpty()) return null
-        val (w, h) = RenduPc.tailleVideo(s.paysage, s.resolution)
+        val (w, h) = s.format?.let { RenduPc.tailleVideo(it) } ?: RenduPc.tailleVideo(s.paysage, s.resolution)
         val plan = plan(s)
         val avantP = debut(s, w, h); val apresP = fin(s, w, h)
         val total = avantP.sumOf { it.second } + plan.size + apresP.sumOf { it.second }
@@ -479,8 +503,9 @@ object SessionRenduPc {
 
     /**
      * The session's sound as its video plays it: silence for its card, then, frame by frame,
-     * the pass's sound where a contact is heard in real time (its pace 1), silence elsewhere
-     * (the time running faster), the mosaic silent.
+     * the pass's sound where the time runs in real time (its pace 1: a contact heard, the
+     * accelerated replay's normal stretches, a stretch chosen), silence elsewhere (the time
+     * running faster), the mosaic silent.
      */
     fun source(s: Session, plan: List<Trame>, son: Son): fr.f4ioz.satcombo.domain.SourcePcm {
         val allure = allure(s)
@@ -493,7 +518,7 @@ object SessionRenduPc {
             val l = (debut(k + 1) - debut(k)).toInt()
             cur = ShortArray(l)
             val tr = plan.getOrNull(k - nTitre) as? Trame.Passe ?: return
-            if (allure.a(tr.t) > 1.0001 || s.ecoute.none { tr.t in it }) return
+            if (!s.son || allure.a(tr.t) > 1.0001) return
             val sp = son.sons[tr.i] ?: return
             val de = son.debuts[tr.i] ?: return
             // The pass's own rate: its samples taken to the video's (the nearest one).
@@ -515,6 +540,33 @@ object SessionRenduPc {
         }
     }
 
+    /** [a], then [b] once [a] has ended. */
+    fun suite(a: fr.f4ioz.satcombo.domain.SourcePcm, b: fr.f4ioz.satcombo.domain.SourcePcm): fr.f4ioz.satcombo.domain.SourcePcm {
+        var premier = true
+        return fr.f4ioz.satcombo.domain.SourcePcm { buf ->
+            var n = 0
+            if (premier) { n = a.lis(buf); if (n > 0) return@SourcePcm n; premier = false }
+            b.lis(buf)
+        }
+    }
+
+    /** [src] at [de] samples a second handed out at [vers] (the nearest sample: a recording's own rate to another's). */
+    fun auTaux(src: fr.f4ioz.satcombo.domain.SourcePcm, de: Int, vers: Int): fr.f4ioz.satcombo.domain.SourcePcm {
+        if (de == vers || de <= 0 || vers <= 0) return src
+        val lu = ShortArray(4096); var n = 0; var base = 0L; var fin = false
+        var k = 0L
+        return fr.f4ioz.satcombo.domain.SourcePcm { buf ->
+            var i = 0
+            while (i < buf.size) {
+                val pos = k * de / vers
+                while (!fin && pos >= base + n) { base += n; n = src.lis(lu); if (n <= 0) { n = 0; fin = true } }
+                if (pos >= base + n) break
+                buf[i++] = lu[(pos - base).toInt()]; k++
+            }
+            i
+        }
+    }
+
     // ---------------------------------------------------------------- a GIF, a picture
 
     /** The frame showing the moment [t]: in the pass round it, or between two. */
@@ -531,7 +583,7 @@ object SessionRenduPc {
 
     /** The moment [t] of the session as a PNG picture, at the size of a pass's. */
     fun png(s: Session, t: Long, sortie: File): File {
-        val (w, h) = if (s.paysage) 1920 to 1080 else 1080 to 1440
+        val (w, h) = s.format?.let { RenduPc.tailleImage(it) } ?: (1920 to 1080)
         javax.imageio.ImageIO.write(image(s, trameA(s, t), w, h), "png", sortie)
         return sortie
     }
@@ -542,7 +594,7 @@ object SessionRenduPc {
     /** The session as an animated GIF, as its video plays it (fewer frames, each longer), looping. */
     fun gif(s: Session, sortie: File, progres: (Float) -> Unit): File? {
         if (s.scenes.isEmpty()) return null
-        val (w, h) = if (s.paysage) 640 to 360 else 480 to 640
+        val (w, h) = s.format?.let { RenduPc.tailleGif(it) } ?: (640 to 360)
         val plan = plan(s)
         val pas = ceil(plan.size / GIF_MAX.toDouble()).toInt().coerceAtLeast(1)
         // A GIF's delay in hundredths of a second, 2 at least (the browsers' floor).

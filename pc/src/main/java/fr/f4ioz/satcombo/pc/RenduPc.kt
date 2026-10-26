@@ -70,6 +70,8 @@ object RenduPc {
         val vueVue: Pair<JournalPassage.VueCarte, Float>? = null,
         /** The screen's 16:9 rather than the phone's 3:4 (its view square above the caption). */
         val paysage: Boolean = false,
+        /** A phone's whole screen upright (9:16), the view over the caption; wins over [paysage]. */
+        val vertical: Boolean = false,
         /** The whole sky, as the page shows it; else framed to the pass. */
         val cielEntier: Boolean = false,
         /** The SSTV picture where the page placed it, shares of the view; null: the corner away from the satellite. */
@@ -439,9 +441,10 @@ object RenduPc {
         sc.bande?.let { (t, v) -> if (t == (w to h)) return v }
         val b = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB); val g = g2(b)
         val dp = echelle(w, h)
-        val bande = LegendePc.dispose(g, rangs(sc, sc.e.debutMs, null, dp), w.toFloat(), dp, sc.police, h * if (sc.paysage) 0.45f else 0.5f).naturelle
+        val large = sc.paysage || sc.vertical
+        val bande = LegendePc.dispose(g, rangs(sc, sc.e.debutMs, null, dp), w.toFloat(), dp, sc.police, h * if (large) 0.45f else 0.5f).naturelle
         g.dispose()
-        val v = (h - kotlin.math.ceil(bande)).toInt().let { if (sc.paysage) it else minOf(w, it) }
+        val v = (h - kotlin.math.ceil(bande)).toInt().let { if (large) it else minOf(w, it) }
         sc.bande = (w to h) to v
         return v
     }
@@ -696,7 +699,7 @@ object RenduPc {
 
     fun png(sc: Scene, instant: Long?, sortie: File): File {
         sc.flashMs = sc.flashS * 1000L
-        val (w, h) = if (sc.paysage) 1920 to 1080 else 1080 to 1440
+        val (w, h) = tailleImage(sc)
         ImageIO.write(image(w, h, sc, instant ?: sc.e.finMs), "png", sortie)
         return sortie
     }
@@ -704,7 +707,7 @@ object RenduPc {
     /** The replay as an animated GIF: the pass in about fifteen seconds, then held, looping. */
     fun gif(sc: Scene, sortie: File, progres: (Float) -> Unit): File {
         val e = sc.e
-        val (w, h) = if (sc.paysage) 640 to 360 else 480 to 640
+        val (w, h) = tailleGif(sc)
         val n = 75
         val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
         val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
@@ -759,7 +762,7 @@ object RenduPc {
     fun video(sc: Scene, sortie: File, son: SourcePcm?, rate: Int, travail: File, progres: (Float) -> Unit): File? {
         val ff = ffmpeg() ?: return null
         val e = sc.e
-        val (w, h) = tailleVideo(sc.paysage, sc.resolution)
+        val (w, h) = tailleVideo(sc)
         val fps = 5
         val segs = sc.segments
         val vitesse = if (son != null || segs != null) 1 else 10
@@ -788,10 +791,16 @@ object RenduPc {
         }
     }
 
-    /** A video's frame size for its format (16:9 or the phone's 3:4) and resolution (XS, M, HD). */
-    fun tailleVideo(paysage: Boolean, resolution: String): Pair<Int, Int> =
-        if (paysage) when (resolution) { "XS" -> 854 to 480; "HD" -> 1920 to 1080; else -> 1280 to 720 }
+    /** A video's frame size for its format (16:9, a phone's 9:16 when [vertical], or the phone app's 3:4) and resolution (XS, M, HD). */
+    fun tailleVideo(paysage: Boolean, resolution: String, vertical: Boolean = false): Pair<Int, Int> =
+        if (vertical) when (resolution) { "XS" -> 480 to 854; "HD" -> 1080 to 1920; else -> 720 to 1280 }
+        else if (paysage) when (resolution) { "XS" -> 854 to 480; "HD" -> 1920 to 1080; else -> 1280 to 720 }
         else when (resolution) { "XS" -> 480 to 640; "HD" -> 1080 to 1440; else -> 720 to 960 }
+    fun tailleVideo(sc: Scene): Pair<Int, Int> = tailleVideo(sc.paysage, sc.resolution, sc.vertical)
+    /** A picture's size for the scene's format (16:9, 9:16, 3:4). */
+    fun tailleImage(sc: Scene): Pair<Int, Int> = if (sc.vertical) 1080 to 1920 else if (sc.paysage) 1920 to 1080 else 1080 to 1440
+    /** A GIF's size for the scene's format. */
+    fun tailleGif(sc: Scene): Pair<Int, Int> = if (sc.vertical) 360 to 640 else if (sc.paysage) 640 to 360 else 480 to 640
 
     /**
      * Frames [w]×[h] given to [trames] made into an MP4 (H.264, with [wav]'s

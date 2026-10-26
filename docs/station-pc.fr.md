@@ -245,11 +245,11 @@ Dans le carnet, **Importer → SatMe sur le téléphone** :
 
 ## Journal des passages
 
-La page du journal du téléphone, sous les onglets du PC : les passages listés (♪ quand il y a du son), rejoués sur le ciel ou la carte avec le S-mètre, la fréquence, les contacts et les images à leur place. « Fabriquer » : son, image, vidéo, GIF ou fichier de passage. **Le cadre du fichier est dessiné sur le rejeu** (téléphone 3:4 ou écran 16:9) : ce qui est dans le cadre est ce que montre le fichier.
+La page du journal du téléphone, sous les onglets du PC : les passages listés (♪ quand il y a du son), rejoués sur le ciel ou la carte avec le S-mètre, la fréquence, les contacts et les images à leur place. « Fabriquer » : son, image, vidéo, GIF ou fichier de passage. **Le cadre du fichier est dessiné sur le rejeu** (écran 16:9 ou téléphone 9:16 ; le téléphone lui-même fait ses fichiers en 3:4) : ce qui est dans le cadre est ce que montre le fichier.
 
 - **Le passage entier** sur la carte : la trace prévue en pointillés, la partie suivie en plein — même quand SatMe-PC a été lancé en cours de passage.
 - **Chaque contact à sa place, comme dans la vidéo** : un point sur la trace au moment du QSO, avec l'indicatif, et la station à son carré, reliée à lui.
-- **L'image SSTV de la vidéo, à la souris** : sur le rejeu, la glisser pour la déplacer, tirer son coin (ou la molette) pour sa taille (4:3, de 15 à 90 % de la largeur) ; un cadre pointillé la montre au survol même quand aucune image n'arrive. Gardée par la station et reprise telle quelle par l'image, le GIF et la vidéo, en 16:9 comme en 3:4. **Auto** la remet à sa place d'origine : en haut, dans le coin opposé au satellite.
+- **L'image SSTV de la vidéo, à la souris** : sur le rejeu, la glisser pour la déplacer, tirer son coin (ou la molette) pour sa taille (4:3, de 15 à 90 % de la largeur) ; un cadre pointillé la montre au survol même quand aucune image n'arrive. Gardée par la station et reprise telle quelle par l'image, le GIF et la vidéo, en 16:9 comme en 9:16. **Auto** la remet à sa place d'origine : en haut, dans le coin opposé au satellite.
 - **Le S-mètre** lu par le CAT (IC-9700, IC-9100, IC-910H, TS-2000), en réception seulement.
 - **Ajouter** un contact au rejeu : en pause, l'heure est celle du son ; indicatif prédit et QRZ, mode et fréquences du satellite, RST (59 / 59 d'origine) et commentaire ; Entrée valide.
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
@@ -257,13 +257,13 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 
 ### Un passage ou plusieurs : le même éditeur
 
-Une **session regroupe des passages** : ouvrir un passage de la liste, c'est une session d'un passage ; **🌍 Session** (ou **🌍 Plusieurs passages** en tête d'un passage : son satellite, la veille au lendemain) en réunit plusieurs. Les mêmes onglets (**Options**, **Fabriquer**), les mêmes réglages, gardés ensemble dans ce navigateur :
+Ouvrir un passage de la liste, c'est l'éditeur sur ce passage ; **🌍 Session** (ou **🌍 Plusieurs passages** en tête d'un passage : son satellite, la veille au lendemain) l'ouvre sur plusieurs. **Le même éditeur** dans les deux cas — même aperçu, mêmes onglets (**Moments**, **Options**, **Fabriquer**, **Ajouter**), mêmes réglages gardés dans ce navigateur, mêmes fichiers :
 
-- **Avant et après le passage** : **Commencer avant l'AOS** et **Finir après le LOS** (0 à 30 min, 30 s d'origine). Avec quelques minutes, on **voit arriver le satellite** sur le globe (sa position d'après ses orbites), puis repartir ; le bandeau dit « AOS dans 1:40 ». Sur la page comme dans la vidéo, le GIF et l'image.
-- **Vitesses** : *Pendant le passage* et *Image ou contact* (plus *Enchaînement*, *Hors passage* et *Pause entre passages* pour plusieurs) ; d'un passage seul, un son enregistré se joue toujours en temps réel, le reste à ces vitesses (× la vitesse de lecture).
-- **Globe** : les deux zooms, **hors passage** (de loin) et **passage** (de près) — la caméra se rapproche autour de l'AOS et s'éloigne après le LOS, si bien qu'avec une longue marge on voit le satellite venir de loin —, les **satellites en plus** ; **Afficher** (image SSTV, fiche, S-mètre, fréquence, locator, vignettes) et la taille des textes.
-- **Fabriquer** : vidéo, GIF, image du moment, son. D'un passage seul **sur le globe**, entier et non accéléré, la vidéo, le GIF et l'image sont faits comme une session d'un passage : marges, vitesses, zoom, satellites en plus — avec son titre, ses cartes du rapport et son récapitulatif.
-- **Ce qui n'a de sens que pour un passage** reste avec lui : le ciel et la carte, le son en temps réel, les moments et le morceau choisi sur la frise, la lecture accélérée, les versions des images SSTV et leur place, les éléments du rapport, le son WAV d'un morceau, le fichier du passage. Ciel, carte, morceau ou vidéo accélérée : le passage seul, de l'AOS au LOS. Plusieurs passages : sur le globe. **Ouvrir seul** (onglet *Passages* d'une session) ouvre un passage avec tout cela.
+- **L'aperçu est le fichier.** Le ciel et la carte montrent les passages **l'un après l'autre**, le globe tous ; au-dessus de la frise du passage affiché, une bande avec tous les passages bout à bout (clic pour y aller). Le moment, les moments, le son, les versions SSTV et les éléments du rapport sont ceux du **passage affiché** ; **Ouvrir seul** ouvre un passage à part.
+- **Avant et après le passage** : **Commencer avant l'AOS** et **Finir après le LOS** (0 à 30 min, 30 s d'origine). Avec quelques minutes, on **voit arriver le satellite** sur le globe (sa position d'après ses orbites), puis repartir. Sur la page comme dans la vidéo, le GIF et l'image.
+- **Vitesses** : *Pendant le passage*, *Image ou contact*, *Enchaînement* (passages à la suite, avec une pause, ou temps continu à la vitesse *Hors passage* — d'un seul passage, la page dit que cela ne sert qu'à plusieurs). Avec **le son**, le temps passe en temps réel là où un contact est entendu, avec l'enregistrement ; pour écouter tout un passage, *Pendant le passage* ×1. La **lecture accélérée** (normale autour de ce qui est consigné ou entendu, rapide et muette ailleurs) remplace ces vitesses dans les passages, sur la page comme dans les fichiers.
+- **Globe** : les deux zooms, **hors passage** (de loin) et **passage** (de près) — la caméra se rapproche autour de l'AOS et s'éloigne après le LOS —, les **satellites en plus** ; **Afficher** (image SSTV, fiche, S-mètre, fréquence, locator, vignettes) et la taille des textes.
+- **Fabriquer** : le **format** — **écran (16:9)** ou **téléphone (9:16)**, le plein écran d'un téléphone debout —, son cadre dessiné sur l'aperçu (le ciel et le globe dedans, comme dans le fichier) ; l'**image SSTV** et les **incrustations** du rapport s'y placent à la souris ou au doigt (glisser, le coin ou la molette pour la taille), et la vidéo, le GIF et l'image les reprennent à la même place, dans les deux formats. Vidéo, GIF, image du moment, **son** (les enregistrements des passages bout à bout, une seconde entre deux), **fichier du passage** (à plusieurs : un par passage, dans un ZIP) ; le tout ou **le morceau choisi** sur la frise (en temps réel, avec son son).
 
 ### La vue Globe
 
@@ -275,19 +275,19 @@ Une **session regroupe des passages** : ouvrir un passage de la liste, c'est une
 
 ### Session : plusieurs passages animés
 
-**🌍 Session** (en haut, à côté de *+ Passage*) : un **satellite** et deux **dates** (*seulement les passages avec des images SSTV* coché d'origine), **▶ Animer la session** : tous ses passages animés à la suite sur le globe, avec la frise de la session (les passages bout à bout, les images en orange, un clic y va) et les images SSTV qui arrivent une à une.
+**🌍 Session** (en haut, à côté de *+ Passage*) : un **satellite** et deux **dates** (*seulement les passages avec des images SSTV* coché d'origine), **▶ Animer la session** : tous ses passages dans l'éditeur, animés à la suite (sur le globe, ou sur le ciel ou la carte l'un après l'autre), avec la frise de la session (les passages bout à bout, les images en orange, un clic y va) et les images SSTV qui arrivent une à une.
 
 - **Passages enchaînés** (une courte pause entre deux, le globe tourne vers le suivant) ou **Temps continu** (le temps court sans s'arrêter).
 - **Trois vitesses** : **Hors passage** (temps continu, ×1000 d'origine), **Pendant le passage** (×20), **Image ou contact** (×3) ; on passe de l'une à l'autre en douceur. En passages enchaînés, **Pause entre passages** (0,5 à 6 s, 1,6 s d'origine).
-- *l'image SSTV qui arrive* : en grand sur le globe, loin du satellite, dessinée pendant qu'elle est reçue ; *vignettes des images* : les images reçues sous la frise.
-- Un bandeau : l'heure, « Passage 2 / 4 · 5 images reçues », AOS, TCA et LOS, « AOS + 3:06 ».
+- *l'image SSTV qui arrive* : dessinée pendant qu'elle est reçue, à la place choisie à la souris (sinon en haut, loin du satellite) ; *vignettes des images* : les images reçues sous la frise.
+- À côté, le moment comme pour un passage : le jour et l'heure, « Passage 2 / 4 · 5 images reçues », AOS, TCA et LOS, « AOS dans 1:40 », la fréquence, le S-mètre, la fiche du contact.
 - **▶ Animer la session de l'événement** (*Fabriquer › Éléments du rapport* d'un passage qui a un événement SSTV) : la session de son satellite et de ses jours, lancée tout de suite.
 - **Deux zooms** : **Zoom hors passage** (de loin, ×0,9 d'origine) et **Zoom passage** (de près, ×1,8) ; la caméra passe de l'un à l'autre en douceur avant l'AOS et après le LOS (en passages enchaînés : elle s'éloigne pendant la pause et revient). La molette sur le globe règle celui du moment.
 - **Satellites en plus** : tes favoris à cocher tournent aussi autour du globe, plus discrets que celui de la session (une lumière et leur nom, *leurs taches au sol* en option), sur la page et dans les fichiers. Leurs positions viennent des orbites d'aujourd'hui.
 - **La session est un petit éditeur vidéo** : ce qu'on règle sur la page (style du globe, villes, noms, détails, cadrage, vitesses, zooms, satellites en plus, image SSTV, textes) se retrouve dans le fichier. Avec ffmpeg :
-  - **🎬 Vidéo de la session** (MP4) : les mêmes options que la vidéo d'un passage (résolution, format paysage ou portrait, ouverture, récapitulatif, image SSTV, fiche, S-mètre, fréquence, locator, taille des textes) ; une **carte d'ouverture**, les passages sur le globe, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin ; elle suit les trois vitesses et les deux zooms de la session.
+  - **🎬 Vidéo de la session** (MP4) : les mêmes options que la vidéo d'un passage (résolution, format écran 16:9 ou téléphone 9:16, ouverture, récapitulatif, image SSTV, fiche, S-mètre, fréquence, locator, taille des textes) ; une **carte d'ouverture**, les passages sur le globe, une **carte du passage suivant** entre deux, la **mosaïque** des images à la fin ; elle suit les trois vitesses et les deux zooms de la session.
   - **Avec le son de l'enregistrement** : un contact entendu passe **en temps réel** (sur la page aussi) et la vidéo a son son ; le reste est muet.
-  - **GIF animé** (la session en moins d'images, en boucle), **Image de ce moment** (PNG du moment affiché) et **Son (WAV)** (la bande son de la vidéo).
+  - **GIF animé** (la session en moins d'images, en boucle), **Image de ce moment** (PNG du moment affiché) et **Son (WAV)** (les enregistrements des passages bout à bout).
 
 ### Images SSTV et éléments du rapport
 

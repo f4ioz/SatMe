@@ -244,11 +244,11 @@ The log's **Import → SatMe sur le téléphone**:
 
 ## Pass journal
 
-The phone's journal page, under the PC's tabs: passes listed (♪ when there is sound), replayed on the sky or the map with the S-meter, the frequency, the contacts and the pictures in their place. "Make": sound, picture, video, GIF or pass file. **The file's frame is drawn over the replay** (phone 3:4 or screen 16:9): what is inside the frame is what the file shows.
+The phone's journal page, under the PC's tabs: passes listed (♪ when there is sound), replayed on the sky or the map with the S-meter, the frequency, the contacts and the pictures in their place. "Make": sound, picture, video, GIF or pass file. **The file's frame is drawn over the replay** (screen 16:9 or phone 9:16; the phone itself makes its files in 3:4): what is inside the frame is what the file shows.
 
 - **The whole pass** on the map: the predicted track dashed, the part followed solid — even when SatMe-PC was started mid-pass.
 - **Each contact in its place, as in the video**: a dot on the track at the QSO's moment, with the callsign, and the station at its square, linked to it.
-- **The video's SSTV picture, with the mouse**: on the replay, drag it to move it, pull its corner (or use the wheel) to size it (4:3, 15 to 90 % of the width); a dashed frame shows it on hover even when no picture is arriving. Kept by the station and used as is by the picture, the GIF and the video, in 16:9 as in 3:4. **Auto** puts it back in its original place: at the top, in the corner away from the satellite.
+- **The video's SSTV picture, with the mouse**: on the replay, drag it to move it, pull its corner (or use the wheel) to size it (4:3, 15 to 90 % of the width); a dashed frame shows it on hover even when no picture is arriving. Kept by the station and used as is by the picture, the GIF and the video, in 16:9 as in 9:16. **Auto** puts it back in its original place: at the top, in the corner away from the satellite.
 - **The S-meter** read through CAT (IC-9700, IC-9100, IC-910H, TS-2000), receiving only.
 - **Add** a contact during the replay: paused, the time is the sound's; callsign predicted and QRZ, the satellite's mode and frequencies, RST (59 / 59 by default) and a comment; Enter confirms.
 - **+ Passage**: a pass made from nothing — the satellite and its times, contacts, a sound, pictures.
@@ -256,13 +256,13 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 
 ### One pass or several: the same editor
 
-A **session groups passes**: opening a pass from the list is a session of one pass; **🌍 Session** (or **🌍 Plusieurs passages** at the top of a pass: its satellite, the day before to the day after) brings several together. The same tabs (**Options**, **Fabriquer**), the same settings, kept together in this browser:
+Opening a pass from the list is the editor on that pass; **🌍 Session** (or **🌍 Plusieurs passages** at the top of a pass: its satellite, the day before to the day after) opens it on several. **The same editor** either way — the same preview, the same tabs (**Moments**, **Options**, **Fabriquer**, **Ajouter**), the same settings kept in this browser, the same files:
 
-- **Before and after the pass**: **Commencer avant l'AOS** (start before the AOS) and **Finir après le LOS** (end after the LOS), 0 to 30 min, 30 s by default. With a few minutes you **see the satellite coming** on the globe (its position from its orbit), then leaving; the caption says « AOS dans 1:40 ». On the page as in the video, the GIF and the picture.
-- **Speeds**: *Pendant le passage* (in the pass) and *Image ou contact* (plus *Enchaînement*, *Hors passage* and *Pause entre passages* for several); for one pass, a recorded sound always plays in real time, the rest at these speeds (× the playback speed).
-- **Globe**: the two zooms, **outside the pass** (from afar) and **pass** (near) — the camera comes near around the AOS and goes away after the LOS, so that with a long margin the satellite is seen coming from afar —, the **extra satellites**; **Afficher** (SSTV picture, record, S-meter, frequency, locator, thumbnails) and the texts' size.
-- **Fabriquer**: video, GIF, picture of the moment, sound. For one pass **on the globe**, whole and not accelerated, the video, the GIF and the picture are made as a session of one pass: margins, speeds, zoom, extra satellites — with its title, its report cards and its summary.
-- **What only makes sense for one pass** stays with it: the sky and the map, the sound in real time, the moments and the stretch chosen on the timeline, the accelerated playback, the SSTV pictures' versions and their place, the report elements, a stretch's WAV, the pass file. Sky, map, stretch or accelerated video: the pass alone, AOS to LOS. Several passes: on the globe. **Ouvrir seul** (open alone, a session's *Passages* tab) opens a pass with all that.
+- **The preview is the file.** The sky and the map show the passes **one after the other**, the globe all of them; above the shown pass's timeline, a strip with all the passes end to end (click to go there). The moment, the moments, the sound, the SSTV versions and the report's elements are the **shown pass's**; **Ouvrir seul** (open alone) opens one pass on its own.
+- **Before and after the pass**: **Commencer avant l'AOS** (start before the AOS) and **Finir après le LOS** (end after the LOS), 0 to 30 min, 30 s by default. With a few minutes you **see the satellite coming** on the globe (its position from its orbit), then leaving. On the page as in the video, the GIF and the picture.
+- **Speeds**: *Pendant le passage* (in the pass), *Image ou contact*, *Enchaînement* (passes in a row, with a pause, or continuous time at the *Hors passage* speed — with a single pass the page says it only matters with several). With **the sound**, the time runs in real time where a contact is heard, with the recording; to hear a whole pass, *Pendant le passage* ×1. The **accelerated replay** (normal around what was logged or heard, fast and silent elsewhere) replaces these speeds in the passes, on the page as in the files.
+- **Globe**: the two zooms, **outside the pass** (from afar) and **pass** (near) — the camera comes near around the AOS and goes away after the LOS —, the **extra satellites**; **Afficher** (SSTV picture, record, S-meter, frequency, locator, thumbnails) and the texts' size.
+- **Fabriquer**: the **format** — **screen (16:9)** or **phone (9:16)**, a phone's whole screen upright —, its frame drawn over the preview (the sky and the globe inside it, as in the file); the **SSTV picture** and the report's **overlays** are placed there with the mouse or a finger (drag, the corner or the wheel for the size), and the video, the GIF and the picture keep them in the same place, in both formats. Video, GIF, picture of the moment, **sound** (the passes' recordings end to end, a second between two), **pass file** (with several: one per pass, in a ZIP); the whole or **the stretch chosen** on the timeline (in real time, with its sound).
 
 ### The globe view
 
@@ -274,19 +274,19 @@ A **session groups passes**: opening a pass from the list is a session of one pa
 
 ### Session: several passes animated
 
-**🌍 Session** (at the top, beside *+ Passage*): a **satellite** and two **dates** (*seulement les passages avec des images SSTV*, only the passes with SSTV pictures, ticked by default), **▶ Animer la session**: all its passes animated one after another on the globe, with the session's timeline (the passes end to end, the pictures in orange, a click goes there) and the SSTV pictures arriving one by one.
+**🌍 Session** (at the top, beside *+ Passage*): a **satellite** and two **dates** (*seulement les passages avec des images SSTV*, only the passes with SSTV pictures, ticked by default), **▶ Animer la session**: all its passes in the editor, animated one after another (on the globe, or on the sky or the map one after the other), with the session's timeline (the passes end to end, the pictures in orange, a click goes there) and the SSTV pictures arriving one by one.
 
 - **Passages enchaînés** (passes in a row: a short pause between two, the globe turning to the next) or **Temps continu** (continuous time: time runs without stopping).
 - **Three speeds**: **Hors passage** (outside the passes; continuous time, ×1000 by default), **Pendant le passage** (during a pass; ×20), **Image ou contact** (on a picture or a contact; ×3); it goes from one to the next smoothly. With passes in a row, **Pause entre passages** (pause between passes; 0.5 to 6 s, 1.6 s by default).
-- *l'image SSTV qui arrive* (the SSTV picture coming in): large over the globe, away from the satellite, drawn as it is received; *vignettes des images* (thumbnails): the pictures received under the timeline.
-- A caption: the time, « Passage 2 / 4 · 5 images reçues », AOS, TCA and LOS, « AOS + 3:06 ».
+- *l'image SSTV qui arrive* (the SSTV picture coming in): drawn as it is received, where it was placed with the mouse (else at the top, away from the satellite); *vignettes des images* (thumbnails): the pictures received under the timeline.
+- Beside it, the moment as for one pass: the day and time, « Passage 2 / 4 · 5 images reçues », AOS, TCA and LOS, « AOS dans 1:40 », the frequency, the S-meter, the contact's record.
 - **▶ Animer la session de l'événement** (play the event's session; *Fabriquer › Éléments du rapport* of a pass that has an SSTV event): the session of its satellite and days, played at once.
 - **Two zooms**: **Zoom hors passage** (outside the passes, from afar, ×0.9 by default) and **Zoom passage** (in a pass, near, ×1.8); the camera eases from one to the other before the AOS and after the LOS (passes in a row: it goes away during the pause and comes back). The wheel on the globe sets the one of the moment.
 - **Satellites en plus** (more satellites): your favourites, ticked, go round the globe too, quieter than the session's (a light and their name, *leurs taches au sol*, their footprints, as an option), on the page and in the files. Their positions come from today's orbits.
 - **The session is a small video editor**: what is set on the page (globe style, cities, names, details, framing, speeds, zooms, more satellites, SSTV picture, texts) is what the file shows. With ffmpeg:
-  - **🎬 Vidéo de la session** (MP4): the same options as a pass's video (resolution, landscape or portrait, opening, summary, SSTV picture, card, S-meter, frequency, locator, text size); an **opening card**, the passes on the globe, a **card of the next pass** between two, the **mosaic** of the pictures at the end; it follows the session's three speeds and two zooms.
+  - **🎬 Vidéo de la session** (MP4): the same options as a pass's video (resolution, screen 16:9 or phone 9:16 format, opening, summary, SSTV picture, card, S-meter, frequency, locator, text size); an **opening card**, the passes on the globe, a **card of the next pass** between two, the **mosaic** of the pictures at the end; it follows the session's three speeds and two zooms.
   - **Avec le son de l'enregistrement** (with the recording's sound): a contact heard plays **in real time** (on the page too) and the video has its sound; the rest is silent.
-  - **GIF animé** (the session in fewer frames, looping), **Image de ce moment** (PNG of the moment shown) and **Son (WAV)** (the video's sound track).
+  - **GIF animé** (the session in fewer frames, looping), **Image de ce moment** (PNG of the moment shown) and **Son (WAV)** (the passes' recordings end to end).
 
 ### SSTV pictures and report elements
 

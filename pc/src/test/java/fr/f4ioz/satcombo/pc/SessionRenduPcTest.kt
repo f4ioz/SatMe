@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Marque
 import fr.f4ioz.satcombo.domain.JournalPassage.TypeMarque
@@ -254,11 +255,92 @@ class SessionRenduPcTest {
             val f1 = fait(seul)
             assertTrue(f1.name, f1.name.endsWith("_passage.mp4"))
             assertEquals(long, duree(RenduPc.ffmpeg()!!, f1), 0.3)
-            // Without it (the phone's words, the sky, a stretch, the accelerated video): the pass's own video, as before.
+            // Every other way of asking (the phone's words, the sky, a stretch, the accelerated video): the same engine, one pass.
             for (autre in listOf(mapOf("vue" to "globe"), mapOf("vue" to "ciel", "moteur" to "session"), mapOf("vue" to "globe", "moteur" to "session", "accelere" to "1"),
-                mapOf("vue" to "globe", "moteur" to "session", "de" to "${es[0].debutMs + 10_000L}", "a" to "${es[0].debutMs + 40_000L}")))
-                assertTrue(autre.toString(), !lit("/fabrique", mapOf("id" to es[0].id, "quoi" to "image", "t" to "${es[0].debutMs + 60_000L}") + autre).has("passages"))
+                mapOf("vue" to "globe", "moteur" to "session", "de" to "${es[0].debutMs + 10_000L}", "a" to "${es[0].debutMs + 40_000L}"), mapOf("carte" to "1")))
+                assertEquals(autre.toString(), 1, lit("/fabrique", mapOf("id" to es[0].id, "quoi" to "image", "t" to "${es[0].debutMs + 60_000L}") + autre).getInt("passages"))
+            // The editor's words for one pass or several, a stretch: only the passes it reaches.
+            val bout = lit("/fabrique-session", mapOf("ids" to es.joinToString(",") { it.id }, "quoi" to "gif", "margeAvant" to "0", "margeApres" to "0",
+                "de" to "${es[1].debutMs + 10_000L}", "a" to "${es[1].debutMs + 40_000L}", "vue" to "ciel"))
+            assertEquals(1, bout.getInt("passages"))
+            fait(bout)
+            // Several passes' pass files: one each, together in a ZIP.
+            val zip = fait(lit("/fabrique-session", mapOf("ids" to es.joinToString(",") { it.id }, "quoi" to "paquet")))
+            val noms = java.util.zip.ZipFile(zip).use { z -> z.entries().toList().map { it.name } }
+            assertEquals(noms.toString(), 2, noms.size)
+            // A phone's 9:16, on the sky, the SSTV picture where the page put it: the picture upright.
+            val tel = ImageIO.read(fait(lit("/fabrique-session", mapOf("ids" to es[0].id, "quoi" to "image", "t" to "${es[0].debutMs + 60_000L}",
+                "format" to "telephone", "vue" to "ciel"))))
+            assertEquals(1080, tel.width); assertEquals(1920, tel.height)
         } finally { portee.coroutineContext[kotlinx.coroutines.Job]?.cancel(); dossier.deleteRecursively() }
+    }
+
+    @Test
+    fun le_format_telephone_et_les_incrustations_placees() {
+        // 9:16: the phone's whole screen upright, at each resolution; a picture, a GIF.
+        assertEquals(720 to 1280, RenduPc.tailleVideo(false, "M", vertical = true))
+        assertEquals(480 to 854, RenduPc.tailleVideo(true, "XS", vertical = true))
+        assertEquals(1080 to 1920, RenduPc.tailleVideo(false, "HD", vertical = true))
+        // The older two unchanged: 16:9 and the phone app's 3:4.
+        assertEquals(1280 to 720, RenduPc.tailleVideo(true, "M")); assertEquals(720 to 960, RenduPc.tailleVideo(false, "M"))
+        fun scene(paysage: Boolean, vertical: Boolean, cadre: CadreSstv?) = scenes().first().let { sc ->
+            RenduPc.Scene(sc.e, emptyList(), sc.marques, "F4IOZ", sol = sc.sol, qth = sc.qth, paysage = paysage, vertical = vertical, surGlobe = true,
+                resolution = "XS", cadreSstv = cadre, ouverture = false, recap = false)
+        }
+        val v = scene(false, true, null)
+        assertEquals(1080 to 1920, RenduPc.tailleImage(v)); assertEquals(360 to 640, RenduPc.tailleGif(v))
+        assertEquals(1920 to 1080, RenduPc.tailleImage(scene(true, false, null))); assertEquals(1080 to 1440, RenduPc.tailleImage(scene(false, false, null)))
+        // Upright, the view over the caption is taller than wide (not the 3:4's square).
+        val haut = RenduPc.hautVue(1080, 1920, v)
+        assertTrue("$haut", haut in 1300..1800)
+        assertTrue(RenduPc.hautVue(1080, 1440, scene(false, false, null)) <= 1080)
+        for ((w, h) in listOf(1280 to 720, 720 to 1280, 1920 to 1080, 1080 to 1920)) println("vue $w×$h : ${RenduPc.hautVue(w, h, scene(w > h, h > w, null))}")
+        // The SSTV picture placed on the page, in shares of the view: the same place in each format.
+        val m = scenes().first().marques.first()
+        for ((paysage, vertical) in listOf(true to false, false to true, false to false)) {
+            val sc = scene(paysage, vertical, CadreSstv(0.5f, 0.25f, 0.4f))
+            val s = SessionRenduPc.Session(listOf(sc), "passages", avant = 0L, apres = 0L, ouverture = false, recap = false)
+            val f = File(echantillons, "format-$paysage-$vertical.png")
+            SessionRenduPc.png(s, m.finMs, f)
+            val b = ImageIO.read(f)
+            assertEquals(RenduPc.tailleImage(sc), b.width to b.height)
+            val hv = RenduPc.hautVue(b.width, b.height, sc)
+            // Its centre: 70 % across, 25 % + 15 % × width × 3/4 / height down the view.
+            val l = 0.4f * b.width; val x = (0.5f * b.width + l / 2).toInt(); val y = (0.25f * hv + l * 3 / 8).toInt()
+            val c = Color(b.getRGB(x, y)); val n = Color(b.getRGB((0.1f * b.width).toInt(), (0.15f * hv).toInt()))
+            assertTrue("$paysage $vertical $c", maxOf(c.red, c.green, c.blue) - minOf(c.red, c.green, c.blue) > 100)
+            assertTrue("$paysage $vertical outside $n", n != c)
+        }
+    }
+
+    @Test
+    fun un_morceau_en_temps_reel_et_l_accelere() {
+        val sc = scenes()
+        val e = sc[1].e
+        // A stretch: the windows cut to it, in real time with its sound.
+        val m = (e.debutMs + 100_000L)..(e.debutMs + 160_000L)
+        assertTrue(SessionRenduPc.touche(e, 0L, 0L, m)); assertTrue(!SessionRenduPc.touche(sc[0].e, 0L, 0L, m))
+        val s = SessionRenduPc.Session(listOf(sc[1]), "passages", SessionRenduPc.Vitesses(passage = 50.0), son = true, morceau = m, avant = 0L, apres = 0L)
+        assertEquals(m, s.fenetres.single())
+        assertEquals(listOf(m), s.ecoute)
+        val plan = SessionRenduPc.plan(s)
+        assertEquals(60.0, plan.size.toDouble() / SessionRenduPc.FPS, 1.0)
+        // Accelerated: real time on its normal stretches, its own pace on the fast ones, the margins at the pass's pace.
+        val segs = listOf(JournalPassage.Segment(e.debutMs, e.debutMs + 140_000L, 10), JournalPassage.Segment(e.debutMs + 140_000L, e.debutMs + 170_000L, 1),
+            JournalPassage.Segment(e.debutMs + 170_000L, e.finMs, 10))
+        val a = SessionRenduPc.Session(listOf(sc[1]), "passages", SessionRenduPc.Vitesses(passage = 50.0), son = true, accelere = segs, avant = 60_000L, apres = 0L)
+        val al = SessionRenduPc.allure(a)
+        assertEquals(1.0, al.a(e.debutMs + 155_000L), 1e-9)
+        assertEquals(10.0, al.a(e.debutMs + 60_000L), 1e-9)
+        assertEquals(50.0, al.a(e.debutMs - 50_000L), 1e-9)
+        assertEquals(listOf((e.debutMs + 140_000L)..(e.debutMs + 170_000L)), a.ecoute)
+        // The sounds one after the other: a second of silence between, each at the first's rate.
+        val un = fr.f4ioz.satcombo.domain.SourcePcm.de(ShortArray(8000) { 100 })
+        val deux = SessionRenduPc.auTaux(fr.f4ioz.satcombo.domain.SourcePcm.de(ShortArray(16000) { 200 }), 16000, 8000)
+        val tout = SessionRenduPc.suite(SessionRenduPc.suite(un, fr.f4ioz.satcombo.domain.SourcePcm.de(ShortArray(8000))), deux)
+        val l = ArrayList<Short>(); val buf = ShortArray(3000)
+        while (true) { val k = tout.lis(buf); if (k <= 0) break; for (i in 0 until k) l += buf[i] }
+        assertEquals(24000, l.size); assertEquals(100.toShort(), l[0]); assertEquals(0.toShort(), l[12000]); assertEquals(200.toShort(), l[23999])
     }
 
     @Test
