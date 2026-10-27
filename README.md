@@ -15,7 +15,18 @@ Amateur radio satellite tracking for Android and the PC — passes, pointing, Do
 
 SatMe-PC has had a big autumn. The short version, with pictures — every point is detailed in the [built-in guide](docs/station-pc.md) (**F1** in SatMe-PC) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
 
-**Orbites, and its full-screen board.** The Earth in 3D with your satellites on their orbits, their footprints and nearly 250 landmarks. **⛶ Tableau** turns it into a wall display with six looks: *Dessin animé* (the globe turns by itself), *Pédagogique* (cards that explain, "did you know?"), and **Vitrine** for a club stand — big cards that rotate: "AO-91 passes over us in 30 min — come and listen!", a satellite and its story, your club and its QR code.
+**New since 2026.10.32**
+
+- **FT8 / FT4 transmit**, through the IC-9700 SatMe already keys: double-click a line to answer, **📣 Appeler CQ**, the sequence up to 73, terrestrial or through a transponder (RS-44, QO-100) with the Doppler; the rig put in USB-D by itself; **never unattended** (attendance watchdog, Esc). The Journal shows the FT4 / FT8 decodes on the replay and in its videos.
+- **Sked on the globe**: the common window with another station replayed on the Orbites globe, with its looks and cameras, and its MP4 video in **16:9 or 9:16** — up to the *animated globe* filmed as on screen.
+- **Orbites**: the **view from the satellite** (the Earth seen from above, its footprint, your station in it or not), **📺 the ISS live** (NASA's video beside SatMe's own calculation), stronger tracks, and in *Vitrine* the globe beside the cards — no "come and listen" by default.
+- **Agenda**: the **awards** (ARISS SSTV, AMSAT, VUCC, DXCC, WAS…) and where you stand from your gallery and your log, the request prepared — nothing is sent; **Activer l'auto-pilote** in one click on an announced SSTV activity.
+- **DATV**: a **pointing** screen readable from afar (huge MER, trend, tone), the reception history, the signal level, the beacon calibration, **spoken translation** and a **summary** of the station received; when transmitting, the **free slots**, the encoder test, a live clock and a gain ramp.
+- **SDR and station**: a **satellite scale** over the waterfall (Doppler included, one click to follow), a **converter and transverter table** per band, **Calibrer la clé SDR** (ppm) and **Aligner** a transponder step by step; **SSDV pictures completed over several passes**.
+
+Earlier this autumn:
+
+**Orbites, and its full-screen board.** The Earth in 3D with your satellites on their orbits, their footprints and nearly 250 landmarks. **⛶ Tableau** turns it into a wall display with six looks: *Dessin animé* (the globe turns by itself), *Pédagogique* (cards that explain, "did you know?"), and **Vitrine** for a club stand — big cards that rotate: "AO-91 passes over us at 15:29", the globe beside it, a satellite and its story, your club and its QR code.
 
 <p align="center">
 <img src="docs/images/pc-orbites-tableau.webp" width="49%" alt="Orbites full screen, Dessin animé look: the cartoon globe with the station QF4DMO, the ISS and its orbit, panels for the time, the Sun and Moon, the next passes and the ISS position">
@@ -23,7 +34,7 @@ SatMe-PC has had a big autumn. The short version, with pictures — every point 
 </p>
 <p align="center">
 <img src="docs/images/pc-orbites-pedagogique.webp" width="49%" alt="Pédagogique look: the globe with the ISS track, a card explaining why the ground track shifts west each orbit, and a did-you-know card about Doppler at 435 MHz">
-<img src="docs/images/pc-orbites-vitrine-passage.webp" width="49%" alt="Vitrine look: a card announcing that AO-91 passes over the station in 30 minutes, up to 54 degrees, come and listen">
+<img src="docs/images/pc-orbites-vitrine-passage.webp" width="49%" alt="Vitrine look: a card announcing that AO-91 passes over the station in 30 minutes, up to 54 degrees, come and listen (with « Réception sur le stand » ticked)">
 </p>
 
 **Satellite cards with real photos.** Country, launch, mission, orbit, a story, the amateur frequencies and the Wikipedia summary. The photo is a free one from Wikimedia Commons (author and licence shown), fetched once and kept; without the Internet, a SatMe drawing.
@@ -81,7 +92,7 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 
 ## SatMe-PC — the whole station in a browser
 
-SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, antenna polarisation, the log with the station live beside it, skeds, the **QO-100 cockpit** (narrow band received and transmitted), **Orbites** and its full-screen board, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC guide, every function and where to click](https://github.com/f4ioz/SatMe/wiki/SatMe-PC) (wiki, chapter by chapter)
+SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, antenna polarisation, the log with the station live beside it, skeds, the **QO-100 cockpit** (narrow band received and transmitted), **Orbites** and its full-screen board, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (receive and transmit), the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC guide, every function and where to click](https://github.com/f4ioz/SatMe/wiki/SatMe-PC) (wiki, chapter by chapter)
 
 **Install**, guided (it sees what is plugged in): `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC on Linux](docs/installer-satme-pc.md) · [SatMe-PC on Windows](docs/installer-satme-pc-windows.md) (all in one) · [SatMe-Node on a Raspberry Pi 3](docs/installer-satme-node.md) (the MiniTiouner next to the antenna) · [downloads](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -173,7 +184,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🤖 SSTV campaigns on auto-pilot** — an ARISS series or a satellite sending pictures for a few days is entered like an appointment in the **Agenda**, or from the announcement's **flyer** read on the PC; the auto-pilot (off by default) prepares the rig, rotator, sound and decoder before each pass, records, keeps the pictures and puts everything back. Receive only, never transmits.
 
-**📣 Upcoming activities** — in the **Agenda**, what the online sources announce that SatMe decodes: ISS SSTV (437.550 MHz, Robot 36 since 2026) and other satellites, ARISS contacts, SSDV, METEOR seen recently; your passes during them, a banner for each new one, "on the air now" from AMSAT reports, and **Préparer la campagne SSTV** that fills in the auto-pilot, to check. On by default, each source can be turned off.
+**📣 Upcoming activities** — in the **Agenda**, what the online sources announce that SatMe decodes: ISS SSTV (437.550 MHz, Robot 36 since 2026) and other satellites, ARISS contacts, SSDV, METEOR seen recently; your passes during them, a banner for each new one, "on the air now" from AMSAT reports, **Préparer la campagne SSTV** that fills in the auto-pilot, to check, or **Activer l'auto-pilote** in one click (receive only). On by default, each source can be turned off. And the **Diplômes** (awards): those the station can claim, matched with the gallery and the log, the request prepared (nothing is sent).
 
 **🖼 The SSTV gallery by slide** — copies of the same slide together, a **mark** from 0 to 100 per picture, the number read at the bottom of ARISS slides, the **series' timetable** and the passes to wait for missing slides on; in the viewer, **Brute | Corrigée | Fusion**: the picture decoded again from its recording, its specks removed, its copies fused — the reception never changed.
 
@@ -199,15 +210,15 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 <img src="docs/images/pc-sdr.png" width="49%" alt="SDR tab with the test generator: spectrum, magnifier and waterfall with made-up CW, SSB, FM, FT8 and SSTV signals">
 </p>
 
-**📻 SDR receiver** — memories in folders with flags on the spectrum, band plans, band stack, receive-only **scanning** (memories, ranges, priority channel), display options (averaging, peak hold, seven palettes), **sound cleaning** (noise blanker, automatic and manual notch, noise reduction, AGC), **CTCSS** reading and tone squelch, **I/Q** « back in time », SigMF recording and replay, a **test generator** with no hardware, **measurements** (level over time, Sun noise, the QO-100 beacon over 24 h). Receivers: RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — and the **IC-9700's IF** demodulated by SatMe.
+**📻 SDR receiver** — memories in folders with flags on the spectrum, band plans, band stack, receive-only **scanning** (memories, ranges, priority channel), display options (averaging, peak hold, seven palettes), **sound cleaning** (noise blanker, automatic and manual notch, noise reduction, AGC), **CTCSS** reading and tone squelch, **I/Q** « back in time », SigMF recording and replay, a **test generator** with no hardware, **measurements** (level over time, Sun noise, the QO-100 beacon over 24 h). A **satellite scale** over the waterfall, a **converter and transverter table**, the **dongle's calibration** in ppm. Receivers: RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — and the **IC-9700's IF** demodulated by SatMe.
 
 **📡 IC-9700 over the network** — CAT and receive audio through the rig's LAN (Network Control ON), no USB cable; receive only, every transmit command refused; AF or IF output; the coded credentials learnt from a capture of your own login.
 
 **📡 QO-100 cockpit** — the waterfall **names each signal**, a click tunes it and opens the right decoder; **up to four decoders at once** (FT8, FT4, CW, SSTV, voice, PSK31, RTTY, beacon); the band plan and an **emergency frequency** guard, beacon calibration and beacon lock, **LEILA** flagged; the **middle beacon's BPSK telemetry** decoded.
 
-**📺 DATV** — MiniTiouner, SatMe-Node or SatMe's own **DVB-S2 demodulator** (Pluto, bladeRF); quality in plain words, the wide band at a glance, subtitles, callsigns read in the picture; **transmission in DVB-S2 or DVB-S** with every safety rule in the code, indoor and dummy-load tests, per-board **I/Q correction**.
+**📺 DATV** — MiniTiouner, SatMe-Node or SatMe's own **DVB-S2 demodulator** (Pluto, bladeRF); quality in plain words, the wide band at a glance, a **pointing** screen, the history, subtitles and **spoken translation**, callsigns read in the picture, the summary of the station received; **transmission in DVB-S2 or DVB-S** (free slots, encoder test, ramp) with every safety rule in the code, indoor and dummy-load tests, per-board **I/Q correction**.
 
-**🛰 Telemetry** — 1200–9600 bit/s FSK / GMSK packets (G3RUH, AX.25), **SSDV pictures** rebuilt, **FUNcube** real-time values; optional sharing with SatNOGS DB (off by default).
+**🛰 Telemetry** — 1200–9600 bit/s FSK / GMSK packets (G3RUH, AX.25), **SSDV pictures** rebuilt, over several passes when needed, **FUNcube** real-time values; optional sharing with SatNOGS DB (off by default).
 
 <p align="center">
 <img src="docs/images/pc-telemesure-paquets.png" width="49%" alt="Telemetry: 9600 bit/s AX.25 frames from a test and the SSDV picture rebuilt">
@@ -220,7 +231,9 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
-**🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. Receive only from afar.
+**🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. From afar, only the IC-9700's transmitting goes through (PTT and microphone over HTTPS), after a confirmation.
+
+**📶 FT8 / FT4** — the waterfall that writes each callsign at its frequency, the radar, "who to call now", a decoder that follows the Doppler; **transmitting through the IC-9700**, answer with a double-click or call CQ, automatic sequence, never unattended.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar, who to call now">

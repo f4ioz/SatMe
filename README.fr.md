@@ -15,6 +15,17 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 
 SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point est détaillé dans le [guide intégré](docs/station-pc.fr.md) (**F1** dans SatMe-PC) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
 
+**Nouveau depuis la 2026.10.32**
+
+- **FT8 / FT4 en émission**, par l'IC-9700 que SatMe tient déjà : double-clic sur une ligne pour répondre, **📣 Appeler CQ**, la séquence jusqu'au 73, en terrestre ou par un transpondeur (RS-44, QO-100) avec le Doppler ; le poste mis en USB-D tout seul ; **jamais sans opérateur** (chien de garde de présence, Échap). Le Journal montre les décodages FT4 / FT8 sur le rejeu et dans ses vidéos.
+- **Sked sur le globe** : la fenêtre commune avec une autre station rejouée sur le globe d'Orbites, avec ses rendus et ses caméras, et sa vidéo MP4 en **16:9 ou 9:16** — jusqu'au *Globe animé* filmé tel qu'à l'écran.
+- **Orbites** : la **Vue du satellite** (la Terre vue d'en haut, son empreinte, ta station dedans ou non), **📺 l'ISS en direct** (la vidéo NASA à côté du calcul de SatMe), des traces plus marquées, et en *Vitrine* le globe à côté des cartes — sans « venez écouter » d'office.
+- **Agenda** : les **Diplômes** (ARISS SSTV, AMSAT, VUCC, DXCC, WAS…) et où tu en es d'après ta galerie et ton carnet, la demande préparée — rien n'est envoyé ; **Activer l'auto-pilote** en un clic sur une activité SSTV annoncée.
+- **DATV** : un écran de **pointage** lisible de loin (MER en très gros, tendance, son), l'historique de réception, le niveau du signal, le calage sur la balise, la **traduction parlée** et un **résumé** de la station reçue ; en émission, les **créneaux libres**, le test de l'encodeur, une horloge en direct et une rampe de gain.
+- **SDR et station** : une **échelle des satellites** sur la cascade (Doppler compris, un clic pour suivre), une **table des convertisseurs et transverters** par bande, **Calibrer la clé SDR** (ppm) et **Aligner** un transpondeur pas à pas ; des **images SSDV complétées sur plusieurs passages**.
+
+Plus tôt cet automne :
+
 **Orbites, et son tableau plein écran.** La Terre en 3D avec tes satellites sur leur orbite, leurs empreintes et près de 250 monuments. **⛶ Tableau** en fait un écran mural, avec six thèmes : *Dessin animé* (le globe tourne seul), *Pédagogique* (des fiches qui expliquent, « Le savais-tu ? »), et **Vitrine** pour le stand d'un club — de grandes cartes qui défilent : « AO-91 passe au-dessus de nous à 15:29 », le globe à côté, un satellite et son histoire, ton club et son QR code.
 
 <p align="center">
@@ -23,7 +34,7 @@ SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point 
 </p>
 <p align="center">
 <img src="docs/images/pc-orbites-pedagogique.webp" width="49%" alt="Thème Pédagogique : le globe avec la trace de l'ISS, une fiche qui explique pourquoi la trace se décale vers l'ouest à chaque tour, et un « Le savais-tu ? » sur le Doppler à 435 MHz">
-<img src="docs/images/pc-orbites-vitrine-passage.webp" width="49%" alt="Thème Vitrine : une carte annonce qu'AO-91 passe au-dessus de la station dans 30 minutes, jusqu'à 54 degrés, venez écouter">
+<img src="docs/images/pc-orbites-vitrine-passage.webp" width="49%" alt="Thème Vitrine : une carte annonce qu'AO-91 passe au-dessus de la station dans 30 minutes, jusqu'à 54 degrés, venez écouter (avec « Réception sur le stand » coché)">
 </p>
 
 **Des fiches de satellites avec de vraies photos.** Pays, lancement, mission, orbite, une anecdote, les fréquences radioamateur et le résumé Wikipédia. La photo est une photo libre de Wikimedia Commons (auteur et licence affichés), demandée une fois puis gardée ; sans Internet, un dessin de SatMe.
@@ -81,7 +92,7 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 
 ## SatMe-PC — toute la station dans un navigateur
 
-SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, polarisation d'antenne, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100** (bande étroite en réception et en émission), **Orbites** et son tableau plein écran, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, chapitre par chapitre)
+SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, polarisation d'antenne, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100** (bande étroite en réception et en émission), **Orbites** et son tableau plein écran, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (réception et émission), le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, chapitre par chapitre)
 
 **Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-PC sous Windows](docs/installer-satme-pc-windows.fr.md) (tout en un) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -173,7 +184,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🤖 Campagnes SSTV en auto-pilote** — une série ARISS ou un satellite qui envoie des images quelques jours s'entre comme un rendez-vous dans l'**Agenda**, ou depuis l'**affiche** de l'annonce lue sur le PC ; l'auto-pilote (coupé d'origine) prépare le poste, le rotor, le son et le décodeur avant chaque passage, enregistre, garde les images et remet tout comme avant. Réception seulement, jamais d'émission.
 
-**📣 Activités à venir** — dans l'**Agenda**, ce que les sources en ligne annoncent et que SatMe décode : la SSTV de l'ISS (437,550 MHz, Robot 36 depuis 2026) et d'autres satellites, les contacts ARISS, le SSDV, METEOR vu récemment ; tes passages pendant, un bandeau pour chaque nouveauté, « ça émet maintenant » d'après les écoutes AMSAT, et **Préparer la campagne SSTV** qui remplit l'auto-pilote, à vérifier. Actif d'origine, chaque source se coupe.
+**📣 Activités à venir** — dans l'**Agenda**, ce que les sources en ligne annoncent et que SatMe décode : la SSTV de l'ISS (437,550 MHz, Robot 36 depuis 2026) et d'autres satellites, les contacts ARISS, le SSDV, METEOR vu récemment ; tes passages pendant, un bandeau pour chaque nouveauté, « ça émet maintenant » d'après les écoutes AMSAT, **Préparer la campagne SSTV** qui remplit l'auto-pilote, à vérifier, ou **Activer l'auto-pilote** en un clic (réception seulement). Actif d'origine, chaque source se coupe. Et les **Diplômes** : ceux que la station peut demander, comparés à la galerie et au carnet, la demande préparée (rien n'est envoyé).
 
 **🖼 La galerie SSTV par diapo** — les copies d'une même diapo ensemble, une **note** de 0 à 100 par image, le numéro lu au bas des diapos ARISS, l'**horaire de la série** et les passages où attendre les diapos manquantes ; dans la visionneuse, **Brute | Corrigée | Fusion** : l'image re-décodée depuis son enregistrement, ses taches retirées, ses copies fusionnées — la réception jamais modifiée.
 
@@ -199,15 +210,15 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 <img src="docs/images/pc-sdr.png" width="49%" alt="Onglet SDR avec le générateur d'essai : spectre, loupe et cascade avec une CW, une BLU, une FM, un FT8 et une SSTV fabriqués">
 </p>
 
-**📻 Récepteur SDR** — mémoires en dossiers avec drapeaux sur le spectre, plans de bandes, pile de bandes, **balayage** en réception seulement (mémoires, plages, canal prioritaire), affichage réglable (moyenne, crêtes, sept palettes), **nettoyage du son** (antiparasite, notch automatique et manuel, réduction de bruit, CAG), lecture du **CTCSS** et silencieux sur sous-ton, **I/Q** « remonter le temps », enregistrement SigMF et relecture, un **générateur d'essai** sans matériel, des **mesures** (niveau dans le temps, bruit solaire, la balise QO-100 sur 24 h). Récepteurs : RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — et la **FI de l'IC-9700** démodulée par SatMe.
+**📻 Récepteur SDR** — mémoires en dossiers avec drapeaux sur le spectre, plans de bandes, pile de bandes, **balayage** en réception seulement (mémoires, plages, canal prioritaire), affichage réglable (moyenne, crêtes, sept palettes), **nettoyage du son** (antiparasite, notch automatique et manuel, réduction de bruit, CAG), lecture du **CTCSS** et silencieux sur sous-ton, **I/Q** « remonter le temps », enregistrement SigMF et relecture, un **générateur d'essai** sans matériel, des **mesures** (niveau dans le temps, bruit solaire, la balise QO-100 sur 24 h). Une **échelle des satellites** sur la cascade, une **table des convertisseurs et transverters**, la **calibration de la clé** en ppm. Récepteurs : RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — et la **FI de l'IC-9700** démodulée par SatMe.
 
 **📡 L'IC-9700 par le réseau** — CAT et son reçu par le LAN du poste (Network Control sur ON), sans câble USB ; réception seulement, toute commande d'émission refusée ; sortie AF ou FI ; les identifiants codés appris d'une capture de sa propre connexion.
 
 **📡 Cockpit QO-100** — la cascade **nomme chaque signal**, un clic s'y accorde et ouvre le bon décodeur ; **jusqu'à quatre décodeurs à la fois** (FT8, FT4, CW, SSTV, phonie, PSK31, RTTY, balise) ; le plan de bande et une garde sur la **fréquence d'urgence**, le calage et le verrouillage sur la balise, **LEILA** signalée ; la **télémesure BPSK de la balise médiane** décodée.
 
-**📺 DATV** — MiniTiouner, SatMe-Node ou le **démodulateur DVB-S2** de SatMe (Pluto, bladeRF) ; la qualité en clair, la bande large d'un coup d'œil, sous-titres, indicatifs lus dans l'image ; **émission en DVB-S2 ou DVB-S** avec toutes les règles de sécurité dans le code, essais en intérieur et sur charge, **correction I/Q** par carte.
+**📺 DATV** — MiniTiouner, SatMe-Node ou le **démodulateur DVB-S2** de SatMe (Pluto, bladeRF) ; la qualité en clair, la bande large d'un coup d'œil, un écran de **pointage**, l'historique, sous-titres et **traduction parlée**, indicatifs lus dans l'image, le résumé de la station reçue ; **émission en DVB-S2 ou DVB-S** (créneaux libres, test de l'encodeur, rampe) avec toutes les règles de sécurité dans le code, essais en intérieur et sur charge, **correction I/Q** par carte.
 
-**🛰 Télémesure** — paquets FSK / GMSK de 1200 à 9600 bit/s (G3RUH, AX.25), **images SSDV** reconstituées, valeurs temps réel de **FUNcube** ; partage SatNOGS DB au choix (coupé d'origine).
+**🛰 Télémesure** — paquets FSK / GMSK de 1200 à 9600 bit/s (G3RUH, AX.25), **images SSDV** reconstituées, sur plusieurs passages s'il le faut, valeurs temps réel de **FUNcube** ; partage SatNOGS DB au choix (coupé d'origine).
 
 <p align="center">
 <img src="docs/images/pc-telemesure-paquets.png" width="49%" alt="Télémesure : des trames AX.25 à 9600 bit/s d'un essai et l'image SSDV reconstituée">
@@ -220,7 +231,9 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
-**🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. Réception seulement de loin.
+**🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. De loin, seule l'émission de l'IC-9700 passe (PTT et micro en HTTPS), après une confirmation.
+
+**📶 FT8 / FT4** — la cascade qui écrit chaque indicatif à sa fréquence, le radar, « qui appeler maintenant », un décodeur qui suit le Doppler ; **l'émission par l'IC-9700**, réponse d'un double-clic ou appel CQ, séquence automatique, jamais sans opérateur.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar, qui appeler maintenant">
