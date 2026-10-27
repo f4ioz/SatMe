@@ -75,7 +75,9 @@ object GlobeRenduPc {
      * ([gdx], [gdy] shares of the view's width and height from its middle) and how large ([gz], 1: 85 % of its height).
      */
     data class Options(val villes: String = "toutes", val etiquettes: String = "nom", val detail: Int = 1,
-                       val gdx: Float = 0f, val gdy: Float = 0f, val gz: Float = 1f)
+                       val gdx: Float = 0f, val gdy: Float = 0f, val gz: Float = 1f,
+                       /** The landmarks (« aucun », « principaux », « tous »: the drawn ones, the main ones here) and their size (0.5 to 3). */
+                       val monuments: String = "principaux", val tailleMonuments: Float = 1f)
 
     /** The globe's choices from a request; a missing or wrong one keeps its default. */
     fun options(p: (String) -> String): Options {
@@ -84,7 +86,9 @@ object GlobeRenduPc {
             villes = p("villes").trim().takeIf { it in setOf("toutes", "capitales", "aucune") } ?: "toutes",
             etiquettes = p("etiquettes").trim().takeIf { it in setOf("nom", "drapeau", "nomdrapeau") } ?: "nom",
             detail = p("detail").trim().toIntOrNull()?.coerceIn(0, 2) ?: 1,
-            gdx = nombre("gdx", -0.5f, 0.5f, 0f), gdy = nombre("gdy", -0.5f, 0.5f, 0f), gz = nombre("gz", 0.5f, 3f, 1f))
+            gdx = nombre("gdx", -0.5f, 0.5f, 0f), gdy = nombre("gdy", -0.5f, 0.5f, 0f), gz = nombre("gz", 0.5f, 3f, 1f),
+            monuments = p("monuments").trim().takeIf { it in setOf("aucun", "principaux", "tous") } ?: "principaux",
+            tailleMonuments = nombre("montaille", 0.5f, 3f, 1f))
     }
 
     /** Another satellite going round with the pass's (a session's companion): its name, its colour, where it is at a time. */
@@ -331,11 +335,16 @@ object GlobeRenduPc {
     fun centre(sc: RenduPc.Scene, t: Long): DoubleArray {
         val qth = sc.qth?.let { vec(it.first, it.second) }
         if (sc.sol.isEmpty()) return qth ?: vec(30.0, 0.0)
+        return lisseCentre(sc.sol, t, qth)
+    }
+
+    /** Half way from [ancre] (unit; none: the satellite alone) to the point under the satellite, smoothed over a few minutes around [t]. */
+    private fun lisseCentre(sol: List<JournalPassage.Sol>, t: Long, ancre: DoubleArray?): DoubleArray {
         var x = 0.0; var y = 0.0; var z = 0.0
         for (k in -8..8) {
             val w = exp(-(k / 4.0).pow(2))
-            val s = sousSatellite(sc.sol, t + k * 15_000L)!!.first
-            val m = if (qth == null) s else norme(doubleArrayOf(qth[0] + s[0], qth[1] + s[1], qth[2] + s[2]))
+            val s = sousSatellite(sol, t + k * 15_000L)!!.first
+            val m = if (ancre == null) s else norme(doubleArrayOf(ancre[0] + s[0], ancre[1] + s[1], ancre[2] + s[2]))
             x += w * m[0]; y += w * m[1]; z += w * m[2]
         }
         return norme(doubleArrayOf(x, y, z))
@@ -411,11 +420,17 @@ object GlobeRenduPc {
         val o = sc.optionsGlobe
         val cam = camera(sc, t, w, h)
         val soleil = soleil(t)
+        terreVue(g, w, h, cam, style, soleil, dp, o)
+        return dessus(g, w, cam, sc, t, style, lk, soleil, dp)
+    }
+
+    /** Space and the Earth lit by [soleil], as [cam] sees it in a view [w]×[h]: what lies under the drawings. */
+    private fun terreVue(g: Graphics2D, w: Float, h: Float, cam: Camera, style: String, soleil: DoubleArray, dp: Float, o: Options, traitMax: Float = Float.MAX_VALUE) {
+        val lk = LOOKS.getValue(style)
         fond(g, w, h, lk, style, dp)
         lueurExterieure(g, cam, lk, style)
-        terre(g, cam, lk, style, soleil, dp, w, h, o.detail)
+        terre(g, cam, lk, style, soleil, dp, w, h, o.detail, o, traitMax)
         if (style == "cartoon") { g.color = Color(0x0a1230); g.stroke = BasicStroke(max(2f, cam.r * 0.018f)); g.draw(Ellipse2D.Float(cam.ox - cam.r, cam.oy - cam.r, 2 * cam.r, 2 * cam.r)) }
-        return dessus(g, w, cam, sc, t, style, lk, soleil, dp)
     }
 
     /** The view of the frame at [t] in a view [w]×[h]: where it looks, the globe moved and scaled as the page asks. */
@@ -461,7 +476,7 @@ object GlobeRenduPc {
      * shallows, the grid) and over it (the coast, mountains, landmarks,
      * cities), then each pixel coloured by its latitude and lit.
      */
-    private fun terre(g: Graphics2D, cam: Camera, lk: Look, style: String, soleil: DoubleArray, dp: Float, vw: Float, vh: Float, detail: Int) {
+    private fun terre(g: Graphics2D, cam: Camera, lk: Look, style: String, soleil: DoubleArray, dp: Float, vw: Float, vh: Float, detail: Int, o: Options = Options(), traitMax: Float = Float.MAX_VALUE) {
         // Only what of the disc is in the view (a large globe goes beyond it).
         val x0 = max(0, floor(cam.ox - cam.r - 2).toInt()); val y0 = max(0, floor(cam.oy - cam.r - 2).toInt())
         val dw = (min(ceil(vw.toDouble()).toInt(), ceil(cam.ox + cam.r + 2.0).toInt()) - x0).coerceAtLeast(1)
@@ -469,22 +484,26 @@ object GlobeRenduPc {
         val r = cam.r.toDouble()
         val remplir = Path2D.Float(Path2D.WIND_NON_ZERO); val cote = Path2D.Float()
         for (a in terres.anneaux) decoupe(a, cam, remplir, cote)
-        val unDeg = (r * D2R).toFloat()
+        // A degree on the globe (px): the coast's and the grid's strokes, no wider than [traitMax] (a close view's wide strokes cost seconds a frame).
+        val unDeg = min((r * D2R).toFloat(), traitMax)
 
         val masque = BufferedImage(dw, dh, BufferedImage.TYPE_BYTE_GRAY)
         if (lk.terre != null) masque.createGraphics().apply { lisse(); translate(-x0.toDouble(), -y0.toDouble()); color = Color.WHITE; fill(remplir); dispose() }
         val dessous = BufferedImage(dw, dh, BufferedImage.TYPE_INT_ARGB)
         dessous.createGraphics().apply {
             lisse(); translate(-x0.toDouble(), -y0.toDouble())
-            val rond = BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            // A video's many frames ([traitMax] given): bevelled joins, as good to the eye at these widths and much quicker on a dense coast.
+            val rond = if (traitMax < Float.MAX_VALUE) BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL) else BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             fun trait(c: Color, l: Float, s: Shape) { color = c; stroke = BasicStroke(l, rond.endCap, rond.lineJoin); draw(s) }
             when (style) {
                 "cartoon" -> { trait(Color(170, 240, 255, 130), unDeg * 2.8f, cote); trait(Color(210, 250, 255, 200), unDeg * 1.2f, cote) }
                 "realiste" -> trait(Color(80, 170, 200, 90), max(1f, unDeg * 0.5f), cote)
                 "vintage" -> {
                     grille(this, cam, 15, Color(110, 70, 30, 90), max(1f, unDeg * 0.25f), floatArrayOf(unDeg * 1.8f, unDeg * 0.9f))
-                    for (i in 6 downTo 1) {
-                        trait(Color(110, 80, 40, (255 * (.05 + .03 * (6 - i))).toInt()), i * unDeg * 0.86f, cote)
+                    // The ripples along the coast: one in two for a video (they are its frames' slowest part), a little darker.
+                    val video = traitMax < Float.MAX_VALUE
+                    for (i in 6 downTo 1 step if (video) 2 else 1) {
+                        trait(Color(110, 80, 40, (255 * (.05 + .03 * (6 - i)) * if (video) 1.6 else 1.0).toInt().coerceAtMost(255)), i * unDeg * 0.86f, cote)
                         trait(couleur(0xdcc79a), max(0.5f, i * unDeg * 0.86f - unDeg * 0.4f), cote)
                     }
                 }
@@ -506,7 +525,7 @@ object GlobeRenduPc {
                 color = couleur(0x8fb0ff); val s = max(1.3f, cam.r * 0.0085f)
                 for (p in points) if (cam.profondeur(p) > 0.02) fill(Ellipse2D.Float(cam.x(p) - s / 2, cam.y(p) - s / 2, s, s))
             }
-            if (detail > 0) monde(this, cam, style, dp, detail)
+            if (detail > 0) monde(this, cam, style, dp, detail, o)
             dispose()
         }
 
@@ -834,7 +853,7 @@ object GlobeRenduPc {
     }
 
     /** The world drawn on the surface, back to front: mountains, scenery, landmarks, cities' dots (the cartoon's all of it, the others' lighter). */
-    private fun monde(g: Graphics2D, cam: Camera, style: String, dp: Float, detail: Int) {
+    private fun monde(g: Graphics2D, cam: Camera, style: String, dp: Float, detail: Int, o: Options = Options()) {
         val cartoon = style == "cartoon"
         val k = cam.r * (if (cartoon) 1f else 0.75f)
         val dessins = ArrayList<Pair<Float, () -> Unit>>()
@@ -849,7 +868,7 @@ object GlobeRenduPc {
         }
         if (style != "holo" && style != "radar" && style != "points") for (d in GlobeDonnees.DECOR.filter { detail >= 2 || it.type == "bateau" })
             ajoute(d.lat, d.lon, k * if (d.type == "foret") 0.06f else 0.048f) { decor(it, d.type) }
-        for (m in GlobeDonnees.MONUMENTS) { val mo = m.modele?.takeIf { m.rang == 1 } ?: continue; ajoute(m.lat, m.lon, k * 0.095f) { monument(it, mo) } }
+        if (o.monuments != "aucun") for (m in GlobeDonnees.MONUMENTS) { val mo = m.modele?.takeIf { m.rang == 1 } ?: continue; ajoute(m.lat, m.lon, k * 0.095f * o.tailleMonuments) { monument(it, mo) } }
         dessins.sortBy { it.first }
         dessins.forEach { it.second() }
     }
@@ -939,14 +958,7 @@ object GlobeRenduPc {
 
         // The ground track: gone solid, to come dashed.
         if (sc.sol.size >= 2) {
-            fun pts(de: Long, a: Long): List<DoubleArray> {
-                if (a <= de) return emptyList()
-                val l = ArrayList<DoubleArray>()
-                var x = de
-                while (x < a) { sousSatellite(sc.sol, x)?.let { l += it.first }; x += 4_000L }
-                sousSatellite(sc.sol, a)?.let { l += it.first }
-                return l
-            }
+            fun pts(de: Long, a: Long) = pointsSol(sc.sol, de, a)
             val de = sc.sol.first().tMs; val a = sc.sol.last().tMs
             val tc = t.coerceIn(de, a)
             val ombre = BasicStroke(6f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
@@ -999,40 +1011,55 @@ object GlobeRenduPc {
         // The station.
         if (qth != null && cam.profondeur(qth) > 0.02) {
             val x = cam.x(qth); val y = cam.y(qth)
-            g.color = Color(STATION.red, STATION.green, STATION.blue, 90); g.fill(rond(x, y, 10f * dp))
-            val pin = Path2D.Float().apply { moveTo(x, y); curveTo(x - 9 * dp, y - 12 * dp, x - 7 * dp, y - 22 * dp, x, y - 22 * dp); curveTo(x + 7 * dp, y - 22 * dp, x + 9 * dp, y - 12 * dp, x, y); closePath() }
-            g.color = STATION; g.fill(pin); g.color = Color(0x0a1230); g.stroke = BasicStroke(1.4f * dp); g.draw(pin)
-            g.color = Color.WHITE; g.fill(rond(x, y - 15 * dp, 3f * dp))
+            epingle(g, x, y, STATION, dp)
             sc.etiquetteQth?.takeIf { it.isNotBlank() }?.let { boites += etiquette(g, it, x - 10 * dp, y - 14 * dp, STATION, style, dp, aDroite = true) }
         }
 
         // The satellite at its height, over the point under it.
-        var satX = 0.5f
-        if (sous != null && satP != null) {
-            val s = sous.first
-            val x = cam.x(satP); val y = cam.y(satP)
-            satX = x / w
-            if (cam.profondeur(s) > 0) {
-                val sx = cam.x(s); val sy = cam.y(s)
-                g.color = Color(coulSat.red, coulSat.green, coulSat.blue, 170); g.stroke = BasicStroke(1.2f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, floatArrayOf(2 * dp, 3 * dp), 0f)
-                g.draw(Line2D.Float(sx, sy, x, y))
-                g.color = Color(0, 0, 0, 120); g.fill(rond(sx, sy, 3.5f * dp)); g.color = coulSat; g.fill(rond(sx, sy, 2.2f * dp))
-            }
-            if (satVu) {
-                val r1 = 16f * dp
-                g.paint = RadialGradientPaint(x, y, r1, floatArrayOf(0f, 0.3f, 1f), arrayOf(Color(255, 255, 255, 230), Color(coulSat.red, coulSat.green, coulSat.blue, 170), Color(coulSat.red, coulSat.green, coulSat.blue, 0)))
-                g.fill(rond(x, y, r1))
-                // The craft: its body and two panels.
-                val k = dp
-                g.color = Color(0x1d3f8f); g.fill(Rectangle2D.Float(x - 13 * k, y - 3 * k, 8 * k, 6 * k)); g.fill(Rectangle2D.Float(x + 5 * k, y - 3 * k, 8 * k, 6 * k))
-                g.color = Color(0x6f9cff); g.stroke = BasicStroke(0.8f * k)
-                g.draw(Rectangle2D.Float(x - 13 * k, y - 3 * k, 8 * k, 6 * k)); g.draw(Rectangle2D.Float(x + 5 * k, y - 3 * k, 8 * k, 6 * k))
-                g.color = coulSat; g.fill(Rectangle2D.Float(x - 4.5f * k, y - 4.5f * k, 9 * k, 9 * k))
-                g.color = Color(0x0a1230); g.stroke = BasicStroke(1f * k); g.draw(Rectangle2D.Float(x - 4.5f * k, y - 4.5f * k, 9 * k, 9 * k))
-                etiquette(g, sc.e.satName, x + 16 * dp, y - 14 * dp, coulSat, style, dp)
-            }
+        if (sous != null && satP != null) satellite(g, cam, sous.first, satP, satVu, sc.e.satName, coulSat, style, dp)
+        return if (sous != null && satP != null) cam.x(satP) / w else 0.5f
+    }
+
+    /** The satellite at [satP] (Earth radii) over [s], its dotted drop to the ground, its craft and name when seen. */
+    private fun satellite(g: Graphics2D, cam: Camera, s: DoubleArray, satP: DoubleArray, satVu: Boolean, nom: String, coulSat: Color, style: String, dp: Float) {
+        val x = cam.x(satP); val y = cam.y(satP)
+        if (cam.profondeur(s) > 0) {
+            val sx = cam.x(s); val sy = cam.y(s)
+            g.color = Color(coulSat.red, coulSat.green, coulSat.blue, 170); g.stroke = BasicStroke(1.2f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, floatArrayOf(2 * dp, 3 * dp), 0f)
+            g.draw(Line2D.Float(sx, sy, x, y))
+            g.color = Color(0, 0, 0, 120); g.fill(rond(sx, sy, 3.5f * dp)); g.color = coulSat; g.fill(rond(sx, sy, 2.2f * dp))
         }
-        return satX
+        if (satVu) {
+            val r1 = 16f * dp
+            g.paint = RadialGradientPaint(x, y, r1, floatArrayOf(0f, 0.3f, 1f), arrayOf(Color(255, 255, 255, 230), Color(coulSat.red, coulSat.green, coulSat.blue, 170), Color(coulSat.red, coulSat.green, coulSat.blue, 0)))
+            g.fill(rond(x, y, r1))
+            // The craft: its body and two panels.
+            val k = dp
+            g.color = Color(0x1d3f8f); g.fill(Rectangle2D.Float(x - 13 * k, y - 3 * k, 8 * k, 6 * k)); g.fill(Rectangle2D.Float(x + 5 * k, y - 3 * k, 8 * k, 6 * k))
+            g.color = Color(0x6f9cff); g.stroke = BasicStroke(0.8f * k)
+            g.draw(Rectangle2D.Float(x - 13 * k, y - 3 * k, 8 * k, 6 * k)); g.draw(Rectangle2D.Float(x + 5 * k, y - 3 * k, 8 * k, 6 * k))
+            g.color = coulSat; g.fill(Rectangle2D.Float(x - 4.5f * k, y - 4.5f * k, 9 * k, 9 * k))
+            g.color = Color(0x0a1230); g.stroke = BasicStroke(1f * k); g.draw(Rectangle2D.Float(x - 4.5f * k, y - 4.5f * k, 9 * k, 9 * k))
+            etiquette(g, nom, x + 16 * dp, y - 14 * dp, coulSat, style, dp)
+        }
+    }
+
+    /** The track under the satellite from [de] to [a], a point every 4 s (unit vectors). */
+    private fun pointsSol(sol: List<JournalPassage.Sol>, de: Long, a: Long): List<DoubleArray> {
+        if (a <= de) return emptyList()
+        val l = ArrayList<DoubleArray>()
+        var x = de
+        while (x < a) { sousSatellite(sol, x)?.let { l += it.first }; x += 4_000L }
+        sousSatellite(sol, a)?.let { l += it.first }
+        return l
+    }
+
+    /** A station's pin at ([x], [y]) in its colour [c]. */
+    private fun epingle(g: Graphics2D, x: Float, y: Float, c: Color, dp: Float) {
+        g.color = Color(c.red, c.green, c.blue, 90); g.fill(rond(x, y, 10f * dp))
+        val pin = Path2D.Float().apply { moveTo(x, y); curveTo(x - 9 * dp, y - 12 * dp, x - 7 * dp, y - 22 * dp, x, y - 22 * dp); curveTo(x + 7 * dp, y - 22 * dp, x + 9 * dp, y - 12 * dp, x, y); closePath() }
+        g.color = c; g.fill(pin); g.color = Color(0x0a1230); g.stroke = BasicStroke(1.4f * dp); g.draw(pin)
+        g.color = Color.WHITE; g.fill(rond(x, y - 15 * dp, 3f * dp))
     }
 
     /** A footprint: the circle seen from [alt] km over [s], filled with [c] at [fond], its edge at [trait]. */
@@ -1151,5 +1178,145 @@ object GlobeRenduPc {
         "vintage" -> texteCerne(g, s, x, y, Color(74, 46, 20, alpha), Color(239, 224, 184, alpha * 2 / 3), f, 2.4f * dp)
         "realiste" -> texteCerne(g, s, x, y, Color(240, 244, 250, alpha), Color(0, 0, 0, alpha / 2), f, 2.4f * dp)
         else -> texteCerne(g, s, x, y, teinte(style, 0xffffff, alpha), Color(0, 0, 0, alpha / 2), f, 2.4f * dp)
+    }
+
+    // ---------------------------------------------------------------- a sked ([VideoSked])
+
+    /** The cameras of the page's « Réglages du globe » a sked's video follows: both stations still, the satellite followed, my station in the middle, under the satellite. */
+    val CAMERAS_SKED = listOf("espace", "poursuite", "sol", "satellite")
+
+    /** The camera asked by a request: one of [CAMERAS_SKED], else both stations. */
+    fun cameraDemandee(q: String): String = q.trim().lowercase().takeIf { it in CAMERAS_SKED } ?: "espace"
+
+    /** A station of a sked: where it is, its label, its colour. */
+    class StationSked(val lat: Double, val lon: Double, val etiquette: String, val couleur: Color)
+
+    /**
+     * A sked on the globe: the track [sol] with its common window [deMs]..[aMs] green on it,
+     * the satellite [satellite], both stations and the line from each to the satellite while
+     * it is above its horizon ([voient]; none: from the geometry), in the look [style] with the
+     * page's [options], seen from [camera], the track as marked as [traces] (0 … 100, the page's
+     * « Traces »). [cadre] (lat, lon): what the still view keeps in sight with both stations (none: the track).
+     */
+    class Sked(val sol: List<JournalPassage.Sol>, val deMs: Long, val aMs: Long, val satellite: String,
+               val moi: StationSked, val autre: StationSked, val style: String = DEFAUT, val options: Options = Options(),
+               val camera: String = "espace", val traces: Int = 50, val cadre: List<Pair<Double, Double>>? = null,
+               val voient: ((Long) -> Pair<Boolean, Boolean>)? = null) {
+        /** The view stays put (the Earth can be drawn once in a while). */
+        val immobile get() = camera == "espace" || camera == "sol"
+    }
+
+    private val VERT_SKED = Color(91, 214, 138)
+    private val FENETRE = Color(46, 158, 91)
+    private val EMPREINTE = Color(63, 224, 200)
+
+    /**
+     * The still framing of [s] in a view [w]×[h]: the middle of what it keeps in sight (or [centre])
+     * and the globe's radius (px) that holds it all within 80 % of the view, the whole Earth at least.
+     */
+    fun cadreSked(s: Sked, w: Float, h: Float, centre: DoubleArray? = null): Pair<DoubleArray, Float> {
+        val l = (s.cadre ?: s.sol.map { it.lat to it.lon }).map { vec(it.first, it.second) } + listOf(vec(s.moi.lat, s.moi.lon), vec(s.autre.lat, s.autre.lon))
+        val c = centre ?: norme(doubleArrayOf(l.sumOf { it[0] }, l.sumOf { it[1] }, l.sumOf { it[2] }))
+        // How far from the middle each lies on the screen (Earth radii); behind it: the whole disc.
+        val loin = l.maxOf { p -> val z = dot(p, c); if (z <= 0) 1.0 else sqrt(max(0.0, 1 - z * z)) }
+        val demi = 0.5f * min(w, h)
+        return c to (0.8f * demi / max(loin, 0.05).toFloat()).coerceIn(0.85f * demi, 14f * demi)
+    }
+
+    /** The view of [s] at [t] in the rectangle ([x0], [y0], [w], [h]). */
+    fun cameraSked(s: Sked, t: Long, x0: Float, y0: Float, w: Float, h: Float): Camera {
+        val ox = x0 + w / 2; val oy = y0 + h / 2
+        val moi = vec(s.moi.lat, s.moi.lon); val autre = vec(s.autre.lat, s.autre.lon)
+        val (c, r) = cadreSked(s, w, h)
+        return when {
+            s.camera == "sol" -> Camera(moi, ox, oy, cadreSked(s, w, h, moi).second)
+            s.camera == "poursuite" && s.sol.isNotEmpty() -> Camera(lisseCentre(s.sol, t, norme(doubleArrayOf(moi[0] + autre[0], moi[1] + autre[1], moi[2] + autre[2]))), ox, oy, r)
+            s.camera == "satellite" && s.sol.isNotEmpty() -> Camera(lisseCentre(s.sol, t, null), ox, oy, r)
+            else -> Camera(c, ox, oy, r)
+        }
+    }
+
+    /** The whole sked at [t] in a view [w]×[h]: [fondSked] then [dessusSked]. */
+    fun dessineSked(g: Graphics2D, w: Float, h: Float, s: Sked, t: Long, dp: Float, cam: Camera = cameraSked(s, t, 0f, 0f, w, h)) {
+        fondSked(g, w, h, s, cam, t, dp)
+        dessusSked(g, cam, s, t, dp)
+    }
+
+    /** What lies under a sked's drawings: space, the Earth lit at [t], the cities (room kept for both stations' names). */
+    fun fondSked(g: Graphics2D, w: Float, h: Float, s: Sked, cam: Camera, t: Long, dp: Float) {
+        g.lisse()
+        val style = s.style.takeIf { it in STYLES } ?: DEFAUT
+        terreVue(g, w, h, cam, style, soleil(t), dp, s.options, traitMax = 4f * dp)
+        val reserve = ArrayList<Rectangle2D.Float>()
+        for ((st, aGauche) in listOf(s.moi to true, s.autre to false)) {
+            val p = vec(st.lat, st.lon); if (cam.profondeur(p) <= 0.02) continue
+            reserve += Rectangle2D.Float(cam.x(p) - 10 * dp, cam.y(p) - 24 * dp, 20 * dp, 26 * dp)
+            reserve += station(g, cam, st, aGauche, style, dp, dessine = false)
+        }
+        when (s.options.villes) {
+            "capitales" -> capitales(g, cam, style, dp, reserve, s.options)
+            "aucune" -> {}
+            else -> villes(g, cam, style, dp, reserve)
+        }
+    }
+
+    /** Whether each station sees the satellite at [t]: [Sked.voient], else above its horizon. */
+    fun voientSked(s: Sked, t: Long): Pair<Boolean, Boolean> = s.voient?.invoke(t) ?: run {
+        val (v, alt) = sousSatellite(s.sol, t) ?: return false to false
+        val k = 1 + alt / RE; val p = doubleArrayOf(v[0] * k, v[1] * k, v[2] * k)
+        fun voit(st: StationSked): Boolean { val q = vec(st.lat, st.lon); return (p[0] - q[0]) * q[0] + (p[1] - q[1]) * q[1] + (p[2] - q[2]) * q[2] > 0 }
+        voit(s.moi) to voit(s.autre)
+    }
+
+    /**
+     * Over the Earth at [t]: the footprint (green while both see the satellite), the track — to
+     * come dashed, the common window green, flown solid —, each station's line to the satellite
+     * while it sees it, both stations' pins and labels, the satellite at its height.
+     */
+    fun dessusSked(g: Graphics2D, cam: Camera, s: Sked, t: Long, dp: Float) {
+        g.lisse()
+        val style = s.style.takeIf { it in STYLES } ?: DEFAUT
+        val encre = LOOKS.getValue(style).encre?.let { couleur(it) }
+        val sous = sousSatellite(s.sol, t)
+        val satP = sous?.let { (v, alt) -> val k = 1 + alt / RE; doubleArrayOf(v[0] * k, v[1] * k, v[2] * k) }
+        val (voitMoi, voitAutre) = voientSked(s, t)
+        val deux = voitMoi && voitAutre
+        val kt = s.traces.coerceIn(0, 100) / 100f
+        if (sous != null) empreinte(g, cam, sous.first, sous.second, if (deux) VERT_SKED else encre ?: EMPREINTE, if (style == "cartoon") 60 else 40, 210, 1.6f * dp)
+        if (s.sol.size >= 2) {
+            val de = s.sol.first().tMs; val a = s.sol.last().tMs
+            val tc = t.coerceIn(de, a)
+            val ep = (0.7f + 0.9f * kt) * dp
+            val coulTrace = encre ?: RenduPc.CYAN
+            val venir = chemin(cam, pointsSol(s.sol, tc, a)); val passe = chemin(cam, pointsSol(s.sol, de, tc))
+            val fenetre = chemin(cam, pointsSol(s.sol, max(de, s.deMs), min(a, s.aMs)))
+            g.color = Color(0, 0, 0, if (style == "cartoon") 90 else 50); g.stroke = BasicStroke(6f * ep, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND); g.draw(passe)
+            g.color = Color(coulTrace.red, coulTrace.green, coulTrace.blue, (140 + 100 * kt).toInt())
+            g.stroke = BasicStroke(2.6f * ep, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 10f, floatArrayOf(7 * dp, 6 * dp), 0f); g.draw(venir)
+            // The common window: a light halo under it when the traces are marked, then green.
+            if (kt > 0.05f) { g.color = Color(255, 255, 255, (190 * kt).toInt()); g.stroke = BasicStroke(9.5f * ep, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND); g.draw(fenetre) }
+            g.color = FENETRE; g.stroke = BasicStroke(6.5f * ep, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND); g.draw(fenetre)
+            g.color = coulTrace; g.stroke = BasicStroke(3f * ep, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND); g.draw(passe)
+        }
+        // Each station's line to the satellite while it sees it.
+        if (satP != null && cam.voit(satP)) for ((st, vu) in listOf(s.moi to voitMoi, s.autre to voitAutre)) {
+            val q = vec(st.lat, st.lon)
+            if (!vu || cam.profondeur(q) <= 0) continue
+            g.color = Color(st.couleur.red, st.couleur.green, st.couleur.blue, 230); g.stroke = BasicStroke(2.4f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            g.draw(Line2D.Float(cam.x(q), cam.y(q), cam.x(satP), cam.y(satP)))
+        }
+        station(g, cam, s.moi, true, style, dp)
+        station(g, cam, s.autre, false, style, dp)
+        if (sous != null && satP != null) satellite(g, cam, sous.first, satP, cam.voit(satP), s.satellite, if (deux) VERT_SKED else RenduPc.ISS, style, dp)
+    }
+
+    /** A sked's station: its pin, its label on the left ([aGauche]) or the right. The label's box (empty when hidden). */
+    private fun station(g: Graphics2D, cam: Camera, st: StationSked, aGauche: Boolean, style: String, dp: Float, dessine: Boolean = true): Rectangle2D.Float {
+        val p = vec(st.lat, st.lon)
+        if (cam.profondeur(p) <= 0.02) return Rectangle2D.Float()
+        val x = cam.x(p); val y = cam.y(p)
+        if (dessine) epingle(g, x, y, st.couleur, dp)
+        if (st.etiquette.isBlank()) return Rectangle2D.Float(x, y, 0f, 0f)
+        return etiquette(g, st.etiquette, if (aGauche) x - 10 * dp else x + 10 * dp, y - 14 * dp, st.couleur, style, dp, aDroite = aGauche, dessine = dessine)
     }
 }

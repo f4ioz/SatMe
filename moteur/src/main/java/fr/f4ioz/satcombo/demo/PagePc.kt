@@ -3257,7 +3257,8 @@ ${DiplomesJs.HTML}</div>
         <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
         <span id="k-ensemble" class="petit"></span>
         <span class="bascule-c" role="group" aria-label="Rejouer sur"><button id="k-b-carte" onclick="vueSked('carte')" title="Le sked rejoué sur la carte">Carte</button><button id="k-b-globe" onclick="vueSked('globe')" title="Le sked rejoué sur le globe de l’onglet Orbites, avec ses rendus et ses réglages">Globe</button></span>
-        <button id="k-video" onclick="videoSked()" title="Le sked rejoué en vidéo (MP4), à envoyer à l'autre station">Vidéo</button>
+        <button id="k-video" onclick="videoSked()" title="Le sked rejoué en vidéo (MP4), à envoyer à l'autre station : sur la carte ou sur le globe, comme affiché (le globe avec son rendu, sa caméra et ses réglages)">Vidéo</button>
+        <select id="k-video-format" style="flex:none;width:auto" aria-label="Format de la vidéo" title="Le format de la vidéo : l'écran (16:9) ou un téléphone debout (9:16)" onchange="try { localStorage.setItem('sked-video-format', this.value); } catch (x) {}"><option value="paysage">16:9</option><option value="telephone">9:16</option></select>
         <span class="petit" id="k-video-etat"></span>
       </div>
       <details class="k-reglages" id="k-reglages" hidden><summary>Réglages du globe</summary><div id="k-reglages-c"></div></details>
@@ -11577,7 +11578,12 @@ async function rejoueSked(i) {
 async function videoSked() {
   if (!KT) return;
   const w = KT.w;
-  const j = await post('api/sked/video?catnum=' + g('k-sat').value + '&loc=' + enc(KT.loc) + '&de=' + w.de + '&a=' + w.a + '&debutTrace=' + w.debutTrace + '&finTrace=' + w.finTrace);
+  // As shown: the map, or the globe with the look, camera and settings chosen (the server draws them itself).
+  let q = '&format=' + (g('k-video-format').value === 'telephone' ? 'telephone' : 'paysage');
+  if (kVue === 'globe') q += '&vue=globe&style=' + enc(Orbites.styleActif()) + '&camera=' + enc(Orbites.cameraActive()) + '&detail=' + Orbites.detailActif() +
+    '&villes=' + enc(Orbites.villesActives()) + '&etiquettes=' + enc(Orbites.etiquettesActives()) + '&monuments=' + enc(Orbites.monumentsActifs()) +
+    '&montaille=' + Orbites.monumentsTailleActive() + '&traces=' + Orbites.tracesActives();
+  const j = await post('api/sked/video?catnum=' + g('k-sat').value + '&loc=' + enc(KT.loc) + '&de=' + w.de + '&a=' + w.a + '&debutTrace=' + w.debutTrace + '&finTrace=' + w.finTrace + q);
   if (j && j.ok) suisVideoSked();
 }
 async function suisVideoSked() {
@@ -11736,6 +11742,8 @@ attacheCarte(g('k-carte'), KV, dessineSked, cadreSked, 1);
 let kVue = 'carte';
 try { if (localStorage.getItem('sked-vue') === 'globe' && !window.SATME_TELEPHONE) kVue = 'globe'; } catch (x) {}
 if (window.SATME_TELEPHONE) g('k-b-globe').hidden = true;
+try { if (localStorage.getItem('sked-video-format') === 'telephone') g('k-video-format').value = 'telephone'; } catch (x) {}
+if (window.SATME_TELEPHONE) g('k-video-format').hidden = true;
 function vueSked(q) {
   kVue = q;
   try { localStorage.setItem('sked-vue', q); } catch (x) {}

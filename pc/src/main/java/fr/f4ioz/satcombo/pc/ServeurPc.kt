@@ -1751,7 +1751,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val tr = kotlinx.coroutines.runBlocking { station.traceSked(catnum, loc, l("debutTrace"), l("finTrace")) }
                     ?: return JSONObject().put("ok", false).put("erreur", "sked introuvable")
                 val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == catnum }?.name ?: "?"
-                if (!v.lance(VideoSked.Sked(tr, l("de"), l("a"), sat, station.settings.callsign.ifBlank { station.etat.value.locator }.uppercase(), loc)))
+                // The map or the globe as the page shows it (its look, camera, settings), 16:9 or a phone's 9:16.
+                val rendu = VideoSked.rendu { q[it].orEmpty() }
+                if (!v.lance(VideoSked.Sked(tr, l("de"), l("a"), sat, station.settings.callsign.ifBlank { station.etat.value.locator }.uppercase(), loc,
+                        locMoi = station.etat.value.locator), rendu))
                     return JSONObject().put("ok", false).put("erreur", v.etat.erreur.ifBlank { "une vidéo est déjà en cours" })
             }
             "/api/telephone/qr" -> {
