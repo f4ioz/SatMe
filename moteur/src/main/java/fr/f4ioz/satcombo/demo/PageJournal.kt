@@ -50,7 +50,7 @@ object PageJournal {
         "pj_creer_fusion", "pj_fusion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
-        "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble",
+        "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble", "pj_cam_satellite",
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
         "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
@@ -657,7 +657,7 @@ function choixGlobe(id, idCam) {
   const sel = (attrs, l, v) => { const s = el('select', attrs, l.map(c => el('option', { value: c[0], text: c[1] }))); s.value = v; return s; };
   return el('div', { class: 'globe-choix', id: id }, [
     sel({ class: 'ob-style-choix', onchange: ev => Orbites.style(ev.target.value) }, Orbites.styles(), Orbites.styleActif()),
-    sel({ id: idCam, onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station]], Orbites.cameraActive()),
+    sel({ id: idCam, onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station], ['satellite', T.cam_satellite]], Orbites.cameraActive()),
     sel({ title: T.villes, onchange: ev => Orbites.villes(ev.target.value) }, [['toutes', T.villes + ' : ' + T.v_toutes], ['capitales', T.villes + ' : ' + T.v_capitales], ['aucune', T.villes + ' : ' + T.v_aucune]], Orbites.villesActives()),
     sel({ onchange: ev => Orbites.etiquettes(ev.target.value) }, [['nom', T.e_nom], ['drapeau', T.e_drapeau], ['nomdrapeau', T.e_nomdrapeau]], Orbites.etiquettesActives()),
     sel({ title: T.detail, onchange: ev => Orbites.detail(+ev.target.value) }, [['0', T.detail + ' : ' + T.d_0], ['1', T.detail + ' : ' + T.d_1], ['2', T.detail + ' : ' + T.d_2]], String(Orbites.detailActif()))]);
@@ -676,7 +676,7 @@ function montreVue(v) {
   if (v === 'carte') dessineCarte();
   if (v === 'globe') {
     g('globeChoix').firstChild.value = Orbites.styleActif();
-    g('globeCam').value = Orbites.cameraActive() === 'poursuite' || Orbites.cameraActive() === 'sol' ? Orbites.cameraActive() : 'espace';
+    g('globeCam').value = ['poursuite', 'sol', 'satellite'].includes(Orbites.cameraActive()) ? Orbites.cameraActive() : 'espace';
     if (g('globeCam').value === 'espace') Orbites.camera('espace');
     lanceGlobe();
   }

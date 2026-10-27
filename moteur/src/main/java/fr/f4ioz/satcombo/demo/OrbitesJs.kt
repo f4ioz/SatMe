@@ -172,6 +172,28 @@ function obPisteA(l, t, ecart) {
   let lon = p[2] + dl * k; lon = ((lon + 540) % 360) - 180;
   return { lat: p[1] + (q[1] - p[1]) * k, lon: lon, alt: p[3] + (q[3] - p[3]) * k };
 }
+/**
+ * What a satellite [alt] km above [lat], [lon] (degrees) sees: {lam, rayon} its footprint (the radio horizon) as an angle at
+ * the Earth's centre (radians) and a radius along the ground (km); for a place [p] {lat, lon}, also {dist} its distance from
+ * the point below (km), {marge} how far inside the edge it is (km, negative outside) and {el} the satellite's elevation there.
+ */
+function obVueSat(alt, lat, lon, p) {
+  const R = 6378.137, r = Math.PI / 180, lam = Math.acos(R / (R + alt)), o = { lam: lam, rayon: R * lam };
+  if (p) {
+    const c = Math.sin(lat * r) * Math.sin(p.lat * r) + Math.cos(lat * r) * Math.cos(p.lat * r) * Math.cos((p.lon - lon) * r), g = Math.acos(Math.max(-1, Math.min(1, c)));
+    o.dist = R * g; o.marge = R * (lam - g); o.el = Math.atan2(Math.cos(g) - R / (R + alt), Math.sin(g)) / r;
+  }
+  return o;
+}
+/**
+ * « Vue du satellite »: the camera's distance from the Earth's centre (Earth radii), the satellite [r] radii out. [k] 0: on
+ * the satellite; 1: drawn back along its vertical until its whole footprint holds in a view of half-angle [a] (radians);
+ * never nearer than the satellite (a high one already sees all of it).
+ */
+function obReculSat(r, a, k) {
+  const lam = Math.acos(1 / r), d = Math.cos(lam) + Math.sin(lam) / Math.tan(a);
+  return r + Math.max(0, d - r) * Math.max(0, k);
+}
 
 /* ------------------------------------------------------------ the globes */
 const Orbites = (function () {
@@ -672,6 +694,53 @@ const Orbites = (function () {
     const cardinaux = [['N', 0], ['E', 90], ['S', 180], ['O', 270]].map(c => { const s = etiquette(c[0], '#FFB454'); s.userData.az = c[1]; s.visible = false; scene.add(s); return s; });
     // The satellite chosen: a ring turning round it.
     const cible = new THREE.Sprite(new THREE.SpriteMaterial({ map: rond('#FFFFFF', true), depthTest: false, transparent: true, sizeAttenuation: false })); cible.renderOrder = 9; scene.add(cible);
+    // « Vue du satellite »: the day / night line on the ground (a circle square to the Sun), and its figures over the globe.
+    const terminateur = (() => {
+      const pts = []; for (let i = 0; i < 180; i++) { const a = i / 180 * 2 * Math.PI; pts.push(new THREE.Vector3(Math.cos(a) * 1.004, Math.sin(a) * 1.004, 0)); }
+      const l = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffc857, transparent: true, opacity: .75 }));
+      l.visible = false; scene.add(l); return l;
+    })();
+    sc.regard = { x: 0, y: 0 }; sc.vueSat = false;
+    let infoSat = null, infoT = 0;
+    sc.cacheInfo = () => { if (infoSat && !infoSat.hidden) infoSat.hidden = true; };
+    // [sobre]: the Vitrine's, nothing to touch (no hints).
+    function vueSatInfo(o, t, now, D, sobre) {
+      if (!infoSat) {
+        infoSat = document.createElement('div'); infoSat.className = 'ob-vuesat'; infoSat.setAttribute('aria-live', 'off');
+        Object.assign(infoSat.style, { position: 'absolute', zIndex: 3, pointerEvents: 'none', maxWidth: '300px', padding: '6px 9px', borderRadius: '8px',
+          background: 'rgba(8,12,24,.74)', border: '1px solid rgba(255,255,255,.14)', color: '#E8EEF8', font: '12px/1.45 system-ui, sans-serif', boxSizing: 'border-box' });
+        const p = canvas.parentElement; if (getComputedStyle(p).position === 'static') p.style.position = 'relative'; p.appendChild(infoSat);
+      }
+      infoSat.hidden = false;
+      if (now - infoT < 400) return; infoT = now;
+      // Beside the tab's globe, middle right (its tools above, its instruments below); over the others' bottom left corner (their own choices at the top).
+      // A narrow globe (a phone): smaller, without the hints.
+      const etroit = canvas.clientWidth < 560;
+      Object.assign(infoSat.style, { fontSize: etroit ? '11px' : '12px', maxWidth: etroit ? '62%' : '300px' });
+      if (mode === 'tab') Object.assign(infoSat.style, { right: '10px', left: 'auto', top: '50%', transform: 'translateY(-50%)' });
+      else Object.assign(infoSat.style, { left: (canvas.offsetLeft + 8) + 'px', top: (canvas.offsetTop + canvas.offsetHeight - 8) + 'px', right: 'auto', transform: 'translateY(-100%)' });
+      const en = /^en/i.test(document.documentElement.lang || ''), e = o.e, v = obVueSat(e.alt, e.lat, e.lon), km = x => Math.round(x).toLocaleString(en ? 'en-GB' : 'fr-FR') + ' km';
+      const so = obHauteurSoleil(t, e.lat, e.lon), haut = (D - 1) * RE - e.alt;
+      const lieu = (nom, coul, q) => {
+        const w = obVueSat(e.alt, e.lat, e.lon, q);
+        return '<div><span style="color:' + coul + '">●</span> ' + echappe(nom) + ' : ' + (w.marge >= 0 ? (en ? 'in view, ' : 'dans l’empreinte, ') + km(w.marge) + (en ? ' from the edge, el. ' : ' du bord, él. ') + w.el.toFixed(0) + '°'
+          : (en ? 'out of view, ' : 'hors de l’empreinte, à ') + km(-w.marge) + (en ? ' beyond the edge' : ' du bord')) + '</div>';
+      };
+      let h = '<div><b>' + (en ? 'Seen from ' : 'Vue de ') + echappe(o.s.nom) + '</b></div>' +
+        '<div>' + (en ? 'Altitude ' : 'Altitude ') + km(e.alt) + (en ? ' · footprint radius ' : ' · rayon de l’empreinte ') + km(v.rayon) + '</div>' +
+        '<div>' + (en ? 'Below it: ' : 'Sous lui : ') + (so > 0 ? (en ? 'day' : 'jour') + ' (' + (en ? 'Sun ' : 'Soleil ') + so.toFixed(0) + '°)' : so > -6 ? (en ? 'twilight' : 'crépuscule') : (en ? 'night' : 'nuit')) + '</div>';
+      const l = sc.lieu();
+      if (l) h += lieu(l.indicatif || (en ? 'My station' : 'Ma station'), '#FFB454', l);
+      if (mode === 'sked' && sc.sk && sc.sk.autre) h += lieu(sc.sk.autre.indicatif || sc.sk.autre.locator || (en ? 'The other station' : 'L’autre station'), '#E86FA8', sc.sk.autre);
+      if (mode === 'tab' && OB.contacts !== 'aucun' && OB.carnet) {
+        if (!sc.carnetPts || sc.carnetPts.src !== OB.carnet) { const m = new Map(); OB.carnet.forEach(c => { const q = obLocator(c.l); if (q && !m.has(c.c)) m.set(c.c, q); }); sc.carnetPts = { src: OB.carnet, l: [...m.values()] }; }
+        const n = sc.carnetPts.l.filter(q => obVueSat(e.alt, e.lat, e.lon, q).marge >= 0).length;
+        h += '<div><span style="color:#FF4FA3">●</span> ' + n + (en ? ' station' + (n > 1 ? 's' : '') + ' of the log in view' : ' station' + (n > 1 ? 's' : '') + ' du carnet dans l’empreinte') + '</div>';
+      }
+      if (!etroit && !sobre) h += '<div style="opacity:.7">' + (haut > 5 ? (en ? 'Camera ' : 'Caméra ') + km(haut) + (en ? ' above it (wheel: nearer)' : ' au-dessus de lui (molette : plus près)') : (en ? 'Camera on the satellite' : 'Caméra sur le satellite')) +
+        (en ? ' · drag: look around, double-click: back' : ' · glisser : regarder ailleurs, double-clic : revenir') + '</div>';
+      if (infoSat.texte !== h) { infoSat.texte = h; infoSat.innerHTML = h; }
+    }
     sc.lieu = () => mode === 'rejeu' ? (sc.rj && sc.rj.station) : mode === 'sked' ? (sc.sk && sc.sk.moi) : (OB.donnees && OB.donnees.obs ? { lat: OB.donnees.obs.lat, lon: OB.donnees.obs.lon, indicatif: OB.donnees.indicatif, locator: OB.donnees.locator } : null);
     sc.obs = () => { if (!rejoue) return OB.obs; const l = sc.lieu(); return l ? { latitude: l.lat * D2R, longitude: l.lon * D2R, height: 0 } : null; };
     const epingle = (d, pos, pi, an) => {
@@ -782,14 +851,17 @@ const Orbites = (function () {
       const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NC * 3), 3));
       o.bordCal = new THREE.LineLoop(lg, new THREE.LineBasicMaterial({ color: s.couleur, transparent: true, opacity: .8 }));
       o.rayon = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffb454, transparent: true, opacity: .9 }));
-      scene.add(o.engin, o.lueur, o.orbite, o.tube, o.rayon); terre.add(o.cal, o.bordCal);
+      // « Vue du satellite »: its ground track, ahead bright, behind faint.
+      o.sol = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .95 })); o.sol.visible = false; o.solT = [];
+      o.solPts = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: point(), vertexColors: true, size: 6, sizeAttenuation: false, transparent: true, alphaTest: .3 })); o.sol.add(o.solPts);
+      scene.add(o.engin, o.lueur, o.orbite, o.tube, o.rayon); terre.add(o.cal, o.bordCal, o.sol);
       o.restyle = () => {
         [o.nom, o.nomFort].forEach(n => { if (n) scene.remove(n); });
         o.nom = etiquette(s.nom, s.couleur, sc.style, 'sat'); o.nomFort = etiquette('★ ' + s.nom, s.couleur, sc.style, 'fort'); scene.add(o.nom, o.nomFort);
         const c = STYLES[sc.style].encre || s.couleur;
-        o.orbite.material.color.set(c); o.tube.material.color.set(c); o.bordCal.material.color.set(c); o.cal.material.color.set(c);
+        o.orbite.material.color.set(c); o.tube.material.color.set(c); o.bordCal.material.color.set(c); o.cal.material.color.set(c); o.solC = new THREE.Color(c);
       };
-      o.retire = () => { scene.remove(o.engin, o.lueur, o.orbite, o.tube, o.rayon, o.nom, o.nomFort); terre.remove(o.cal, o.bordCal); };
+      o.retire = () => { scene.remove(o.engin, o.lueur, o.orbite, o.tube, o.rayon, o.nom, o.nomFort); terre.remove(o.cal, o.bordCal, o.sol); };
       o.tOrbite = -1e15;
       if (sc.style) o.restyle();
       return o;
@@ -822,6 +894,18 @@ const Orbites = (function () {
       o.tube.geometry.dispose();
       o.tube.geometry = tube.length > 3 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tube, !s.piste && s.mm > 1.2), tube.length, sc.style === 'cartoon' ? .0045 : .003, 6, false) : new THREE.BufferGeometry();
       o.trace = trace; o.tOrbite = t; o.tubeLui = lui;
+      // The ground track below (a journal's passes not joined across the gaps between them), its times to colour it.
+      const seg = [], ts = [];
+      for (let i = 1; i < trace.length; i++) if (!s.piste || trace[i][0] - trace[i - 1][0] < 600000) {
+        seg.push(local(trace[i - 1][1], trace[i - 1][2], 1.003), local(trace[i][1], trace[i][2], 1.003)); ts.push(trace[i - 1][0], trace[i][0]);
+      }
+      o.sol.geometry.dispose(); o.sol.geometry = new THREE.BufferGeometry().setFromPoints(seg);
+      o.sol.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(seg.length * 3), 3)); o.solT = ts;
+      // Dots along it, some 150 km apart (a journal's track is recorded every few seconds).
+      const pts = [], pt = []; let der = null;
+      trace.forEach(q => { const v = local(q[1], q[2], 1.003); if (!der || der.distanceTo(v) > .024) { pts.push(v); pt.push(q[0]); der = v; } });
+      o.solPts.geometry.dispose(); o.solPts.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      o.solPts.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pts.length * 3), 3)); o.solPT = pt;
     }
     sc.orbite = orbite;
     sc.choisi = () => mode === 'suivi' ? OB.sats.find(s => s.suivi) : mode === 'rejeu' ? (sc.rj && sc.rj.sat) : mode === 'sked' ? (sc.sk && sc.sk.sat) : OB.choisi;
@@ -882,6 +966,7 @@ const Orbites = (function () {
       autre.visible = nomAutre.visible = vu; rayon2.visible = false;
       if (!vu) return;
       const aW = terre.localToWorld(posAutre.clone());
+      if (sc.vueSat && aW.dot(cam.pos.clone().sub(aW)) < 0) nomAutre.visible = false;
       nomAutre.position.copy(aW.clone().multiplyScalar(1.02)); nomAutre.scale.set(.026 * nomAutre.userData.ratio, .026, 1); nomAutre.center.set(-.08, .5);
       const pulse = ((now + 700) / 1400) % 1; anneau2.scale.setScalar(1 + pulse * 2.5); anneau2.material.opacity = 1 - pulse;
       if (!a.obs) a.obs = { latitude: a.lat * D2R, longitude: a.lon * D2R, height: 0 };
@@ -917,7 +1002,7 @@ const Orbites = (function () {
     }
 
     // The camera: dragged round the Earth (turning with it), the wheel brings it nearer or further.
-    const cam = { az: 0, pol: 1, dist: mode === 'suivi' ? 2.8 : 3.4, pos: new THREE.Vector3(0, 0, 4), cible: new THREE.Vector3(), cale: false };
+    const cam = { az: 0, pol: 1, dist: mode === 'suivi' ? 2.8 : 3.4, pos: new THREE.Vector3(0, 0, 4), cible: new THREE.Vector3(), cale: false, satK: 0, satD: 2 };
     sc.cam = cam;
     let tir = null;
     // The journal's globe: dragged, it moves on the screen (room for the picture); a double click puts it back.
@@ -926,10 +1011,10 @@ const Orbites = (function () {
     canvas.addEventListener('dblclick', () => { if (mode === 'rejeu') { sc.decal = { x: 0, y: 0 }; garde('ob-decal', JSON.stringify(sc.decal)); } });
     // The Sked's globe: framed by itself until dragged, then free (a double click frames it again).
     sc.skH = 3.5; sc.libre = false;
-    canvas.addEventListener('dblclick', () => { if (mode === 'sked') sc.libre = false; });
+    canvas.addEventListener('dblclick', () => { if (mode === 'sked') sc.libre = false; sc.regard.x = sc.regard.y = 0; });
     canvas.addEventListener('pointerdown', e => {
       tir = { x: e.clientX, y: e.clientY }; sc.geste = performance.now(); canvas.setPointerCapture(e.pointerId);
-      if (mode === 'sked' && !sc.libre) {
+      if (mode === 'sked' && !sc.libre && !sc.vueSat) {
         // From where the camera is: its angles without the Earth's turn.
         const q = cam.pos.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -(sc.gm || 0)), n = Math.max(1.3, q.length());
         cam.az = Math.atan2(-q.z, q.x); cam.pol = Math.acos(Math.max(-1, Math.min(1, q.y / n))); cam.dist = Math.min(14, n); cam.cale = true; sc.libre = true;
@@ -941,6 +1026,12 @@ const Orbites = (function () {
         const r = canvas.getBoundingClientRect();
         sc.decal.x = Math.max(-.45, Math.min(.45, sc.decal.x + (e.clientX - tir.x) / r.width)); sc.decal.y = Math.max(-.45, Math.min(.45, sc.decal.y + (e.clientY - tir.y) / r.height));
         tir = { x: e.clientX, y: e.clientY }; garde('ob-decal', JSON.stringify(sc.decal)); return;
+      }
+      if (sc.vueSat) {
+        // « Vue du satellite »: a look aside, the Earth held by the hand (back below a few seconds after).
+        const b = x => Math.max(-1.2, Math.min(1.2, x));
+        sc.regard.x = b(sc.regard.x - (e.clientX - tir.x) * .004); sc.regard.y = b(sc.regard.y + (e.clientY - tir.y) * .004);
+        tir = { x: e.clientX, y: e.clientY }; sc.geste = performance.now(); return;
       }
       const k = .005 * Math.min(1, cam.dist / 3);
       cam.az -= (e.clientX - tir.x) * k; cam.pol = Math.max(.05, Math.min(Math.PI - .05, cam.pol - (e.clientY - tir.y) * k));
@@ -983,7 +1074,9 @@ const Orbites = (function () {
       extras.forEach(e => { e.visible = !auSol || !!e.isPoints; });
       mondeGp.visible = !auSol;
       station.visible = !auSol && lieu;
-      const fov = auSol ? 75 : 42; if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+      // « Vue du satellite »: chosen for a pass (or the Sked's window), or now and then by itself on the Vitrine's dashboard.
+      const vitSat = mode === 'tab' && !passage && !!OB.tb && !!OB.tb.vitrine && !tir && !reduit && now - (sc.geste || 0) > 12000 && now % 90000 > 60000;
+      const satVoulu = (passage && OB.cam === 'satellite') || vitSat;
       const plusieurs = sc.objets.size > 1;
       cible.visible = false;
       let satP = null;
@@ -995,7 +1088,7 @@ const Orbites = (function () {
         const discret = (mode === 'suivi' || passage) && !lui, efface = !lui && plusieurs;
         if (!discret && (s.piste ? o.morceau !== morceauA(s, t) || o.tOrbite < -1e14 : Math.abs(t - o.tOrbite) > s.periode * .02 || o.tubeLui !== lui)) orbite(o, t, lui);
         const p = eciVers3(e.eci); o.p = p; if (lui) satP = p;
-        o.engin.position.copy(p); o.engin.lookAt(0, 0, 0); o.engin.scale.setScalar(auSol ? .15 : lui ? 1.6 : 1); o.engin.visible = !discret;
+        o.engin.position.copy(p); o.engin.lookAt(0, 0, 0); o.engin.scale.setScalar(auSol ? .15 : satVoulu ? .5 : lui ? 1.6 : 1); o.engin.visible = !discret;
         o.lueur.position.copy(p); o.lueur.visible = true;
         const vu = e.el > 0, sz = (vu ? .06 : .04) * (sc.style === 'cartoon' ? 1.3 : 1) * (auSol && lui ? 1.8 : 1) * (discret ? .55 : 1) * (lui && plusieurs ? 1.5 : 1);
         o.lueur.scale.set(sz, sz, 1);
@@ -1008,18 +1101,27 @@ const Orbites = (function () {
         // A session's companions: their footprints when asked, faint.
         const tache = discret && mode === 'rejeu' && !!(sc.rj && sc.rj.taches);
         o.cal.visible = o.bordCal.visible = (!discret || tache) && !auSol;
-        o.cal.material.opacity = lui ? (sc.style === 'cartoon' ? .26 : .2) : tache ? .09 : efface ? .05 : .14;
+        o.cal.material.opacity = lui ? (satVoulu ? .07 : sc.style === 'cartoon' ? .26 : .2) : tache ? .09 : efface ? .05 : .14;
         o.bordCal.material.opacity = lui ? 1 : tache ? .5 : efface ? .3 : .8;
         o.orbite.visible = !discret && (!lui || !!s.piste); o.orbite.material.opacity = efface ? .3 : lui ? .45 : .7;
-        o.tube.visible = !discret && lui;
+        // Seen from above, its orbit would cross the view thick: its ground track instead.
+        o.tube.visible = !discret && lui && !satVoulu;
+        o.sol.visible = satVoulu && lui && !discret;
+        if (o.sol.visible && o.solC) {
+          const c = o.sol.geometry.attributes.color, q = o.solC;
+          const teinte = (c, ts) => { if (!c) return; for (let i = 0; i < ts.length; i++) { const f = ts[i] >= t ? 1 : .35; c.setXYZ(i, q.r * f, q.g * f, q.b * f); } c.needsUpdate = true; };
+          teinte(c, o.solT); teinte(o.solPts.geometry.attributes.color, o.solPT || []);
+        }
         o.rayon.visible = vu && !discret && !auSol && lieu;
         if (o.rayon.visible) { const a = o.rayon.geometry.attributes.position; a.setXYZ(0, stW.x, stW.y, stW.z); a.setXYZ(1, p.x, p.y, p.z); a.needsUpdate = true; o.rayon.material.opacity = .55 + .4 * Math.sin(now / 160); }
         if (lui && plusieurs && !auSol) { cible.visible = true; cible.position.copy(p); const q = .075 + .012 * Math.sin(now / 250); cible.scale.set(q, q, 1); cible.material.rotation = now / 1200; cible.material.color.set(STYLES[sc.style].encre || s.couleur); }
       });
       if (mode === 'rejeu') rejeuImage(t, stW, satP, now);
+      if (sc.sk && sc.sk.tube) sc.sk.tube.visible = !satVoulu;
       if (mode === 'sked') skedImage(t, satP, now);
       // The journal's « mon indicatif et mon locator » unticked: the station's pin without its name, as in its videos.
-      nomStation.visible = station.visible && !(mode === 'rejeu' && sc.rj && sc.rj.donnees.nomStation && !sc.rj.donnees.nomStation()); nomStation.position.copy(stW.clone().multiplyScalar(1.02)); nomStation.scale.set(.026 * nomStation.userData.ratio, .026, 1); nomStation.center.set(1.08, .5);
+      // Seen from the satellite, a station beyond the Earth's edge keeps its name hidden with it.
+      nomStation.visible = station.visible && !(satVoulu && stW.dot(cam.pos.clone().sub(stW)) < 0) && !(mode === 'rejeu' && sc.rj && sc.rj.donnees.nomStation && !sc.rj.donnees.nomStation()); nomStation.position.copy(stW.clone().multiplyScalar(1.02)); nomStation.scale.set(.026 * nomStation.userData.ratio, .026, 1); nomStation.center.set(1.08, .5);
       const pulse = (now / 1400) % 1; anneau.scale.setScalar(1 + pulse * 2.5); anneau.material.opacity = 1 - pulse;
       cardinaux.forEach(c => { c.visible = auSol; if (auSol) { c.position.copy(stW.clone().add(dirCiel(stW, c.userData.az, 1).multiplyScalar(.04))); c.scale.set(.03 * c.userData.ratio, .03, 1); } });
       // The cities' and contacts' names: their size, smaller from far away.
@@ -1029,8 +1131,33 @@ const Orbites = (function () {
       rejeuGp.children.forEach(s => { if (s.isSprite) s.scale.set(.02 * s.userData.ratio, .02, 1); });
 
       const oc = choisi && sc.objets.get(choisi.catnum);
+      // The satellite whose view it is: the one chosen (the Vitrine: else the first shown).
+      const ov = oc && oc.p ? oc : vitSat ? [...sc.objets.values()].find(o => o.p && o.lueur.visible) : null, vueSat = satVoulu && !!ov;
+      sc.vueSat = vueSat; terminateur.visible = vueSat;
+      if (vueSat) { terminateur.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), soleil.position.clone().normalize()); terminateur.material.color.set(STYLES[sc.style].encre || '#FFC857'); }
+      if (!tir && now - (sc.geste || 0) > 4000) { const f = Math.pow(.15, dt); sc.regard.x *= f; sc.regard.y *= f; }
+      let fov = auSol ? 75 : 42; if (!vueSat) cam.satK = 0;
       const lisse = 1 - Math.pow(.02, dt);
-      if (passage && oc && oc.p) {
+      if (vueSat) {
+        // On the satellite's vertical, looking straight down; its track going up the screen (a geostationary one: north up).
+        const p = ov.p, up = p.clone().normalize(), r = p.length(), asp = camera.aspect || 1;
+        const H = mode === 'sked' ? sc.skH : mode === 'rejeu' && sc.rj && sc.rj.donnees.hauteur ? sc.rj.donnees.hauteur() : OB.hauteur, k = Math.min(2.5, H / 3.5);
+        let haut = ov.s.mm != null && ov.s.mm < 1.2 ? new THREE.Vector3(0, 1, 0) : eciVers3(ov.e.vel);
+        haut.sub(up.clone().multiplyScalar(haut.dot(up)));
+        if (haut.lengthSq() < 1e-9) haut = new THREE.Vector3(1, 0, 0).sub(up.clone().multiplyScalar(up.x));
+        haut.normalize();
+        // Drawn back until the whole footprint holds in the view (the Hauteur nearer: down to the satellite itself).
+        const a = asp >= 1 ? 30 * D2R : Math.atan(Math.tan(30 * D2R) * asp), D = obReculSat(r, a * .9, Math.min(1, k)), lam = Math.acos(1 / r);
+        const m = Math.min(80 * D2R, Math.atan2(Math.sin(lam), D - Math.cos(lam)) / .9 * Math.max(1, k));
+        fov = Math.max(6, Math.min(100, 2 * R2D * (asp >= 1 ? m : Math.atan(Math.tan(m) / asp))));
+        const droite = new THREE.Vector3().crossVectors(haut, up);
+        const vise = droite.clone().multiplyScalar(D * Math.tan(sc.regard.x)).add(haut.clone().multiplyScalar(D * Math.tan(sc.regard.y)));
+        // Eased in for a second, then held on the satellite (a fast replay would leave it behind), its height eased.
+        const deb = cam.satK < 1; cam.satK = Math.min(1, cam.satK + dt * .8); cam.satD = deb ? D : cam.satD + (D - cam.satD) * lisse;
+        const kk = Math.max(lisse, cam.satK * cam.satK), pos = up.clone().multiplyScalar(cam.satD);
+        if (deb) { cam.pos.copy(glisse(cam.pos, pos, kk)); cam.cible.lerp(vise, kk); } else { cam.pos.copy(pos); cam.cible.copy(vise); }
+        camera.up.copy(haut);
+      } else if (passage && oc && oc.p) {
         const e = oc.e, p = oc.p, up = p.clone().normalize(), H = mode === 'sked' ? sc.skH : mode === 'rejeu' && sc.rj && sc.rj.donnees.hauteur ? sc.rj.donnees.hauteur() : OB.hauteur;
         let pos, vise;
         if (OB.cam === 'poursuite') {
@@ -1071,6 +1198,11 @@ const Orbites = (function () {
         const k = 1 - Math.pow(.01, dt);
         cam.pos.copy(glisse(cam.pos, base, k)); cam.cible.lerp(new THREE.Vector3(), k);
       }
+      // The view's width and its top eased from one camera to the next (from the station's own: at once).
+      const f0 = camera.fov; camera.fov = auSol || Math.abs(fov - f0) < .05 ? fov : f0 + (fov - f0) * lisse; if (camera.fov !== f0) camera.updateProjectionMatrix();
+      if (!cam.haut || auSol) cam.haut = camera.up.clone();
+      else { cam.haut.lerp(camera.up, lisse); if (cam.haut.lengthSq() < 1e-6) cam.haut.copy(camera.up); cam.haut.normalize(); camera.up.copy(cam.haut); }
+      if (vueSat) vueSatInfo(ov, t, now, cam.pos.length(), vitSat); else sc.cacheInfo();
       camera.position.copy(cam.pos); camera.lookAt(cam.cible);
       rendu.render(scene, camera);
       if (mode === 'tab' && OB.tb && OB.tb.pedago) reperes3d(sc, camera, cam, terre, r.width, r.height, satP, oc, lieu ? stW : null, soleil.position.clone().normalize());
@@ -1091,6 +1223,8 @@ const Orbites = (function () {
     const f = () => {
       const vus = scenes.filter(sc => sc.canvas.isConnected && sc.canvas.offsetParent !== null && !sc.canvas.hidden);
       const carte = tab && tab.c2d.offsetParent !== null && !tab.c2d.hidden;
+      // A globe put away (the map shown instead): its « Vue du satellite » figures with it.
+      scenes.forEach(sc => { if (!vus.includes(sc)) sc.cacheInfo(); });
       if (!vus.length && !carte) { boucle = false; return; }
       requestAnimationFrame(f);
       const now = performance.now();
@@ -1824,8 +1958,8 @@ const Orbites = (function () {
     /** The tab's time back to the present, at its real pace (the dashboard shows now). */
     tempsReel: () => direct(),
     /**
-     * The dashboard open ([o]: {style, vue, tourne, astres, pedago, surVue(v)}) or closed (null): its look and view taken without
-     * being kept, the tab's own given back when it closes.
+     * The dashboard open ([o]: {style, vue, tourne, astres, pedago, vitrine, surVue(v)}) or closed (null): its look and view taken without
+     * being kept, the tab's own given back when it closes. The Vitrine's ([o.vitrine]): 30 s of every 90 the Earth seen from the satellite chosen.
      */
     tableauMode: o => {
       const avant = OB.tb; OB.tb = o || null;

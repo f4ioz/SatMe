@@ -2429,6 +2429,7 @@ val FR: Map<String, String> = mapOf(
     "pj_cam_poursuite" to "Poursuite",
     "pj_cam_station" to "Depuis la station",
     "pj_cam_ensemble" to "Vue d'ensemble",
+    "pj_cam_satellite" to "Vue du satellite",
     "pj_session" to "Session",
     "pj_session_aide" to "Le même éditeur qu'un passage, sur plusieurs passages d'un satellite entre deux dates",
     "pj_s_titre" to "Session : plusieurs passages animés",
