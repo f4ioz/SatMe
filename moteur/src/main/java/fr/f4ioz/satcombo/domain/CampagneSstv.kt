@@ -35,6 +35,11 @@ object CampagneSstv {
     const val DUREE_MAX_MS = 62 * 86_400_000L
 
     const val AUTO = "Auto"
+    /** A one-click campaign's lowest elevation by default (« Activités à venir »): passes lower give no picture. */
+    const val EL_MIN_ACTIVITE = 10.0
+
+    /** A one-click campaign's elevation by default: the station's minimum, but never under [EL_MIN_ACTIVITE]. */
+    fun elMinActivite(stationDeg: Double): Double = maxOf(EL_MIN_ACTIVITE, stationDeg).coerceAtMost(90.0)
     /** The chain's sound: the rig's own (the IC-9700 by the network or its USB codec). */
     const val POSTE = "poste"
     /** The chain's sound: the SDR receiver. */

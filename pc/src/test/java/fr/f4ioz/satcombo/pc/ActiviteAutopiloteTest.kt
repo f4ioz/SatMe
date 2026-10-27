@@ -73,8 +73,9 @@ END:VCALENDAR
         debutMs = t0, finMs = t0 + 7 * 86_400_000L, precision = ActivitesAVenir.Precision.INCONNUE, freqHz = 145_800_000L,
         titre = "DEMOSAT-2 en SSTV", sources = listOf(ActivitesAVenir.Source("AMSAT-UK")))
 
-    private fun monte(): Pair<ActivitesPc, AutoPiloteSstvPc> {
+    private fun monte(minEl: Int? = null): Pair<ActivitesPc, AutoPiloteSstvPc> {
         val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee, { heure })
+        if (minEl != null) st.settings.minElevDeg = minEl
         val faux = ActivitesEnLigne.Telechargeur { url, _, _ ->
             if (url.contains("calendar.google.com")) ActivitesEnLigne.Reponse(200, ics()) else ActivitesEnLigne.Reponse(404, null)
         }
@@ -188,5 +189,33 @@ END:VCALENDAR
         assertEquals(57172, activite(a, "rss:x").getInt("catnum"))
         val (a2, _) = monte()
         assertEquals(57172, a2.liste().first { it.id == "rss:x" }.catnum)
+    }
+
+    @Test fun `l'elevation de la campagne au moins 10 degres, ou celle donnee dans la fenetre`() {
+        // A station that lists every pass from 0°: the campaign does not take that (1–2° passes give nothing).
+        val (a, ap) = monte(minEl = 0)
+        a.tic()
+        val id = "ariss:serie34@google.com"
+        val v = get(a, "/autopilote", mapOf("id" to id))
+        assertEquals(10.0, v.getDouble("elMin"), 0.0)
+        assertEquals(10.0, v.getJSONObject("campagne").getDouble("elMin"), 0.0)
+        assertEquals(1, v.getJSONArray("passages").length())
+        // Typed in the dialog: the passes listed follow it (the one known culminates at 50°).
+        assertEquals(0, get(a, "/autopilote", mapOf("id" to id, "el" to "60")).getJSONArray("passages").length())
+        assertEquals(1, get(a, "/autopilote", mapOf("id" to id, "el" to "45")).getJSONArray("passages").length())
+        assertEquals(10.0, get(a, "/autopilote", mapOf("id" to id, "el" to "abc")).getDouble("elMin"), 0.0)
+        assertEquals(90.0, get(a, "/autopilote", mapOf("id" to id, "el" to "120")).getDouble("elMin"), 0.0)
+        // Without it, the default; with it, the one typed; clicked again, the existing campaign takes the new one.
+        post(a, "/autopilote", mapOf("id" to id))
+        assertEquals(10.0, ap.campagnes.single().elMin, 0.0)
+        post(a, "/autopilote", mapOf("id" to id, "el" to "20"))
+        assertEquals(20.0, ap.campagnes.single().elMin, 0.0)
+        assertEquals(id, ap.campagnes.single().activite)
+        // A station asking more than 10°: its minimum.
+        val (a2, _) = monte(minEl = 15)
+        a2.tic()
+        assertEquals(15.0, get(a2, "/autopilote", mapOf("id" to id)).getDouble("elMin"), 0.0)
+        assertEquals(10.0, CampagneSstv.elMinActivite(0.0), 0.0)
+        assertEquals(25.0, CampagneSstv.elMinActivite(25.0), 0.0)
     }
 }
