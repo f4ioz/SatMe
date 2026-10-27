@@ -95,6 +95,7 @@ class ApiHf(private val s: Site, horloge: () -> Long = System::currentTimeMillis
                 rbn.assure()
                 val m = minutes.coerceAtMost(30)
                 Rbn.carte(rbn.recents(m * 60_000L, bande)).put("since", m * 60).put("connected", rbn.connecte).put("error", rbn.erreur ?: JSONObject.NULL)
+                    .put("enabled", c.rbnActif && !c.horsLigne)
             }
             else -> {
                 val l = psk.spots("")

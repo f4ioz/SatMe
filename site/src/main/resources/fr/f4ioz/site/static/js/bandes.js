@@ -161,7 +161,7 @@
       return '<div class="pa-l"><b style="color:' + couleur(b) + '">' + b + '</b><span class="barre"><i style="width:' + Math.round(n / max * 100) + '%;background:' + couleur(b) + '"></i></span>' +
         '<span class="num">' + n + '</span><span class="' + condCls(mod) + '">' + esc(mod ? COND[mod] : '—') + '</span><span class="' + c + '">' + v + '</span></div>';
     }).join('');
-    $('prop-analysis').innerHTML = '<div class="pa-l pa-t"><span>Bande</span><span>Activité mesurée (' + nomSource + ', ' + Math.round((d.since || 900) / 60) + ' min)</span><span>Spots</span><span>Modèle (' + (per === 'day' ? 'jour' : 'nuit') + ')</span><span>Verdict</span></div>' +
+    $('prop-analysis').innerHTML = '<div class="pa-l pa-t"><span>Bande</span><span>Activité mesurée (' + (source === 'psk' ? 'derniers reports PSKReporter' : nomSource + ', ' + Math.round((d.since || 900) / 60) + ' min') + ')</span><span>Spots</span><span>Modèle (' + (per === 'day' ? 'jour' : 'nuit') + ')</span><span>Verdict</span></div>' +
       (lignes || '<p class="dim">Aucune activité reçue.</p>');
   }
 
@@ -172,7 +172,8 @@
       taches(d.blobs || []); chemins(d.qth_paths || []); analyse(d);
       let t = (d.total || 0) + ' reports · ' + (d.blobs || []).length + ' taches';
       if (d.error) t += ' · ' + d.error;
-      if (source === 'rbn' && !d.connected) t += ' · connexion RBN…';
+      if (source === 'rbn' && d.enabled === false) t += ' · flux RBN coupé sur ce site';
+      else if (source === 'rbn' && !d.connected) t += ' · connexion RBN…';
       $('prop-status').textContent = t;
     } catch (e) { $('prop-status').textContent = 'indisponible (' + e.message + ')'; }
   }
