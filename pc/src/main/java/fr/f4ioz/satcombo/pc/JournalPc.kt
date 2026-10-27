@@ -33,6 +33,8 @@ class JournalPc(
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
     val rangement = JournalPassage.Rangement(dossier)
+    /** The FT8 / FT4 messages heard during the passes, kept beside them. */
+    val ft = JournalFtPc(dossier, horloge = horloge)
     private val collecte = JournalPassage.Collecte()
     private val predicteur = PassPredictor()
 
@@ -59,7 +61,7 @@ class JournalPc(
     /** The pass under way kept now (the program stopping). */
     @Synchronized fun ferme() { collecte.ferme()?.let { garde(it) } }
 
-    private fun garde(e: JournalPassage.Entree) { runCatching { rangement.enregistre(e) } }
+    private fun garde(e: JournalPassage.Entree) { runCatching { rangement.enregistre(e) }; ft.fige(e) }
 
     fun passages(): List<JournalPassage.Entree> = runCatching { rangement.passages() }.getOrDefault(emptyList())
 

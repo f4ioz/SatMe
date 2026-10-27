@@ -16,6 +16,7 @@ import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.TleEntry
 import fr.f4ioz.satcombo.domain.ActivitesAVenir
 import fr.f4ioz.satcombo.domain.CampagneSstv
+import fr.f4ioz.satcombo.domain.JournalFt
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.PassPredictor
 import fr.f4ioz.satcombo.location.Maidenhead
@@ -110,7 +111,12 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
                 contacts += qsos
                 val imagesIss = if (s.catnum == ISS && p.aosEpochMs >= debutCampagne()) imagesSstv(dossierSstv, p, piste) else emptyList()
                 if (imagesIss.isNotEmpty()) images += p to imagesIss
-                journal.enregistre(entree(tle, s, p, piste, suivi))
+                val e = entree(tle, s, p, piste, suivi)
+                journal.enregistre(e)
+                // The last pass of the linear transponder heard in FT4 too: its messages kept beside it.
+                if (s.catnum == FT4_SAT && suivi && p == choisis.last()) runCatching {
+                    File(journal.dossier, e.id + ".ft").writeText(JournalFt.ecritTout(ft4(e, piste, qsos)), Charsets.UTF_8)
+                }
                 nbPassages++
             }
             // Older contacts: the log goes back further than the journal.
@@ -268,6 +274,51 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
     private fun arrondi(v: Double) = Math.round(v * 100) / 100.0
     private fun ecart(a: Double, b: Double): Double = ((a - b + 540.0) % 360.0) - 180.0
 
+    // ---------------------------------------------------------------- FT4 heard on a pass
+
+    /**
+     * A pass's FT4 messages, made up: each 7.5 s slot above 8°, a few of the stations in the footprint calling CQ
+     * or answering each other, one of them calling the station (QF4DMO) through to its RR73, the pass's contacts
+     * calling CQ too. Its own random series, so the rest of the demonstration stays as it was.
+     */
+    private fun ft4(e: JournalPassage.Entree, piste: List<Pt>, qsos: List<LogEntry>): List<JournalFt.Decode> {
+        val r = java.util.Random(graine xor 0xF74L)
+        val out = ArrayList<JournalFt.Decode>()
+        val hauts = piste.filter { it.el >= 8.0 }
+        if (hauts.isEmpty()) return out
+        val duree = JournalFt.dureeTranche("FT4")
+        val milieu = hauts[hauts.size / 2].t
+        val qui = CORRESPONDANTS.firstOrNull { c -> qsos.none { it.callsign == c.indicatif } && Maidenhead.centre(c.locator) != null }
+        var tranche = hauts.first().t / duree * duree + duree
+        while (tranche + duree <= hauts.last().t) {
+            val q = hauts.minByOrNull { kotlin.math.abs(it.t - tranche) }!!
+            val vus = visibles(q, CORRESPONDANTS)
+            fun db() = (-21 + (q.el / 90.0 * 18).roundToInt() + r.nextInt(9)).coerceIn(-24, 12)
+            fun d(msg: String) = JournalFt.analyse(msg).let { (de, a, loc) ->
+                JournalFt.Decode(tranche, "FT4", db(), Math.round((r.nextDouble() * 1.4 - 0.3) * 10) / 10.0, 300 + r.nextInt(2400), msg, de, a, loc, catnum = e.catnum) }
+            val n = if (vus.isEmpty()) 0 else 1 + r.nextInt(minOf(3, vus.size))
+            for (c in vus.shuffled(r).take(n)) {
+                val autre = vus.filter { it != c }.let { if (it.isEmpty()) null else it[r.nextInt(it.size)] }
+                out += d(when {
+                    autre == null || r.nextInt(3) == 0 -> "CQ " + c.indicatif + " " + c.locator.take(4)
+                    r.nextBoolean() -> autre.indicatif + " " + c.indicatif + " " + c.locator.take(4)
+                    else -> autre.indicatif + " " + c.indicatif + " " + listOf("-12", "R-09", "RR73", "73", "-05", "R+02")[r.nextInt(6)]
+                })
+            }
+            // Someone calling the station, around the middle of the pass, and the pass's contacts calling CQ before.
+            if (qui != null) when (Math.floorDiv(tranche - milieu, duree)) {
+                0L -> out += d("$INDICATIF ${qui.indicatif} ${qui.locator.take(4)}")
+                2L -> out += d("$INDICATIF ${qui.indicatif} R-11")
+                4L -> out += d("$INDICATIF ${qui.indicatif} RR73")
+            }
+            qsos.firstOrNull { kotlin.math.abs(it.timeMs - 60_000L - tranche) < duree }?.let { c ->
+                out += d("CQ " + c.callsign + " " + c.theirLocator.take(4))
+            }
+            tranche += duree
+        }
+        return out
+    }
+
     // ---------------------------------------------------------------- the log
 
     /** Who could be heard at [q]: inside the satellite's footprint, well inside. */
@@ -414,6 +465,8 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
         const val ISS = 25544
         const val ISS_NOM = "ISS"
         const val QO100 = 43700
+        /** The satellite whose last pass was heard in FT4 too (its linear transponder). */
+        const val FT4_SAT = 44909
         const val DIAPOS = 12
         const val CAMPAGNE = "SSTV de démonstration"
         /** The made-up SSDV pictures' callsign and satellite. */

@@ -23,7 +23,8 @@ import fr.f4ioz.satcombo.sstv.Planche
  *    put them ([Reglage.incruste], [Reglage.cadre]), or a card of their
  *    own ([Reglage.carte]) — the montage's opening the video, the others
  *    closing it;
- *  - the montage's plan ([plan], "" the one drawing the pass's reception best).
+ *  - the montage's plan ([plan], "" the one drawing the pass's reception best);
+ *  - the FT8 / FT4 messages' panel over the replay ([ft]: shown or not, where, how visible).
  *
  * A pass with none of it kept reads as [DEFAUT]: the pictures as received,
  * nothing more — its videos as they always were.
@@ -34,6 +35,7 @@ data class OptionsJournal(
     val marqueTraitees: Boolean = false,
     val elements: Map<Element, Reglage> = emptyMap(),
     val plan: String = "",
+    val ft: JournalFt.Affichage = JournalFt.Affichage.DEFAUT,
 ) {
     /** The report's pieces the journal can show (their words: `pj_el_<code>`). */
     enum class Element(val code: String, /** Where it lands at first, laid over the view: left, top, width (shares). */ val defaut: CadreSstv,
@@ -86,6 +88,7 @@ data class OptionsJournal(
                 l += "element=" + k.code + "\t" + (if (r.incruste) "i" else "") + (if (r.carte) "c" else "") + "\t" + (r.cadre?.texte() ?: "")
             }
             if (o.plan.isNotBlank()) l += "plan=" + o.plan.replace('\t', ' ').replace('\n', ' ')
+            if (o.ft != JournalFt.Affichage.DEFAUT) l += "ft=" + o.ft.texte()
             return l
         }
 
@@ -105,6 +108,7 @@ data class OptionsJournal(
                     cadre = CadreSstv.lit(c.getOrElse(2) { "" }, k.min))))
             }
             "plan" -> o.copy(plan = v.trim())
+            "ft" -> o.copy(ft = JournalFt.Affichage.lit(v))
             else -> o
         }
 

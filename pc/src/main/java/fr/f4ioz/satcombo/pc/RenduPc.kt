@@ -84,6 +84,11 @@ object RenduPc {
         val donnees: ElementsJournal.Donnees? = null,
         /** The words on a processed picture, by its file (only when the pass asks them said). */
         val etiquettes: Map<String, String> = emptyMap(),
+        /** The FT8/FT4 messages heard during the pass, and their panel over the view ([PanneauFtPc]). */
+        val ft: List<fr.f4ioz.satcombo.domain.JournalFt.Decode> = emptyList(),
+        val affFt: fr.f4ioz.satcombo.domain.JournalFt.Affichage = fr.f4ioz.satcombo.domain.JournalFt.Affichage.DEFAUT,
+        /** My callsign and the pass's contacts, picked out among them. */
+        val ftMoi: String = "", val ftQsos: Set<String> = emptySet(),
     ) {
         val cadre = if (cielEntier) JournalPassage.Cadre() else JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -572,6 +577,8 @@ object RenduPc {
                 bas -= hEnc + 6 * dp
             }
         }
+        // The FT8/FT4 messages where the page placed their panel, on top (placed by hand, nothing hides it).
+        if (sc.affFt.affiche && sc.ft.isNotEmpty()) PanneauFtPc.dessine(g, sc.ft, sc.affFt, instant, w.toFloat(), haut.toFloat(), sc.ftMoi, sc.ftQsos)
         g.clip = null
         g.color = FOND; g.fillRect(0, haut, w, h - haut)
         val mise = legende(g, w, h, sc, instant, p)

@@ -681,7 +681,7 @@ object JournalPassage {
                 "reconstitue" -> e = e.copy(reconstitue = v == "1")
                 "masquee" -> e = e.copy(masquees = e.masquees + unesc(v))
                 "auto" -> e = e.copy(auto = unesc(v))
-                "sstv_version", "sstv_image", "sstv_marque", "element", "plan" -> e = e.copy(options = OptionsJournal.lit(e.options, k, v))
+                "sstv_version", "sstv_image", "sstv_marque", "element", "plan", "ft" -> e = e.copy(options = OptionsJournal.lit(e.options, k, v))
                 "s" -> runCatching { val c = v.split('\t'); sig += Signal(c[0].toLong(), c[1].toInt()) }
                 "tx" -> runCatching { val c = v.split('\t'); tx += Emission(c[0].toLong(), c[1].toLong()) }
                 "test" -> {

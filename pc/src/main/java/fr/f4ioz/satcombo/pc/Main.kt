@@ -122,6 +122,10 @@ fun main(args: Array<String>) {
         else son.son.demarre(c)
     }
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
+    // Each FT8/FT4 slot decoded kept for the journal's passes too (after PSK Reporter's, which it does not replace).
+    son.ft8.auDecode.let { avant ->
+        son.ft8.auDecode = { l -> avant?.invoke(l); journal.ft.recoit(l, station.etat.value.suivi?.catalogNumber ?: 0) }
+    }
     // The CW decoder knows the log's callsigns: one of them decoded is right.
     son.cw.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
     // FT8/FT4 hashed callsigns: those heard in clear (kept between two starts), the log's, ours.
