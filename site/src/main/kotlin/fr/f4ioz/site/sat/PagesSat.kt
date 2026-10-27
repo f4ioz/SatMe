@@ -185,9 +185,13 @@ class PageTle(private val s: Site) : ModuleSite {
         val z = s.config.fuseau
         val filtre = q.param("q")?.trim()?.take(30).orEmpty()
         val l = s.catalogue.satellites.filter { filtre.isEmpty() || it.name.contains(filtre, true) || it.catalogNumber.toString() == filtre }
-        val sb = StringBuilder("<header class=\"page-head\"><h1>TLE</h1><p>Les éléments orbitaux qu'utilisent les pages du site : le bulletin d'AMSAT (JSON et TLE, le plus frais des deux par satellite), " +
-            "pris par le serveur GP de SatMe, relus toutes les six heures. <a href=\"/sat/tle.txt\">Le fichier TLE</a>.</p></header>")
-        sb.append("<section class=\"card\"><header class=\"card-head\"><h2 class=\"card-title\">Sources</h2></header><div class=\"card-body\"><ul class=\"rows sources\">")
+        val gp = s.catalogue.serveurNom
+        val sb = StringBuilder("<header class=\"page-head\"><h1>TLE</h1><p>Les éléments orbitaux qu'utilisent les pages du site, tous pris au <b>serveur GP SatMe (")
+            .append(h(gp)).append(")</b> — jamais directement à CelesTrak ou AMSAT : le serveur les relaie pour tous — relus toutes les six heures ; " +
+            "le plus frais par satellite, son âge ci-dessous. <a href=\"/sat/tle.txt\">Le fichier TLE</a>.</p></header>")
+        sb.append("<section class=\"card\"><header class=\"card-head\"><h2 class=\"card-title\">Source : serveur GP SatMe (").append(h(gp)).append(")</h2>")
+        if (s.catalogue.pauseJusqua > maintenant) sb.append("<span class=\"card-meta\">en pause jusqu'au ").append(h(Html.utc(s.catalogue.pauseJusqua))).append("</span>")
+        sb.append("</header><div class=\"card-body\"><ul class=\"rows sources\">")
         s.catalogue.etats.forEach { e ->
             sb.append("<li><span><b>").append(h(e.nom)).append("</b>").append(if (e.adresse.isNotEmpty()) " <span class=\"dim\">" + h(e.adresse.removePrefix("https://")) + "</span>" else "")
                 .append("</span><span class=\"num\">").append(if (e.lu > 0) h(Html.dateHeure(e.lu, z)) else "jamais lu").append("</span><span class=\"num\">")
@@ -209,7 +213,7 @@ class PageTle(private val s: Site) : ModuleSite {
                 .append("</td><td class=\"lignes\"><code>").append(h(e.line1)).append("<br>").append(h(e.line2)).append("</code></td></tr>")
         }
         sb.append("</tbody></table></div>")
-        return s.gabarit.reponse(q, Page("TLE — éléments orbitaux", "Les éléments orbitaux (TLE) des satellites radioamateurs utilisés par le site : époque, âge, source AMSAT.",
+        return s.gabarit.reponse(q, Page("TLE — éléments orbitaux", "Les éléments orbitaux (TLE) des satellites radioamateurs utilisés par le site : époque, âge, pris au serveur GP SatMe.",
             sb.toString(), "/sat/tle", robots = if (filtre.isEmpty()) "index, follow" else "noindex, follow")).cache("public, max-age=300")
     }
 }

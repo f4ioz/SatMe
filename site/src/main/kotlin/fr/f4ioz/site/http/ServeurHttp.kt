@@ -92,6 +92,14 @@ class ServeurHttp(
             e.printStackTrace()
             runCatching { pageErreur(r, 500) }.getOrElse { Reponse.texte("Erreur interne", 500) }
         }
+        // A body the route did not read (refused before it: 401, 413…) is read away, 4 MB at most, so the client
+        // still sending it gets the answer rather than a reset connection; beyond that the connection ends with the answer.
+        if (r.methode == "POST" || r.methode == "DELETE") {
+            val reste = runCatching { val b = ByteArray(64 * 1024); var n = 0L
+                while (n < 4L * 1024 * 1024) { val k = ex.requestBody.read(b); if (k < 0) break; n += k }
+                n >= 4L * 1024 * 1024 }.getOrDefault(true)
+            if (reste) rep.entete("Connection", "close")
+        }
         envoie(ex, r, rep)
         val ms = (System.nanoTime() - debut) / 1_000_000
         journal("${Instant.now()} $ip ${r.methode} ${brut.take(200)} ${rep.statut} ${ms}ms")

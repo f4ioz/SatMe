@@ -7,7 +7,6 @@ indicatif = F4IOZ
 nom = Olivier
 locator = JN18FS
 fuseau = Europe/Paris
-club = Radioclub F6KMX
 lien.qrz = https://www.qrz.com/db/F4IOZ
 lien.github = https://github.com/f4ioz
 
@@ -36,8 +35,11 @@ publication.video_max_mo = 200
 # La page privée /admin : le mot de passe haché (« f4ioz-site mot-de-passe »). Vide : pas de page admin.
 admin.mot_de_passe =
 
-# Les éléments orbitaux : le serveur GP de SatMe (AMSAT si muet).
-tle.serveur = https://gp.f4ioz.fr
+# Les éléments orbitaux : uniquement le serveur GP de SatMe (jamais CelesTrak ni AMSAT directement),
+# relu toutes les 6 h ; après un refus (403/429), pause d'une heure doublée jusqu'à un jour.
+gp = https://gp.f4ioz.fr
+# Les groupes lus sur le serveur : amsat (bulletin AMSAT), amateur, satnogs, images (satellites à images, un par un).
+gp.sources = amsat
 # Les satellites des prochains passages de l'accueil (noms AMSAT ou numéros NORAD).
 satellites.accueil = ISS, SO-50, RS-44, AO-7, PO-101, AO-91
 

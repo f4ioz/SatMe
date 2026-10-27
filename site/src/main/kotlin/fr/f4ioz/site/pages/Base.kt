@@ -71,13 +71,7 @@ class Bientot : ModuleSite {
     override fun installe(r: Routeur) {}
 
     companion object {
-        val SLOTS = listOf(
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.TRAFIC, 10, "/dx", "DX cluster", "dx", bientot = true),
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.TRAFIC, 20, "/bands", "Bandes", "bands", bientot = true),
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.TRAFIC, 30, "/beacons", "Balises", "beacons", bientot = true),
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.TRAFIC, 40, "/wspr", "WSPR", "wspr", bientot = true),
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.TRAFIC, 50, "/openings", "Ouvertures", "openings", bientot = true),
-            fr.f4ioz.site.EntreeMenu(fr.f4ioz.site.Groupe.STATION, 10, "/station", "Station", "station", bientot = true),
-        )
+        /** Every phase-2 page is there now (DX, Bandes, Balises, WSPR, Ouvertures, Station): no slot left. */
+        val SLOTS = emptyList<fr.f4ioz.site.EntreeMenu>()
     }
 }

@@ -40,7 +40,7 @@ class Accueil(private val s: Site) : ModuleSite {
         val z = c.fuseau
         val sb = StringBuilder()
         sb.append("""<section class="home-hero" aria-labelledby="hero-title">${Icones.marque(88, "h")}<div>
-<h1 id="hero-title">${h(c.indicatif)}<small>${h(c.nom)} · radioamateur · ${h(c.locator)} · ${h(c.club)}</small></h1>
+<h1 id="hero-title">${h(c.indicatif)}<small>${h(c.nom)} · radioamateur · ${h(c.locator)}${if (c.club.isNotEmpty()) " · " + h(c.club) else ""}</small></h1>
 <p>Satellites, trafic HF et VHF depuis la région parisienne : articles, images SSTV reçues, logbook, outils de passages
 et de poursuite — et SatMe, l'appli de poursuite de satellites que je développe.</p>
 <div class="pills"><span class="pill accent"><span class="dot"></span><span data-utc-clock>--:-- UTC</span></span>
@@ -127,9 +127,9 @@ ${tuile("/logbook", "logbook", "Logbook", "Les QSO, par satellite")}
 """)
         val jsonLd = JSONObject().put("@context", "https://schema.org").put("@type", "Person").put("name", c.nom).put("alternateName", c.indicatif)
             .put("url", c.urlBaseNette + "/").put("sameAs", JSONArray(listOf(c.qrz, c.github)))
-            .put("memberOf", JSONObject().put("@type", "Organization").put("name", c.club))
+            .also { j -> if (c.club.isNotEmpty()) j.put("memberOf", JSONObject().put("@type", "Organization").put("name", c.club)) }
             .put("knowsAbout", JSONArray(listOf("Radioamateur", "Satellites radioamateurs", "SSTV", "QO-100")))
-        return s.gabarit.reponse(q, Page("", "Site radioamateur de ${c.indicatif} — ${c.nom} (${c.locator}), ${c.club} : articles, images SSTV reçues, logbook, passages de satellites, Sked, Orbites et SatMe.",
+        return s.gabarit.reponse(q, Page("", "Site radioamateur de ${c.indicatif} — ${c.nom} (${c.locator})${if (c.club.isNotEmpty()) ", " + c.club else ""} : articles, images SSTV reçues, logbook, passages de satellites, Sked, Orbites et SatMe.",
             sb.toString(), "/", jsonLd = jsonLd.toString(), ogImage = s.statique.url("img/satme/pc-orbites-tableau.webp").substringBefore('?'))).cache("public, max-age=60")
     }
 

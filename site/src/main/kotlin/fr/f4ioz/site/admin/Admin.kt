@@ -55,6 +55,20 @@ class Admin(private val s: Site, private val horloge: () -> Long = System::curre
     private fun cookie(q: Requete, valeur: String, maxAge: Int): String =
         nomCookie(q) + "=" + valeur + "; Path=/; HttpOnly; SameSite=Strict; Max-Age=" + maxAge + (if (securise(q)) "; Secure" else "")
 
+    /** True when [q] comes with a live admin session (the station's panadapter, private pages). */
+    fun estAdmin(q: Requete): Boolean = actif && session(q) != null
+
+    /**
+     * True when the Cookie header [entete] carries a live admin session, under either of its names
+     * (the WebSocket's handshake, read outside the HTTP server).
+     */
+    fun sessionValide(entete: String?): Boolean {
+        if (!actif || entete.isNullOrBlank()) return false
+        val cles = entete.split(';').map { it.trim() }.filter { it.startsWith("__Host-f4ioz_admin=") || it.startsWith("f4ioz_admin=") }
+            .map { it.substringAfter('=') }.filter { it.length in 30..60 }
+        return cles.any { c -> sessions[c]?.let { it.expire >= horloge() } == true }
+    }
+
     private fun session(q: Requete): Pair<String, Session>? {
         val cle = q.cookie(nomCookie(q))?.takeIf { it.length in 30..60 } ?: return null
         val se = sessions[cle] ?: return null

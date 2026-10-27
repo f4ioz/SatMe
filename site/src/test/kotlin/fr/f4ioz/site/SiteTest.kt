@@ -67,8 +67,14 @@ class SiteTest {
     @Test fun `every page of the menu answers, with its security headers`() {
         for (p in listOf("/", "/articles", "/articles/2026/essai", "/articles/feed.xml", "/gallery", "/logbook", "/satme", "/sat/pass", "/sat/sked",
                 "/sat/orbites", "/sat/radar", "/sat/tle", "/grid", "/grid?a=JN18FS&b=IO91WM", "/a-propos", "/robots.txt", "/sitemap.xml", "/admin",
+                "/dx", "/bands", "/beacons", "/wspr", "/openings", "/station", "/static/js/hf-commun.js", "/static/js/dx.js", "/static/js/bandes.js",
+                "/static/js/balises.js", "/static/js/wspr.js", "/static/js/ouvertures.js", "/static/js/station.js", "/static/css/hf.css",
+                "/static/vendor/leaflet/leaflet.js", "/static/vendor/leaflet/leaflet.css", "/static/vendor/leaflet/LICENSE.txt",
+                "/api/dx/spots", "/api/dx/solar", "/api/prop/map", "/api/prop/map?source=wspr", "/api/prop/map?source=rbn", "/api/prop/iono?layer=muf",
+                "/api/wspr/bands", "/api/wspr/footprint?call=F4IOZ", "/api/rbn/bands", "/api/rbn/footprint", "/api/rbn/openings", "/api/rbn/heat",
                 "/static/css/site.css", "/static/js/orbites.js", "/static/js/sked.js", "/api/orbites", "/api/satellites")) {
-            val r = get(p)
+            // Their own visitor: the server's brake (300 a minute per address) is for the other tests' one.
+            val r = get(p, mapOf("X-Forwarded-For" to "192.0.2.10"))
             assertEquals(p, 200, r.statusCode())
             assertEquals(p, "nosniff", r.headers().firstValue("x-content-type-options").orElse(""))
             assertTrue(p, r.headers().firstValue("content-security-policy").orElse("").contains("frame-ancestors 'self'"))
@@ -165,5 +171,52 @@ class SiteTest {
         val csrf = Regex("name=\"csrf\" value=\"([^\"]+)\"").find(page.body())!!.groupValues[1]
         assertNotNull(csrf)
         assertEquals(303, envoie("POST", "/admin/rafraichir/tle", "csrf=$csrf".toByteArray(), mapOf("Cookie" to c, "Content-Type" to "application/x-www-form-urlencoded")).statusCode())
+    }
+
+    @Test fun `the HF pages are in the menu, nothing « bientôt » is left, the club is gone`() {
+        val b = get("/").body()
+        for (p in listOf("/dx", "/bands", "/beacons", "/wspr", "/openings", "/station")) assertTrue(p, b.contains("href=\"$p\""))
+        assertFalse(b.contains("rail-soon"))
+        assertFalse(b.contains("F6KMX"))
+        assertTrue(get("/sitemap.xml").body().contains("https://f4ioz.example/openings"))
+        // The page's script is the site's file, run under the nonce; the map's library is the site's own copy.
+        val dx = get("/dx")
+        assertTrue(dx.body().contains("/static/vendor/leaflet/leaflet.js?v="))
+        assertFalse(dx.body().contains("unpkg.com")); assertFalse(dx.body().contains("tile.openstreetmap.org"))
+    }
+
+    @Test fun `offline, the HF APIs answer empty and say why`() {
+        val d = JSONObject(get("/api/dx/spots?mode=FT8&band=20m").body())
+        assertEquals(0, d.getInt("count")); assertEquals("hors ligne", d.getString("error"))
+        // A mode or band that is not ours never reaches PSKReporter: it is simply ignored.
+        assertEquals(200, get("/api/dx/spots?mode=%3Cscript%3E&band=x").statusCode())
+        assertTrue(JSONObject(get("/api/prop/iono?layer=autre").body()).has("error"))
+        assertEquals("F4IOZ", JSONObject(get("/api/wspr/footprint").body()).getString("call"))
+    }
+
+    @Test fun `RBN archives are read for the station's locator only`() {
+        val o = JSONObject(get("/api/rbn/openings?loc=IO91WM&days=7").body())
+        assertTrue(o.getString("error").contains("JN18FS"))
+        assertEquals("locator invalide", JSONObject(get("/api/rbn/openings?loc=ZZ99").body()).getString("error"))
+        val j = JSONObject(get("/api/rbn/openings?loc=JN18FS&days=7").body())
+        assertEquals(0, j.getInt("days")); assertFalse(j.getBoolean("ingesting"))
+    }
+
+    @Test fun `the HF APIs have their own brake per visitor`() {
+        val ip = mapOf("X-Forwarded-For" to "198.51.100.77")
+        val codes = (1..32).map { get("/api/hf/indicatif?call=DL1ABC", ip).statusCode() }
+        assertEquals(200, codes.first()); assertEquals(429, codes.last())
+        // Another visitor is not braked.
+        assertEquals(200, get("/api/hf/indicatif?call=DL1ABC", mapOf("X-Forwarded-For" to "198.51.100.78")).statusCode())
+        val p = JSONObject(get("/api/hf/indicatif?call=JA1ABC", mapOf("X-Forwarded-For" to "198.51.100.79")).body())
+        assertTrue(p.getDouble("lon") > 100); assertTrue(p.getBoolean("approx"))
+    }
+
+    @Test fun `the station is off by default, and says nothing of the LAN`() {
+        val p = get("/station")
+        assertEquals(200, p.statusCode())
+        assertFalse(p.body().contains("pan-canvas"))
+        assertFalse(p.body().contains("js/station.js"))
+        assertEquals(404, get("/api/sdr/status").statusCode())
     }
 }

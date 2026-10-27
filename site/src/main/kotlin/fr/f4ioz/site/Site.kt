@@ -33,13 +33,17 @@ import java.util.concurrent.TimeUnit
 class Site(val config: Config, private val horloge: () -> Long = System::currentTimeMillis) {
 
     val statique = Statique()
-    val catalogue = CatalogueSite(File(config.donnees, "cache/tle"), config.tleServeur, config.horsLigne, horloge)
+
+    /** Who the site says it is to the servers it asks: « f4ioz-site/<version> (+https://f4ioz.fr) », so they can let it in. */
+    val agent: String get() = agentDe(config)
+    val catalogue = CatalogueSite(File(config.donnees, "cache/tle"), config.tleServeur, config.horsLigne, horloge, config.gpSources, agent)
     val articles = Articles(config.contenu, horloge)
     val albums = Albums(File(config.contenu, "galeries"), File(config.donnees, "cache/albums"))
     val publications = Publications(File(config.donnees, "publications"), horloge)
     val logbook = Logbook(File(config.donnees, "cache/logbook.json"), config.wavelogUrl, config.wavelogCle, config.wavelogStations,
         publications, config.horsLigne, horloge)
 
+    val admin by lazy { fr.f4ioz.site.admin.Admin(this) }
     val modules: List<ModuleSite> by lazy { Modules.liste(this) }
     val gabarit = Gabarit(config, { modules.flatMap { it.menu } }, statique)
 
@@ -83,6 +87,13 @@ class Site(val config: Config, private val horloge: () -> Long = System::current
         s.demarre()
         serveur = s
         return s.portReel
+    }
+
+    companion object {
+        /** The program's version (the package's), « dev » in a build tree. */
+        val VERSION: String = Site::class.java.`package`?.implementationVersion ?: "dev"
+
+        fun agentDe(c: Config): String = "f4ioz-site/$VERSION (+${c.urlBaseNette})"
     }
 
     fun arrete() { serveur?.arrete(); taches.shutdownNow() }

@@ -122,7 +122,7 @@ class Gabarit(private val config: Config, private val menu: () -> List<EntreeMen
         sb.append("<nav id=\"site-rail\" class=\"rail\" aria-label=\"Navigation principale\">\n")
         sb.append("<a class=\"rail-brand\" href=\"/\" title=\"").append(h(c.indicatif)).append(" — accueil\" aria-label=\"").append(h(c.indicatif)).append(" — accueil\">")
             .append(Icones.marque(36, "r")).append("<span class=\"rail-brand-txt\"><span class=\"rail-call\">").append(h(c.indicatif))
-            .append("</span><span class=\"rail-sub\">").append(h(c.locator)).append(" · ").append(h(c.club.substringAfterLast(' '))).append("</span></span></a>\n")
+            .append("</span><span class=\"rail-sub\">").append(h(c.locator)).append("</span></span></a>\n")
         sb.append("<div class=\"rail-clock\" aria-hidden=\"true\"><span data-utc-clock>--:--:-- UTC</span></div>\n")
         val entrees = menu()
         for (g in Groupe.values()) {
@@ -151,7 +151,7 @@ class Gabarit(private val config: Config, private val menu: () -> List<EntreeMen
 
     private fun pied(): String {
         val c = config
-        return "<footer class=\"site-footer\"><div class=\"container\"><p>© ${h(c.indicatif)} — ${h(c.nom)} · ${h(c.locator)} · ${h(c.club)} · " +
+        return "<footer class=\"site-footer\"><div class=\"container\"><p>© ${h(c.indicatif)} — ${h(c.nom)} · ${h(c.locator)} · " + (if (c.club.isNotEmpty()) "${h(c.club)} · " else "") +
             "<a href=\"${h(c.qrz)}\" rel=\"noopener\">QRZ</a> · <a href=\"/satme\">SatMe</a> · <a href=\"${h(c.github)}\" rel=\"noopener\">GitHub</a> · " +
             "<a href=\"/articles/feed.xml\">Flux Atom</a></p></div></footer>\n"
     }

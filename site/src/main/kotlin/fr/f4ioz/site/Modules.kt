@@ -8,7 +8,13 @@
  */
 package fr.f4ioz.site
 
-import fr.f4ioz.site.admin.Admin
+import fr.f4ioz.site.hf.ApiHf
+import fr.f4ioz.site.hf.PageBalises
+import fr.f4ioz.site.hf.PageBandes
+import fr.f4ioz.site.hf.PageDx
+import fr.f4ioz.site.hf.PageOuvertures
+import fr.f4ioz.site.hf.PageWspr
+import fr.f4ioz.site.station.PageStation
 import fr.f4ioz.site.pages.Accueil
 import fr.f4ioz.site.pages.Base
 import fr.f4ioz.site.pages.Bientot
@@ -27,9 +33,10 @@ import fr.f4ioz.site.sat.PageTle
 
 /**
  * The site's pages, in one place. To add one (phase 2: the DX cluster, the
- * bands, the beacons, WSPR, the openings, the station's SDR): write a
- * [ModuleSite] — its routes, its [EntreeMenu]s, its paths for the sitemap —
- * put it in this list and take its slot out of [Bientot.SLOTS].
+ * bands, the beacons, WSPR, the openings, the station's SDR — all there
+ * now): write a [ModuleSite] — its routes, its [EntreeMenu]s, its paths for
+ * the sitemap — put it in this list and take its slot out of [Bientot.SLOTS]
+ * if it had one.
  */
 object Modules {
     fun liste(s: Site): List<ModuleSite> = listOf(
@@ -47,7 +54,14 @@ object Modules {
         PageTle(s),
         PageGrid(s),
         ApiPublication(s.config, s.publications),
-        Admin(s),
+        s.admin,
+        ApiHf(s),
+        PageDx(s),
+        PageBandes(s),
+        PageBalises(s),
+        PageWspr(s),
+        PageOuvertures(s),
+        PageStation(s),
         Bientot(),
         // Last: « /<slug> » for the pages of contenu/pages.
         PagesArticles.PagesTexte(s),
