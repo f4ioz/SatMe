@@ -850,6 +850,13 @@ ${STYLE_JETONS}
   .ap-tab { max-height:calc(50vh - 120px); overflow:auto; }
   #ap-liste { max-height:calc(100vh - 470px); min-height:60px; overflow:auto; }
   .ap-bot { font-size:13px; }
+  /* The auto-pilot's mark beside a pass or a satellite, wherever they are listed: dimmed when skipped, pulsing while it runs. */
+  .ap-m { display:inline-block; font-size:12px; line-height:1; margin-left:3px; vertical-align:baseline; cursor:help; font-family:Drapeaux,system-ui; }
+  td:has(> .ap-m) { white-space:nowrap; }
+  .ap-m.perdu { opacity:.4; filter:grayscale(1); }
+  .ap-m.coupe { opacity:.55; }
+  .ap-m.encours { animation:ap-m-pouls 1.4s ease-in-out infinite; filter:drop-shadow(0 0 3px var(--ambre)); }
+  @keyframes ap-m-pouls { 50% { transform:scale(1.3); } }
   .pastille.ap-st-PREVU { background:rgba(63,224,200,.14); color:var(--rx); }
   .pastille.ap-st-EN_COURS { background:rgba(255,180,84,.2); color:var(--ambre); }
   .pastille.ap-st-FAIT { background:rgba(91,214,138,.2); color:var(--vert); }
@@ -2263,7 +2270,7 @@ ${rail()}
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
   <button id="h-ap" class="h-puce" hidden onclick="apMaitreBascule()" aria-pressed="false" title="Auto-pilote SSTV (Agenda › SSTV) : clic pour l'activer ou le couper. Réception seulement">🤖<span class="h-m" id="h-ap-t">Auto-pilote</span></button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
-  <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
+  <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span id="h-pass-ap"></span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span class="h-esp"></span>
   <button id="h-k" class="h-cmd" onclick="palette()" title="Aller à un onglet, accorder, suivre un satellite, chercher un indicatif">${IconesPc.svg("search")}<span>Commandes</span><kbd>Ctrl K</kbd></button>
@@ -2497,7 +2504,7 @@ ${rail()}
         <datalist id="tous"></datalist>
         <button onclick="choisitParNom()">Suivre</button>
       </div>
-      <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
+      <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><span id="nom-ap"></span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
         <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
           <b>AMSAT</b><span class="petit" id="amsat"></span>
           <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
@@ -5490,7 +5497,7 @@ function dessineAgenda() {
   const cle = JSON.stringify(E.agenda);
   if (cle === agendaVu) return;
   agendaVu = cle;
-  g('g-liste').innerHTML = E.agenda.map(a => '<tr' + (a.enCours ? ' class="encours"' : '') + '><td>' + jourHeure(a.de) + (a.a > a.de ? ' → ' + hm(a.a) : '') +
+  g('g-liste').innerHTML = E.agenda.map(a => '<tr' + (a.enCours ? ' class="encours"' : '') + '><td>' + jourHeure(a.de) + (a.a > a.de ? ' → ' + hm(a.a) : '') + (a.sat ? apMarque(a.sat, a.de, a.a) : '') +
     '</td><td>' + esc(a.titre) + (a.type ? ' <span class="pastille off">' + esc(a.type) + '</span>' : '') + (a.note ? '<div class="petit">' + esc(a.note) + '</div>' : '') +
     '</td><td>' + esc(a.sat) + '</td><td class="act"><label class="petit"><input type="checkbox" ' + (a.actif ? 'checked' : '') +
     ' onchange="post(\'api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
@@ -6458,7 +6465,7 @@ function obTbMaj() {
   else montre('passages', '<div class="ob-w-t">Prochains passages</div>' + (l.length ? '<div class="ob-w-pas">' + l.map(p => {
       const la = p.aos <= d.t;
       return '<i style="background:' + p.couleur + '"></i><span class="n">' + esc(p.nom) + '</span><span class="d' + (la ? ' la' : '') + '">' +
-        (la ? '↑ encore ' + obDuree(p.los - d.t) : p.aos - d.t < 3600000 ? 'dans ' + obDuree(p.aos - d.t) : hm(p.aos)) + '</span><span class="m">' + p.max.toFixed(0) + '°</span>';
+        (la ? '↑ encore ' + obDuree(p.los - d.t) : p.aos - d.t < 3600000 ? 'dans ' + obDuree(p.aos - d.t) : hm(p.aos)) + apMarque(p.catnum, p.aos, p.los) + '</span><span class="m">' + p.max.toFixed(0) + '°</span>';
     }).join('') + '</div>' : '<div class="petit">Aucun dans les 24 h (les satellites cochés, sinon les favoris).</div>'));
   // The satellite chosen in the list.
   const e = d.e, s = d.sat;
@@ -6885,7 +6892,7 @@ function dessinePassages() {
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
     return '<tr class="' + cl + '" title="Suivre ' + p.nom.replace(/"/g, '') + ' : le carnet, la carte, le poste et le rotor le suivent" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
-      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + marqueHorizon(p) + '</td><td>' +
+      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + marqueHorizon(p) + apMarque(p.catnum, p.aos, p.los) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') + (p.skeds ? ' <span title="' + p.skeds + ' sked(s) annoncé(s) sur hams.at" style="color:var(--ambre)">📣' + (p.skeds > 1 ? p.skeds : '') + '</span>' : '') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
@@ -7122,6 +7129,7 @@ function dessine() {
   if (document.activeElement !== g('indicatif') && !g('indicatif').value) g('indicatif').value = E.indicatif || '';
   if (document.activeElement !== g('locator') && !g('locator').value) g('locator').value = E.locator || '';
   txt('nom', E.suivi ? E.suivi.nom : '— choisis un passage');
+  apSuivi();
   g('fav').style.display = E.suivi ? '' : 'none';
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
@@ -7170,7 +7178,7 @@ function dessine() {
   const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
   if (sv !== g('suivants').dataset.vu) {
     g('suivants').dataset.vu = sv;
-    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + marqueHorizon(p) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
+    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + marqueHorizon(p) + apMarque(p.catnum, p.aos, p.los) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
       duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
   }
   dessineAgenda();
@@ -15892,7 +15900,7 @@ async function ticVeille() {
   vaVu = cle;
   g('va-sats').innerHTML = VA.sats.map(s => '<span class="pastille">' + esc(s.nom) + ' <a href="#" onclick="veille(\'retire=' + s.n + '\');return false" title="Retirer" style="color:var(--rose);text-decoration:none">✕</a></span>').join('') ||
     '<span class="petit">aucun satellite choisi</span>';
-  g('va-plan').innerHTML = VA.plan.map(l => '<tr' + (l.cle === VA.enCours ? ' class="encours"' : '') + (l.garde ? '' : ' style="opacity:.55"') + '><td>' + jourHeure(l.aos) + ' → ' + hm(l.los) +
+  g('va-plan').innerHTML = VA.plan.map(l => '<tr' + (l.cle === VA.enCours ? ' class="encours"' : '') + (l.garde ? '' : ' style="opacity:.55"') + '><td>' + jourHeure(l.aos) + ' → ' + hm(l.los) + apMarque(l.n, l.aos, l.los) +
     '</td><td>' + esc(l.sat) + (l.perdu ? '<div class="petit">pendant ' + esc(l.perdu) + '</div>' : '') + '</td><td>' + l.el + '°</td><td>' + duree(l.los - l.aos) +
     '</td><td class="act"><label class="petit"><input type="checkbox" ' + (l.garde ? 'checked' : '') + (l.perdu ? ' disabled' : '') +
     ' onchange="veille((this.checked ? \'garde=\' : \'ecarte=\') + \'' + l.cle + '\')"> garder</label></td></tr>').join('') ||
@@ -15903,6 +15911,40 @@ setInterval(() => { if (ouverte('agenda')) ticVeille(); }, 2000);
 // ------------------------------------------------------------------ Agenda › SSTV: campaigns and their auto-pilot (receive only)
 let AP = null, apVu = '', apEdit = '', apEmisSat = 0, apListesVu = '';
 const AP_STATUTS = { PREVU: 'prévu', CHEVAUCHE: 'perdu (autre passage)', EN_COURS: 'en cours', FAIT: 'reçu', ECARTE: 'écarté', ARRETE: 'arrêté', INTERROMPU: 'interrompu' };
+/*
+ * The auto-pilot's mark, the same 🤖 as the Frise, beside the passes and the satellites it will take, in every list
+ * (Station, Suivi, the header, Orbites, the dashboard). From AP.prochains, read every 3 s anyway: nothing more asked.
+ */
+/** The 🤖 beside the followed satellite's name (Station). */
+function apSuivi() {
+  const h = E && E.suivi ? apMarqueSat(E.suivi.catnum) : '', b = g('nom-ap');
+  if (b && b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; }
+}
+/**
+ * The auto-pilot's pass of [sat] (its number, or its name for the agenda's lines) around [aos]…[los] (the lists work out
+ * their own times: a little slack), else null.
+ */
+function apPassage(sat, aos, los) {
+  if (!AP || AP.absent || !AP.prochains || !sat || !aos) return null;
+  const fin = los || aos + 60000, nom = typeof sat === 'string';
+  return AP.prochains.find(p => (nom ? p.sat === sat : p.catnum === sat) && p.aos <= fin + 120000 && p.los >= aos - 120000) || null;
+}
+/** The 🤖 of a planned pass [p] (an entry of AP.prochains): its campaign and status in the tooltip. */
+function apIcone(p, quand) {
+  const pris = p.statut === 'PREVU' || p.statut === 'EN_COURS';
+  const cl = p.statut === 'EN_COURS' ? ' encours' : !pris ? ' perdu' : !AP.maitre ? ' coupe' : '';
+  const t = 'Auto-pilote : campagne « ' + p.nom + ' » — ' + (pris ? 'réception automatique' : 'pas reçu') + ' (' + (AP_STATUTS[p.statut] || p.statut) + ')' + (p.raison ? ' : ' + p.raison : '') + (quand ? ' · ' + quand : '') +
+    (pris && !AP.maitre ? ' · auto-pilote coupé : rien ne démarrera tant qu’il est coupé' : '');
+  return '<span class="ap-m' + cl + '" title="' + esc(t).replace(/"/g, '&quot;') + '" aria-label="' + esc(t).replace(/"/g, '&quot;') + '">🤖</span>';
+}
+/** The mark of [sat]'s pass at [aos]…[los], or '' when the auto-pilot does not take it. */
+function apMarque(sat, aos, los) { const p = apPassage(sat, aos, los); return p ? apIcone(p) : ''; }
+/** The mark of a satellite the auto-pilot will take (its pass running, else its next one in the tooltip), or ''. */
+function apMarqueSat(catnum) {
+  if (!AP || AP.absent || !AP.prochains || !catnum) return '';
+  const l = AP.prochains.filter(p => p.catnum === catnum), p = l.find(x => x.statut === 'EN_COURS') || l.find(x => x.statut === 'PREVU') || l[0];
+  return p ? apIcone(p, p.statut === 'PREVU' ? 'prochain passage reçu ' + jourHeure(p.aos) : '') : '';
+}
 async function apCharge() {
   try { AP = await (await fetch('api/autopilote')).json(); } catch (x) { AP = null; }
   const ok = !!(AP && !AP.absent && AP.campagnes);
@@ -15910,6 +15952,18 @@ async function apCharge() {
   apTete();
   if (ok && ouverte('agenda')) apDessine();
   if (ok && ouverte('frise') && F) dessineFrise();
+  apMarquesChangent();
+}
+/* The lists bearing the 🤖 drawn again only when the auto-pilot's passes (or its switch) change. */
+let apMarquesVu = '';
+function apMarquesChangent() {
+  const k = AP && !AP.absent && AP.prochains ? JSON.stringify([AP.maitre, AP.prochains.map(p => [p.catnum, p.aos, p.statut, p.raison, p.nom])]) : '';
+  if (k === apMarquesVu) return;
+  apMarquesVu = k;
+  dessinePassages();
+  g('suivants').dataset.vu = ''; agendaVu = ''; vaVu = '';
+  if (typeof Orbites !== 'undefined' && Orbites.autopilote) Orbites.autopilote();
+  apSuivi();
 }
 /** The header's chip (the master switch) and the banner while a pass runs. */
 function apTete() {
@@ -18914,9 +18968,10 @@ function rendTete() {
   if (p && p.aos) {
     const dedans = n >= p.aos && n < p.los;
     txt('h-pass-n', p.nom); txt('h-pass-t', dedans ? 'LOS ' + duree(p.los - n) : 'AOS ' + duree(p.aos - n));
+    const hap = apMarque(p.catnum, p.aos, p.los); if (g('h-pass-ap').dataset.h !== hap) { g('h-pass-ap').dataset.h = hap; g('h-pass-ap').innerHTML = hap; }
     g('h-pass').classList.toggle('encours', dedans); g('h-pass').classList.toggle('proche', !dedans && p.aos - n < 300000);
     g('h-pass').title = 'Passage de ' + p.nom + ' : ' + hm(p.aos) + ' → ' + hm(p.los) + ', ' + Math.round(p.elMax) + '° au plus haut';
-  } else { txt('h-pass-n', E && E.suivi ? E.suivi.nom : 'aucun passage'); txt('h-pass-t', ''); }
+  } else { txt('h-pass-n', E && E.suivi ? E.suivi.nom : 'aucun passage'); txt('h-pass-t', ''); g('h-pass-ap').innerHTML = ''; g('h-pass-ap').dataset.h = ''; }
   // The status bar.
   const sb = (id, cl, t) => { const e = g(id); const k = 'sb-i' + (cl ? ' ' + cl : ''); if (e.className !== k) e.className = k; txt(id + '-t', t); };
   sb('sb-sdr', r && !r.absent ? (r.actif ? (r.erreur ? 'warn' : 'ok') : (r.erreur ? 'danger' : '')) : '',

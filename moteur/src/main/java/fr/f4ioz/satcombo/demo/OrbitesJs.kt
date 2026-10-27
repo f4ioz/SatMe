@@ -1671,12 +1671,21 @@ const Orbites = (function () {
     const box = el('ob-sats'); box.innerHTML = '';
     l.forEach(s => {
       const r = document.createElement('div'); r.className = 'ob-sat' + (s === OB.choisi ? ' choisi' : ''); r.dataset.n = s.catnum;
-      r.innerHTML = '<input type="checkbox" aria-label="Afficher ' + echappe(s.nom) + '"' + (s.on ? ' checked' : '') + '><div class="ob-nom"><span class="ob-pastille" style="background:' + s.couleur + '"></span><span>' + echappe(s.nom) + (s.suivi ? ' <small>(suivi)</small>' : s.fav ? ' <small>★</small>' : '') + '</span></div><div class="ob-el"></div><div class="ob-det"></div>';
+      r.innerHTML = '<input type="checkbox" aria-label="Afficher ' + echappe(s.nom) + '"' + (s.on ? ' checked' : '') + '><div class="ob-nom"><span class="ob-pastille" style="background:' + s.couleur + '"></span><span>' + echappe(s.nom) + (s.suivi ? ' <small>(suivi)</small>' : s.fav ? ' <small>★</small>' : '') + '<span class="ob-ap"></span></span></div><div class="ob-el"></div><div class="ob-det"></div>';
       r.querySelector('input').onclick = e => { e.stopPropagation(); s.on = e.target.checked; gardeCoches(); tab.scene.synchro(); };
       r.onclick = () => choisis(s);
       box.appendChild(r);
     });
     if (!l.length) box.innerHTML = '<div class="petit" style="padding:6px">' + (OB.sats.length ? 'Aucun satellite ne correspond.' : 'Aucun élément orbital chargé.') + '</div>';
+    marquesAp();
+  }
+  /* The page's SSTV auto-pilot (when there is one): its 🤖 on the satellites it will take and on their passes, as in the other lists. */
+  function marquesAp() {
+    if (!tab || typeof apMarque !== 'function') return;
+    const met = (b, h) => { if (b && b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; } };
+    tab.v.querySelectorAll('.ob-sat').forEach(r => met(r.querySelector('.ob-ap'), apMarqueSat(+r.dataset.n)));
+    const s = OB.choisi;
+    el('ob-passages').querySelectorAll('.ob-pas').forEach(b => { const p = OB.passages[+b.dataset.i]; met(b.querySelector('.ob-ap'), s && p ? apMarque(s.catnum, p.aos, p.los) : ''); });
   }
   function lignesSats(t) {
     tab.v.querySelectorAll('.ob-sat').forEach(r => {
@@ -1736,12 +1745,13 @@ const Orbites = (function () {
     if (!OB.passages.length) box.innerHTML += '<div class="petit">Aucun passage au-dessus de l’horizon dans les 36 h.</div>';
     OB.passages.forEach((p, i) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'ob-pas'; b.setAttribute('aria-pressed', 'false'); b.dataset.i = i;
-      b.innerHTML = '<b>' + (p.aos <= de ? 'en cours' : jour(p.aos) + ' ' + hh(p.aos)) + '</b><span class="ob-max">' + p.max.toFixed(0) + '°</span><span class="ob-sous">' + Math.round((p.los - p.aos) / 60000) + ' min · ' + cardinal(p.azAos) + ' → ' + cardinal(p.azLos) + (i ? ' · rejouer' : ' · en direct') + '</span>';
+      b.innerHTML = '<b>' + (p.aos <= de ? 'en cours' : jour(p.aos) + ' ' + hh(p.aos)) + '<span class="ob-ap"></span></b><span class="ob-max">' + p.max.toFixed(0) + '°</span><span class="ob-sous">' + Math.round((p.los - p.aos) / 60000) + ' min · ' + cardinal(p.azAos) + ' → ' + cardinal(p.azLos) + (i ? ' · rejouer' : ' · en direct') + '</span>';
       // The first one live, the others replayed.
       b.onclick = () => { if (i) prendPassage(p, true); else direct(); };
       box.appendChild(b);
     });
     if (OB.passages[0]) suisPassage(OB.passages[0]);
+    marquesAp();
     instruments(de);
   }
   /** [p] the pass shown: its sky track, its profile, the camera turned to its AOS. */
@@ -1810,6 +1820,7 @@ const Orbites = (function () {
       else if (t - p.aos < 25000) { texte = 'AOS !'; sous = s.nom + ' est là · az ' + e.az.toFixed(0) + '°'; flash = true; }
       else { texte = e.el.toFixed(0) + '°'; sous = s.nom + ' · az ' + e.az.toFixed(0) + '° · ' + Math.round(e.dist) + ' km'; }
     } else { texte = 'LOS · 73 !'; sous = s.nom + ' est passé · ' + Math.round((p.los - p.aos) / 60000) + ' min, ' + p.max.toFixed(0) + '° au plus haut'; flash = true; }
+    if (p && s && t <= p.los && typeof apPassage === 'function' && apPassage(s.catnum, p.aos, p.los)) sous += ' · 🤖 auto-pilote';
     if (b.dataset.t !== texte) {
       b.dataset.t = texte; b.textContent = texte;
       const sm = document.createElement('small'); sm.textContent = sous; b.appendChild(sm);
@@ -2061,6 +2072,8 @@ const Orbites = (function () {
     },
     /** The tab's time back to the present, at its real pace (the dashboard shows now). */
     tempsReel: () => direct(),
+    /** The SSTV auto-pilot's passes changed: its 🤖 marks again. */
+    autopilote: () => marquesAp(),
     /**
      * The dashboard open ([o]: {style, vue, tourne, astres, pedago, vitrine, place(w, h) → the globe's {x, y, s} on the screen, surVue(v)}) or closed (null): its look and view taken without
      * being kept, the tab's own given back when it closes. The Vitrine's ([o.vitrine]): 30 s of every 90 the Earth seen from the satellite chosen.
