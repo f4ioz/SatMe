@@ -51,7 +51,8 @@ object Bandes {
 
     private val CODE_WSPR: Map<String, Int> = WSPR.entries.associate { it.value to it.key }
 
-    fun wsprNom(code: Int): String = WSPR[code] ?: "${code}m"
+    /** A code wspr.live has but no band of ours (13, 40, 430…: MHz) is said in MHz — « 40m » would be 40 MHz taken for the 40 m band. */
+    fun wsprNom(code: Int): String = WSPR[code] ?: "$code MHz"
 
     /** The code of a label, null when wspr.live has none (never interpolate anything else into SQL). */
     fun wsprCode(nom: String): Int? = CODE_WSPR[nom]

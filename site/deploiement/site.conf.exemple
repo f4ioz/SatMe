@@ -47,3 +47,23 @@ satellites.accueil = ISS, SO-50, RS-44, AO-7, PO-101, AO-91
 hors_ligne = false
 # Cookies « Secure » même en HTTP simple (laisser true derrière nginx en HTTPS).
 cookies_securises = true
+
+# Propagation HF. Le contact donné à PSKReporter (appcontact) et dans le User-Agent : une adresse ou une page
+# où joindre l'opérateur ; vide : l'adresse publique du site.
+hf.contact =
+wspr.serveur = https://db1.wspr.live
+# Le flux telnet du Reverse Beacon Network (connexion avec l'indicatif ; vide : celui du site).
+rbn.actif = true
+rbn.indicatif =
+# Ouvertures : les locators dont les archives RBN sont lues (vide : celui du site) et combien de jours (1 à 30).
+ouvertures.locators =
+ouvertures.jours = 14
+
+# Station : le panadapter du SDR (openHPSDR Protocol 1, réception seule), pour l'admin seulement.
+# À n'activer que si le site tourne sur le réseau local de la radio. nginx envoie /ws/sdr/ au port station.ws_port.
+station = false
+station.hote =
+station.port = 1024
+station.diffusion = true
+station.ws_port = 8002
+station.websdr =

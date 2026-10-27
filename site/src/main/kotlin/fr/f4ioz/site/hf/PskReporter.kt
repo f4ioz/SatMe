@@ -51,7 +51,10 @@ class PskReporter(private val amont: Amont, private val contact: String, horloge
     /** What PSKReporter last gave for [mode] (one of [MODES], "" for all), most recent first; its age and error. */
     fun spots(mode: String, attenteMs: Long = 10_000L): Memo.Lu<List<Spot>> {
         val m = mode.uppercase().takeIf { it in MODES }.orEmpty()
-        return memo.lis(m, attenteMs) { analyse(amont.texte(url(m), 24 * 1024 * 1024, 60), MAX_SPOTS) }
+        return memo.lis(m, attenteMs) {
+            val t = amont.texte(url(m), 24 * 1024 * 1024, 60)
+            analyse(t, MAX_SPOTS).also { println("PSKReporter ${m.ifEmpty { "tous modes" }} : ${t.length / 1024} ko, ${it.size} reports gardés") }
+        }
     }
 
     fun pose(mode: String, l: List<Spot>) = memo.pose(mode, l)
@@ -69,7 +72,7 @@ class PskReporter(private val amont: Amont, private val contact: String, horloge
         /** The window fetched: the widest the pages offer. */
         const val FENETRE_S = 1800
         /** The reports kept per mode (the most recent). */
-        const val MAX_SPOTS = 6000
+        const val MAX_SPOTS = 10_000
 
         /** The modes a visitor may choose (each its own query shape; nothing else reaches PSKReporter). */
         val MODES = setOf("", "FT8", "FT4", "CW", "PSK31", "JT9", "JT65", "MFSK", "OLIVIA", "SSB", "RTTY", "WSPR")
@@ -117,7 +120,20 @@ class PskReporter(private val amont: Amont, private val contact: String, horloge
             } finally { r.close() }
             if (!racine) throw IOException("réponse PSKReporter sans receptionReports")
             out.sortByDescending { it.ts }
-            return if (out.size > max) out.subList(0, max).toList() else out
+            return echantillon(out, max)
+        }
+
+        /**
+         * At most [max] of [l] (most recent first): PSKReporter's half hour is far more than a few thousand
+         * reports, so the most recent half is kept whole and the rest of the window evenly sampled — the
+         * table shows the latest, the map's proportions stay those of the whole half hour.
+         */
+        fun echantillon(l: List<Spot>, max: Int): List<Spot> {
+            if (l.size <= max) return l
+            val moitie = max / 2
+            val reste = l.size - moitie
+            val pas = reste.toDouble() / (max - moitie)
+            return l.subList(0, moitie) + (0 until max - moitie).map { l[moitie + (it * pas).toInt().coerceAtMost(reste - 1)] }
         }
 
         /** Reports of the last [depuisS] seconds (at [maintenantS]) on [bande] ("" all), [limite] at most. */

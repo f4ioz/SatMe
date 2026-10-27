@@ -145,7 +145,7 @@ class HfTest {
         assertEquals(12, WsprLive.indicatifNet("ABCDEFGHIJKLMNOP").length)
         assertEquals("EA8/F4IOZ", WsprLive.indicatifNet("ea8/f4ioz;"))
         assertEquals(14, Bandes.wsprCode("20m")); assertNull(Bandes.wsprCode("20m; DROP"))
-        assertEquals("630m", Bandes.wsprNom(0)); assertEquals("999m", Bandes.wsprNom(999))
+        assertEquals("630m", Bandes.wsprNom(0)); assertEquals("999 MHz", Bandes.wsprNom(999)); assertEquals("40 MHz", Bandes.wsprNom(40))
     }
 
     @Test fun `wspr's band activity is read, numbers as strings too`() {

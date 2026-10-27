@@ -49,7 +49,8 @@ class Amont(
     /** GET [url], its body handed to [lecteur] as a stream (an archive read as it comes). */
     fun <T> lis(url: String, appelS: Long = 30, lecteur: (InputStream) -> T): T {
         if (horsLigne) throw IOException("hors ligne")
-        val req = Request.Builder().url(url).header("User-Agent", agent).header("Accept-Encoding", "gzip").build()
+        // OkHttp asks for gzip and unpacks it itself (setting Accept-Encoding here would turn that off).
+        val req = Request.Builder().url(url).header("User-Agent", agent).build()
         val appel = client.newCall(req)
         appel.timeout().timeout(appelS, TimeUnit.SECONDS)
         appel.execute().use { r ->

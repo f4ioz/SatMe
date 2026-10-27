@@ -136,6 +136,23 @@ Les autres fonds (ciel étoilé, crépuscule, abysse, ardoise, nébuleuse, orbit
 
 ---
 
+## Le site web F4IOZ (`:site`)
+
+| Composant ou données | Licence / conditions | Usage |
+|---|---|---|
+| Leaflet 1.9.4 (`site/src/main/resources/fr/f4ioz/site/static/vendor/leaflet/`, non modifié, `LICENSE.txt` à côté ; © Volodymyr Agafonkin, CloudMade) | BSD-2-Clause | Les cartes des pages HF |
+| Tuiles OpenStreetMap (demandées par le site, gardées un mois, 120 par minute au plus, zoom ≤ 12, User-Agent du site) | © les contributeurs d'OpenStreetMap, ODbL ; politique d'usage des tuiles de l'OSMF | Fond des cartes, attribution sur chaque carte |
+| Traits de côte Natural Earth (`land.json`, celui du téléphone) | Domaine public | La carte du monde des balises |
+| Reports de réception PSKReporter (retrieve.pskreporter.info) | Conditions de Philip Gladstone : une requête toutes les cinq minutes au plus, `appcontact` fourni | DX cluster, carte des bandes |
+| Données solaires HamQSL (N0NBH, `solarxml.php`) | Libres avec mention de HamQSL.com ; lues toutes les heures | Conditions, bandes |
+| Modèle ionosphérique KC2G (prop.kc2g.com) | CC BY 4.0, attribué sur la carte | Contours MUF et foF2 |
+| wspr.live (données WSPRnet, ClickHouse) | Libre, non commercial, résultats accessibles à tous ; 20 requêtes/min (le site en envoie ≤ 10) | Page WSPR, carte des bandes |
+| Reverse Beacon Network (telnet et archives quotidiennes) | Libre ; connexion telnet avec un indicatif | Carte des bandes, onglet RBN de WSPR, Ouvertures |
+
+Le code propre au site (pages, scripts, styles) est en GPL-2.0-ou-ultérieure, comme SatMe.
+
+---
+
 ## Ce que la publication rend visible
 
 Deux mécanismes de l'application reposaient sur la discrétion de la source, et
