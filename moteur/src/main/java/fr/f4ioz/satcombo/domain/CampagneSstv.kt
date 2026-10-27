@@ -91,6 +91,10 @@ object CampagneSstv {
         val lien: String = "",
         val active: Boolean = true,
         val creeMs: Long = 0L,
+        /** The « Activités à venir » activity it was made from in one click (its id), "" none. */
+        val activite: String = "",
+        /** Its period still follows the activity's (false once the owner changed it by hand). */
+        val activiteSuit: Boolean = true,
     ) {
         val personnalisee: Boolean get() = freqHz > 0L
         /** The SSTV mode held, null: « Auto ». */
@@ -188,7 +192,7 @@ object CampagneSstv {
             largeurHz = c.largeurHz.coerceIn(3_000, 250_000),
             modeSstv = c.modeSstv.takeIf { it == AUTO || SstvMode.byName(it) != null } ?: AUTO,
             elMin = c.elMin.coerceIn(0.0, 90.0), horaire = propre(c.horaire, 80), avantMin = c.avantMin.coerceIn(0, 30),
-            notes = propre(c.notes, 600), lien = lienPropre(c.lien),
+            notes = propre(c.notes, 600), lien = lienPropre(c.lien), activite = propre(c.activite, 400),
             chaine = ch.copy(profil = ch.profil.takeIf { ID.matches(it) } ?: "", source = propre(ch.source, 120)),
         ))
     }
@@ -199,6 +203,7 @@ object CampagneSstv {
         .put("emetteur", c.emetteur).put("freqHz", c.freqHz).put("modulation", c.modulation).put("largeurHz", c.largeurHz)
         .put("mode", c.modeSstv).put("de", c.debutMs).put("a", c.finMs).put("aConfirmer", c.aConfirmer).put("elMin", c.elMin)
         .put("horaire", c.horaire).put("avantMin", c.avantMin).put("notes", c.notes).put("lien", c.lien).put("active", c.active).put("cree", c.creeMs)
+        .put("activite", c.activite).put("activiteSuit", c.activiteSuit)
         .put("chaine", c.chaine.let { h -> JSONObject().put("profil", h.profil).put("poste", h.poste).put("connecterPoste", h.connecterPoste)
             .put("source", h.source).put("rotor", h.rotor).put("connecterRotor", h.connecterRotor).put("enregistrer", h.enregistrer)
             .put("sstv", h.sstv).put("annonce", h.annonce).put("parquer", h.parquer) })
@@ -211,7 +216,7 @@ object CampagneSstv {
             largeurHz = o.optInt("largeurHz", 15_000), modeSstv = o.optString("mode", AUTO), debutMs = o.optLong("de"), finMs = o.optLong("a"),
             aConfirmer = o.optBoolean("aConfirmer"), elMin = o.optDouble("elMin", 10.0), horaire = o.optString("horaire"),
             avantMin = o.optInt("avantMin", 2), notes = o.optString("notes"), lien = o.optString("lien"), active = o.optBoolean("active", true),
-            creeMs = o.optLong("cree"),
+            creeMs = o.optLong("cree"), activite = o.optString("activite"), activiteSuit = o.optBoolean("activiteSuit", true),
             chaine = Chaine(profil = h.optString("profil"), poste = h.optBoolean("poste", d.poste), connecterPoste = h.optBoolean("connecterPoste", false),
                 source = h.optString("source", d.source), rotor = h.optBoolean("rotor", d.rotor), connecterRotor = h.optBoolean("connecterRotor", false),
                 enregistrer = h.optBoolean("enregistrer", d.enregistrer), sstv = h.optBoolean("sstv", d.sstv), annonce = h.optBoolean("annonce", d.annonce),

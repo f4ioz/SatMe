@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.data.Transmitter
 import fr.f4ioz.satcombo.demo.ReponseWeb
+import fr.f4ioz.satcombo.domain.ActivitesAVenir
 import fr.f4ioz.satcombo.domain.AfficheSstv
 import fr.f4ioz.satcombo.domain.CampagneSstv
 import fr.f4ioz.satcombo.domain.CampagneSstv.Campagne
@@ -167,6 +168,90 @@ class AutoPiloteSstvPc(
         donnees = donnees.copy(campagnes = donnees.campagnes.map { if (it.id == id) it.copy(active = on) else it }); ecrit()
     }
 
+    // ------------------------------------------------------------- from an activity
+
+    /** What « Activer l'auto-pilote » did: the campaign, made now or already there, the master switch turned on by it. */
+    data class Activation(val campagne: Campagne, val nouvelle: Boolean, val maitreAllume: Boolean)
+
+    /** The campaign made from [a] in one click, if any: by its id, else (an activity merged since) the same satellite over the same period. */
+    fun campagneDe(a: ActivitesAVenir.Activite): Campagne? = donnees.campagnes.let { l ->
+        l.firstOrNull { it.activite.isNotBlank() && it.activite == a.id }
+            ?: l.firstOrNull { it.activite.isNotBlank() && a.catnum > 0 && it.catnum == a.catnum &&
+                it.debutMs <= a.finMs + ActivitesAVenir.MARGE_MS && it.finMs >= a.debutMs - ActivitesAVenir.MARGE_MS }
+    }
+
+    /**
+     * [a]'s campaign as « Préparer la campagne » fills the form, with the
+     * form's defaults (chain: no profile, the rig's sound, rig and mast
+     * followed, recorded, decoded, said): on satellite [catnum]; a period
+     * known by whole days taken from 00:00 to 23:59 here (as the form does);
+     * without a frequency, the satellite's SSTV transmitter (else its FM one).
+     */
+    fun depuisActivite(a: ActivitesAVenir.Activite, catnum: Int): Result<Campagne> {
+        if (catnum <= 0) return Result.failure(IllegalArgumentException("choisir le satellite"))
+        val t = horloge()
+        val b = ActivitesAVenir.campagne(a.copy(catnum = catnum), t)
+        val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == catnum }
+        var de = b.debutMs; var fin = b.finMs
+        if (b.aConfirmer) {
+            val z = java.time.ZoneId.systemDefault()
+            de = java.time.Instant.ofEpochMilli(de).atZone(z).toLocalDate().atStartOfDay(z).toInstant().toEpochMilli()
+            fin = java.time.Instant.ofEpochMilli(fin).atZone(z).toLocalDate().atTime(23, 59).atZone(z).toInstant().toEpochMilli()
+        }
+        if (fin <= t) return Result.failure(IllegalArgumentException("activité terminée"))
+        if (fin - de > CampagneSstv.DUREE_MAX_MS) fin = de + CampagneSstv.DUREE_MAX_MS
+        val emetteur = if (b.freqHz > 0) "" else {
+            val l = station.emetteursDe(catnum).filter { it.alive && it.downlinkLowHz != null }
+            (l.firstOrNull { (it.description + " " + it.mode.orEmpty()).contains("SSTV", true) }
+                ?: l.firstOrNull { it.mode.orEmpty().uppercase() in CampagneSstv.MODULATIONS })?.description
+                ?: return Result.failure(IllegalArgumentException("fréquence non annoncée et aucun émetteur SSTV ou FM connu pour " +
+                    (sat?.name ?: a.satNom.ifBlank { "ce satellite" }) + " : « Modifier avant… » pour la donner"))
+        }
+        return CampagneSstv.valide(b.copy(satNom = sat?.name ?: a.satNom.ifBlank { "#$catnum" }, emetteur = emetteur,
+            debutMs = de, finMs = fin, activite = a.id, activiteSuit = true, chaine = CampagneSstv.Chaine())).map { it.copy(id = "") }
+    }
+
+    /**
+     * « Activer l'auto-pilote » on [a] (satellite [catnum]): its campaign
+     * made and kept, or the one already made switched on again; the master
+     * switch turned on when it was off. Receive only, as always.
+     */
+    fun activeActivite(a: ActivitesAVenir.Activite, catnum: Int): Result<Activation> = synchronized(this) {
+        val deja = campagneDe(a.copy(catnum = catnum))
+        val c = if (deja != null) {
+            if (!deja.active) active(deja.id, true)
+            donnees.campagnes.first { it.id == deja.id }
+        } else garde(depuisActivite(a, catnum).getOrElse { return Result.failure(it) }).getOrElse { return Result.failure(it) }
+        val allume = !donnees.maitre
+        if (allume) regleMaitre(true)
+        Result.success(Activation(c, deja == null, allume))
+    }
+
+    /**
+     * After each refresh of the activities: a campaign made from one follows
+     * its new period while the owner has not changed that period himself
+     * (an activity without dates is left alone — its period would only creep).
+     * True when a campaign changed.
+     */
+    fun suitActivites(l: List<ActivitesAVenir.Activite>): Boolean = synchronized(this) {
+        var change = false
+        val nouvelles = donnees.campagnes.map { c ->
+            if (c.activite.isBlank() || !c.activiteSuit) return@map c
+            val a = l.firstOrNull { it.id == c.activite } ?: l.firstOrNull { it.catnum == c.catnum && campagneDe(it)?.id == c.id } ?: return@map c
+            if (a.precision == ActivitesAVenir.Precision.INCONNUE || a.type != ActivitesAVenir.Type.SSTV) return@map c
+            val n = depuisActivite(a, c.catnum).getOrNull() ?: return@map c
+            if (n.debutMs == c.debutMs && n.finMs == c.finMs && n.aConfirmer == c.aConfirmer && a.id == c.activite) return@map c
+            change = true
+            c.copy(debutMs = n.debutMs, finMs = n.finMs, aConfirmer = n.aConfirmer, activite = a.id)
+        }
+        if (change) {
+            donnees = donnees.copy(campagnes = nouvelles)
+            synchronized(cache) { cache.clear() }
+            ecrit()
+        }
+        change
+    }
+
     // ------------------------------------------------------------------ the flyer
 
     /** A flyer's picture read: its text, and the campaign's form it proposes. */
@@ -209,7 +294,12 @@ class AutoPiloteSstvPc(
         }
         return when (route) {
             "/maitre" -> { regleMaitre(p("on") == "1"); json(JSONObject().put("ok", true).put("maitre", maitre)) }
-            "/campagne" -> garde(depuisFormulaire(p)).fold({ json(JSONObject().put("ok", true).put("campagne", CampagneSstv.json(it))) }, { refus(it.message ?: "refusé") })
+            "/campagne" -> garde(depuisFormulaire(p).let { f ->
+                // Made from an activity: still linked to it; its period no longer follows once changed here.
+                val ancien = donnees.campagnes.firstOrNull { it.id == f.id && f.id.isNotBlank() }
+                if (ancien == null || ancien.activite.isBlank()) f
+                else f.copy(activite = ancien.activite, activiteSuit = ancien.activiteSuit && f.debutMs == ancien.debutMs && f.finMs == ancien.finMs)
+            }).fold({ json(JSONObject().put("ok", true).put("campagne", CampagneSstv.json(it))) }, { refus(it.message ?: "refusé") })
             "/retire" -> { retire(p("id")); json(JSONObject().put("ok", true)) }
             "/active" -> { active(p("id"), p("on") == "1"); json(JSONObject().put("ok", true)) }
             "/stop" -> { if (pilote.enCours == null) refus("aucun passage en cours") else { pilote.stop(); tic(); json(JSONObject().put("ok", true)) } }

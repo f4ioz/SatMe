@@ -525,7 +525,9 @@ fun main(args: Array<String>) {
     serveur.autopilote = autopilote
     portee.launch { while (true) { runCatching { autopilote.tic() }; kotlinx.coroutines.delay(1000) } }
     // « Agenda › Activités à venir »: the online sources (on by default, each one can be turned off), read at their own pace.
-    val activites = ActivitesPc(station, dossier)
+    val activites = if (ModeDemo.actif) ActivitesPc(station, dossier, fictives = GenerateurDemo::activites) else ActivitesPc(station, dossier)
+    // « Activer l'auto-pilote » on an SSTV activity: its campaign made, kept and switched on here.
+    activites.autopilote = autopilote
     serveur.activites = activites
     // The SSTV gallery sorted by slide (marks, groups, the footer read) and the series' timetable.
     val classement = ClassementSstvPc(son.sstv, station, { activites }, { autopilote })

@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.data.Observer
 import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.TleEntry
+import fr.f4ioz.satcombo.domain.ActivitesAVenir
 import fr.f4ioz.satcombo.domain.CampagneSstv
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.PassPredictor
@@ -463,6 +464,27 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
             Correspondant("QVE2AB", "FN35FM", "Luc"), Correspondant("Q4X1AB", "KM72JB", "Avi"),
             Correspondant("QUA3AB", "KO85SR", "Sergei"), Correspondant("QTF3AB", "HP94AD", "Einar"),
         )
+
+        /**
+         * The demonstration's « Activités à venir », made up and dated from [t]'s day (UTC): an ISS SSTV
+         * series from tomorrow, a post naming SONATE-2 without dates or frequency, and a made-up satellite
+         * the catalogue does not know (to pick by hand). Never fetched, never sent anywhere.
+         */
+        fun activites(t: Long): List<ActivitesAVenir.Activite> {
+            val jour = t - Math.floorMod(t, JOUR_MS)
+            val h = 3_600_000L
+            val src = listOf(ActivitesAVenir.Source("Démonstration (fictive)"))
+            return listOf(
+                ActivitesAVenir.Activite(id = "demo:sstv-iss", type = ActivitesAVenir.Type.SSTV, satNom = ISS_NOM, catnum = ISS, debutMs = jour + JOUR_MS + 9 * h,
+                    finMs = jour + 3 * JOUR_MS + 18 * h, freqHz = 145_800_000L, mode = "PD 120", horaire = "2 min on / 2 min off",
+                    titre = "Série SSTV de démonstration (fictive)", details = "Activité inventée pour la démonstration.", sources = src),
+                ActivitesAVenir.Activite(id = "demo:sonate", type = ActivitesAVenir.Type.SSTV, satNom = "SONATE-2", catnum = 0, debutMs = jour, finMs = jour + 7 * JOUR_MS,
+                    precision = ActivitesAVenir.Precision.INCONNUE, titre = "SONATE-2 : des images SSTV bientôt (nouvelle fictive)", sources = src),
+                ActivitesAVenir.Activite(id = "demo:demosat", type = ActivitesAVenir.Type.SSTV, satNom = "DEMOSAT-2", catnum = 0, debutMs = jour + 2 * JOUR_MS + 8 * h,
+                    finMs = jour + 2 * JOUR_MS + 20 * h, freqHz = 145_800_000L, mode = "Robot 36",
+                    titre = "DEMOSAT-2 : SSTV d'un satellite fictif", sources = src),
+            )
+        }
 
         fun distanceKm(la1: Double, lo1: Double, la2: Double, lo2: Double): Double {
             val r = 6371.0

@@ -832,6 +832,13 @@ ${STYLE_JETONS}
   .ac-act .ac-t .act { margin-left:auto; display:flex; gap:4px; }
   .ac-act .petit a { color:var(--rx); }
   .ac-act .ac-f { font-family:var(--mono); color:var(--ambre); font-weight:600; }
+  .ac-act .ac-t .act { flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+  #ac-ap-ok:disabled { opacity:.45; cursor:not-allowed; }
+  .ac-act .ac-ap { margin-top:4px; }
+  #ac-ap-dlg dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 10px; margin:6px 0; }
+  #ac-ap-dlg dt { color:var(--doux, inherit); opacity:.75; }
+  #ac-ap-dlg dd { margin:0; }
+  #ac-ap-sat { width:100%; margin-top:4px; }
   .pastille.ac-SSTV { background:rgba(63,224,200,.14); color:var(--rx); }
   .pastille.ac-CONTACT { background:rgba(120,160,255,.16); color:#8fb0ff; }
   .pastille.ac-SSDV { background:rgba(255,180,84,.18); color:var(--ambre); }
@@ -5222,6 +5229,20 @@ ${ConversionPagePc.DIALOGUES}
     <button class="arret" onclick="ndAction('tx-arrete', '')">■ Arrêter l’émission du node</button>
     <button onclick="ndAction('relance', 'Relancer SatMe sur le node ? Son service systemd le redémarre en quelques secondes (le Raspberry Pi, lui, ne redémarre pas).')">Relancer SatMe sur le node</button>
     <span class="petit" id="nd-msg"></span></div>
+</dialog>
+<dialog id="ac-ap-dlg" class="dlg-mt" style="width:min(560px,94vw)" aria-labelledby="ac-ap-t">
+  <div class="dlg-tete"><b id="ac-ap-t">Activer l'auto-pilote</b><button class="discret" onclick="g('ac-ap-dlg').close()" aria-label="Fermer">✕</button></div>
+  <div id="ac-ap-titre" style="font-weight:600"></div>
+  <div id="ac-ap-sat-z" hidden style="margin-top:6px">
+    <label class="petit" for="ac-ap-q" id="ac-ap-sat-l">Satellite à recevoir :</label>
+    <input id="ac-ap-q" type="search" placeholder="Chercher dans le catalogue…" style="width:100%" oninput="acApSats()">
+    <select id="ac-ap-sat" size="6" onchange="acApChoisit(+this.value)" aria-labelledby="ac-ap-sat-l"></select>
+  </div>
+  <dl id="ac-ap-corps" class="petit"></dl>
+  <div class="petit" id="ac-ap-notes"></div>
+  <div class="petit" style="margin:6px 0"><b>Réception seulement : rien n'est émis.</b></div>
+  <div class="ligne"><button id="ac-ap-ok" class="primaire" onclick="acApConfirme()">Activer l'auto-pilote</button><button onclick="acApModifie()" title="Agenda › SSTV : le formulaire rempli, à vérifier puis enregistrer">Modifier avant…</button><button onclick="g('ac-ap-dlg').close()">Annuler</button>
+    <span class="petit" id="ac-ap-msg" aria-live="polite"></span></div>
 </dialog>
 <dialog id="nx-pi-dlg" class="dlg-mt" style="width:min(540px,94vw)" aria-labelledby="nx-pi-t">
   <div class="dlg-tete"><b id="nx-pi-t">Redémarrer le Pi</b><button class="discret" onclick="g('nx-pi-dlg').close()" aria-label="Fermer">✕</button></div>
@@ -15849,19 +15870,19 @@ function acCarte(a) {
     a.catnum ? '<div class="petit">Aucun passage assez haut ici' + (a.type === 'CONTACT' ? ' (contact entendu ailleurs)' : '') + '.</div>' : '';
   return '<div class="ac-act' + (enCours ? ' encours' : '') + '"><div class="ac-t"><b>' + esc(a.sat || '?') + '</b><span class="pastille ac-' + a.type + '">' + esc(a.libelle) + '</span>' +
     '<span class="pastille' + (a.confiance === 'CONFIRME' ? ' ac-c-CONFIRME' : ' off') + '">' + esc(a.confianceLibelle) + (a.ecoutes && a.type !== 'LRPT' ? ' · ' + a.ecoutes : '') + '</span>' + (enCours ? '<span class="pastille ap-st-EN_COURS">en cours</span>' : '') +
-    '<span class="act">' + (a.campagne ? '<button onclick="acPrepare(\'' + escA(a.id).replace(/'/g, '') + '\')" title="Ouvrir Agenda › SSTV avec la campagne remplie, à vérifier puis enregistrer">Préparer la campagne SSTV</button>' : '') + '</span></div>' +
+    '<span class="act">' + acApBoutons(a) + (a.campagne && !a.lienAp ? '<button data-id="' + escA(a.id) + '" onclick="acPrepare(this.dataset.id)" title="Ouvrir Agenda › SSTV avec la campagne remplie, à vérifier puis enregistrer">Préparer la campagne SSTV</button>' : '') + '</span></div>' +
     '<div>' + esc(a.titre) + '</div>' +
     '<div class="petit">' + acPeriode(a) + '</div>' +
     '<div class="petit">' + (a.freqHz ? '<span class="ac-f">' + apFreq(a.freqHz) + ' MHz</span> ' + esc(a.modulation === 'LRPT' ? '' : a.modulation) : 'fréquence non dite') + (a.mode && a.mode !== 'LRPT' ? ' · ' + esc(a.mode) : '') + (a.horaire ? ' · ' + esc(a.horaire) : '') + '</div>' +
-    (a.details ? '<div class="petit">' + esc(a.details) + '</div>' : '') + pass +
+    (a.details ? '<div class="petit">' + esc(a.details) + '</div>' : '') + pass + acApLigne(a) +
     '<div class="petit">Sources : ' + src + a.liens.filter(x => !a.sources.some(s => s.lien === x)).slice(0, 2).map(x => ' · <a href="' + escA(x) + '" target="_blank" rel="noopener noreferrer">lien ↗</a>').join('') + '</div></div>';
 }
 async function acReglage(k, on) { await post('api/activites/reglage?k=' + k + '&on=' + (on ? 1 : 0)); acVu = ''; acCharge(); }
 async function acActualise() { await post('api/activites/rafraichit'); annonce('Sources demandées'); setTimeout(acCharge, 8000); }
 /** « Préparer la campagne SSTV »: Agenda › SSTV's form filled, to check before saving (nothing saved here). */
-async function acPrepare(id) {
+async function acPrepare(id, catnum) {
   let j = null;
-  try { j = await (await fetch('api/activites/campagne?id=' + enc(id))).json(); } catch (x) {}
+  try { j = await (await fetch('api/activites/campagne?id=' + enc(id) + (catnum ? '&catnum=' + catnum : ''))).json(); } catch (x) {}
   if (!j || !j.ok) { alert((j && j.erreur) || 'Activité introuvable.'); return; }
   apOuvre();
   await apPropose(j);
@@ -15871,6 +15892,86 @@ async function acPrepare(id) {
   txt('ap-imp-etat', 'Rempli d’après l’activité : vérifie puis « Enregistrer la campagne ».');
   g('ap-form').scrollIntoView({ block: 'nearest' });
 }
+/* « Activer l'auto-pilote » on an SSTV activity: one click, a confirmation, the campaign made, kept and switched on (receive only). */
+function acApBoutons(a) {
+  if (!a.autopilote) return '';
+  const l = a.lienAp, d = ' data-id="' + escA(a.id) + '"';
+  if (!l) return '<button class="primaire"' + d + ' onclick="acAuto(this.dataset.id)" title="Recevoir tout seul les passages de cette activité (réception seulement)">Activer l’auto-pilote</button>';
+  const c = ' data-c="' + escA(l.id) + '"', voir = '<button' + c + ' onclick="acApVoir(this.dataset.c)" title="Agenda › SSTV">Voir la campagne</button>';
+  if (l.active && l.maitre) return '<span class="pastille ap-st-FAIT">Auto-pilote actif ✓</span><button' + c + ' onclick="acApSuspend(this.dataset.c, false)">Suspendre</button>' + voir;
+  return '<span class="pastille off">' + (l.active ? 'Auto-pilote coupé' : 'Auto-pilote suspendu') + '</span><button class="primaire"' + d + ' onclick="acAuto(this.dataset.id)">' + (l.active ? 'Activer l’auto-pilote' : 'Reprendre') + '</button>' + voir;
+}
+function acApLigne(a) {
+  const l = a.lienAp; if (!l) return '';
+  return '<div class="petit ac-ap">🤖 « ' + esc(l.nom) + ' » : ' + (l.enCours ? 'passage en cours' : l.prochain ? 'prochain passage reçu ' + jourHeure(l.prochain) : 'aucun passage à recevoir pour l’instant') +
+    (l.active && !l.maitre ? ' — l’interrupteur général de l’auto-pilote est coupé' : '') + (l.suit ? '' : ' · période modifiée à la main') + '</div>';
+}
+let acAp = null;
+async function acAuto(id) {
+  acAp = { id: id, catnum: 0, choisir: false, j: null };
+  g('ac-ap-q').value = ''; txt('ac-ap-msg', ''); txt('ac-ap-titre', 'Lecture…');
+  g('ac-ap-corps').innerHTML = ''; txt('ac-ap-notes', '');
+  if (!g('ac-ap-dlg').open) g('ac-ap-dlg').showModal();
+  await acApApercu();
+}
+async function acApApercu() {
+  let j = null;
+  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : ''))).json(); } catch (x) {}
+  acAp.j = j;
+  g('ac-ap-ok').disabled = !(j && j.ok && j.campagne);
+  if (!j || !j.ok) { txt('ac-ap-titre', ''); txt('ac-ap-msg', (j && j.erreur) || 'Activité introuvable.'); g('ac-ap-sat-z').hidden = true; return; }
+  txt('ac-ap-titre', j.titre);
+  const pick = !j.catnum || acAp.choisir;
+  g('ac-ap-sat-z').hidden = !pick;
+  txt('ac-ap-sat-l', j.catnum ? 'Satellite à recevoir :' : 'Satellite non reconnu' + (j.satNom ? ' (« ' + j.satNom + ' »)' : '') + ' : le choisir dans le catalogue');
+  if (pick) { if (!tous.length) await chargeSatellites(); acApSats(); }
+  const c = j.campagne, h = [];
+  const dd = (t, v) => h.push('<dt>' + t + '</dt><dd>' + v + '</dd>');
+  dd('Satellite', j.catnum ? esc(j.satCatalogue || ('#' + j.catnum)) + (j.trouve && j.satNom && j.satNom !== j.satCatalogue ? ' <span class="petit">(reconnu d’après « ' + esc(j.satNom) + ' »)</span>' : '') +
+    (pick ? '' : ' <button class="discret" onclick="acAp.choisir = true; acApApercu()">changer</button>') : '<i>à choisir</i>');
+  if (c) {
+    dd('Fréquence', c.freqHz ? apFreq(c.freqHz) + ' MHz ' + esc(c.modulation) : esc(c.emetteur) + (c.freqEmetteur ? ' (' + apFreq(c.freqEmetteur) + ' MHz)' : '') + (j.freqInconnue ? ' — non annoncée : l’émetteur SSTV du satellite' : ''));
+    dd('Mode', c.mode === 'Auto' ? 'auto (l’en-tête VIS le dit)' : esc(c.mode));
+    dd('Période', apQuand(c));
+    dd('Passages utiles', j.passages && j.passages.length ? j.passages.map(p => jourHeure(p.aos) + ' · ' + p.el + '°').join(', ') : 'aucun assez haut pour l’instant');
+    dd('Chaîne', esc(apChaineTexte(c)) + ' <span class="petit">(réglages par défaut du formulaire)</span>');
+  }
+  g('ac-ap-corps').innerHTML = h.join('');
+  const n = [];
+  if (j.datesInconnues && c) n.push('Dates non annoncées : la campagne couvrira ' + apQuand(c) + '. Ce peut n’être qu’une nouvelle sans émission prévue.');
+  if (j.existante) n.push('Une campagne existe déjà pour cette activité (« ' + esc(j.existante.nom) + ' ») : elle sera ' + (j.existante.active ? 'gardée' : 'reprise') + '.');
+  if (!j.maitre) n.push('L’auto-pilote est coupé : il sera activé (pour toutes les campagnes actives).');
+  g('ac-ap-notes').innerHTML = n.map(x => '<div>' + x + '</div>').join('');
+  txt('ac-ap-msg', j.erreur || '');
+}
+function acApSats() {
+  const j = acAp && acAp.j; if (!j) return;
+  const q = v('ac-ap-q').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const ok = s => !q || s.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(q) || String(s.catnum) === q;
+  const prop = (j.candidats || []).filter(ok), vus = new Set(prop.map(s => s.catnum));
+  const reste = tous.filter(s => !vus.has(s.catnum) && ok(s)).slice(0, 300);
+  const o = s => '<option value="' + s.catnum + '"' + (s.catnum === j.catnum ? ' selected' : '') + '>' + esc(s.nom) + ' (' + s.catnum + ')</option>';
+  g('ac-ap-sat').innerHTML = (prop.length ? '<optgroup label="Proposés">' + prop.map(o).join('') + '</optgroup>' : '') + (reste.length ? '<optgroup label="Catalogue">' + reste.map(o).join('') + '</optgroup>' : '');
+}
+async function acApChoisit(n) { if (!n) return; acAp.catnum = n; await acApApercu(); }
+async function acApConfirme() {
+  const j0 = acAp && acAp.j; if (!j0 || !j0.campagne) return;
+  g('ac-ap-ok').disabled = true; txt('ac-ap-msg', 'Activation…');
+  let j = null;
+  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : ''), { method: 'POST' })).json(); } catch (x) {}
+  if (!j || !j.ok) { g('ac-ap-ok').disabled = false; txt('ac-ap-msg', (j && j.erreur) || 'Refusé.'); return; }
+  g('ac-ap-dlg').close();
+  const t = 'Auto-pilote actif : « ' + j.campagne.nom + ' »' + (j.maitreAllume ? ' — interrupteur général de l’auto-pilote allumé' : '');
+  annonce(t);
+  acVu = ''; apVu = ''; await acCharge(); apCharge();
+}
+function acApModifie() {
+  const id = acAp && acAp.id, n = acAp && (acAp.catnum || (acAp.j && acAp.j.catnum));
+  g('ac-ap-dlg').close();
+  if (id) acPrepare(id, n || 0);
+}
+async function acApSuspend(cid, on) { await post('api/autopilote/active?id=' + enc(cid) + '&on=' + (on ? 1 : 0)); annonce(on ? 'Campagne reprise' : 'Campagne suspendue'); acVu = ''; await acCharge(); apCharge(); }
+async function acApVoir(cid) { apOuvre(); await apCharge(); apEdite(cid); }
 acCharge();
 setInterval(acCharge, 60000);
 
