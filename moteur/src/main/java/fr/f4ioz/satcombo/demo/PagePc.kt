@@ -1263,6 +1263,14 @@ ${STYLE_JETONS}
   #v-orbites.ob-tableau.ob-calme .ob-scene { cursor:none; }
   .ob-coin { display:none; }
   #v-orbites.ob-tableau .ob-coin { position:absolute; z-index:3; display:flex; flex-direction:column; gap:10px; max-width:min(38%, 440px); pointer-events:none; overflow:hidden; }
+  /* The full screen's mark: the logo and « SatMe », top left (above the first corner). */
+  .ob-marque { display:none; }
+  #v-orbites.ob-tableau .ob-marque { display:flex; align-items:center; gap:.4em; position:absolute; left:14px; top:12px; z-index:3; pointer-events:none;
+    font-size:clamp(20px, 2vw, 34px); font-weight:800; letter-spacing:.02em; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+  #v-orbites.ob-tableau .ob-marque img { height:1.35em; width:1.35em; border-radius:22%; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+  /* Classique: its top row is the cards, so the mark goes bottom left, above the ticker; too narrow a screen: none (the toolbar is there). */
+  #v-orbites.ob-th-classique.ob-tableau .ob-marque { top:auto; bottom:calc(14px + 2.1 * clamp(14px, 1.25vw, 22px)); font-size:clamp(16px, 1.4vw, 26px); }
+  @media (max-width:700px) { #v-orbites.ob-tableau .ob-marque { display:none; } }
   .ob-coin-hg { left:14px; top:60px; max-height:calc(50% - 70px); } .ob-coin-hd { right:14px; top:60px; max-height:calc(50% - 70px); align-items:flex-end; }
   .ob-coin-bg { left:14px; bottom:14px; max-height:calc(50% - 24px); } .ob-coin-bd { right:14px; bottom:14px; max-height:calc(50% - 24px); align-items:flex-end; }
   /* A corner whose cards do not fit is made smaller (--ob-k, obAjusteCoin) rather than cut; anchored at the bottom, its content flows downwards so that an overflow is seen. */
@@ -4364,6 +4372,7 @@ ${rail()}
         <div class="ob-lecteur"><button type="button" class="ob-jouer" id="ob-jouer">▶ Jouer le passage</button><select id="ob-pvitesse" aria-label="Vitesse de l'animation"><option value="10">×10</option><option value="20" selected>×20</option><option value="40">×40</option><option value="80">×80</option></select><button type="button" id="ob-rejouer">⟲ Depuis l'AOS</button><button type="button" id="ob-direct" hidden title="Revenir à l'heure présente : le passage en cours, sinon le prochain">● En direct</button><span class="ob-mode" id="ob-mode"></span></div></div>
       <div><dl class="ob-mesures" id="ob-mesures"></dl></div>
     </div>
+    <div class="ob-marque" aria-hidden="true"><img src="icone-192.png" alt=""><span>SatMe</span></div>
     <div class="ob-coin ob-coin-hg"><div class="ob-w" data-w="horloge" hidden></div><div class="ob-w" data-w="astres" hidden></div></div>
     <div class="ob-coin ob-coin-hd"><div class="ob-w" data-w="station" hidden></div><div class="ob-w" data-w="espace" hidden></div><div class="ob-w ob-w-pedago" data-w="fiche" hidden></div></div>
     <div class="ob-coin ob-coin-b ob-coin-bg"><div class="ob-w" data-w="passages" hidden></div></div>

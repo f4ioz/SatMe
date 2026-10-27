@@ -9,7 +9,9 @@ Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
 Une section par version, la plus récente en haut, une partie « ### fr » et une
+- **Orbites en plein écran** : le logo et « SatMe » en haut à gauche (en bas à gauche en Classique radioamateur).
 partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.
+- **Orbites full screen**: the logo and "SatMe" top left (bottom left in Classique radioamateur).
 Markdown simple (gras, italique, `code`, listes, liens https).
 -->
 
