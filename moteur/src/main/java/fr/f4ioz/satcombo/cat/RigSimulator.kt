@@ -41,6 +41,11 @@ class Ic9700Sim(
     var onSub: Boolean = false; private set
     var mainMode: Int = 0x01; private set
     var subMode: Int = 0x01; private set
+    /** Data mode (1A 06) of each band: USB-D when on with USB. A mode written with 06 turns it off, as Hamlib assumes. */
+    var mainData: Boolean = false
+    var subData: Boolean = false
+    /** Every mode or data-mode write (06, 1A 06, 26) received while keyed: must stay empty. */
+    val modesPendantEmission = ArrayList<ByteArray>()
     var toneOn: Boolean = false; private set
     var toneTenthHz: Int = 0; private set
     /** Keyed over CI-V (0x1C 0x00 0x01), or set by a test. */
@@ -143,6 +148,7 @@ class Ic9700Sim(
         val d = f.copyOfRange(5, f.size - 1)
         fun at(i: Int) = if (d.size > i) d[i].toInt() and 0xFF else -1
         if (transmitting && cmd != 0x1C) pendantEmission += f
+        if (transmitting && (cmd == 0x06 || cmd == 0x26 || (cmd == 0x1A && at(0) == 0x06 && d.size > 1))) modesPendantEmission += f
 
         when (cmd) {
             0x14 -> when {
@@ -164,7 +170,7 @@ class Ic9700Sim(
             }
             0x06 -> {
                 if (d.isEmpty()) nak() else {
-                    if (onSub) subMode = at(0) else mainMode = at(0)
+                    if (onSub) { subMode = at(0); subData = false } else { mainMode = at(0); mainData = false }
                     ack()
                 }
             }
@@ -181,6 +187,15 @@ class Ic9700Sim(
                 else -> nak()
             }
             0x1A -> when {
+                // Data mode with filter (IC-9700 only): 1A 06 reads, 1A 06 <data> <filter> writes.
+                at(0) == 0x06 && modele.donnees -> when {
+                    d.size < 2 -> reply(0x1A, byteArrayOf(0x06, if (if (onSub) subData else mainData) 0x01 else 0x00, 0x01))
+                    // Data off goes with filter 00; data on needs a filter, and a mode that has a data variant.
+                    at(1) == 0x00 && at(2) == 0x00 -> { if (onSub) subData = false else mainData = false; ack() }
+                    at(1) == 0x01 && at(2) in 1..3 && (if (onSub) subMode else mainMode) in CivController.MODES_DONNEES ->
+                        { if (onSub) subData = true else mainData = true; ack() }
+                    else -> nak()
+                }
                 modele.commandeSat == 0x1A && at(0) == modele.sousCommandeSat ->
                     if (d.size < 2) reply(0x1A, byteArrayOf(modele.sousCommandeSat.toByte(), if (satMode) 0x01 else 0x00))
                     else { satMode = at(1) == 1; ack() }
@@ -228,7 +243,7 @@ class Ic9700Sim(
                     }
                 } else {
                     if (d.size < 2) { nak(); return }
-                    if (unselected) subMode = at(1) else mainMode = at(1)
+                    if (unselected) { subMode = at(1); subData = at(2) == 1 } else { mainMode = at(1); mainData = at(2) == 1 }
                     ack()
                 }
             }

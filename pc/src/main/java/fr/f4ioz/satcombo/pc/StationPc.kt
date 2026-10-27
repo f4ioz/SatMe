@@ -206,7 +206,56 @@ class StationPc(
             val attendu = cielAttendu(descente = false) ?: return posteHz
             return TableConversion.depuisAppareil(bandes(), posteHz, UsageConversion.CAT_TX, rfAttendu = attendu)
         }
+        override fun donnees() = runCatching { donneesFt8() }.getOrDefault(false)
+        override fun emissionEnCours() = runCatching { posteEmet() }.getOrDefault(false)
     }, horloge)
+
+    // ---------------------------------------------------------------- data mode (USB-D) for FT8/FT4
+
+    /** FT8/FT4 wants the rig in its data modes now (set by Main: armed, listening, « Mode données » ticked). */
+    @Volatile var donneesFt8: () -> Boolean = { false }
+    /** The rig is keyed (anyone's PTT): no mode written meanwhile (set by Main). */
+    @Volatile var posteEmet: () -> Boolean = { false }
+    /** The data flags switched for FT8/FT4 and what to put back. */
+    val basculeDonnees = fr.f4ioz.satcombo.station.BasculeDonnees(horloge)
+
+    private fun posteCourant(): PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
+
+    /** Does SatMe switch the connected rig's data mode (an IC-9700)? */
+    fun donneesPossibles(): Boolean = _etat.value.catConnecte && posteCourant().donneesPossibles
+
+    /** May FT8/FT4 key now, as far as the data mode goes? */
+    fun donneesPretes(): Boolean = !_etat.value.catConnecte || basculeDonnees.pret(posteCourant(), donneesFt8())
+
+    /** The rig's mode read outside the Doppler loop (« USB-D »), when the FT8 tab asked; when. */
+    @Volatile private var modeLu: String? = null
+    @Volatile private var modeLuMs = 0L
+    @Volatile private var modeDemandeMs = Long.MIN_VALUE / 2
+
+    /**
+     * The rig's mode for the FT8 tab (« USB-D »): the Doppler loop's reading
+     * while it drives, else one of SatMe's own (every 2 s while the tab asks).
+     */
+    fun modePoste(): String? {
+        if (!_etat.value.catConnecte) return null
+        modeDemandeMs = horloge()
+        val boucle = stationCat.etat.value.mode
+        return if (pilotageDoppler() && boucle != null) boucle else modeLu ?: boucle
+    }
+
+    /** Between two Doppler rounds: the data modes switched or put back, the mode read for the tab. */
+    private suspend fun tourDonnees() {
+        val poste = posteCourant()
+        val emet = runCatching { posteEmet() }.getOrDefault(false)
+        basculeDonnees.tour(poste, runCatching { donneesFt8() }.getOrDefault(false), emet)
+        val t = horloge()
+        if (posteIc9700() && !emet && !pilotageDoppler() && t - modeDemandeMs < 3_000L && t - modeLuMs >= 2_000L) {
+            modeLuMs = t
+            val m = civ.readMode()
+            val d = civ.readDataMode()
+            modeLu = m?.let { fr.f4ioz.satcombo.cat.CatDecode.civModeName(it) + (if (d == true) "-D" else "") }
+        }
+    }
 
     // ---------------------------------------------------------------- the converter table
 
@@ -1307,6 +1356,11 @@ class StationPc(
     private suspend fun deconnecteCatDedans() {
         if (_etat.value.catConnecte) avantCoupureCat?.let { f -> runCatching { kotlinx.coroutines.withTimeoutOrNull(1_500L) { f() } } }
         boucleCat?.cancel(); boucleCat = null
+        // The data modes SatMe set for FT8/FT4 put back while the rig still hears (never while keyed).
+        if (_etat.value.catConnecte && basculeDonnees.actif && !runCatching { posteEmet() }.getOrDefault(true))
+            runCatching { kotlinx.coroutines.withTimeoutOrNull(1_500L) { basculeDonnees.tour(posteCourant(), voulu = false, emission = false) } }
+        basculeDonnees.oublie()
+        modeLu = null
         civ.close()
         paire.close()
         stationCat.deconnecte()
@@ -1319,6 +1373,7 @@ class StationPc(
         boucleCat = portee.launch {
             while (_etat.value.catConnecte) {
                 runCatching { stationCat.tour() }
+                runCatching { tourDonnees() }
                 runCatching { tourPoste() }
                 runCatching { lisSmetre() }
                 delay(100)

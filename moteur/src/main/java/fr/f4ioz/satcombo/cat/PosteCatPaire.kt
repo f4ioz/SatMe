@@ -17,6 +17,9 @@ class PosteCatPaire(private val p: Ft817Pair) : PosteCat {
 
     override suspend fun arme(disposition: DispositionSat, descente: ModePoste, montee: ModePoste, ctcssDixiemes: Int) {
         // Two dedicated rigs: no band/split gymnastics — just modes + tone.
+        // The data flag (USB-D) is not switched here: an FT-817's DIG/PKT and
+        // a TS-2000's modes depend on menus SatMe cannot see, and SatMe keys
+        // none of them for FT8/FT4.
         p.setModes(downlink = descente.nom, uplink = montee.nom)
         p.setCtcss(ctcssDixiemes)
     }

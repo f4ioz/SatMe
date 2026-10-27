@@ -55,6 +55,9 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
     override val isOpen: Boolean get() = link != null
 
     companion object {
+        /** The modes that have a data variant on the IC-9700: LSB-D, USB-D, FM-D. */
+        val MODES_DONNEES = setOf(0x00, 0x01, 0x05)
+
         /**
          * Many CDC bridges (Icom's included) stay silent until the host
          * raises DTR/RTS: the port opens, writes succeed, nothing comes back.
@@ -393,6 +396,41 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         send(frame(0x06, byteArrayOf(mode.toByte(), filter.toByte())))
 
     /**
+     * Data mode (USB-D, LSB-D, FM-D) of the **selected** band or VFO: CI-V
+     * `1A 06 <data> <filter>`, data 00 = off / 01 = on, filter 01..03 =
+     * FIL1..FIL3, and 00 with data off (IC-9700 CI-V Reference Guide, "Data
+     * mode with filter width settings", p. 17). In data mode the IC-9700
+     * takes its TX audio from *DATA MOD* (MENU › SET › Connectors › MOD
+     * Input) instead of *DATA OFF MOD* — the way WSJT-X drives it.
+     *
+     * Not `26 <vfo> <mode> <data> <filter>`: the guide (p. 23) says 0x26 works
+     * on MAIN only and returns FA (NG) in satellite mode — the uplink could
+     * not be reached. So: select the band (07 D0/D1), then 06 for the mode and
+     * 1A 06 for the data flag. **06 comes first**: a mode written with 06
+     * may come back with data off (Hamlib sends 1A 06 after 06 for that).
+     */
+    suspend fun setDataMode(on: Boolean, filter: Int = 0x01): Boolean =
+        modele.donnees && send(frame(0x1A, byteArrayOf(0x06, if (on) 0x01 else 0x00, if (on) filter.toByte() else 0x00)))
+
+    /** The selected band's data mode (1A 06), null when not answered or not an IC-9700. */
+    suspend fun readDataMode(): Boolean? {
+        if (link == null || !modele.donnees) return null
+        val frames = exchange(0x1A, byteArrayOf(0x06), expect = 0x1A, expectSub = 0x06)
+        val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x1A, 0x06) ?: return null
+        return p.firstOrNull()?.let { (it.toInt() and 0xFF) != 0 }
+    }
+
+    /**
+     * Mode, then data flag when [data] (see [setDataMode]): what the Doppler
+     * loop sends while FT8/FT4 wants USB-D, so its own mode writes do not
+     * undo the data flag. [data] false sends 06 alone, as before.
+     */
+    suspend fun setModeData(mode: Int, data: Boolean): Boolean {
+        val ok = setMode(mode)
+        return if (data && modele.donnees && mode in MODES_DONNEES) setDataMode(true) && ok else ok
+    }
+
+    /**
      * Reads the current VFO frequency (Hz), or null. The frame must come from
      * the rig, carry command 0x03, and hold a plausible frequency.
      */
@@ -612,11 +650,15 @@ fun modeCiv(m: String): Int = when (m.uppercase()) {
  *    IC-910's CI-V jack stop at 19 200;
  *  - **satellite mode**: 0x16 0x5A, except on the IC-910, which only knows
  *    0x1A 0x07 (and refuses the other);
- *  - **0x25/0x26** (unselected VFO): IC-9700 only.
+ *  - **0x25/0x26** (unselected VFO): IC-9700 only;
+ *  - **data mode** (1A 06, USB-D): driven on the IC-9700 only. The IC-910H
+ *    has none; the IC-9100's is left to the operator (SatMe keys neither).
  */
 enum class ModeleIcom(val id: String, val libelle: String, val adresse: Int, val baud: Int,
-                      val commandeSat: Int, val sousCommandeSat: Int, val vfoDirect: Boolean) {
-    IC9700("IC9700", "Icom IC-9700", 0xA2, 115_200, 0x16, 0x5A, true),
+                      val commandeSat: Int, val sousCommandeSat: Int, val vfoDirect: Boolean,
+                      /** Data mode (USB-D…) switched by SatMe (1A 06): the IC-9700 only, the one SatMe keys for FT8/FT4. */
+                      val donnees: Boolean = false) {
+    IC9700("IC9700", "Icom IC-9700", 0xA2, 115_200, 0x16, 0x5A, true, true),
     IC9100("IC9100", "Icom IC-9100", 0x7C, 19_200, 0x16, 0x5A, false),
     IC910("IC910", "Icom IC-910H", 0x60, 19_200, 0x1A, 0x07, false);
 

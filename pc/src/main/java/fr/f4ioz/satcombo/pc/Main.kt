@@ -441,7 +441,16 @@ fun main(args: Array<String>) {
             val l = liaisonFt8(station)
             carnet.ajouteNumerique(f.indicatif, f.carre, f.rapportEnvoye, f.rapportRecu, note, mode, l.satellite != null,
                 station.stationCat.etat.value.descenteHz)
+        },
+        // « Mode données (USB-D) »: the IC-9700's data flags switched by the station between two Doppler rounds.
+        modeDonnees = object : Ft8EmissionPc.ModeDonnees {
+            override fun possible() = station.donneesPossibles()
+            override fun pret() = station.donneesPretes()
+            override fun modePoste() = station.modePoste()
         })
+    station.donneesFt8 = { ft8Tx.veutDonnees }
+    // No mode written while the rig is keyed, by FT8/FT4 or anyone else's PTT.
+    station.posteEmet = { emissionPoste.poste.etat.emet || ft8Tx.emet }
     ft8Tx.demarreBoucle()
     serveur.ft8Tx = ft8Tx
     if (ModeDemo.actif) {
@@ -461,7 +470,7 @@ fun main(args: Array<String>) {
             else if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord"
             else if (iq.enCours) iqEnCours
             else if (emissionPoste.poste.etat.emet) "l'IC-9700 émet : relâcher son PTT d'abord"
-            else if (ft8Tx.arme) "FT8/FT4 en émission par l'IC-9700 (onglet FT8) : l'arrêter d'abord" else null
+            else if (ft8Tx.arme) "FT8/FT4 en émission par l'IC-9700 (onglet FT8/FT4) : l'arrêter d'abord" else null
         },
         gainMaxDb = { emission.gainMaxDb }, reseauAutorise = { station.txReseauAutorise },
         descenteCockpit = { station.qo100.etat.value.descenteHz },

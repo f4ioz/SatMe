@@ -263,6 +263,11 @@ object CatDecode {
                 0x42 -> if (sub(1) == 1) t("catj_tone_on") else t("catj_tone_off")
                 else -> tf("catj_setting", "%02X".format(sub(0)))
             }
+            0x1A -> when {
+                sub(0) == 0x06 && d.size >= 2 -> if (sub(1) == 1) t("catj_data_on") else t("catj_data_off")
+                sub(0) == 0x06 -> t("catj_read_data")
+                else -> tf("catj_command", "1A %02X".format(sub(0)))
+            }
             0x1B -> if (d.size >= 4) {
                 val ton = bcdBeToTone(d, 1)
                 if (ton != null) tf("catj_tone_set", "%.1f".format(java.util.Locale.US, ton / 10.0)) else t("catj_tone")

@@ -78,6 +78,14 @@ interface MondeCat {
      * the PC adds the IFs of its converter table (a 28 MHz transverter).
      */
     fun atteignable(posteHz: Long): Boolean = BandPlan.band(posteHz) != BandPlan.Band.AUTRE
+    /**
+     * FT8/FT4 wants the data modes (USB-D, LSB-D, FM-D): every mode the loop
+     * writes carries the data flag, so arming or putting a mode back never
+     * undoes it. False by default.
+     */
+    fun donnees(): Boolean = false
+    /** The rig is keyed (PTT held): no mode write until it is released; frequencies go on. */
+    fun emissionEnCours(): Boolean = false
 }
 
 /** What the loop shows: the rig's frequencies (sky), who drives the RX dial, its mode read back. */
@@ -86,7 +94,9 @@ data class EtatBoucleCat(
     val monteeHz: Long? = null,
     val rxPilote: Boolean = false,
     val mode: String? = null,
-    val modeEcart: Boolean = false
+    val modeEcart: Boolean = false,
+    /** The data flag read back with the mode (USB-D…), null when not read. */
+    val donnees: Boolean? = null
 )
 
 /**
@@ -314,7 +324,10 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         }
     }
 
-    private fun mode(t: Transmitter, isUplink: Boolean) = ModePoste(civModeFor(t, isUplink), ft817ModeFor(t, isUplink))
+    private fun mode(t: Transmitter, isUplink: Boolean): ModePoste {
+        val civ = civModeFor(t, isUplink)
+        return ModePoste(civ, ft817ModeFor(t, isUplink), donnees = monde.donnees() && civ in fr.f4ioz.satcombo.cat.CivController.MODES_DONNEES)
+    }
 
     /**
      * Extract a CTCSS tone (tenths of Hz) from a transmitter description such as
@@ -377,6 +390,8 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         // the rig. Return before the "already armed" test so nothing is
         // recorded as done: full arming happens on release.
         if (monde.maintienDoppler()) return
+        // Keyed: arming writes modes, never between PTT on and off. Done at release.
+        if (monde.emissionEnCours()) return
         val catnum = monde.catnum() ?: return
         val t = monde.transpondeur() ?: return
         if (catArmedFor == catnum && catArmedTxDesc == t.description) return
@@ -476,12 +491,17 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         if (++toursDepuisLeMode < 20) return
         toursDepuisLeMode = 0
         val lu = runCatching { poste.lisMode() }.getOrNull() ?: return
-        val attendu = civModeFor(t, isUplink = false)
-        val ecart = lu != attendu
-        change { copy(mode = CatDecode.civModeName(lu), modeEcart = ecart) }
+        val attendu = mode(t, isUplink = false)
+        // The data flag, on the rigs SatMe switches it on: shown (USB-D), and
+        // put back only while FT8/FT4 wants it — an operator's own USB-D is
+        // never taken away.
+        val donnees = if (poste.donneesPossibles) runCatching { poste.lisDonnees() }.getOrNull() else null
+        val ecart = lu != attendu.civ || (attendu.donnees && donnees == false)
+        change { copy(mode = CatDecode.civModeName(lu) + (if (donnees == true) "-D" else ""), modeEcart = ecart, donnees = donnees) }
         // Restoring the mode is a write like any other: on Doppler hold, only
-        // report the mismatch.
-        if (ecart && !monde.maintienDoppler()) runCatching { poste.ecrisMode(attendu) }
+        // report the mismatch; while keyed, nothing (the next look will).
+        if (ecart && !monde.maintienDoppler() && !monde.emissionEnCours())
+            runCatching { poste.ecrisMode(attendu.civ, attendu.donnees) }
     }
 
     /**

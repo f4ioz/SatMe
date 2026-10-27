@@ -60,7 +60,7 @@ object PagePc {
         Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
         Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
         Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
-        Onglet("ft8", "FT8", "graphic_eq", "FT8 et FT4 : décodage, messages, radar"),
+        Onglet("ft8", "FT8/FT4", "graphic_eq", "FT8 et FT4 : décodage, émission, messages, radar"),
         Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure : paquets 1200 à 9600 bit/s, images SSDV, FUNcube, balise QO-100"),
         Onglet("journal", "Journal", "history", "Les passages enregistrés, rejoués"),
         Onglet("reglages", "Réglages", "settings", "Toute la station : réglages par catégorie"))
@@ -623,10 +623,16 @@ ${STYLE_JETONS}
   .reg-cartes { display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:10px; align-items:start; }
   .reg-cartes .carte { margin:0; }
   @media (max-width:900px) { .reg { flex-direction:column; } .reg-nav { flex:none; width:100%; position:static; flex-direction:row; flex-wrap:wrap; } .reg-nav button small { display:none; } .reg-cartes { grid-template-columns:1fr; } }
-  .f8 { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
-  .f8-tete { display:flex; gap:16px; align-items:center; margin:0; }
-  .f8-anneau { width:86px; height:86px; flex:none; }
-  .f8-horloge-boite { display:flex; flex-direction:column; align-items:center; gap:3px; flex:none; }
+  /* FT8/FT4: one page — the waterfall over the decoded lines on the left, transmit and radar on the right. */
+  .f8 { padding:8px 12px; display:flex; flex-direction:column; gap:8px; }
+  .f8 .carte { margin:0; padding:8px 10px; }
+  .f8-tete { display:flex; gap:12px; align-items:center; }
+  .f8-tete-c { flex:1; min-width:0; }
+  .f8-tete .ligne { margin-top:0; gap:4px 6px; }
+  .f8-tete .ligne + .ligne { margin-top:4px; }
+  .f8-titre { font-size:15px; white-space:nowrap; }
+  .f8-anneau { width:52px; height:52px; flex:none; }
+  .f8-horloge-boite { display:flex; flex-direction:column; align-items:center; gap:1px; flex:none; }
   .f8-horloge { font-size:11px; font-weight:700; white-space:nowrap; cursor:help; color:var(--gris); }
   .f8-diag { display:flex; gap:10px; align-items:center; padding:9px 14px; border-radius:10px; font-size:13px;
     background:rgba(229,72,77,.12); border:1px solid rgba(229,72,77,.55); }
@@ -637,13 +643,44 @@ ${STYLE_JETONS}
   .m8-bulle.guettee { box-shadow:0 0 0 2px rgba(63,224,200,.55); }
   .f8-puce.guet { color:var(--cyan); border-color:rgba(63,224,200,.55); }
   .f8-puce.guet.frais { background:rgba(63,224,200,.14); }
-  .f8-puces { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-  .f8-puce { padding:3px 10px; border-radius:20px; background:#0E1720; border:1px solid var(--bord); font-size:12px; color:var(--gris); }
-  .f8-puce b { color:var(--clair); font-size:14px; }
-  .f8-grille { display:grid; grid-template-columns:minmax(420px,1.7fr) minmax(300px,1fr) minmax(340px,1.15fr); gap:12px; align-items:start; }
-  .f8-grille .carte { margin:0; }
-  @media (max-width:1300px) { .f8-grille { grid-template-columns:1fr 1fr; } .f8-cascade-boite { grid-column:1 / -1; } }
-  @media (max-width:800px) { .f8-grille { grid-template-columns:1fr; } }
+  .f8-puces { display:flex; gap:4px; flex-wrap:wrap; }
+  .f8-puce { padding:1px 8px; border-radius:20px; background:#0E1720; border:1px solid var(--bord); font-size:12px; color:var(--gris); }
+  .f8-puce b { color:var(--clair); font-size:13px; }
+  .f8-grille { display:flex; flex-direction:column; gap:8px; }
+  .f8-gauche, .f8-droite { display:contents; }
+  .f8-cascade-boite { order:1; } .f8tx { order:2; } .f8-bas { order:3; } .f8-radar-boite { order:4; }
+  .f8-cascade { width:100%; height:clamp(180px, 42vh, 420px); display:block; border-radius:8px; background:#05070D; cursor:crosshair; }
+  .f8-spectre { width:100%; height:40px; display:block; margin-top:2px; }
+  .f8-radar { width:100%; height:clamp(220px, 80vw, 420px); display:block; border-radius:8px; background:radial-gradient(circle closest-side,#0B1A24 0%,#05070D 100%); }
+  .f8-tableau { display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .f8-tableau[hidden] { display:none; }
+  .f8-liste-defile { max-height:60vh; min-height:160px; overflow:auto; }
+  .f8-opport { max-height:40vh; overflow:auto; }
+  .f8 .paire.f8-t { margin:0 0 4px; flex-wrap:nowrap; }
+  .f8 .paire.f8-t .petit { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .f8-table td button { padding:1px 6px; }
+  @media (max-width:600px) { .f8-tete { align-items:flex-start; } }
+  /* A computer's screen: everything in the window, the long lists scroll in their own box. */
+  @media (min-width:1101px) and (min-height:600px) {
+    .f8 { height:100%; box-sizing:border-box; }
+    .f8 .f8-grille { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) clamp(360px, 28vw, 520px); }
+    .f8 .f8-gauche, .f8 .f8-droite { display:flex; flex-direction:column; gap:8px; min-height:0; min-width:0; }
+    .f8 .f8-cascade { height:clamp(120px, calc(100vh - 560px), 480px); }
+    .f8 .f8-bas { flex:1; min-height:0; display:flex; }
+    .f8 .f8-tableau { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) clamp(220px, 19vw, 330px); }
+    .f8 .f8-liste-boite { display:flex; flex-direction:column; min-height:0; }
+    .f8 .f8-liste-defile { flex:1; max-height:none; min-height:0; }
+    .f8 .f8-opport-boite { display:flex; flex-direction:column; min-height:0; }
+    .f8 .f8-opport { flex:1; min-height:0; max-height:none; }
+    .f8 .f8tx { flex:0 1 auto; min-height:0; overflow:auto; }
+    .f8 .f8-radar-boite { flex:1 1 0; min-height:180px; display:flex; flex-direction:column; }
+    .f8 .f8-radar { flex:1 1 0; min-height:0; height:auto; }
+    .f8 .m8 { flex:1; min-height:0; flex-direction:row; gap:8px; }
+    .f8 .m8 > .carte:first-child { width:clamp(220px, 22vw, 330px); flex:none; display:flex; flex-direction:column; min-height:0; }
+    .f8 .m8-convs { flex:1; min-height:0; max-height:none; }
+    .f8 .m8-fil-boite { display:flex; flex-direction:column; min-width:0; }
+    .f8 .m8-fil { flex:1; height:auto; min-height:0; }
+  }
   .f8-op { display:flex; gap:10px; align-items:center; padding:7px 8px; border-radius:10px; cursor:pointer; border:1px solid transparent; }
   .f8-op:hover { border-color:var(--cyan); background:rgba(63,224,200,.06); }
   .f8-dr { font-size:22px; line-height:1; }
@@ -657,8 +694,7 @@ ${STYLE_JETONS}
   .f8-sep td { border-top:2px solid var(--bord); }
   .f8-db { display:inline-block; width:34px; height:6px; background:#1C2A36; border-radius:3px; margin-right:4px; vertical-align:middle; overflow:hidden; }
   .f8-db i { display:block; height:100%; }
-  .m8 { display:flex; flex-direction:column; gap:12px; min-width:0; }
-  .m8 .carte { margin:0; }
+  .m8 { display:flex; flex-direction:column; gap:8px; min-width:0; }
   .m8-convs { max-height:240px; overflow:auto; }
   .m8-conv { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:12px; cursor:pointer; border:1px solid transparent; }
   .m8-conv:hover { background:rgba(63,224,200,.05); }
@@ -676,8 +712,6 @@ ${STYLE_JETONS}
   .m8-qui { font-size:12px; margin-bottom:2px; }
   .m8-txt { font-family:ui-monospace,Consolas,monospace; font-size:15px; }
   .m8-ico { font-family:system-ui; }
-  /* Messages shown: the radar only where there is room for three columns. */
-  @media (max-width:1500px) { .f8-messages .f8-radar-boite { display:none; } .f8-messages .f8-grille { grid-template-columns:minmax(420px,1.3fr) minmax(360px,1fr); } }
   a.bouton { font-size:var(--fs-m); font-weight:600; border-radius:var(--r1); border:1px solid var(--ligne); background:var(--s3); color:var(--texte); padding:5px 9px; text-decoration:none; white-space:nowrap; }
   a.bouton:hover { border-color:var(--ligne-forte); }
   button:disabled { opacity:.45; cursor:default; }
@@ -2217,7 +2251,7 @@ ${rail()}
       <div class="hs-src" id="hs-src" role="group" aria-label="Source audio"></div>
       <div class="avert hs-conseil" id="hs-conseil" hidden></div>
       <div class="petit hs-st">Décodeurs à l'écoute</div>
-      <div class="niv-seg hs-decs" id="hs-decs" role="group" aria-label="Décodeurs"><button type="button" data-d="SSTV" aria-pressed="false">SSTV</button><button type="button" data-d="FT8" aria-pressed="false">FT8</button><button type="button" data-d="CW" aria-pressed="false">CW</button><button type="button" data-d="APRS" aria-pressed="false">APRS</button><button type="button" data-d="Phonie" aria-pressed="false" hidden title="Phonie → texte (sa source se règle dans sa carte)">Phonie</button></div>
+      <div class="niv-seg hs-decs" id="hs-decs" role="group" aria-label="Décodeurs"><button type="button" data-d="SSTV" aria-pressed="false">SSTV</button><button type="button" data-d="FT8" aria-pressed="false">FT8/FT4</button><button type="button" data-d="CW" aria-pressed="false">CW</button><button type="button" data-d="APRS" aria-pressed="false">APRS</button><button type="button" data-d="Phonie" aria-pressed="false" hidden title="Phonie → texte (sa source se règle dans sa carte)">Phonie</button></div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()" title="Touche E">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span></div>
       <div class="ligne rec-los-l" style="margin-top:2px"><label class="petit"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
       <div class="ligne"><button id="hs-passage" onclick="preparePassage()" title="Le satellite suivi : sa source, ses décodeurs, son enregistrement (réception seulement) — touche P">⚡ Préparer le passage</button>
@@ -3711,7 +3745,7 @@ ${DiplomesJs.HTML}</div>
         <div id="tq-d-cw" hidden><div id="cw-slot-qo100"></div><div class="petit" id="tq-cw-absent" hidden>Le décodeur CW n'est pas disponible ici.</div></div>
         <div id="tq-d-ft8" hidden>
           <div class="ligne" style="margin:0"><button id="tq-ft8-go" onclick="tqFt8Marche()">▶ Décoder</button><span class="petit" id="tq-ft8-etat"></span>
-            <button style="margin-left:auto" onclick="vue('ft8')">Onglet FT8 complet ›</button></div>
+            <button style="margin-left:auto" onclick="vue('ft8')">Onglet FT8/FT4 complet ›</button></div>
           <div class="tq-ft8"><table><tbody id="tq-ft8"></tbody></table></div>
         </div>
         <div id="tq-d-psk" hidden>
@@ -4559,53 +4593,61 @@ ${Ft8EmissionJs.BANDEAU}
       <svg id="8-anneau" viewBox="0 0 100 100" class="f8-anneau" role="img" aria-label="Le créneau en cours"></svg>
       <span class="f8-horloge" id="8-horloge"></span>
     </div>
-    <div style="flex:1;min-width:0">
-      <div class="ligne" style="margin-top:0">
+    <div class="f8-tete-c">
+      <div class="ligne">
+        <b class="f8-titre">FT8/FT4</b>
         <button class="primaire" id="8-marche" data-marche="8" onclick="ft8Marche()">Écouter</button>
         <button class="arret" data-arret="8" hidden onclick="ft8Marche()">Arrêter</button>
-        <select id="8-mode" onchange="post('api/ft8?mode=' + this.value)" style="max-width:90px"><option>FT8</option><option>FT4</option></select>
+        <select id="8-mode" onchange="post('api/ft8?mode=' + this.value)" style="max-width:90px" title="Le mode décodé (et émis)"><option>FT8</option><option>FT4</option></select>
         <button onclick="post('api/ft8?vide=1').then(() => { f8Lignes = []; f8Total = 0; })">Effacer</button>
-        <input id="8-filtre" placeholder="Filtrer : indicatif, pays, carré…" style="max-width:220px">
+        <input id="8-filtre" placeholder="Filtrer : indicatif, pays, carré…" style="max-width:200px">
         <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
         <span class="bascule-c" style="margin-left:auto"><button id="8-b-tableau" class="actif" onclick="f8Montre('tableau')">📊 Tableau</button><button id="8-b-messages" onclick="f8Montre('messages')">💬 Messages</button></span>
         <span class="petit" id="8-etat"></span>
         <button class="primaire repare" id="f8-repare" hidden onclick="hsRepare()"></button>
       </div>
-      <div class="f8-puces" id="8-puces"></div>
       <div class="ligne">
-        <label class="petit" for="8-guet" title="Une ligne de ces stations est surlignée, et signalée ici. Réception seule : rien n’est émis.">👁 Stations guettées</label>
-        <input id="8-guet" placeholder="indicatifs, ex. K1ABC EA8/F4XYZ" style="max-width:320px" onchange="f8Guette(this.value)">
-        <span class="f8-puces" id="8-guet-alerte" style="margin-top:0"></span>
+        <div class="f8-puces" id="8-puces"></div>
+        <label class="petit" for="8-guet" style="margin-left:auto" title="Une ligne de ces stations est surlignée, et signalée ici. Réception seule : rien n’est émis.">👁 Stations guettées</label>
+        <input id="8-guet" placeholder="indicatifs, ex. K1ABC EA8/F4XYZ" style="max-width:240px" onchange="f8Guette(this.value)">
+        <span class="f8-puces" id="8-guet-alerte"></span>
       </div>
     </div>
   </div>
-${Ft8EmissionJs.HTML}
   <div class="f8-diag" id="8-diag" role="status" hidden></div>
   <div class="f8-grille">
-    <div class="carte f8-cascade-boite">
-      <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
-      <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:clamp(200px, calc(100vh - 340px), 560px);display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
-      <canvas id="8-spectre" style="width:100%;height:56px;display:block;margin-top:2px"></canvas>
-      <div class="petit aide" style="margin-top:4px">Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
-    </div>
-    <div class="carte f8-radar-boite">
-      <div class="paire" style="margin:0 0 6px"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
-      <canvas id="8-radar" style="width:100%;aspect-ratio:1/1;display:block;border-radius:50%;background:radial-gradient(circle,#0B1A24 0%,#05070D 75%)"></canvas>
-      <div class="petit aide" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
-    </div>
-    <div class="m8" id="8-messages" hidden>
-      <div class="carte"><div class="paire" style="margin:0 0 6px"><b>Conversations</b><span class="petit">deux stations qui se parlent</span></div><div class="m8-convs" id="8-convs"></div></div>
-      <div class="carte" style="flex:1;min-height:0"><div class="t" style="margin-top:0" id="8-fil-titre"></div><div class="m8-fil" id="8-fil"></div></div>
-    </div>
-    <div id="8-tableau" style="display:flex;flex-direction:column;gap:12px;min-width:0">
-      <div class="carte">
-        <div class="paire" style="margin:0 0 6px"><b>Qui appeler maintenant</b><span class="petit">ce que chaque station apporterait</span></div>
-        <div id="8-opport"></div>
+    <div class="f8-gauche">
+      <div class="carte f8-cascade-boite">
+        <div class="paire f8-t"><b>Cascade</b><span class="petit" id="8-libre"></span></div>
+        <div style="position:relative"><canvas id="8-cascade" class="f8-cascade"></canvas></div>
+        <canvas id="8-spectre" class="f8-spectre"></canvas>
+        <div class="petit aide">Les indicatifs décodés écrits à leur fréquence, dans leur créneau. Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
       </div>
-      <div class="carte" style="flex:1;min-height:0">
-        <div style="max-height:calc(100vh - 470px);min-height:200px;overflow:auto">
-          <table class="f8-table"><thead><tr><th>UTC</th><th></th><th>Station</th><th>dB</th><th>Hz</th><th>Message</th><th>km</th><th></th></tr></thead><tbody id="8-liste"></tbody></table>
+      <div class="f8-bas">
+        <div class="m8" id="8-messages" hidden>
+          <div class="carte"><div class="paire f8-t"><b>Conversations</b><span class="petit">deux stations qui se parlent</span></div><div class="m8-convs" id="8-convs"></div></div>
+          <div class="carte m8-fil-boite" style="flex:1;min-height:0"><div class="t" style="margin-top:0" id="8-fil-titre"></div><div class="m8-fil" id="8-fil"></div></div>
         </div>
+        <div id="8-tableau" class="f8-tableau">
+          <div class="carte f8-liste-boite">
+            <div class="f8-liste-defile">
+              <table class="f8-table"><thead><tr><th>UTC</th><th></th><th>Station</th><th>dB</th><th>Hz</th><th>Message</th><th>km</th><th></th></tr></thead><tbody id="8-liste"></tbody></table>
+            </div>
+          </div>
+          <div class="carte f8-opport-boite">
+            <div class="paire f8-t"><b>Qui appeler maintenant</b></div>
+            <div class="petit" style="margin:-2px 0 4px">ce que chaque station apporterait</div>
+            <div id="8-opport" class="f8-opport"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="f8-droite">
+${Ft8EmissionJs.HTML}
+      <div class="carte f8-radar-boite">
+        <div class="paire f8-t"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
+        <canvas id="8-radar" class="f8-radar"></canvas>
+        <div class="petit aide">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
       </div>
     </div>
   </div>
