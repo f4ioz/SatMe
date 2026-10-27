@@ -857,6 +857,13 @@ ${STYLE_JETONS}
   .ts-img { background:var(--s3); border-radius:var(--r2); padding:6px; font-size:var(--fs-s); }
   .ts-img img { display:block; width:100%; height:auto; border-radius:4px; background:#7f7f7f; }
   .ts-img .tlm-h { margin-top:4px; }
+  .ts-bande { display:flex; height:8px; margin-top:5px; border-radius:3px; overflow:hidden; background:var(--s1); }
+  .ts-bande span { display:block; height:100%; min-width:1px; }
+  .ts-pass { display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:4px; color:var(--texte-2, inherit); }
+  .ts-pass i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .ts-act { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+  .ts-act a, .ts-act button { font-size:var(--fs-xs); padding:2px 8px; }
+  .tlm-b.encours { background:rgba(79,195,247,.16); color:#7FD3FA; }
   .tlm-g { grid-column:1/-1; margin-top:4px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--texte-3); }
   .allume { box-shadow:inset 4px 0 0 var(--vert); }
   .eteint { box-shadow:inset 4px 0 0 rgba(229,72,77,.55); }
@@ -4569,7 +4576,8 @@ ${rail()}
   <div class="st-pan" id="tl-p-ssdv">
   <div class="carte">
     <div class="t">Images SSDV <span class="petit" id="ts-n"></span></div>
-    <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Les images reçues sont gardées dans telemesure/ssdv.</div>
+    <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Une image renvoyée à un passage suivant (même indicatif, même numéro, dans les 3 jours) est complétée avec ses nouveaux paquets : la bande sous l’image montre quel passage a apporté quels paquets. Les paquets sont gardés dans telemesure/ssdv/paquets (l’image en cours survit à un redémarrage) ; une image complète rejoint la galerie (telemesure/ssdv).</div>
+    <div class="ligne"><input type="file" id="ts-fichier" hidden onchange="tsImporte(this)"><button class="discret" onclick="g('ts-fichier').click()" title="Des paquets SSDV d’un passage manqué : paquets bruts à la suite, fichier KISS, ou journal de trames de SatMe (telemesure/paquets/*.jsonl). Les doublons sont écartés.">⤒ Importer des paquets…</button><span class="petit" id="ts-imp"></span></div>
     <div id="ts-galerie" class="ts-galerie"></div>
   </div>
   </div>
@@ -13194,19 +13202,53 @@ function tpRend(p) {
     (s.attente ? ' · ' + s.attente + ' en attente' : '') + (s.erreur ? ' · dernier échec : ' + s.erreur : '') + (s.essai ? ' · serveur d’essai' : ''));
   tlmPose('tp-trames', (p.trames || []).map(tpTrameHtml).join('') ||
     '<div class="petit">Aucune trame. Suis un satellite qui émet en FSK/GMSK (9600 bit/s le plus souvent), démarre le récepteur SDR sur sa descente et coche la case. Sans antenne : le générateur d’essai du SDR a un signal « Paquets 9600 ».</div>');
-  // The gallery: pictures being received first, then those saved.
+  // The gallery: pictures being put together first (over one pass or several), then those saved.
   const vus = {}, l = [];
-  (p.images || []).forEach(i => { vus[i.fichier] = 1; l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?cle=' + encodeURIComponent(i.cle) + '&v=' + i.recus + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?cle=' +
-    encodeURIComponent(i.cle) + '&v=' + i.recus + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span>' + (i.essai ? '<span class="tlm-b essai">essai</span>' : '') + '<b>' + esc(i.indicatif) + ' n° ' + i.numero +
-    '</b><span>' + i.largeur + '×' + i.hauteur + '</span><span style="margin-left:auto">' + i.recus + ' paquets' + (i.manquants ? ' · ' + i.manquants + ' manquant' + (i.manquants > 1 ? 's' : '') : '') + (i.dernier >= 0 ? ' · fin reçue' : '') + '</span></div></div>'); });
+  (p.images || []).forEach(i => { vus[i.fichier] = 1; l.push(tsImageHtml(i)); });
   (p.sauvees || []).forEach(s2 => { if (!vus[s2.f]) l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?f=' + encodeURIComponent(s2.f) + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?f=' +
     encodeURIComponent(s2.f) + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span><span>' + esc(s2.f) + '</span></div></div>'); });
   txt('ts-n', l.length ? '— ' + l.length : '');
   // The latest picture under the options, as it fills.
   const d0 = (p.images || [])[0];
-  tlmPose('tp-derniere', d0 ? '<div class="petit">Dernière image SSDV : ' + esc(d0.indicatif) + ' n° ' + d0.numero + ' — ' + d0.recus + ' paquets</div><img alt="" src="api/telemesure/ssdv.jpg?cle=' +
+  tlmPose('tp-derniere', d0 ? '<div class="petit">Dernière image SSDV : ' + esc(d0.indicatif) + ' n° ' + d0.numero + ' — ' + tsAvance(d0) + '</div><img alt="" src="api/telemesure/ssdv.jpg?cle=' +
     encodeURIComponent(d0.cle) + '&v=' + d0.recus + '" onclick="document.querySelector(&quot;#v-tlm .st-nav button[data-p=tl-p-ssdv]&quot;).click()" title="Toutes les images">' : '');
   tlmPose('ts-galerie', l.join('') || '<div class="petit">Aucune image. Les paquets SSDV sont cherchés dans chaque trame décodée (onglet Paquets).</div>');
+}
+
+// One colour a pass, in the strip under an SSDV picture and its list of passes.
+const TS_COUL = ['#4FC3F7', '#FFB454', '#9CCC65', '#CE93D8', '#F48FB1', '#FFD54F', '#80CBC4', '#BCAAA4'];
+function tsAvance(i) {
+  return i.recus + '/' + (i.estime ? '≈' : '') + i.total + ' paquets, ' + i.pourcent + ' %';
+}
+function tsImageHtml(i) {
+  const u = 'api/telemesure/ssdv.jpg?cle=' + encodeURIComponent(i.cle), t = Math.max(1, i.total || 1), ps = i.passages || [];
+  const bande = '<div class="ts-bande" title="Les paquets dans l’ordre, chacun de la couleur du passage qui l’a apporté ; foncé : manquant">' +
+    (i.bande || []).map(r => '<span style="width:' + (r[1] * 100 / t).toFixed(3) + '%;background:' + (r[2] < 0 ? 'transparent' : TS_COUL[r[2] % TS_COUL.length]) + '"></span>').join('') + '</div>';
+  const pass = '<div class="ts-pass petit">' + ps.map((s, k) => '<span title="' + escA((s.sat ? s.sat + ' · ' : '') + 'de ' + hm(s.debut) + ' à ' + hm(s.fin)) + '"><i style="background:' +
+    TS_COUL[k % TS_COUL.length] + '"></i>' + (s.source === 'radio' ? 'Passage ' + (k + 1) : esc(s.source)) + ' · ' + jourHeure(s.debut) + ' · ' + s.n + ' paq.</span>').join('') + '</div>';
+  const act = '<div class="ts-act"><a class="bouton-lien" href="' + u.replace('ssdv.jpg', 'ssdv.png') + '&dl=1" download title="L’image telle qu’elle est (blocs manquants en gris), en PNG">⤓ PNG</a>' +
+    '<a class="bouton-lien" href="' + u + '&dl=1" download title="L’image telle qu’elle est, en JPEG">⤓ JPEG</a>' +
+    (i.complete ? '' : '<button class="discret" onclick="tsAbandonne(' + escA(JSON.stringify(i.cle)) + ')" title="Oublier cette image en cours et ses paquets">Abandonner</button>') + '</div>';
+  return '<div class="ts-img"><a href="' + u + '&v=' + i.recus + '" target="_blank"><img loading="lazy" alt="" src="' + u + '&v=' + i.recus + '"></a>' +
+    '<div class="tlm-h"><span class="tlm-b ssdv">SSDV</span>' + (i.essai ? '<span class="tlm-b essai">essai</span>' : '') +
+    (i.complete ? '<span class="tlm-b ok">complète</span>' : '<span class="tlm-b encours">en cours</span>') + '<b>' + esc(i.indicatif) + ' n° ' + i.numero + '</b>' +
+    (i.satellite ? '<span>' + esc(i.satellite) + '</span>' : '') + '<span>' + i.largeur + '×' + i.hauteur + '</span></div>' +
+    '<div class="petit" style="margin-top:3px">' + tsAvance(i) + (i.manquants && !i.complete ? ' · ' + i.manquants + ' manquant' + (i.manquants > 1 ? 's' : '') : '') +
+    (ps.length > 1 ? ' · ' + ps.length + ' passages' : '') + '</div>' + bande + pass + act + '</div>';
+}
+async function tsAbandonne(cle) {
+  if (!confirm('Abandonner cette image en cours ? Ses paquets reçus sont effacés.')) return;
+  await tlmPost('ssdv/abandon?cle=' + encodeURIComponent(cle));
+}
+async function tsImporte(inp) {
+  const f = inp.files && inp.files[0];
+  if (!f) return;
+  txt('ts-imp', 'lecture de ' + f.name + '…');
+  let j = null;
+  try { j = await (await fetch('api/telemesure/ssdv/importe?nom=' + encodeURIComponent(f.name), { method: 'POST', body: f })).json(); } catch (x) {}
+  inp.value = '';
+  txt('ts-imp', !j ? 'échec de l’envoi' : j.ok ? j.nouveaux + ' paquet' + (j.nouveaux > 1 ? 's' : '') + ' ajouté' + (j.nouveaux > 1 ? 's' : '') + (j.doublons ? ', ' + j.doublons + ' déjà là' : '') : (j.erreur || 'refusé'));
+  await tlmTic(true);
 }
 
 /** The channels on the waterfall: a dashed line on the dial, the passband underlined, the decoder named. */

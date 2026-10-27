@@ -31,7 +31,8 @@ import java.util.concurrent.TimeUnit
  *   it (pictures rebuilt as they come), the time, the frequency heard and
  *   the one sent (Doppler taken off);
  * - written per pass in [dossier]`/telemesure/paquets` (JSON lines, and a
- *   KISS file when [kiss]), pictures in `telemesure/ssdv`. Frames from the
+ *   KISS file when [kiss]), pictures in `telemesure/ssdv`, put together
+ *   over several passes ([AssemblageSsdv]). Frames from the
  *   test generator ([Contexte.essai]) are shown, never written nor shared.
  */
 class RecepteurPaquets(
@@ -93,9 +94,8 @@ class RecepteurPaquets(
     @Volatile var etat = Etat(); private set
     private val liste = java.util.ArrayDeque<TramePaquet>()
     val trames: List<TramePaquet> get() = synchronized(liste) { liste.toList() }
-    private val images = LinkedHashMap<String, Ssdv.Image>()
-    private val imagesEssai = HashSet<String>()
-    private val fichiersImages = HashMap<String, String>()
+    /** The SSDV pictures, put together over the passes (kept in `telemesure/ssdv` with a [dossier]). */
+    val assemblage = AssemblageSsdv(dossier, horloge)
 
     // ---------------------------------------------------------------- the chain (one thread)
 
@@ -234,48 +234,19 @@ class RecepteurPaquets(
     }
 
     private fun image(p: Ssdv.Paquet, cx: Contexte, now: Long): Pair<String, Int> {
-        val cle = p.indicatif + "-" + p.image
-        val img = synchronized(images) {
-            var i = images[cle]
-            // Image numbers come round again (one byte): an old picture, or another size, makes way for the new one.
-            if (i != null && (now - i.miseAJour > NOUVELLE_IMAGE_MS || (i.recus > 0 && (i.largeur != p.largeur * 16 || i.hauteur != p.hauteur * 16 || i.mode != p.mode)))) {
-                images.remove(cle); synchronized(fichiersImages) { fichiersImages.remove(cle) }; i = null
-            }
-            if (i == null) {
-                i = Ssdv.Image(p.indicatif, p.image)
-                images[cle] = i
-                while (images.size > MAX_IMAGES) images.entries.minByOrNull { it.value.miseAJour }?.key?.let { images.remove(it); imagesEssai.remove(it) }
-            }
-            if (cx.essai) imagesEssai += cle
-            i
-        }
-        if (img.ajoute(p)) {
-            img.miseAJour = now
-            if (!cx.essai) runCatching {
-                val j = img.jpeg() ?: return@runCatching
-                val d = File(dossier ?: return@runCatching, "telemesure/ssdv").apply { mkdirs() }
-                val nom = synchronized(fichiersImages) {
-                    fichiersImages.getOrPut(cle) { jour(now, "yyyyMMdd-HHmm") + "-" + nomFichier(cx.satellite.ifBlank { p.indicatif }) + "-" + p.indicatif + "-" + p.image + ".jpg" }
-                }
-                File(d, nom).writeBytes(j)
-            }
-        }
-        return cle to p.numero
+        val a = assemblage.ajoute(p, now, cx.satellite, AssemblageSsdv.SOURCE_RADIO, cx.essai)
+        return (a.photo?.id ?: (p.indicatif + "-" + p.image)) to p.numero
     }
 
     /** One picture's JPEG as it stands (missing blocks grey). */
-    fun jpeg(cle: String): ByteArray? = synchronized(images) { images[cle] }?.jpeg()
+    fun jpeg(cle: String): ByteArray? = assemblage.photo(cle)?.jpeg()
 
-    fun imagesJson(): JSONArray = JSONArray(synchronized(images) { images.entries.toList() }.sortedByDescending { it.value.miseAJour }.take(24).map { (cle, i) ->
-        JSONObject().put("cle", cle).put("indicatif", i.indicatif).put("numero", i.numero).put("recus", i.recus)
-            .put("manquants", i.manquants().size).put("dernier", i.dernier ?: -1).put("largeur", i.largeur).put("hauteur", i.hauteur)
-            .put("t", i.miseAJour).put("essai", cle in imagesEssai).put("fichier", fichiersImages[cle] ?: "")
-    })
+    fun imagesJson(): JSONArray = assemblage.json()
 
     fun vide() {
         synchronized(liste) { liste.clear(); recents.clear() }
-        synchronized(images) { images.clear(); imagesEssai.clear() }
-        synchronized(fichiersImages) { fichiersImages.clear() }
+        // The pictures under way are the station's (on disk): only the test ones go.
+        assemblage.videEssais()
         etat = etat.copy(trames = 0)
     }
 
@@ -301,8 +272,6 @@ class RecepteurPaquets(
         const val FS_CIBLE = 88_200.0
         const val MAX_TRAMES = 300
         const val NOUVEAU_PASSAGE_MS = 20 * 60_000L
-        const val NOUVELLE_IMAGE_MS = 30 * 60_000L
-        const val MAX_IMAGES = 60
         val DEBITS = listOf(1200, 2400, 4800, 9600)
 
         private fun jour(ms: Long, f: String) = java.text.SimpleDateFormat(f, java.util.Locale.ROOT)

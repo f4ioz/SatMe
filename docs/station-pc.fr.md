@@ -694,7 +694,14 @@ Le sous-onglet **Paquets** décode les cubesats en FSK ou GMSK de 1200 à 9600 b
 
 ### Images SSDV
 
-Le sous-onglet **Images SSDV** reconstitue les images SSDV (JPEG en paquets de 256 octets, CRC-32 et Reed-Solomon) trouvées dans les trames décodées, au fil des paquets ; les blocs des paquets manquants restent gris. Les images sont gardées dans `telemesure/ssdv/`.
+Le sous-onglet **Images SSDV** reconstitue les images SSDV (JPEG en paquets de 256 octets, CRC-32 et Reed-Solomon) trouvées dans les trames décodées, au fil des paquets ; les blocs des paquets manquants restent gris.
+
+- **Sur plusieurs passages** : les satellites renvoient souvent une image, ou sa suite, une orbite ou un jour plus tard. Un paquet de même indicatif et même numéro d'image qu'une image reçue dans les 3 derniers jours, de même taille et qualité, la complète ; le numéro d'image tient sur un octet et revient, donc un numéro de paquet déjà là avec d'autres octets, ou un paquet au-delà de la fin d'une image finie, commence une nouvelle image. Les doublons (les deux lectures des bits, un rejeu, un import) ne sont gardés qu'une fois ; le CRC de chaque paquet est vérifié.
+- Chaque image affiche **N/M paquets, X %** (M estimé, « ≈ », tant que le dernier paquet n'est pas arrivé), **en cours** ou **complète**, une **bande** de ses paquets colorés selon le passage qui les a apportés (foncé : manquant) et la liste des passages (heure, paquets, source). L'image se met à jour en direct pendant le passage.
+- **Gardé sur le disque** : les paquets de chaque image dans `telemesure/ssdv/paquets/<id>.jsonl` (une ligne par paquet, relus au démarrage : une image en cours survit à un redémarrage). Une image complète est écrite en JPEG dans `telemesure/ssdv/` et rejoint la galerie.
+- **⤓ PNG / ⤓ JPEG** exportent une image telle qu'elle est (blocs manquants en gris) ; **Abandonner** oublie une image en cours et ses paquets.
+- **Importer des paquets…** : les paquets d'un passage manqué depuis un fichier — paquets SSDV bruts à la suite, fichier KISS, ou journal de trames de SatMe (`telemesure/paquets/*.jsonl`, avec ses heures). Ils rejoignent les images comme des paquets reçus, en passage à part au nom du fichier. (Les enregistrements I/Q ou WAV rejoués dans le SDR sont traités comme des essais et n'alimentent pas les images.)
+- En démonstration (`--demo`), deux images fictives assemblées sur deux passages : l'une complète, l'autre à quelques paquets près.
 
 ### BPSK : FUNcube et la balise QO-100
 

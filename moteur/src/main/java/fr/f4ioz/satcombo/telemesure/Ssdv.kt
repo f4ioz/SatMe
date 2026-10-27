@@ -68,6 +68,8 @@ object Ssdv {
         val donnees: ByteArray,
         /** Bytes put right by Reed-Solomon. */
         val corriges: Int,
+        /** The whole packet as read (256 bytes, sync first, repaired), to be kept; empty when not known. */
+        val brut: ByteArray = ByteArray(0),
     ) {
         val premiereMcu: Int? get() = if (mcuDecalage == 0xFF || mcuIndice == 0xFFFF) null else mcuIndice
     }
@@ -142,7 +144,7 @@ object Ssdv {
         val drapeaux = u(11)
         return Paquet(type, indicatif((u(2).toLong() shl 24) or (u(3).toLong() shl 16) or (u(4).toLong() shl 8) or u(5).toLong()),
             u(6), (u(7) shl 8) or u(8), u(9), u(10), ((drapeaux ushr 3) and 7) xor 4, drapeaux and 4 != 0, drapeaux and 3,
-            u(12), (u(13) shl 8) or u(14), p.copyOfRange(ENTETE, ENTETE + n), corriges)
+            u(12), (u(13) shl 8) or u(14), p.copyOfRange(ENTETE, ENTETE + n), corriges, p.copyOf())
     }
 
     /** The SSDV packets inside a frame's bytes (an AX.25 information field, or a frame of its own). */
@@ -285,6 +287,24 @@ object Ssdv {
 
         val recus: Int get() = paquets.size
         val numeros: Set<Int> get() = paquets.keys
+
+        /** Packet [n], when it came. */
+        @Synchronized
+        fun paquet(n: Int): Paquet? = paquets[n]
+
+        /** The packets' numbers, a copy. */
+        @Synchronized
+        fun listeNumeros(): List<Int> = paquets.keys.toList()
+
+        /** The highest first-MCU index among the packets, and the picture's MCU count (an estimate of the whole while the last is missing). */
+        @Synchronized
+        fun avancementMcu(): Pair<Int, Int>? {
+            if (paquets.isEmpty()) return null
+            val (hs, vs) = ECHANTILLONNAGE[mode]
+            val total = (largeur / (8 * hs)) * (hauteur / (8 * vs))
+            val m = paquets.values.mapNotNull { it.premiereMcu }.maxOrNull() ?: return null
+            return m to total
+        }
 
         /** Adds a packet; false when it was there already or does not belong (another size). */
         @Synchronized

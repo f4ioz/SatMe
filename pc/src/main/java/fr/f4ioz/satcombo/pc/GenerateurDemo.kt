@@ -126,6 +126,7 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
         LogStore(File(dossier, "qso_log.json")).save(contacts.sortedBy { it.timeMs }
             .map { if (it.timeMs < maintenant - 2 * JOUR_MS) it.copy(envoyeMs = it.timeMs + 2 * 3_600_000L) else it })
         File(dossier, "sstv-campagnes.json").writeText(campagnes(images).toString(), Charsets.UTF_8)
+        runCatching { imagesSsdv(dossier) }
         File(dossier, ModeDemo.MARQUE).writeText("genere=$maintenant\ngraine=$graine\nversion=$VERSION\n", Charsets.UTF_8)
         return Bilan(nbPassages, contacts.size, images.sumOf { it.second.size }, sats.size)
     }
@@ -324,6 +325,36 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
         }
     }
 
+    // ---------------------------------------------------------------- SSDV
+
+    /**
+     * Two made-up SSDV pictures put together over two passes (the packets
+     * written as the station keeps them): one finished, in the gallery, one
+     * still missing a few packets, « en cours ».
+     */
+    private fun imagesSsdv(dossier: File) {
+        val d = File(dossier, "telemesure/ssdv")
+        d.deleteRecursively()
+        val a = fr.f4ioz.satcombo.telemesure.AssemblageSsdv(dossier) { maintenant }
+        fun paquets(diapo: Int, numero: Int): List<fr.f4ioz.satcombo.telemesure.Ssdv.Paquet> {
+            val im = ImagesDemo.image(diapo, DIAPOS, 320, 240, graine + numero)
+            val rgb = im.getRGB(0, 0, 320, 240, null, 0, 320).map { it and 0xFFFFFF }.toIntArray()
+            return fr.f4ioz.satcombo.telemesure.Ssdv.codeImage(rgb, 320, 240, SSDV_INDICATIF, numero, qualite = 4)
+                .mapNotNull { fr.f4ioz.satcombo.telemesure.Ssdv.lis(it) }
+        }
+        val orbite = 96 * 60_000L
+        for ((k, numero) in listOf(41, 42).withIndex()) {
+            val l = paquets(3 + 4 * k, numero)
+            val debut = maintenant - (if (k == 0) 28 else 6) * 3_600_000L
+            // First pass: from the start, some lost on the way, the signal gone before the end.
+            val premier = l.indices.filter { it < l.size * (if (k == 0) 70 else 55) / 100 && rnd.nextInt(7) != 0 }
+            premier.forEachIndexed { j, i -> a.ajoute(l[i], debut + j * 3_000L, SSDV_SAT) }
+            // The next orbit: the picture sent again, the rest caught (the second one still a few short).
+            val second = l.indices.filter { it !in premier && (k == 0 || rnd.nextInt(5) != 0) }
+            second.forEachIndexed { j, i -> a.ajoute(l[i], debut + orbite + j * 3_000L, SSDV_SAT) }
+        }
+    }
+
     // ---------------------------------------------------------------- SSTV
 
     private fun debutCampagne() = maintenant - 3 * JOUR_MS
@@ -382,6 +413,9 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
         const val QO100 = 43700
         const val DIAPOS = 12
         const val CAMPAGNE = "SSTV de démonstration"
+        /** The made-up SSDV pictures' callsign and satellite. */
+        const val SSDV_INDICATIF = "DEMSAT"
+        const val SSDV_SAT = "DEMOSAT-1 (fictif)"
         /** The orbital elements carried for the demonstration (AMSAT's bulletin of 25 October 2026) and their date. */
         const val ELEMENTS = "/fr/f4ioz/satcombo/pc/demo/elements.json"
         const val ELEMENTS_MS = 1_792_886_400_000L

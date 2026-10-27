@@ -733,11 +733,26 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         // BPSK telemetry: the QO-100 beacon's panel, the LEO decoder, the test mode (receive only).
         // An SSDV picture as it stands (missing blocks grey), or a saved one.
-        if (chemin == "/api/telemesure/ssdv.jpg") {
-            val j = telemesure?.jpegSsdv(q)
+        if (chemin == "/api/telemesure/ssdv.jpg" || chemin == "/api/telemesure/ssdv.png") {
+            val png = chemin.endsWith(".png")
+            val t = telemesure
+            val j = if (png) t?.pngSsdv(q) else t?.jpegSsdv(q)
+            // dl=1: « Exporter », as a file.
+            val dl = if (q["dl"] == "1" && t != null) "Content-Disposition: attachment; filename=\"" + t.nomSsdv(q, if (png) "png" else "jpg") + "\"\r\n" else ""
             if (j == null) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "absente".toByteArray())
-            else envoie(sortie, "200 OK", "image/jpeg", j)
+            else envoie(sortie, "200 OK", if (png) "image/png" else "image/jpeg", j, dl)
             return
+        }
+        // SSDV packets from a file (raw packets, KISS, SatMe's frame log): put with the pictures.
+        if (chemin == "/api/telemesure/ssdv/importe" && r.methode == "POST") {
+            val t = telemesure
+            val b = RequeteHttp.corps(c.getInputStream(), r, 32 * 1024 * 1024)
+            val o = when {
+                t == null -> JSONObject().put("ok", false).put("erreur", "absent")
+                b == null -> JSONObject().put("ok", false).put("erreur", "fichier trop gros ou illisible")
+                else -> runCatching { t.importeSsdv(b, q["nom"].orEmpty()) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         if (chemin == "/api/telemesure" || chemin.startsWith("/api/telemesure/")) {
             val k = telemesure

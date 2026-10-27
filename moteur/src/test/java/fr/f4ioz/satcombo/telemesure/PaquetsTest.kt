@@ -118,9 +118,11 @@ class PaquetsTest {
         val bits = G3ruh.bits(p.map { SignalPaquets.trameSsdv(it) })
         val r = recoit(bits, 9600, 800.0, 16.0, graine = 9)
         assertEquals(4, r.trames.size)
-        assertTrue(r.trames.all { t -> t.ssdv.map { it.first } == listOf("Q0SAT-3") })
+        val cle = r.trames[0].ssdv[0].first
+        assertTrue(cle, Regex("\\d{8}-\\d{6}-Q0SAT-3-essai").matches(cle))
+        assertTrue(r.trames.all { t -> t.ssdv.map { it.first } == listOf(cle) })
         assertEquals(listOf(0, 1, 2, 3), r.trames.map { it.ssdv[0].second }.sorted())
-        assertNotNull(r.jpeg("Q0SAT-3"))
+        assertNotNull(r.jpeg(cle))
     }
 
     @Test fun generateurIqDeBoutEnBout() {
@@ -142,7 +144,7 @@ class PaquetsTest {
         assertTrue(r.etat.toString(), r.trames.size >= 14)
         assertTrue(r.trames.any { it.ax25?.source?.toString() == "Q0SAT-1" })
         val img = r.imagesJson().getJSONObject(0)
-        assertEquals("Q0SAT-0", img.getString("cle"))
+        assertTrue(img.getString("cle").endsWith("-Q0SAT-0-essai"))
         assertTrue(img.getInt("recus") >= 12)
         assertTrue(img.getBoolean("essai"))
     }

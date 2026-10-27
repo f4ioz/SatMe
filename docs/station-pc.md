@@ -693,7 +693,14 @@ The **Paquets** sub-tab decodes cubesats in FSK or GMSK from 1200 to 9600 bit/s,
 
 ### SSDV pictures
 
-The **Images SSDV** sub-tab rebuilds the SSDV pictures (JPEG in 256-byte packets, CRC-32 and Reed-Solomon) found in the decoded frames, packet by packet; the blocks of missing packets stay grey. Pictures are kept in `telemesure/ssdv/`.
+The **Images SSDV** sub-tab rebuilds the SSDV pictures (JPEG in 256-byte packets, CRC-32 and Reed-Solomon) found in the decoded frames, packet by packet; the blocks of missing packets stay grey.
+
+- **Over several passes**: satellites often send a picture again, or its rest, an orbit or a day later. A packet with the same callsign and image number as a picture received within the last 3 days, of the same size and quality, completes it; the image number is a single byte and comes round, so a packet number already there with other bytes, or one past the end of a finished picture, starts a new picture. Duplicates (both bit readings, a replay, an import) are kept once; every packet's CRC is checked.
+- Each picture shows **N/M paquets, X %** (M guessed, « ≈ », until the last packet came), **en cours** or **complète**, a **strip** of its packets coloured by the pass that brought them (dark: missing), and the list of passes (time, packets, source). The picture updates live during the pass.
+- **Kept on disk**: each picture's packets in `telemesure/ssdv/paquets/<id>.jsonl` (one line a packet, read back at start: a picture under way survives a restart). A complete picture is written as a JPEG in `telemesure/ssdv/` and joins the gallery.
+- **⤓ PNG / ⤓ JPEG** export a picture as it stands (missing blocks grey); **Abandonner** forgets a picture under way and its packets.
+- **Importer des paquets…**: the packets of a missed pass from a file — raw SSDV packets one after the other, a KISS file, or SatMe's frame log (`telemesure/paquets/*.jsonl`, with its times). They join the pictures like received ones, as a pass of their own named after the file. (I/Q or WAV recordings replayed through the SDR are treated as tests and do not feed the pictures.)
+- In the demonstration (`--demo`), two made-up pictures put together over two passes: one complete, one still a few packets short.
 
 ### BPSK: FUNcube and the QO-100 beacon
 

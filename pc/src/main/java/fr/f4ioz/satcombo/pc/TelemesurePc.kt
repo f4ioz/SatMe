@@ -156,6 +156,25 @@ class TelemesurePc(
         return File(dossier, "telemesure/ssdv/$f").takeIf { it.isFile }?.readBytes()
     }
 
+    /** A picture (live, test, or saved) as PNG, for « Exporter ». */
+    fun pngSsdv(q: Map<String, String>): ByteArray? {
+        val j = jpegSsdv(q) ?: return null
+        val im = runCatching { javax.imageio.ImageIO.read(j.inputStream()) }.getOrNull() ?: return null
+        return java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(im, "png", it) }.toByteArray()
+    }
+
+    /** The file name a picture is downloaded under. */
+    fun nomSsdv(q: Map<String, String>, ext: String): String =
+        "SSDV_" + RecepteurPaquets.nomFichier(q["cle"] ?: q["f"]?.substringBeforeLast('.') ?: "image") + "." + ext
+
+    /** SSDV packets from a file (a missed pass caught by another station, an older log): put with the pictures. */
+    fun importeSsdv(octets: ByteArray, nom: String): JSONObject {
+        if (octets.isEmpty()) return erreur("fichier vide")
+        val (n, d) = paquets.assemblage.importe(octets, nom.ifBlank { "fichier" })
+        if (n == 0 && d == 0) return erreur("aucun paquet SSDV valide dans ce fichier")
+        return JSONObject().put("ok", true).put("nouveaux", n).put("doublons", d)
+    }
+
     private fun jsonPaquets(): JSONObject {
         val e = paquets.etat
         val em = emetteurPaquets()
@@ -262,6 +281,11 @@ class TelemesurePc(
             }
             "paquets/essai" -> if (!lanceEssaiPaquets()) return erreur("un essai est déjà en cours")
             "paquets/vide" -> { paquets.vide(); essaiPaquets.vide() }
+            // A picture under way dropped (its packets' file removed; a finished one's JPEG stays).
+            "ssdv/abandon" -> {
+                val c = q["cle"]?.takeIf { fr.f4ioz.satcombo.telemesure.AssemblageSsdv.idValide(it) } ?: return erreur("image inconnue")
+                if (!paquets.assemblage.abandonne(c) && !essaiPaquets.assemblage.abandonne(c)) return erreur("image inconnue")
+            }
             else -> return erreur("geste inconnu")
         }
         return ok
