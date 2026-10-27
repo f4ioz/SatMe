@@ -3259,7 +3259,8 @@ ${DiplomesJs.HTML}</div>
         <span id="k-ensemble" class="petit"></span>
         <span class="bascule-c" role="group" aria-label="Rejouer sur"><button id="k-b-carte" onclick="vueSked('carte')" title="Le sked rejoué sur la carte">Carte</button><button id="k-b-globe" onclick="vueSked('globe')" title="Le sked rejoué sur le globe de l’onglet Orbites, avec ses rendus et ses réglages">Globe</button></span>
         <button id="k-video" onclick="videoSked()" title="Le sked rejoué en vidéo (MP4), à envoyer à l'autre station : sur la carte ou sur le globe, comme affiché (le globe avec son rendu, sa caméra et ses réglages)">Vidéo</button>
-        <select id="k-video-format" style="flex:none;width:auto" aria-label="Format de la vidéo" title="Le format de la vidéo : l'écran (16:9) ou un téléphone debout (9:16)" onchange="try { localStorage.setItem('sked-video-format', this.value); } catch (x) {}"><option value="paysage">16:9</option><option value="telephone">9:16</option></select>
+        <select id="k-video-format" style="flex:none;width:auto" aria-label="Format de la vidéo" title="Le format de la vidéo : l'écran (16:9) ou un téléphone debout (9:16) ; le globe animé en 1920×1080, 1280×720 ou 1080×1920" onchange="try { localStorage.setItem('sked-video-format', this.value); } catch (x) {}"><option value="paysage">16:9</option><option value="paysage720" hidden disabled>16:9 · 720p</option><option value="telephone">9:16</option></select>
+        <label id="k-anime-l" class="petit" style="flex:none;white-space:nowrap" hidden title="La vidéo filmée par le navigateur sur le vrai globe de la page (relief, nuages, monuments, décor animé, le rendu et la caméra des Réglages du globe) au lieu d’être dessinée par SatMe : 24 s du passage et 3 s de la fenêtre. Gardez l’onglet visible pendant l’enregistrement ; SatMe-PC en fait ensuite un MP4."><input type="checkbox" id="k-anime"> Globe animé (comme à l’écran)</label>
         <span class="petit" id="k-video-etat"></span>
       </div>
       <details class="k-reglages" id="k-reglages" hidden><summary>Réglages du globe</summary><div id="k-reglages-c"></div></details>
@@ -11580,6 +11581,8 @@ async function rejoueSked(i) {
 }
 async function videoSked() {
   if (!KT) return;
+  // « Globe animé »: the page's own globe filmed by the browser (VideoSkedJs).
+  if (kfAnime()) { filmeSked(); return; }
   const w = KT.w;
   // As shown: the map, or the globe with the look, camera and settings chosen (the server draws them itself).
   let q = '&format=' + (g('k-video-format').value === 'telephone' ? 'telephone' : 'paysage');
@@ -11756,6 +11759,7 @@ async function majVueSked() {
   const globe = kVue === 'globe';
   g('k-b-carte').classList.toggle('actif', !globe); g('k-b-globe').classList.toggle('actif', globe);
   g('k-carte').hidden = globe; g('k-globe').hidden = !globe; g('k-reglages').hidden = !globe;
+  g('k-anime-l').hidden = !globe; kfFormats();
   txt('k-globe-etat', '');
   if (!globe) { cadreSked(); dessineSked(); return; }
   if (!KT) return;
@@ -11803,6 +11807,7 @@ function rangeTraces() {
   r.oninput = () => { Orbites.traces(+r.value); dessineSked(); };
   l.append(document.createTextNode('Traces '), r); return l;
 }
+${VideoSkedJs.JS}
 majVueSked();
 
 // ------------------------------------------------------------------ the followed satellite's map

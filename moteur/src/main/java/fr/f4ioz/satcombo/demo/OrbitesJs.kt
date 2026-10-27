@@ -1054,7 +1054,12 @@ const Orbites = (function () {
 
     let derniere = performance.now();
     sc.image = (t, now) => {
-      const r = canvas.getBoundingClientRect();
+      // A film being made (the Sked's « Globe animé »): its own size and sharpness, its own clock for the scenery, each image handed over as soon as drawn.
+      const fm = sc.film;
+      if (fm && fm.now != null) now = fm.now;
+      const pr = fm ? fm.k : Math.min(2, window.devicePixelRatio || 1);
+      if (rendu.getPixelRatio() !== pr) rendu.setPixelRatio(pr);
+      const r = fm ? { width: fm.w, height: fm.h } : canvas.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) return;
       if (canvas.width !== Math.round(r.width * rendu.getPixelRatio()) || canvas.height !== Math.round(r.height * rendu.getPixelRatio())) { rendu.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
       // Its centre shifted on the screen and its size (the journal's; the dashboard's look's: OB.tb.place).
@@ -1209,6 +1214,8 @@ const Orbites = (function () {
       if (vueSat) vueSatInfo(ov, t, now, cam.pos.length(), vitSat); else sc.cacheInfo();
       camera.position.copy(cam.pos); camera.lookAt(cam.cible);
       rendu.render(scene, camera);
+      // Read now, in the same frame (the drawing buffer is not kept).
+      if (fm && fm.apres) fm.apres(canvas);
       if (mode === 'tab' && OB.tb && OB.tb.pedago) reperes3d(sc, camera, cam, terre, r.width, r.height, satP, oc, lieu ? stW : null, soleil.position.clone().normalize());
       // Where the satellite chosen shows (the journal's SSTV frame keeps away from it).
       if (satP) { const v = satP.clone().project(camera); sc.satX = (v.x + 1) / 2 * r.width; } else sc.satX = null;
@@ -2002,6 +2009,11 @@ const Orbites = (function () {
     },
     /** The Sked's globe framed by itself again (after a drag). */
     skedRecadre: () => { if (sked) sked.libre = false; },
+    /**
+     * The Sked's globe filmed (« Globe animé »): f = {w, h (its size, CSS px), k (pixels per px), now (the scenery's clock, ms),
+     * apres: canvas => … (called right after each image is drawn)}, or null to stop. False when there is no Sked globe.
+     */
+    skedFilm: f => { if (!sked) return false; sked.film = f || null; return true; },
     /** The journal's globe: where its satellite shows (px from the canvas's left), null when unknown. */
     satEcranX: () => rejeu ? rejeu.satX : null,
     /**
