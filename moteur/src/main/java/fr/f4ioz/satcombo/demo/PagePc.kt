@@ -1264,13 +1264,14 @@ ${STYLE_JETONS}
   .ob-coin { display:none; }
   #v-orbites.ob-tableau .ob-coin { position:absolute; z-index:3; display:flex; flex-direction:column; gap:10px; max-width:min(38%, 440px); pointer-events:none; overflow:hidden; }
   .ob-coin-hg { left:14px; top:60px; max-height:calc(50% - 70px); } .ob-coin-hd { right:14px; top:60px; max-height:calc(50% - 70px); align-items:flex-end; }
-  .ob-coin-bg { left:14px; bottom:14px; max-height:calc(50% - 24px); justify-content:flex-end; } .ob-coin-bd { right:14px; bottom:14px; max-height:calc(50% - 24px); align-items:flex-end; justify-content:flex-end; }
+  .ob-coin-bg { left:14px; bottom:14px; max-height:calc(50% - 24px); } .ob-coin-bd { right:14px; bottom:14px; max-height:calc(50% - 24px); align-items:flex-end; }
+  /* A corner whose cards do not fit is made smaller (--ob-k, obAjusteCoin) rather than cut; anchored at the bottom, its content flows downwards so that an overflow is seen. */
   #v-orbites.ob-tableau .ob-instruments:not([hidden]) ~ .ob-coin-b { display:none; }
-  .ob-w { background:rgba(8,13,18,.6); border:1px solid rgba(255,255,255,.12); border-radius:var(--r3); padding:10px 16px; color:var(--texte); font-size:clamp(14px, 1.3vw, 21px); line-height:1.3;
+  .ob-w { background:rgba(8,13,18,.6); border:1px solid rgba(255,255,255,.12); border-radius:var(--r3); padding:10px 16px; color:var(--texte); font-size:calc(clamp(14px, 1.3vw, 21px) * var(--ob-k, 1)); line-height:1.3;
           text-shadow:0 1px 2px rgba(0,0,0,.6); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); min-width:0; max-width:100%; box-sizing:border-box; }
   .ob-w[hidden] { display:none; }
   .ob-w-t { font-size:.68em; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--texte-2); margin-bottom:2px; }
-  .ob-w-gros { font-family:var(--mono); font-size:clamp(30px, 4.4vw, 68px); font-weight:800; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.02em; white-space:nowrap; }
+  .ob-w-gros { font-family:var(--mono); font-size:calc(clamp(30px, 4.4vw, 68px) * var(--ob-k, 1)); font-weight:800; line-height:1.05; font-variant-numeric:tabular-nums; letter-spacing:.02em; white-space:nowrap; }
   .ob-w-gros small { font-size:.36em; font-weight:600; color:var(--texte-2); margin-left:.3em; letter-spacing:0; }
   .ob-w-moy { font-family:var(--mono); font-size:1.5em; font-weight:700; font-variant-numeric:tabular-nums; }
   .ob-w-mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
@@ -1331,19 +1332,19 @@ ${STYLE_JETONS}
   :is(.ob-th-cartoon, .ob-th-pedago) :is(.ob-w-g span, .ob-w-gros small, .ob-w-mono, .petit) { color:#4a5878; }
   :is(.ob-th-cartoon, .ob-th-pedago) .ob-w-pas .m { color:#E8743B; } :is(.ob-th-cartoon, .ob-th-pedago) .ob-w-pas .la { color:#1f9d55; }
   :is(.ob-th-cartoon, .ob-th-pedago) .ob-defile:not([hidden]) { background:#FFD34D; color:#0a1230; border-top:3px solid #0a1230; }
-  #v-orbites.ob-th-pedago .ob-w { font-size:clamp(15px, 1.45vw, 25px); }
-  #v-orbites.ob-tableau [data-w="sat"] .ob-w-gros { font-size:clamp(26px, 3.2vw, 56px); }
+  #v-orbites.ob-th-pedago .ob-w { font-size:calc(clamp(15px, 1.45vw, 25px) * var(--ob-k, 1)); }
+  #v-orbites.ob-tableau [data-w="sat"] .ob-w-gros { font-size:calc(clamp(26px, 3.2vw, 56px) * var(--ob-k, 1)); }
   #v-orbites.ob-th-pedago .ob-coin { max-width:min(40%, 520px); }
   /* Classique radioamateur: dense panels in a band over a flat map, monospace on black, as the station clocks. */
   #v-orbites.ob-th-classique.ob-tableau .ob-scene { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); grid-template-rows:auto minmax(0, 1fr); gap:6px; padding:6px; box-sizing:border-box; background:#000; }
   #v-orbites.ob-th-classique.ob-tableau .ob-scene > canvas { position:relative; inset:auto; grid-column:1 / -1; grid-row:2; width:100%; height:100%; min-height:0; }
   #v-orbites.ob-th-classique.ob-tableau .ob-coin { position:static; grid-row:1; max-width:none; max-height:none; align-items:stretch; justify-content:flex-start; gap:6px; }
   #v-orbites.ob-th-classique.ob-tableau .ob-coin-hd { grid-column:2; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bg { grid-column:3; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bd { grid-column:4; }
-  #v-orbites.ob-th-classique .ob-w { background:#05080c; border:1px solid #233140; border-radius:4px; padding:6px 10px; font-family:var(--mono); font-size:clamp(12px, .92vw, 17px); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+  #v-orbites.ob-th-classique .ob-w { background:#05080c; border:1px solid #233140; border-radius:4px; padding:6px 10px; font-family:var(--mono); font-size:calc(clamp(12px, .92vw, 17px) * var(--ob-k, 1)); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
   #v-orbites.ob-th-classique .ob-w-t { color:#00E5FF; letter-spacing:.08em; }
   .ob-th-classique [data-w="station"] .ob-w-t { color:#FFD000; } .ob-th-classique [data-w="astres"] .ob-w-t { color:#C792FF; } .ob-th-classique [data-w="passages"] .ob-w-t { color:#7CF29A; }
   .ob-th-classique [data-w="espace"] .ob-w-t { color:#FF9F43; } .ob-th-classique [data-w="sat"] .ob-w-t { color:#FF6B9A; }
-  #v-orbites.ob-th-classique .ob-w-gros { font-size:clamp(24px, 2.8vw, 50px); color:#9CFF57; }
+  #v-orbites.ob-th-classique .ob-w-gros { font-size:calc(clamp(24px, 2.8vw, 50px) * var(--ob-k, 1)); color:#9CFF57; }
   #v-orbites.ob-th-classique .ob-haut { top:auto; bottom:44px; }
   #v-orbites.ob-th-classique.ob-tableau.ob-avec-defile .ob-coin-bg, #v-orbites.ob-th-classique.ob-tableau.ob-avec-defile .ob-coin-bd { bottom:auto; }
   #v-orbites.ob-th-classique .ob-defile:not([hidden]) { font-family:var(--mono); color:#FFD000; background:#05080c; }
@@ -1357,7 +1358,7 @@ ${STYLE_JETONS}
   #v-orbites.ob-th-nuit .ob-w { background:rgba(0,0,0,.55); border-color:rgba(255,90,60,.16); color:#D27A6A; text-shadow:none; }
   #v-orbites.ob-th-nuit :is(.ob-w-t, .ob-w-g span, .ob-w-gros small, .petit) { color:#8A4A40; }
   #v-orbites.ob-th-nuit .ob-w-gros { color:#E08A70; font-weight:600; }
-  #v-orbites.ob-th-nuit [data-w="horloge"] .ob-w-gros { font-size:clamp(36px, 5.2vw, 100px); }
+  #v-orbites.ob-th-nuit [data-w="horloge"] .ob-w-gros { font-size:calc(clamp(36px, 5.2vw, 100px) * var(--ob-k, 1)); }
   #v-orbites.ob-th-nuit.ob-tableau .ob-coin { max-width:min(46%, 640px); }
   #v-orbites.ob-th-nuit :is(.ob-w-pas .m, .ob-w-pas .la) { color:#C9785A; }
   #v-orbites.ob-th-nuit .ob-defile:not([hidden]) { color:#D27A6A; background:rgba(0,0,0,.6); border-top-color:rgba(255,90,60,.16); }
@@ -1376,7 +1377,9 @@ ${STYLE_JETONS}
   .ob-fiche-pli { background:transparent; border:0; padding:2px 0; font-weight:700; color:var(--texte); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .ob-fiche-h label { display:flex; align-items:center; gap:4px; font-size:var(--fs-xs); color:var(--texte-3); flex:none; }
   .ob-photo { margin:6px 0 4px; }
-  .ob-photo img, .ob-photo svg { display:block; width:100%; max-height:120px; object-fit:cover; border-radius:var(--r2); background:#0a1230; }
+  .ob-photo img, .ob-photo svg { display:block; width:100%; max-height:120px; object-fit:contain; border-radius:var(--r2); background:#0a1230; }
+  /* A photo whole (never cropped), as wide as its height allows. */
+  .ob-photo img { width:auto; max-width:100%; height:auto; margin:0 auto; background:none; }
   .ob-photo.ob-dessin svg { object-fit:contain; background:linear-gradient(#16264f, #0a1230); padding:6px; box-sizing:border-box; }
   .ob-photo figcaption { font-size:10px; line-height:1.25; color:var(--texte-3); margin-top:2px; overflow-wrap:anywhere; }
   .ob-photo figcaption a, .ob-credit a { color:inherit; }
@@ -1388,11 +1391,15 @@ ${STYLE_JETONS}
   .ob-fiche-r { margin-top:4px; color:var(--texte-2); } .ob-credit { font-size:var(--fs-xs); color:var(--texte-3); }
   .ob-w-photo { width:min(440px, 100%); }
   #v-orbites .ob-w-photo.ob-trop { display:none; }
-  .ob-fiche-tb { display:grid; grid-template-columns:minmax(0, 42%) minmax(0, 1fr); gap:10px; align-items:start; font-size:.78em; }
-  .ob-fiche-tb .ob-photo { margin:0; } .ob-fiche-tb .ob-photo img, .ob-fiche-tb .ob-photo svg { max-height:min(18vh, 170px); }
+  /* The dashboard's card: the photo beside the name and the facts, the story under both (the whole width, fewer lines). */
+  .ob-fiche-tb { display:grid; grid-template-columns:minmax(0, 42%) minmax(0, 1fr); gap:4px 10px; align-items:start; font-size:max(11px, .78em); overflow-wrap:anywhere; }
+  .ob-fiche-tb .ob-fiche-c { display:contents; }
+  .ob-fiche-tb .ob-photo { margin:0; grid-row:1 / span 3; } .ob-fiche-tb .ob-photo img, .ob-fiche-tb .ob-photo svg { max-height:calc(min(18vh, 170px) * var(--ob-k, 1)); }
+  .ob-fiche-tb .ob-fiche-c > * { grid-column:2; margin:0; } .ob-fiche-tb .ob-fiche-c > .ob-fiche-a { grid-column:1 / -1; }
   .ob-fiche-tb .ob-fiche-t { font-size:1.15em; } .ob-fiche-tb .ob-fiche-g { font-size:.92em; }
-  .ob-fiche-tb .ob-fiche-a { font-size:.92em; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-  #v-orbites.ob-th-classique .ob-fiche-tb .ob-fiche-a { -webkit-line-clamp:2; }
+  .ob-fiche-tb .ob-fiche-a { font-size:.92em; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+  #v-orbites.ob-th-classique .ob-fiche-tb .ob-fiche-a { -webkit-line-clamp:3; }
+  @media (max-width:700px) { .ob-fiche-tb { grid-template-columns:minmax(0, 1fr); } .ob-fiche-tb .ob-photo { grid-row:auto; } .ob-fiche-tb .ob-fiche-c > * { grid-column:1; } }
   /* Vitrine: big cards over the globe turning by itself, readable from across a hall; no menus once the mouse rests. */
   .ob-vitrine { display:none; }
   #v-orbites.ob-tableau.ob-th-vitrine .ob-vitrine:not([hidden]) { display:block; position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden;
@@ -1417,7 +1424,7 @@ ${STYLE_JETONS}
   .ob-vit-contact .ob-vit-duo { grid-template-columns:minmax(0, 1fr) auto; }
   .ob-vit-qr { width:min(26vh, 20vw); height:auto; background:#fff; border-radius:12px; border:3px solid #0a1230; }
   .ob-vit-liste { margin:.2em 0 0; padding-left:1.1em; } .ob-vit-liste li { margin:.25em 0; }
-  .ob-vitrine .ob-photo { margin:0; } .ob-vitrine .ob-photo img, .ob-vitrine .ob-photo svg { max-height:34vh; border-radius:18px; }
+  .ob-vitrine .ob-photo { margin:0; } .ob-vitrine .ob-photo img, .ob-vitrine .ob-photo svg { max-height:min(34vh, 9em); border-radius:18px; }
   .ob-vitrine .ob-photo figcaption { font-size:clamp(10px, .7vw, 14px); color:#4a5878; font-weight:500; }
   .ob-vit-sat .ob-photo { float:left; width:44%; margin:0 1em .4em 0; }
   .ob-vitrine .ob-fiche-t { font-size:1.5em; font-weight:800; color:#E8743B; line-height:1.1; }
@@ -5240,6 +5247,7 @@ ${ConversionPagePc.DIALOGUES}
     <select id="ac-ap-sat" size="6" onchange="acApChoisit(+this.value)" aria-labelledby="ac-ap-sat-l"></select>
   </div>
   <dl id="ac-ap-corps" class="petit"></dl>
+  <div class="ligne petit" id="ac-ap-el-z" hidden><label for="ac-ap-el">Élévation minimale</label><input id="ac-ap-el" type="number" min="0" max="90" step="1" style="max-width:62px" onchange="acApEl()"><span>° : les passages plus bas sont ignorés</span></div>
   <div class="petit" id="ac-ap-notes"></div>
   <div class="petit" style="margin:6px 0"><b>Réception seulement : rien n'est émis.</b></div>
   <div class="ligne"><button id="ac-ap-ok" class="primaire" onclick="acApConfirme()">Activer l'auto-pilote</button><button onclick="acApModifie()" title="Agenda › SSTV : le formulaire rempli, à vérifier puis enregistrer">Modifier avant…</button><button onclick="g('ac-ap-dlg').close()">Annuler</button>
@@ -6368,12 +6376,6 @@ function obTbMaj() {
     l.forEach(p => { if (!lp.some(q => q.nom === p.nom)) lp.push(p); });
     const q = lp.length ? lp[Math.floor(now.getTime() / 15000) % lp.length] : null;
     montre('photo', q ? '<div class="ob-w-t">' + (q === s ? 'Le satellite choisi' : 'Bientôt au-dessus de nous') + '</div><div class="ob-fiche-tb">' + obCarteSat(q, obSatFiche(q), { court: true }) + '</div>' : null);
-    // Only where it fits: its corner's other panels first (looked at again as they change).
-    const ph = w('photo'), co = ph.parentElement;
-    if (!ph.hidden) {
-      if (!ph.classList.contains('ob-trop')) { ph.dataset.haut = ph.offsetHeight; if (co.scrollHeight > co.clientHeight + 2) ph.classList.add('ob-trop'); }
-      else if ([...co.children].filter(e => e !== ph && !e.hidden).reduce((a, e) => a + e.offsetHeight + 10, 0) + (+ph.dataset.haut || 0) <= co.clientHeight) ph.classList.remove('ob-trop');
-    }
   } else montre('photo', null);
   // The station: its Sun now, its next sunrise and sunset, dawn and dusk.
   const sj = A.jour, quand = t => t ? hm(t) + (t - d.t < 3 * 3600000 ? ' <small>(dans ' + obDuree(t - d.t) + ')</small>' : '') : '—';
@@ -6412,6 +6414,31 @@ function obTbMaj() {
     if (now.getSeconds() % 12 === 0) obSav++;
     montre('savais', '<div class="ob-w-t">💡 Le savais-tu ?</div><div class="ob-w-texte">' + esc(OB_SAVAIS[obSav % OB_SAVAIS.length]) + '</div>');
   } else { montre('fiche', null); montre('savais', null); }
+  // Every card whole: a corner too full made smaller; the photo card left out only when even that is not enough.
+  v.querySelectorAll('.ob-coin').forEach(co => {
+    if (getComputedStyle(co).display === 'none') return;
+    const ph = co.querySelector('.ob-w-photo');
+    if (ph && !ph.hidden && ph.classList.contains('ob-trop')) {
+      // Room again for the photo? Tried now, given up at once if not (nothing drawn in between).
+      const k = co.dataset.k;
+      ph.classList.remove('ob-trop');
+      if (!obAjusteCoin(co)) { ph.classList.add('ob-trop'); co.dataset.k = k || 1; co.style.setProperty('--ob-k', k || 1); }
+    }
+    if (!obAjusteCoin(co) && ph && !ph.hidden && !ph.classList.contains('ob-trop')) { ph.classList.add('ob-trop'); obAjusteCoin(co); }
+  });
+}
+const OB_K_MIN = .75;
+/**
+ * A dashboard corner's cards made smaller (--ob-k, down to OB_K_MIN) until all of them fit, never cut; bigger again a
+ * step a second when there is room. True when they fit.
+ */
+function obAjusteCoin(co) {
+  const deborde = () => co.scrollHeight > co.clientHeight + 1 || co.scrollWidth > co.clientWidth + 1;
+  const pose = x => { co.style.setProperty('--ob-k', x); co.dataset.k = x; };
+  let k = +co.dataset.k || 1;
+  if (k < 1 && !deborde()) { const k2 = Math.min(1, Math.round((k + .05) * 100) / 100); pose(k2); if (deborde()) pose(k); else k = k2; }
+  while (k > OB_K_MIN && deborde()) { k = Math.max(OB_K_MIN, Math.round((k - .05) * 100) / 100); pose(k); }
+  return !deborde();
 }
 /** The ticker's text, changed at the end of a run (not in the middle of a sentence). */
 function obDefile(e, html) {
@@ -15922,7 +15949,7 @@ function acApLigne(a) {
 }
 let acAp = null;
 async function acAuto(id) {
-  acAp = { id: id, catnum: 0, choisir: false, j: null };
+  acAp = { id: id, catnum: 0, choisir: false, j: null, el: null };
   g('ac-ap-q').value = ''; txt('ac-ap-msg', ''); txt('ac-ap-titre', 'Lecture…');
   g('ac-ap-corps').innerHTML = ''; txt('ac-ap-notes', '');
   if (!g('ac-ap-dlg').open) g('ac-ap-dlg').showModal();
@@ -15930,8 +15957,11 @@ async function acAuto(id) {
 }
 async function acApApercu() {
   let j = null;
-  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : ''))).json(); } catch (x) {}
+  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : '') + acApElQ())).json(); } catch (x) {}
   acAp.j = j;
+  // The elevation: the station's minimum but at least 10° (a 1–2° pass gives no picture), or the one typed here.
+  g('ac-ap-el-z').hidden = !(j && j.ok && j.campagne);
+  if (j && j.ok && j.elMin != null) g('ac-ap-el').value = Math.round(j.elMin);
   g('ac-ap-ok').disabled = !(j && j.ok && j.campagne);
   if (!j || !j.ok) { txt('ac-ap-titre', ''); txt('ac-ap-msg', (j && j.erreur) || 'Activité introuvable.'); g('ac-ap-sat-z').hidden = true; return; }
   txt('ac-ap-titre', j.titre);
@@ -15947,7 +15977,8 @@ async function acApApercu() {
     dd('Fréquence', c.freqHz ? apFreq(c.freqHz) + ' MHz ' + esc(c.modulation) : esc(c.emetteur) + (c.freqEmetteur ? ' (' + apFreq(c.freqEmetteur) + ' MHz)' : '') + (j.freqInconnue ? ' — non annoncée : l’émetteur SSTV du satellite' : ''));
     dd('Mode', c.mode === 'Auto' ? 'auto (l’en-tête VIS le dit)' : esc(c.mode));
     dd('Période', apQuand(c));
-    dd('Passages utiles', j.passages && j.passages.length ? j.passages.map(p => jourHeure(p.aos) + ' · ' + p.el + '°').join(', ') : 'aucun assez haut pour l’instant');
+    dd('Passages utiles', (j.passages && j.passages.length ? j.passages.map(p => jourHeure(p.aos) + ' · ' + p.el + '°').join(', ') : 'aucun assez haut pour l’instant') +
+      ' <span class="petit">(au moins ' + Math.round(c.elMin) + '°)</span>');
     dd('Chaîne', esc(apChaineTexte(c)) + ' <span class="petit">(réglages par défaut du formulaire)</span>');
   }
   g('ac-ap-corps').innerHTML = h.join('');
@@ -15968,11 +15999,19 @@ function acApSats() {
   g('ac-ap-sat').innerHTML = (prop.length ? '<optgroup label="Proposés">' + prop.map(o).join('') + '</optgroup>' : '') + (reste.length ? '<optgroup label="Catalogue">' + reste.map(o).join('') + '</optgroup>' : '');
 }
 async function acApChoisit(n) { if (!n) return; acAp.catnum = n; await acApApercu(); }
+/** The elevation typed in the dialog (0–90°), sent with the preview and the activation. */
+function acApElQ() { return acAp && acAp.el != null ? '&el=' + acAp.el : ''; }
+async function acApEl() {
+  const e = parseFloat(String(v('ac-ap-el')).replace(',', '.'));
+  acAp.el = isFinite(e) ? Math.max(0, Math.min(90, Math.round(e))) : null;
+  await acApApercu();
+}
 async function acApConfirme() {
   const j0 = acAp && acAp.j; if (!j0 || !j0.campagne) return;
   g('ac-ap-ok').disabled = true; txt('ac-ap-msg', 'Activation…');
   let j = null;
-  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : ''), { method: 'POST' })).json(); } catch (x) {}
+  const el = (j0.elMin != null && acAp.el == null) ? '&el=' + j0.elMin : acApElQ();
+  try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : '') + el, { method: 'POST' })).json(); } catch (x) {}
   if (!j || !j.ok) { g('ac-ap-ok').disabled = false; txt('ac-ap-msg', (j && j.erreur) || 'Refusé.'); return; }
   g('ac-ap-dlg').close();
   const t = 'Auto-pilote actif : « ' + j.campagne.nom + ' »' + (j.maitreAllume ? ' — interrupteur général de l’auto-pilote allumé' : '');
