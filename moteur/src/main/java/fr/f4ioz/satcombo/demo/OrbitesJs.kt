@@ -24,8 +24,8 @@ package fr.f4ioz.satcombo.demo
  */
 object OrbitesJs {
 
-    /** The page's script, in four parts (a constant holds at most 64 KB). */
-    val JS: String get() = DEBUT + MILIEU + MONUMENTS + FIN
+    /** The page's script, in five parts (a constant holds at most 64 KB). */
+    val JS: String get() = DEBUT + MILIEU + MONUMENTS + TRACES + FIN
 
     private const val DEBUT = """
 /* ------------------------------------------------------------ pure part (OrbitesJsTest) */
@@ -212,7 +212,8 @@ const Orbites = (function () {
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
     detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0,
     villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null,
-    monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)) };
+    monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)), traces: Math.max(0, Math.min(100, parseInt(lit('ob-traces', '60'), 10))) };
+  if (isNaN(OB.traces)) OB.traces = 60;
   try { OB.monOff = JSON.parse(lit('ob-montypes-off', '[]')) || []; } catch (x) {}
   let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null, sked = null;
 
@@ -845,23 +846,23 @@ const Orbites = (function () {
     function objet(s) {
       const o = { s: s };
       o.engin = engin(s.couleur); o.lueur = lueur(s.couleur);
-      o.orbite = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: s.couleur, transparent: true, opacity: .7 }));
+      o.orbite = ruban(sc, .6, true);
       o.tube = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: s.couleur, transparent: true, opacity: .95 }));
       o.cal = new THREE.Mesh(calotte(), new THREE.MeshBasicMaterial({ color: s.couleur, transparent: true, opacity: .14, depthWrite: false, side: THREE.DoubleSide }));
       const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NC * 3), 3));
       o.bordCal = new THREE.LineLoop(lg, new THREE.LineBasicMaterial({ color: s.couleur, transparent: true, opacity: .8 }));
       o.rayon = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffb454, transparent: true, opacity: .9 }));
       // « Vue du satellite »: its ground track, ahead bright, behind faint.
-      o.sol = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: .95 })); o.sol.visible = false; o.solT = [];
+      o.sol = ruban(sc); o.sol.visible = false; o.solT = [];
       o.solPts = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: point(), vertexColors: true, size: 6, sizeAttenuation: false, transparent: true, alphaTest: .3 })); o.sol.add(o.solPts);
       scene.add(o.engin, o.lueur, o.orbite, o.tube, o.rayon); terre.add(o.cal, o.bordCal, o.sol);
       o.restyle = () => {
         [o.nom, o.nomFort].forEach(n => { if (n) scene.remove(n); });
         o.nom = etiquette(s.nom, s.couleur, sc.style, 'sat'); o.nomFort = etiquette('★ ' + s.nom, s.couleur, sc.style, 'fort'); scene.add(o.nom, o.nomFort);
         const c = STYLES[sc.style].encre || s.couleur;
-        o.orbite.material.color.set(c); o.tube.material.color.set(c); o.bordCal.material.color.set(c); o.cal.material.color.set(c); o.solC = new THREE.Color(c);
+        o.tube.material.color.set(c); o.bordCal.material.color.set(c); o.cal.material.color.set(c); o.solC = new THREE.Color(c); o.orbite.uni(o.solC, 1);
       };
-      o.retire = () => { scene.remove(o.engin, o.lueur, o.orbite, o.tube, o.rayon, o.nom, o.nomFort); terre.remove(o.cal, o.bordCal, o.sol); };
+      o.retire = () => { scene.remove(o.engin, o.lueur, o.orbite, o.tube, o.rayon, o.nom, o.nomFort); terre.remove(o.cal, o.bordCal, o.sol); o.sol.jette(); o.orbite.jette(); };
       o.tOrbite = -1e15;
       if (sc.style) o.restyle();
       return o;
@@ -890,17 +891,16 @@ const Orbites = (function () {
         for (let i = 0; i <= n; i++) { const ti = t - P / 2 + P * i / n, e = etat(s, ti, null); if (!e) continue; pts.push(eciVers3(e.eci)); trace.push([ti, e.lat, e.lon]); }
         if (lui) tube = pts; else ligne(pts);
       }
-      o.orbite.geometry.dispose(); o.orbite.geometry = new THREE.BufferGeometry().setFromPoints(paires);
+      o.orbite.pose(paires); if (o.solC) o.orbite.uni(o.solC, 1);
       o.tube.geometry.dispose();
-      o.tube.geometry = tube.length > 3 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tube, !s.piste && s.mm > 1.2), tube.length, sc.style === 'cartoon' ? .0045 : .003, 6, false) : new THREE.BufferGeometry();
+      o.tube.geometry = tube.length > 3 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tube, !s.piste && s.mm > 1.2), tube.length, (sc.style === 'cartoon' ? .0045 : .003) * (.7 + .8 * forceTrace()), 6, false) : new THREE.BufferGeometry();
       o.trace = trace; o.tOrbite = t; o.tubeLui = lui;
       // The ground track below (a journal's passes not joined across the gaps between them), its times to colour it.
       const seg = [], ts = [];
       for (let i = 1; i < trace.length; i++) if (!s.piste || trace[i][0] - trace[i - 1][0] < 600000) {
         seg.push(local(trace[i - 1][1], trace[i - 1][2], 1.003), local(trace[i][1], trace[i][2], 1.003)); ts.push(trace[i - 1][0], trace[i][0]);
       }
-      o.sol.geometry.dispose(); o.sol.geometry = new THREE.BufferGeometry().setFromPoints(seg);
-      o.sol.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(seg.length * 3), 3)); o.solT = ts;
+      o.sol.pose(seg); o.solT = ts;
       // Dots along it, some 150 km apart (a journal's track is recorded every few seconds).
       const pts = [], pt = []; let der = null;
       trace.forEach(q => { const v = local(q[1], q[2], 1.003); if (!der || der.distanceTo(v) > .024) { pts.push(v); pt.push(q[0]); der = v; } });
@@ -919,7 +919,7 @@ const Orbites = (function () {
 
     /* The journal: the pass's contacts where they were, their pictures landing at the station once received. */
     sc.rejeuPrepare = () => {
-      while (rejeuGp.children.length) rejeuGp.remove(rejeuGp.children[0]);
+      while (rejeuGp.children.length) { const c = rejeuGp.children[0]; if (c.jette) c.jette(); rejeuGp.remove(c); }
       if (mode !== 'rejeu' || !sc.rj) return;
       const rj = sc.rj;
       if (rj.marques) rj.marques.forEach(o => o.retire && o.retire());
@@ -947,17 +947,17 @@ const Orbites = (function () {
     /* The Sked: the ground track (faint), the common window on it and on the orbit (green, as on its map). */
     sc.skedPrepare = () => {
       if (mode !== 'sked') return;
-      while (rejeuGp.children.length) rejeuGp.remove(rejeuGp.children[0]);
+      while (rejeuGp.children.length) { const c = rejeuGp.children[0]; if (c.jette) c.jette(); rejeuGp.remove(c); }
       if (sc.sk && sc.sk.tube) { scene.remove(sc.sk.tube); sc.sk.tube.geometry.dispose(); sc.sk.tube = null; }
       if (!sc.sk) return;
       const d = sc.sk.donnees, l = sc.sk.sat.piste, carton = !!STYLES[sc.style].carton;
       const sol = l.map(p => local(p[1], p[2], 1.002)), com = l.filter(p => p[0] >= d.de && p[0] <= d.a);
-      rejeuGp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(sol), new THREE.LineBasicMaterial({ color: STYLES[sc.style].encre || '#3FE0C8', transparent: true, opacity: .55 })));
+      rejeuGp.add(ruban(sc).pose(enSegments(sol)).uni(new THREE.Color(STYLES[sc.style].encre || '#3FE0C8'), .8));
       if (com.length > 1) {
-        const vert = new THREE.MeshBasicMaterial({ color: 0x5bd68a, transparent: true, opacity: .95 });
-        rejeuGp.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(com.map(p => local(p[1], p[2], 1.003))), com.length, carton ? .004 : .0028, 6, false), vert));
+        const vert = new THREE.MeshBasicMaterial({ color: 0x5bd68a, transparent: true, opacity: .95 }), kt = .7 + .8 * forceTrace();
+        rejeuGp.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(com.map(p => local(p[1], p[2], 1.003))), com.length, (carton ? .004 : .0028) * kt, 6, false), vert));
         const pts = []; com.forEach(p => { const e = etat(sc.sk.sat, p[0], null); if (e) pts.push(eciVers3(e.eci)); });
-        if (pts.length > 1) { sc.sk.tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length, carton ? .0065 : .0048, 6, false), vert); scene.add(sc.sk.tube); }
+        if (pts.length > 1) { sc.sk.tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length, (carton ? .0065 : .0048) * kt, 6, false), vert); scene.add(sc.sk.tube); }
       }
     };
     /* The Sked: the other station's name, its ring, its line to the satellite while it sees it. */
@@ -1103,14 +1103,16 @@ const Orbites = (function () {
         o.cal.visible = o.bordCal.visible = (!discret || tache) && !auSol;
         o.cal.material.opacity = lui ? (satVoulu ? .07 : sc.style === 'cartoon' ? .26 : .2) : tache ? .09 : efface ? .05 : .14;
         o.bordCal.material.opacity = lui ? 1 : tache ? .5 : efface ? .3 : .8;
-        o.orbite.visible = !discret && (!lui || !!s.piste); o.orbite.material.opacity = efface ? .3 : lui ? .45 : .7;
+        o.orbite.visible = !discret && (!lui || !!s.piste); o.orbite.op = efface ? .45 : lui ? .6 : .85;
         // Seen from above, its orbit would cross the view thick: its ground track instead.
         o.tube.visible = !discret && lui && !satVoulu;
         o.sol.visible = satVoulu && lui && !discret;
         if (o.sol.visible && o.solC) {
-          const c = o.sol.geometry.attributes.color, q = o.solC;
-          const teinte = (c, ts) => { if (!c) return; for (let i = 0; i < ts.length; i++) { const f = ts[i] >= t ? 1 : .35; c.setXYZ(i, q.r * f, q.g * f, q.b * f); } c.needsUpdate = true; };
-          teinte(c, o.solT); teinte(o.solPts.geometry.attributes.color, o.solPT || []);
+          // Ahead vivid, behind paler (both readable); the dots as big as the track is marked.
+          const q = o.solC, k = forceTrace(), pa = reglageTrace(k).passe, c = o.solPts.geometry.attributes.color, pt = o.solPT || [];
+          o.solT.forEach((u, i) => o.sol.teinte(i, q, u >= t ? 1 : pa));
+          if (c) { for (let i = 0; i < pt.length; i++) { const f = pt[i] >= t ? 1 : .35 + .3 * k; c.setXYZ(i, q.r * f, q.g * f, q.b * f); } c.needsUpdate = true; }
+          o.solPts.material.size = 4 + 6 * k;
         }
         o.rayon.visible = vu && !discret && !auSol && lieu;
         if (o.rayon.visible) { const a = o.rayon.geometry.attributes.position; a.setXYZ(0, stW.x, stW.y, stW.z); a.setXYZ(1, p.x, p.y, p.z); a.needsUpdate = true; o.rayon.material.opacity = .55 + .4 * Math.sin(now / 160); }
@@ -1455,6 +1457,92 @@ const Orbites = (function () {
 
 """
 
+    private const val TRACES = """  /* ------------------------------------------------------------ the tracks, as marked as asked (« Traces ») */
+  /* Under a track, a halo [r, g, b, opacity]: dark on the light looks (and on the real Earth), light and fainter on the dark ones. */
+  const HALO_TRACE = { cartoon: [.03, .06, .18, 1], vintage: [.18, .09, .02, 1], realiste: [0, .02, .07, 1], holo: [.86, 1, 1, .4], points: [.92, .95, 1, .4], radar: [.86, 1, .9, .4] };
+  /** How marked the tracks are: [k] 0 (discreet, a thin line) … 1 (very marked, thick, haloed, opaque). */
+  function reglageTrace(k) {
+    return { larg: 1.2 + 3.6 * k, halo: k < .05 ? 0 : .8 + 2.4 * k, haloA: Math.min(.8, 1.2 * k), alpha: .7 + .3 * k, passe: .45 + .25 * k };
+  }
+  const forceTrace = () => Math.max(0, Math.min(100, OB.traces)) / 100;
+  function haloCss(style, a) { const h = HALO_TRACE[style] || HALO_TRACE.realiste; return 'rgba(' + h.slice(0, 3).map(v => Math.round(v * 255)).join(',') + ',' + (a * h[3]).toFixed(3) + ')'; }
+  /** Strokes [chemin] (it draws its path) on the 2D canvas [x]: its halo, then itself, [larg] px wide at [alpha]. */
+  function traitTrace(x, chemin, couleur, larg, alpha, style) {
+    const r = reglageTrace(forceTrace());
+    x.save(); x.lineJoin = x.lineCap = 'round';
+    if (r.halo > 0) { x.globalAlpha = 1; x.strokeStyle = haloCss(style, r.haloA * alpha); x.lineWidth = larg + 2 * r.halo; x.beginPath(); chemin(); x.stroke(); }
+    x.globalAlpha = alpha; x.strokeStyle = couleur; x.lineWidth = larg; x.beginPath(); chemin(); x.stroke(); x.restore();
+  }
+  /* A track in 3D is a ribbon (a WebGL line is always 1 px), its width in screen pixels. On the ground: lying on the globe. */
+  const RUBAN_VS = '#include <common>\n#include <logdepthbuf_pars_vertex>\n' +
+    'attribute vec3 cote; attribute vec4 teinte; uniform float larg; uniform float haut; varying vec4 vT;\n' +
+    'void main() {\n  vec4 m = modelViewMatrix * vec4(position, 1.0);\n  float w = larg * max(-m.z, 1e-5) / (projectionMatrix[1][1] * haut);\n' +
+    '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position + cote * w, 1.0); vT = teinte;\n#include <logdepthbuf_vertex>\n}';
+  // Out in space (an orbit): across its own direction on the screen, whichever way it is seen.
+  const RUBAN_ECRAN_VS = '#include <common>\n#include <logdepthbuf_pars_vertex>\n' +
+    'attribute vec3 autre; attribute float sens; attribute vec4 teinte; uniform float larg; uniform float haut; uniform float aspect; varying vec4 vT;\n' +
+    'void main() {\n  vec4 a = projectionMatrix * modelViewMatrix * vec4(position, 1.0), b = projectionMatrix * modelViewMatrix * vec4(autre, 1.0);\n' +
+    '  vec2 d = (b.xy / b.w - a.xy / a.w) * vec2(aspect, 1.0), n = vec2(0.0);\n  if (a.w > 0.0 && b.w > 0.0 && length(d) > 1e-6) n = normalize(vec2(-d.y, d.x));\n' +
+    '  n.x /= aspect; a.xy += n * sens * larg / haut * a.w; gl_Position = a; vT = teinte;\n#include <logdepthbuf_vertex>\n}';
+  const RUBAN_FS = '#include <common>\n#include <logdepthbuf_pars_fragment>\nuniform vec3 couleur; uniform float opacite; uniform float uni; varying vec4 vT;\n' +
+    'void main() {\n#include <logdepthbuf_fragment>\n  gl_FragColor = vec4(mix(vT.rgb, couleur, uni), vT.a * opacite);\n}';
+  let tailleRendu = null;
+  /**
+   * A track on [sc]'s globe ([ecran]: in space), [epais] times as wide: [r].pose(seg) lays it along [seg] (pairs of points,
+   * a segment each), [r].teinte(i, c, a) colours its point [i], [r].uni(c, a) all of it; [r].op its opacity.
+   */
+  function ruban(sc, epais, ecran) {
+    const gp = new THREE.Group(), mat = halo => new THREE.ShaderMaterial({ vertexShader: ecran ? RUBAN_ECRAN_VS : RUBAN_VS, fragmentShader: RUBAN_FS,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { larg: { value: 1 }, haut: { value: 600 }, aspect: { value: 1 }, couleur: { value: new THREE.Color() }, opacite: { value: 1 }, uni: { value: halo ? 1 : 0 } } });
+    const halo = new THREE.Mesh(new THREE.BufferGeometry(), mat(true)), ligne = new THREE.Mesh(halo.geometry, mat(false));
+    halo.renderOrder = 3; ligne.renderOrder = 4; gp.add(halo, ligne); gp.op = 1;
+    // Each frame: the width and halo the « Traces » setting asks now, the drawing's size.
+    halo.onBeforeRender = rendu => {
+      const r = reglageTrace(forceTrace()), e = epais || 1, uh = halo.material.uniforms, ul = ligne.material.uniforms, l = Math.max(1, r.larg * e);
+      tailleRendu = tailleRendu || new THREE.Vector2(); rendu.getSize(tailleRendu);
+      uh.haut.value = ul.haut.value = Math.max(1, tailleRendu.y); uh.aspect.value = ul.aspect.value = tailleRendu.x / Math.max(1, tailleRendu.y);
+      ul.larg.value = l; ul.opacite.value = r.alpha * gp.op;
+      const h = HALO_TRACE[sc.style] || HALO_TRACE.realiste;
+      halo.visible = r.halo > 0; uh.larg.value = l + 2 * r.halo * e; uh.opacite.value = r.haloA * h[3] * gp.op; uh.couleur.value.setRGB(h[0], h[1], h[2]);
+    };
+    ligne.onBeforeRender = rendu => { if (!halo.visible) halo.onBeforeRender(rendu); };
+    gp.pose = seg => {
+      const n = seg.length >> 1, pos = new Float32Array(n * 12), cote = new Float32Array(n * 12), autre = new Float32Array(n * 12), sens = new Float32Array(n * 4);
+      const idx = [], d = new THREE.Vector3(), s = new THREE.Vector3();
+      for (let i = 0; i < n; i++) {
+        const a = seg[2 * i], b = seg[2 * i + 1];
+        d.subVectors(b, a); s.crossVectors(a, d); if (s.lengthSq() > 1e-16) s.normalize(); else s.set(0, 0, 0);
+        [a, a, b, b].forEach((p, j) => {
+          const k = i * 12 + j * 3, g = j % 2 ? -1 : 1, q = j < 2 ? b : a;
+          pos[k] = p.x; pos[k + 1] = p.y; pos[k + 2] = p.z; cote[k] = s.x * g; cote[k + 1] = s.y * g; cote[k + 2] = s.z * g;
+          autre[k] = q.x; autre[k + 1] = q.y; autre[k + 2] = q.z; sens[i * 4 + j] = j === 0 || j === 3 ? 1 : -1;
+        });
+        idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 2, i * 4 + 1, i * 4 + 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('cote', new THREE.BufferAttribute(cote, 3));
+      g.setAttribute('autre', new THREE.BufferAttribute(autre, 3)); g.setAttribute('sens', new THREE.BufferAttribute(sens, 1));
+      g.setAttribute('teinte', new THREE.BufferAttribute(new Float32Array(n * 16).fill(1), 4)); g.setIndex(idx);
+      halo.geometry.dispose(); halo.geometry = ligne.geometry = g;
+      return gp;
+    };
+    gp.teinte = (i, c, a) => { const t = halo.geometry.attributes.teinte; if (!t) return; const v = (i >> 1) * 4 + (i & 1) * 2; t.setXYZW(v, c.r, c.g, c.b, a); t.setXYZW(v + 1, c.r, c.g, c.b, a); t.needsUpdate = true; };
+    gp.uni = (c, a) => { const t = halo.geometry.attributes.teinte; if (t) { for (let v = 0; v < t.count; v++) t.setXYZW(v, c.r, c.g, c.b, a); t.needsUpdate = true; } return gp; };
+    gp.jette = () => { halo.geometry.dispose(); halo.material.dispose(); ligne.material.dispose(); };
+    return gp;
+  }
+  /** A polyline [pts] as segments, for [ruban]. */
+  function enSegments(pts) { const seg = []; for (let i = 1; i < pts.length; i++) seg.push(pts[i - 1], pts[i]); return seg; }
+  /** The « Traces » setting (0 … 100), kept in this browser; the boxes showing it follow, the orbits' tubes and the Sked's common window are redrawn. */
+  function prendTraces(n) {
+    OB.traces = Math.max(0, Math.min(100, Math.round(+n || 0))); garde('ob-traces', String(OB.traces));
+    document.querySelectorAll('.ob-traces-choix').forEach(s => { if (+s.value !== OB.traces) s.value = String(OB.traces); });
+    scenes.forEach(sc => { if (sc.objets) sc.objets.forEach(o => { o.tOrbite = -1e15; }); if (sc.mode === 'sked' && sc.skedPrepare) sc.skedPrepare(); });
+  }
+
+"""
+
     private const val FIN = """  /* ------------------------------------------------------------ the tab */
   const hh = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const hhs = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1488,6 +1576,7 @@ const Orbites = (function () {
     el('ob-contacts').onchange = e => prendContacts(e.target.value);
     el('ob-monuments').value = OB.monuments; el('ob-monuments').onchange = e => prendMonuments(e.target.value);
     el('ob-montaille').value = String(OB.monTaille); el('ob-montaille').onchange = e => prendMonTaille(+e.target.value);
+    el('ob-traces').value = String(OB.traces); el('ob-traces').oninput = e => prendTraces(+e.target.value);
     el('ob-montypes-b').onclick = ev => {
       ev.stopPropagation(); const m = el('ob-montypes'), ouvre = m.hidden;
       m.hidden = !ouvre; el('ob-montypes-b').setAttribute('aria-expanded', ouvre); if (ouvre) { typesMon(m); const c = m.querySelector('input'); if (c) c.focus(); }
@@ -1675,8 +1764,7 @@ const Orbites = (function () {
       x.fillText('N', cx, cy - R - 7); x.fillText('S', cx, cy + R + 7); x.fillText('E', cx + R + 7, cy); x.fillText('O', cx - R - 7, cy);
       const xy = (az, a) => { const rr = R * (90 - Math.max(0, a)) / 90; return [cx + rr * Math.sin(az * D2R), cy - rr * Math.cos(az * D2R)]; };
       if (p) {
-        x.strokeStyle = coul; x.lineWidth = 2; x.beginPath();
-        p.piste.forEach((q, i) => { const c = xy(q.az, q.el); if (i) x.lineTo(c[0], c[1]); else x.moveTo(c[0], c[1]); }); x.stroke();
+        traitTrace(x, () => p.piste.forEach((q, i) => { const c = xy(q.az, q.el); if (i) x.lineTo(c[0], c[1]); else x.moveTo(c[0], c[1]); }), coul, 1.5 + 2 * forceTrace(), 1, 'realiste');
         const a0 = xy(p.azAos, 0); x.fillStyle = '#3FE0C8'; x.fillRect(a0[0] - 3, a0[1] - 3, 6, 6);
       }
       if (e && e.el > -2) { const c = xy(e.az, e.el); x.fillStyle = '#fff'; x.shadowColor = coul; x.shadowBlur = 12; x.beginPath(); x.arc(c[0], c[1], 5, 0, 7); x.fill(); x.shadowBlur = 0; }
@@ -1775,12 +1863,14 @@ const Orbites = (function () {
       const lui = s === OB.choisi, efface = plusieurs && !lui;
       if (!o.trace || Math.abs(t - o.tOrbite) > s.periode * .05) tab.scene.orbite(o, t, lui);
       const c = S.encre || s.couleur;
-      x.lineWidth = lui ? 3 : 1.3; x.strokeStyle = c;
+      // Its ground track, as marked as « Traces » asks: ahead dashed and vivid, behind paler.
+      const k = forceTrace(), rt = reglageTrace(k), lg = lui ? 2 + 3 * k : 1 + 1.6 * k;
       [false, true].forEach(futur => {
-        x.globalAlpha = (futur ? .85 : .35) * (efface ? .5 : 1); x.setLineDash(futur ? [5, 4] : []); x.beginPath();
-        let prec = null;
-        o.trace.forEach(q => { if ((q[0] > t) !== futur) return; if (prec != null && Math.abs(q[2] - prec) < 180) x.lineTo(X(q[2]), Y(q[1])); else x.moveTo(X(q[2]), Y(q[1])); prec = q[2]; });
-        x.stroke();
+        x.setLineDash(futur ? [5 + 4 * k, 4] : []);
+        traitTrace(x, () => {
+          let prec = null;
+          o.trace.forEach(q => { if ((q[0] > t) !== futur) return; if (prec != null && Math.abs(q[2] - prec) < 180) x.lineTo(X(q[2]), Y(q[1])); else x.moveTo(X(q[2]), Y(q[1])); prec = q[2]; });
+        }, c, lg, (futur ? rt.alpha : rt.passe) * (efface ? .55 : 1), OB.style);
       });
       x.setLineDash([]); x.globalAlpha = 1;
       const emp = obEmpreinte(e.lat, e.lon, Math.acos(RE / (RE + e.alt)));
@@ -1988,6 +2078,9 @@ const Orbites = (function () {
     /** The landmarks' size (0.7 small … 2.4 very big), kept in this browser. */
     monumentsTaille: n => prendMonTaille(n),
     monumentsTailleActive: () => OB.monTaille,
+    /** How marked the tracks are (0 discreet … 100 very marked), kept in this browser. */
+    traces: n => prendTraces(n),
+    tracesActives: () => OB.traces,
     /** The landmarks' families to tick, in [box]. */
     typesMonuments: box => typesMon(box),
     /** The landmarks shown now [[nom, type, pays]], for the dashboard's ticker. */
