@@ -15961,7 +15961,7 @@ async function acApApercu() {
   let j = null;
   try { j = await (await fetch('api/activites/autopilote?id=' + enc(acAp.id) + (acAp.catnum ? '&catnum=' + acAp.catnum : '') + acApElQ())).json(); } catch (x) {}
   acAp.j = j;
-  // The elevation: the station's minimum but at least 10° (a 1–2° pass gives no picture), or the one typed here.
+  // The elevation: the station's minimum or the rotor's lowest, the higher, or the one typed here.
   g('ac-ap-el-z').hidden = !(j && j.ok && j.campagne);
   if (j && j.ok && j.elMin != null) g('ac-ap-el').value = Math.round(j.elMin);
   g('ac-ap-ok').disabled = !(j && j.ok && j.campagne);

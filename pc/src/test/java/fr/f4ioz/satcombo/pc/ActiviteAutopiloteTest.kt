@@ -73,9 +73,10 @@ END:VCALENDAR
         debutMs = t0, finMs = t0 + 7 * 86_400_000L, precision = ActivitesAVenir.Precision.INCONNUE, freqHz = 145_800_000L,
         titre = "DEMOSAT-2 en SSTV", sources = listOf(ActivitesAVenir.Source("AMSAT-UK")))
 
-    private fun monte(minEl: Int? = null): Pair<ActivitesPc, AutoPiloteSstvPc> {
+    private fun monte(minEl: Int? = null, rotorMinEl: Int? = null): Pair<ActivitesPc, AutoPiloteSstvPc> {
         val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee, { heure })
         if (minEl != null) st.settings.minElevDeg = minEl
+        if (rotorMinEl != null) st.settings.rotorMinEl = rotorMinEl
         val faux = ActivitesEnLigne.Telechargeur { url, _, _ ->
             if (url.contains("calendar.google.com")) ActivitesEnLigne.Reponse(200, ics()) else ActivitesEnLigne.Reponse(404, null)
         }
@@ -191,9 +192,9 @@ END:VCALENDAR
         assertEquals(57172, a2.liste().first { it.id == "rss:x" }.catnum)
     }
 
-    @Test fun `l'elevation de la campagne au moins 10 degres, ou celle donnee dans la fenetre`() {
-        // A station that lists every pass from 0°: the campaign does not take that (1–2° passes give nothing).
-        val (a, ap) = monte(minEl = 0)
+    @Test fun `l'elevation de la campagne celle du rotor ou de la station, ou celle donnee dans la fenetre`() {
+        // A station that lists every pass from 0° with a rotor going no lower than 10°: the rotor's.
+        val (a, ap) = monte(minEl = 0, rotorMinEl = 10)
         a.tic()
         val id = "ariss:serie34@google.com"
         val v = get(a, "/autopilote", mapOf("id" to id))
@@ -211,11 +212,12 @@ END:VCALENDAR
         post(a, "/autopilote", mapOf("id" to id, "el" to "20"))
         assertEquals(20.0, ap.campagnes.single().elMin, 0.0)
         assertEquals(id, ap.campagnes.single().activite)
-        // A station asking more than 10°: its minimum.
+        // A station asking more than its rotor: its minimum.
         val (a2, _) = monte(minEl = 15)
         a2.tic()
         assertEquals(15.0, get(a2, "/autopilote", mapOf("id" to id)).getDouble("elMin"), 0.0)
-        assertEquals(10.0, CampagneSstv.elMinActivite(0.0), 0.0)
+        assertEquals(0.0, CampagneSstv.elMinActivite(0.0), 0.0)
         assertEquals(25.0, CampagneSstv.elMinActivite(25.0), 0.0)
+        assertEquals(12.0, CampagneSstv.elMinActivite(5.0, 12.0), 0.0)
     }
 }

@@ -76,7 +76,7 @@ class ActivitesPc(
 
     /** A one-click campaign's elevation: the one asked ([p], the dialog's), else the station's but at least 10°. */
     private fun elMinAp(p: String) = p.replace(',', '.').trim().toDoubleOrNull()?.takeIf { !it.isNaN() }?.coerceIn(0.0, 90.0)
-        ?: CampagneSstv.elMinActivite(elMin())
+        ?: CampagneSstv.elMinActivite(elMin(), reglages.rotorMinEl.toDouble())
 
     /** The activities as the sources say them (and the demonstration's). */
     fun listeBrute(): List<Activite> {
@@ -234,7 +234,7 @@ class ActivitesPc(
             .put("trouve", a0.catnum > 0 && catnum <= 0)
             .put("candidats", JSONArray(NomsSatellites.candidats(a.satNom, a.titre, cat).map { JSONObject().put("nom", it.first).put("catnum", it.second) }))
             .put("precision", a.precision.name).put("datesInconnues", a.precision == ActivitesAVenir.Precision.INCONNUE)
-            .put("freqInconnue", a.freqHz <= 0).put("maitre", ap.maitre).put("elMin", el).put("elMinDefaut", CampagneSstv.elMinActivite(elMin()))
+            .put("freqInconnue", a.freqHz <= 0).put("maitre", ap.maitre).put("elMin", el).put("elMinDefaut", CampagneSstv.elMinActivite(elMin(), reglages.rotorMinEl.toDouble()))
         if (n <= 0) return json(o.put("campagne", JSONObject.NULL).put("erreur", "satellite à choisir"))
         o.put("existante", lien(a, ap) ?: JSONObject.NULL)
         ap.depuisActivite(a, n, el).fold({ c ->
