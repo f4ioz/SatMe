@@ -4316,7 +4316,7 @@ ${rail()}
       <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label><label title="Les monuments célèbres : aucun, les plus connus, ou tous (un à quelques-uns par pays)">Monuments <select id="ob-monuments" class="ob-mon-choix"><option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option></select></label><label title="La taille des monuments sur le globe et la carte (plus grands : lisibles de loin)">Taille <select id="ob-montaille" class="ob-montaille-choix"><option value="0.7">petite</option><option value="1">normale</option><option value="1.6">grande</option><option value="2.4">très grande</option></select></label><span class="ob-tb"><button type="button" id="ob-montypes-b" aria-expanded="false" aria-controls="ob-montypes" title="Les familles de monuments montrées">Types ▾</button><div class="ob-infos" id="ob-montypes" role="dialog" aria-label="Familles de monuments" hidden></div></span></div>
       <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1" selected>×1 réel</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
       <div class="ob-cadreur" id="ob-cadreur" hidden>
-        <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button></div>
+        <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button><button type="button" data-ob-cam="satellite" title="La Terre vue du satellite : son empreinte (l'horizon radio), les stations qui le voient, le jour et la nuit, sa trace au sol. Glisser pour regarder ailleurs, double-clic pour revenir">Vue du satellite</button></div>
         <div class="ob-seg"><label title="Plus haut : la caméra s'éloigne et montre plus de Terre (la molette aussi)">Hauteur <input type="range" id="ob-hauteur" class="ob-hauteur-r" min="0.6" max="8" step="0.1"></label></div>
       </div>
     </div>
@@ -6173,7 +6173,7 @@ g('ob-theme').value = obTh;
 /** What the globe takes from the look: its Earth, its view (as last chosen in it), turning by itself, the Sun and Moon, the explanations. */
 function obThOpts() {
   const T = OB_THEMES[obTh];
-  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago,
+  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago, vitrine: !!T.vitrine,
     surVue: v => { if (v !== 'passage') { obVues[obTh] = v; obGarde('ob-th-vues', obVues); } } };
 }
 function obTableau(on) {
@@ -11485,7 +11485,7 @@ function reglagesGlobeSked() {
     lab.append(document.createTextNode(lib + ' '), s); box.appendChild(lab);
   };
   choix('Rendu', 'ob-style-choix', Orbites.styles(), Orbites.styleActif(), q => Orbites.style(q));
-  choix('Caméra', 'ob-cam-choix', [['espace', 'les deux stations'], ['poursuite', 'poursuite du satellite'], ['sol', 'depuis ma station']], Orbites.cameraActive(),
+  choix('Caméra', 'ob-cam-choix', [['espace', 'les deux stations'], ['poursuite', 'poursuite du satellite'], ['sol', 'depuis ma station'], ['satellite', 'vue du satellite']], Orbites.cameraActive(),
     q => { Orbites.camera(q); Orbites.skedRecadre(); }, 'Glisser le globe le libère ; double-clic : le recadrer');
   choix('Détails', '', [['0', 'simples'], ['1', 'normaux'], ['2', 'riches']], Orbites.detailActif(), q => Orbites.detail(+q), 'Villes, montagnes, monuments et décor du dessin animé');
   choix('Villes', '', [['toutes', 'toutes'], ['capitales', 'capitales'], ['aucune', 'aucune']], Orbites.villesActives(), q => Orbites.villes(q));

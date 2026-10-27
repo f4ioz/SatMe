@@ -2405,6 +2405,7 @@ val EN: Map<String, String> = mapOf(
     "pj_cam_poursuite" to "Chase",
     "pj_cam_station" to "From the station",
     "pj_cam_ensemble" to "Overview",
+    "pj_cam_satellite" to "Seen from the satellite",
     "pj_session" to "Session",
     "pj_session_aide" to "The same editor as a pass's, over several passes of a satellite between two dates",
     "pj_s_titre" to "Session: several passes animated",

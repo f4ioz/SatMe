@@ -1,7 +1,7 @@
 // The globes' pure part (OrbitesJs.JS), run under node (OrbitesJsTest).
 // By hand: node orbites-test.js orbites.js (orbites.js: OrbitesJs.JS + module.exports).
 const assert = require('assert');
-const { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour } = require(require('path').resolve(process.argv[2]));
+const { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour, obVueSat, obReculSat } = require(require('path').resolve(process.argv[2]));
 
 const ecart = (la1, lo1, la2, lo2) => {
   const r = Math.PI / 180;
@@ -115,5 +115,21 @@ const ecart = (la1, lo1, la2, lo2) => {
   // Noon at Greenwich on an equinox: the Sun high, near 90° − the latitude.
   assert(Math.abs(obHauteurSoleil(Date.parse('2024-03-20T12:07:00Z'), 45, 0) - 45) < 1.5);
   assert(obGmst(0) >= 0 && obGmst(0) < 2 * Math.PI);
+}
+// The Earth seen from the satellite: the ISS's footprint (≈ 2 250 km), a place on its edge sees it on the horizon, below it overhead.
+{
+  const v = obVueSat(420, 48, 2);
+  assert(Math.abs(v.rayon - 2254) < 5, 'rayon ' + v.rayon);
+  const bord = obVueSat(420, 48, 2, { lat: 48 + v.lam * 180 / Math.PI, lon: 2 });
+  assert(Math.abs(bord.el) < 1e-6 && Math.abs(bord.marge) < 1e-6, 'bord ' + JSON.stringify(bord));
+  const dessous = obVueSat(420, 48, 2, { lat: 48, lon: 2 });
+  assert(Math.abs(dessous.el - 90) < 1e-6 && dessous.dist < 1e-6 && Math.abs(dessous.marge - v.rayon) < 1e-6);
+  const loin = obVueSat(420, 48, 2, { lat: 10, lon: 2 });
+  assert(loin.marge < 0 && loin.el < 0, 'hors de l’empreinte');
+  // The camera: on the satellite (k 0), drawn back until the edge is at the view's half-angle (k 1); a geostationary one never.
+  const r = 1 + 420 / 6378.137, a = .45, d = obReculSat(r, a, 1), lam = Math.acos(1 / r);
+  assert.strictEqual(obReculSat(r, a, 0), r);
+  assert(Math.abs(Math.atan2(Math.sin(lam), d - Math.cos(lam)) - a) < 1e-9, 'recul ' + d);
+  assert.strictEqual(obReculSat(6.61, a, 1), 6.61);
 }
 console.log('ok');

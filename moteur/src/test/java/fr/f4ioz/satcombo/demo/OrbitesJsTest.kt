@@ -46,6 +46,17 @@ class OrbitesJsTest {
     }
 
     @Test
+    fun la_terre_vue_du_satellite() {
+        // A fourth camera: the tab's button, the Sked's choice, the Vitrine's turn; the globe on the satellite's vertical.
+        assertTrue(PagePc.HTML.contains("data-ob-cam=\"satellite\""))
+        assertTrue(PagePc.HTML.contains("['satellite', 'vue du satellite']"))
+        assertTrue(PagePc.HTML.contains("vitrine: !!T.vitrine"))
+        assertTrue(OrbitesJs.JS.contains("(passage && OB.cam === 'satellite') || vitSat"))
+        assertTrue(OrbitesJs.JS.contains("obReculSat(r, a * .9, Math.min(1, k))"))
+        assertTrue(OrbitesJs.JS.contains("function vueSatInfo("))
+    }
+
+    @Test
     fun les_bibliotheques_sont_dans_le_jar() {
         val three = PagePc.bibliotheque("three.js")
         assertNotNull(three)
@@ -63,7 +74,7 @@ class OrbitesJsTest {
         try {
             // The pure functions only: the globes' module needs a page.
             val pur = OrbitesJs.JS.substringBefore("/* ------------------------------------------------------------ the globes */")
-            val js = File(d, "orbites.js").apply { writeText(pur + "\nmodule.exports = { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour };\n") }
+            val js = File(d, "orbites.js").apply { writeText(pur + "\nmodule.exports = { obEmpreinte, obNuit, obPassages, obSoleil, obLocator, obPisteA, obGmst, obLune, obLunePath, obHauteurSoleil, obSoleilJour, obVueSat, obReculSat };\n") }
             val essai = File(d, "essai.js").apply { writeText(OrbitesJsTest::class.java.getResource("/orbites-test.js")!!.readText()) }
             val p = ProcessBuilder(node, essai.path, js.path).redirectErrorStream(true).start()
             val sortie = p.inputStream.bufferedReader().readText()
