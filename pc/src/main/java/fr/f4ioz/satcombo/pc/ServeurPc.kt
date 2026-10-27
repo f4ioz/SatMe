@@ -1100,6 +1100,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/emission" -> {
                 val o = emission?.json()?.put("ok", true)?.put("coupeTx", sdr?.coupeTxEnReception == true)
                     ?.put("plutoHote", sdr?.plutoHote.orEmpty())?.put("plutoPort", sdr?.plutoPort ?: 0) ?: JSONObject().put("ok", false)
+                // The band plan's channels free or busy on the ground station's spectrum (« Créneaux »).
+                emission?.let { e ->
+                    val l = large
+                    val notre = if (e.etat.emet && !e.etat.chargeFictive && !e.etat.interieur) e.etat.frequenceKhz + fr.f4ioz.satcombo.datv.PlanQo100.DECALAGE_KHZ else null
+                    val cr = l?.creneaux(e.srKs, e.rolloffEffectif.alpha, notre, station.settings.callsign)
+                        ?: fr.f4ioz.satcombo.datv.CreneauxDatv.calcule(e.srKs, e.rolloffEffectif.alpha, null, notreDescenteKhz = notre, indicatif = station.settings.callsign)
+                    o.put("creneaux", fr.f4ioz.satcombo.datv.CreneauxDatv.json(cr)).put("creneauxSpectre", l != null && l.on && l.frais())
+                }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/datv/qrz/photo" -> {
@@ -1841,6 +1849,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
             }
             "/api/datv/emission/arrete" -> emission?.arrete()
+            // « Tester l'encodeur »: ffmpeg to nothing, never while transmitting.
+            "/api/datv/emission/banc" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                e.lanceBanc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            // The gain stepped while transmitting (the same clamps as a gain typed in).
+            "/api/datv/emission/rampe" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                e.lanceRampe(q["sens"].orEmpty(), q["gain"]?.replace(',', '.')?.toDoubleOrNull())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            // The gain remembered per symbol rate: taken back (a setting, or a ramp while transmitting), or forgotten.
+            "/api/datv/emission/calibration" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                if (q["oublie"] == "1") e.oublieCalibration()
+                else e.appliqueCalibration()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
             // SSTV on the air: the parameters (kept; « vers un satellite » never), the confirmed start, the stop, the page's heartbeat.
             "/api/sstv/emission/reglage" -> {
                 val e = emissionSstv ?: return JSONObject().put("ok", false)

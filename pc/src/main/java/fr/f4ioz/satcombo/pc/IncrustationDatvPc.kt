@@ -106,7 +106,8 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         val (w, h) = EmissionDatvPc.taille(debitTs)
         png.parentFile?.mkdirs()
         ImageIO.write(rendu(w, h, r, indicatif, locator, source, horloge()), "png", png)
-        val enDirect = direct && r.heure
+        // The clock card takes ffmpeg's input itself (and shows the time): the overlay then a still one.
+        val enDirect = direct && r.heure && source != "horloge"
         return IncrustationTs(png, enDirect, { ms -> octets(rendu(w, h, r, indicatif, locator, source, ms)) }, horloge)
     }
 
@@ -145,7 +146,7 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         fun nettoie(t: String): String = t.replace(Regex("[\\p{Cntrl}]"), " ").replace(Regex("\\s+"), " ").trim().take(TEXTE_MAX)
 
         /** The test cards show the callsign, the locator and the mark already: not twice. */
-        fun surMire(source: String) = source == "mire" || source == "animee"
+        fun surMire(source: String) = source == "mire" || source == "animee" || source == "horloge"
 
         fun actif(r: Reglage, source: String, indicatif: String, locator: String): Boolean =
             lignes(r, source, indicatif, locator, 0L).let { it.call.isNotEmpty() || it.loc.isNotEmpty() || it.logo || it.texte.isNotEmpty() || it.heure.isNotEmpty() }
@@ -155,7 +156,7 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         private fun lignes(r: Reglage, source: String, indicatif: String, locator: String, ms: Long): Lignes {
             val m = surMire(source)
             return Lignes(if (r.indicatif && !m) indicatif.trim().uppercase() else "", if (r.locator && !m) locator.trim().uppercase() else "",
-                r.logo && !m, nettoie(r.texte), if (r.heure) heure(ms) else "")
+                r.logo && !m, nettoie(r.texte), if (r.heure && source != "horloge") heure(ms) else "")
         }
 
         fun heure(ms: Long): String = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(java.time.ZoneOffset.UTC)

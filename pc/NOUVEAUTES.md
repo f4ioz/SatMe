@@ -37,6 +37,11 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Orbites › 📺 ISS en direct** : la **vidéo en direct de l'ISS** (NASA, via YouTube ; Internet nécessaire) dans une fenêtre déplaçable, avec sa position calculée par SatMe (mer ou pays survolé, altitude, vitesse, jour ou nuit dessous) et **Voir sur le globe** (la *Vue du satellite* à côté de la vraie). source NASA automatique (le direct du jour retrouvé par SatMe-PC), ⚙ pour une autre ; en tuile dans un coin du *Tableau* (Vitrine).
 - **Orbites › Tableau** : les fiches des satellites (photo et faits, tour à tour) ne sont plus coupées, dans tous les thèmes et à toutes les tailles d'écran : un coin trop plein est un peu réduit, la photo est montrée entière (jamais recadrée), l'anecdote passe sous la photo ; la fiche ne s'efface qu'en dernier recours. La photo de la fiche de l'onglet Orbites est aussi montrée entière.
 - **Activer l'auto-pilote** (Agenda › Activités à venir) : la campagne part de l'**élévation la plus basse du rotor** (Réglages › Poste et rotor) ou de l'élévation minimale de la station si elle est plus haute ; **Élévation minimale** modifiable dans la confirmation, la liste des passages suit.
+- **DATV › Émission › Créneaux** : les canaux du plan de bande à ce débit, verts libres ou rouges occupés d'après le spectre de la station sol (avec l'indicatif), hachurés près de la balise ; un clic sur un libre règle la fréquence d'émission. Les mêmes repères sous le spectre de la bande large, notre signal marqué « TX · indicatif », et la confirmation d'ÉMETTRE dit si le canal est libre.
+- **Résumé du signal** : norme, MODCOD, fréquence, débit, la **MER que doivent avoir les récepteurs**, codec, taille et cadence de l'image, son et part de la vidéo dans le flux.
+- **Tester l'encodeur** : quelques secondes codées par ffmpeg vers nulle part (H.264, H.265 et encodeurs matériels présents), gardé par débit et MODCOD, avec une recommandation et **Passer en H.265 / H.264**. Rien n'est émis.
+- **Source « Horloge en direct »** : cadran, heure UTC, indicatif et locator redessinés chaque seconde, un bip chaque seconde.
+- **Rampe ▼ / ■ / ▲** du gain pendant l'émission et **puissance calibrée par débit** (retenue quand la boucle MiniTiouner nous voit 1 à 6 dB sous la balise, proposée, jamais appliquée seule).
 
 ### en
 - **Orbites full screen**: the logo and "SatMe" top left (bottom left in Classique radioamateur).
@@ -60,6 +65,11 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Orbites › 📺 ISS en direct**: the **ISS's live video** (NASA, via YouTube; needs the Internet) in a movable window, with its position worked out by SatMe (sea or country below, altitude, speed, day or night under it) and **Voir sur le globe** (the *Vue du satellite* beside the real one). automatic NASA source (today's live looked up by SatMe-PC), ⚙ for another one; as a corner tile on the *Tableau* (Vitrine).
 - **Orbites › Tableau**: the satellites' cards (photo and facts, one after another) are no longer cut off, in every theme and at every screen size: a corner too full is made a little smaller, the photo is shown whole (never cropped), the story goes under the photo; the card is left out only as a last resort. The Orbites tab's card shows its photo whole too.
 - **Activer l'auto-pilote** (Agenda › Activités à venir): the campaign starts from the **rotator's lowest elevation** (Réglages › Poste et rotor) or the station's minimum elevation when higher; **Élévation minimale** editable in the confirmation, the list of passes follows.
+- **DATV › Émission › Créneaux** (slots): the band plan's channels at this rate, green free or red busy on the ground station's spectrum (with the callsign), hatched near the beacon; a click on a free one sets the transmit frequency. The same marks under the wide band spectrum, our signal marked « TX · callsign », and the ÉMETTRE confirmation says whether the channel is free.
+- **Signal summary**: standard, MODCOD, frequency, rate, the **MER receivers need**, codec, picture size and frame rate, sound and the video's share of the stream.
+- **Tester l'encodeur** (encoder test): a few seconds coded by ffmpeg to nothing (H.264, H.265 and the hardware encoders present), kept per rate and MODCOD, with a recommendation and **Passer en H.265 / H.264**. Nothing is transmitted.
+- **« Horloge en direct » source** (live clock): dial, UTC time, callsign and locator drawn each second, a beep each second.
+- **Gain ramp ▼ / ■ / ▲** while transmitting and **power calibrated per rate** (remembered when the MiniTiouner loop sees us 1 to 6 dB under the beacon; offered, never applied by itself).
 
 ## 2026.10.32
 

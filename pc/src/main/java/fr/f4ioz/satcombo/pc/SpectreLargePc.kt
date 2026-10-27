@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.BandeLarge
+import fr.f4ioz.satcombo.datv.CreneauxDatv
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.NiveauRecu
 import fr.f4ioz.satcombo.datv.NomsSignaux
@@ -223,6 +224,16 @@ class SpectreLargePc(
         o.put("veille", JSONObject().put("on", veille.active).put("etat", if (veille.active && veillePause) "en pause : pas de spectre récent" else veille.etat)
             .put("attente", veille.attenteMs / 1000).put("balise", veille.avecBalise).put("enr", veilleEnregistre))
         return o
+    }
+
+    /**
+     * The band plan's channels at [srKs] free or busy as the spectrum shows
+     * them now (unknown without a fresh one): for the transmission's page.
+     */
+    fun creneaux(srKs: Int, alpha: Double, notreDescenteKhz: Long?, indicatif: String): List<CreneauxDatv.Creneau> {
+        val t = horloge()
+        val l = if (on && frais()) signaux else null
+        return CreneauxDatv.calcule(srKs, alpha, l, { sg -> noms.nom(sg.centreKhz, sg.srKs, t) ?: "" }, notreDescenteKhz, indicatif)
     }
 
     fun action(chemin: String, q: Map<String, String>): JSONObject {
