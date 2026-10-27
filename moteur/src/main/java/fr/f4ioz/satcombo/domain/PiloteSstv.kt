@@ -44,6 +44,11 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
         fun arreteEnregistrement(): String
         /** The pictures received between [deMs] and [aMs] (their names). */
         fun images(deMs: Long, aMs: Long): List<String>
+        /**
+         * The partial pictures received between [deMs] and [aMs] that are one
+         * picture cut in two, put together (« Réunir »): the names made.
+         */
+        fun reunitPartielles(deMs: Long, aMs: Long): List<String> = emptyList()
         /** The mast parked; null when done, else why not. */
         fun parque(): String?
         /** The receive state [avant] put back: what was done. */
@@ -135,6 +140,9 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
         val c = ec.campagne; val p = ec.passage
         val faits = ArrayList(ec.faits)
         val fichier = if (c.chaine.enregistrer) runCatching { station.arreteEnregistrement() }.getOrDefault("") else ""
+        // One picture cut in two by a fade: put back together before the pictures are counted.
+        val reunies = runCatching { station.reunitPartielles(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(emptyList())
+        if (reunies.isNotEmpty()) faits += reunies.size.toString() + " image" + (if (reunies.size > 1) "s" else "") + " réunie" + (if (reunies.size > 1) "s" else "") + " de deux partielles"
         val images = runCatching { station.images(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(emptyList())
         val tx = station.emission()
         if (tx != null) faits += "état laissé tel quel : émission en cours"

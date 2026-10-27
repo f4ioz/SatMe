@@ -82,7 +82,12 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         override fun passage(id: String) = j.passage(id)
         override fun enregistre(e: JournalPassage.Entree) { j.rangement.enregistre(e) }
         override fun images(e: JournalPassage.Entree) = j.liens(e).images
+        override fun reunirAvec(nom: String) = sstvPc?.partenaire(nom)?.fileName
+        override fun reunit(nom: String) = sstvPc?.let { x -> x.partenaire(nom)?.let { x.reunit(nom, it.fileName) } ?: Result.failure(IllegalStateException("pas_de_partenaire")) }
     })
+
+    /** The live SSTV, for « Réunir » (set by Main). */
+    @Volatile var sstvPc: SstvPc? = null
 
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())

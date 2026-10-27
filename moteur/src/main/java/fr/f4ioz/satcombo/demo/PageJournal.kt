@@ -47,7 +47,7 @@ object PageJournal {
         "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc",
         "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide", "pj_n_echec", "pj_supprimer", "pj_supprimer_q",
         "pj_sstv_titre", "pj_sstv_defaut", "pj_v_auto", "pj_v_recue", "pj_v_corrigee", "pj_v_fusion", "pj_v_passage", "pj_v_note",
-        "pj_creer_fusion", "pj_fusion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
+        "pj_creer_fusion", "pj_fusion_en_cours", "pj_reunir", "pj_reunir_aide", "pj_reunion_en_cours", "pj_marque_traitees", "pj_marque_aide", "pj_repli", "pj_sstv_aucune", "pj_sstv_aide",
         "pj_el_titre", "pj_el_aide", "pj_el_incruste", "pj_el_carte", "pj_el_absent", "pj_el_plan", "pj_el_plan_auto",
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble", "pj_cam_satellite",
@@ -940,6 +940,7 @@ function dessineSstvChoix() {
       const kids = [el('img', { src: url('/vignette', { f: im.f, w: 160, id: P.id, n: tourVersion }), loading: 'lazy' }),
         el('span', { class: 'h', text: hms(im.t) }), el('span', { class: 'x', text: im.mode }), s,
         el('span', { class: 'x', text: '→ ' + libVersion(im.montre) + (im.montreNote >= 0 ? ' · ' + tf('v_note', im.montreNote) : '') + (im.repli ? ' · ' + T.repli : '') })];
+      if (im.reunirAvec) kids.push(el('button', { class: 'discret', text: T.reunir, title: T.reunir_aide, onclick: ev => reunir(im.f, ev.target) }));
       if (im.fusionPossible) kids.push(el('button', { class: 'discret', text: SS.enCours ? T.fusion_en_cours : T.creer_fusion, onclick: ev => fusionner(im.f, ev.target) }));
       a.appendChild(el('div', { class: 'vi' }, kids));
     });
@@ -972,6 +973,13 @@ function dessineSstvChoix() {
   } else if (!SS.dessin) b.appendChild(el('div', { class: 'aide', text: T.el_simple }));
   b.appendChild(el('div', { class: 'aide', text: T.el_aide }));
   z.appendChild(b);
+}
+// « Réunir »: this partial picture and the next are one, put back together (the gallery's own action).
+async function reunir(f, bouton) {
+  if (!P) return;
+  bouton.disabled = true; bouton.textContent = T.reunion_en_cours;
+  try { await envoie('/sstv/reunir', { id: P.id, f: f }); } catch (e) {}
+  await chargeSstv(); tourVersion++; imageVue = ''; dessineSstvChoix(); maj();
 }
 async function fusionner(f, bouton) {
   if (!P) return;

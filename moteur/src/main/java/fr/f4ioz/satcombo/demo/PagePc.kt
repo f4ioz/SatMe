@@ -1350,6 +1350,30 @@ ${Ft8EmissionJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; paddin
   .sx-image { width:100%; aspect-ratio:5/4; max-height:clamp(150px, 40vh, 320px); background:#0E1720; border-radius:8px; overflow:hidden; }
   .sx-image img { display:block; width:100%; height:100%; object-fit:contain; }
   .sx-image img:not([src]) { visibility:hidden; }
+  /* The countdown to the next SSTV picture: a ring filling up, mm:ss in it, what it rests on beside. */
+  .pi-compte { display:flex; align-items:center; gap:12px; margin-top:8px; padding:8px 10px; border-radius:10px; background:#0E1720; border:1px solid var(--bord); }
+  .pi-compte[hidden] { display:none; }
+  .pi-rond { position:relative; width:76px; height:76px; flex:none; }
+  .pi-rond svg { width:100%; height:100%; display:block; }
+  .pi-fond { fill:none; stroke:#22303B; stroke-width:6; }
+  .pi-arc { fill:none; stroke:var(--cyan); stroke-width:6; stroke-linecap:round; transition:stroke-dasharray .25s linear, stroke .3s; }
+  .pi-grand { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--clair); }
+  .pi-txt { min-width:0; flex:1; }
+  .pi-leg { font-size:15px; font-weight:600; color:var(--clair); }
+  .pi-note { font-size:12px; color:var(--gris); margin-top:2px; }
+  .pi-bip { margin-left:auto; align-self:flex-start; background:none; border:1px solid var(--bord); border-radius:6px; padding:2px 6px; cursor:pointer; opacity:.55; }
+  .pi-bip.on { opacity:1; border-color:var(--cyan); }
+  .pi-compte.EN_COURS .pi-arc { stroke:var(--vert); }
+  .pi-compte.EN_RETARD .pi-arc { stroke:var(--ambre); }
+  .pi-compte.EN_RETARD .pi-leg { color:var(--ambre); }
+  .pi-compte.EN_ATTENTE .pi-arc, .pi-compte.INCONNU .pi-arc, .pi-compte.FIN_PASSAGE .pi-arc { stroke:var(--gris); }
+  .pi-compte.FIN_PASSAGE .pi-grand { font-size:15px; color:var(--gris); }
+  /* Only a guess: a dashed ring, the words in italics. */
+  .pi-compte.devine .pi-arc { stroke-dasharray:4 5; opacity:.8; }
+  .pi-compte.devine .pi-note { font-style:italic; }
+  .pi-compte.bientot .pi-rond { animation:pi-pouls 1s ease-in-out infinite; }
+  @keyframes pi-pouls { 50% { transform:scale(1.07); filter:drop-shadow(0 0 6px var(--cyan)); } }
+  @media (max-width:600px) { .pi-compte { gap:8px; padding:6px 8px; } .pi-rond { width:54px; height:54px; } .pi-grand { font-size:14px; } .pi-leg { font-size:13px; } }
   #v-sstv #sstv-spectre { max-width:720px; }
   @media (min-width:1101px) { #v-sstv #xs-apercu, #v-sstv #mi-apercu { float:right; margin:6px 0 6px 12px; } #v-sstv #xs-carte, #v-sstv #mi-carte { display:flow-root; } }
   .sx-tx { padding-top:6px; border-top:1px solid var(--bord); }
@@ -2588,6 +2612,7 @@ ${rail()}
       <div class="t">Réception SSTV <span class="petit" id="i-mode"></span></div>
       <div class="sx-image"><img id="i-encours" alt=""></div>
       <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
+      <div class="pi-compte" id="sstv-prochaine" hidden role="timer" aria-live="off"></div>
       <div class="val" id="sstv-statut" style="font-size:15px"></div>
       <div class="avert" id="sstv-conseil" hidden></div>
       <div class="ligne" id="sstv-repare-l" hidden style="margin-top:4px"><button class="primaire repare" id="sstv-repare" style="margin-left:0" onclick="hsRepare()"></button></div>
@@ -2889,6 +2914,7 @@ ${rail()}
       <div class="t">Auto-pilote</div>
       <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitreCase(this)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
       <div class="petit" id="ap-etat" style="margin-top:4px"></div>
+      <div class="pi-compte" id="ap-prochaine" hidden role="timer" aria-live="off"></div>
     </div>
     <div class="carte">
       <div class="t">Importer une affiche</div>
@@ -5032,6 +5058,8 @@ ${DemarragePagePc.DIALOGUES}
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
     <button class="site-b" data-site="sstv-image" hidden onclick="sitePublie('sstv-image', viNom, this)" title="Publier cette image sur le site web (Réglages › Site web)">🌐 Publier sur le site</button>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
+    <button id="vi-reunir" hidden onclick="viReunit()" title="Cette image partielle et la suivante sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble, re-décodées de leur son à la bonne ligne. Les deux partielles sont gardées (cachées tant que l’image réunie existe).">⧉ Réunir</button>
+    <button id="vi-separer" hidden onclick="viSepare()" title="Défaire la réunion : l’image réunie est supprimée, les deux images partielles reviennent dans la galerie">↶ Séparer</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
     <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 », sur le nombre de diapos de sa série) : vaut pour toutes les copies du groupe"></select></label>
@@ -10239,6 +10267,80 @@ function rendSstv() {
     : D.redecode ? D.redecode + ' : ' + D.redecodeImages + ' image(s) trouvée(s)' : '');
 }
 let enregsSstvVus = '';
+// ---- The countdown to the next SSTV picture (api/sstv/prochaine; the auto-pilot's pass carries its own):
+// a ring filling up to the expected start, mm:ss in it, and what the estimate rests on.
+let PI = null, piRecu = 0, piBip = false, piBipPour = 0;
+try { piBip = localStorage.getItem('satme-sstv-bip') === '1'; } catch (x) {}
+async function piCharge() {
+  if (document.hidden || !(ouverte('sstv') || ouverte('agenda'))) return;
+  try { PI = await (await fetch('api/sstv/prochaine')).json(); piRecu = Date.now(); } catch (x) { PI = null; }
+}
+// The server's clock against this one (another machine may be a second or two off).
+function piMaintenant() { return Date.now() + (PI && PI.maintenant ? PI.maintenant - piRecu : 0); }
+function piMmss(ms) { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function piBascule(ev) {
+  ev.stopPropagation(); piBip = !piBip;
+  try { localStorage.setItem('satme-sstv-bip', piBip ? '1' : '0'); } catch (x) {}
+  if (piBip) piSon(660);
+}
+function piSon(f) {
+  try {
+    const c = piSon.c || (piSon.c = new (window.AudioContext || window.webkitAudioContext)());
+    const o = c.createOscillator(), v = c.createGain();
+    o.frequency.value = f; v.gain.setValueAtTime(0.0001, c.currentTime);
+    v.gain.exponentialRampToValueAtTime(0.2, c.currentTime + 0.02); v.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35);
+    o.connect(v).connect(c.destination); o.start(); o.stop(c.currentTime + 0.4);
+  } catch (x) {}
+}
+function piRend(el, d) {
+  if (!el) return;
+  if (!d || !d.visible) { el.hidden = true; return; }
+  if (!el.firstChild) el.innerHTML = '<div class="pi-rond"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="pi-fond" cx="40" cy="40" r="34"/>' +
+    '<circle class="pi-arc" cx="40" cy="40" r="34" transform="rotate(-90 40 40)" stroke-dasharray="0 214"/></svg><div class="pi-grand"></div></div>' +
+    '<div class="pi-txt"><div class="pi-leg"></div><div class="pi-note"></div></div>' +
+    '<button class="pi-bip" title="Un bip 5 s avant la prochaine image (sur ce navigateur)">🔔</button>';
+  el.hidden = false;
+  el.querySelector('.pi-bip').onclick = piBascule;
+  el.querySelector('.pi-bip').classList.toggle('on', piBip);
+  const n = piMaintenant(), ecoule = n - (d.maintenant || n), P = d.periode || 0;
+  let frac = 0, grand = '', leg = '', note = '', bientot = false;
+  const surQuoi = d.source === 'HORAIRE' ? 'd’après l’horaire annoncé' + (d.images ? ', recalé sur la dernière image' : '')
+    : d.images ? 'estimé d’après ' + d.images + ' image' + (d.images > 1 ? 's' : '') : '';
+  if (d.phase === 'EN_COURS') {
+    frac = d.progression; grand = Math.round(frac * 100) + ' %';
+    leg = 'Image en cours · ' + d.lignes + '/' + d.total + ' lignes';
+    note = (d.resteImage - ecoule > 0 ? 'fin dans ' + piMmss(d.resteImage - ecoule) : 'fin imminente') + (d.prochaine ? ' · la suivante vers ' + hm(d.prochaine) : '');
+  } else if (d.phase === 'ATTENTE') {
+    const reste = d.prochaine - n;
+    frac = P ? Math.min(1, Math.max(0, 1 - reste / P)) : 0;
+    grand = piMmss(reste); bientot = reste <= 5000;
+    leg = reste > 1000 ? 'Prochaine image dans ' + piMmss(reste) : 'Prochaine image imminente';
+    note = surQuoi + (d.apresLos ? ' · après la fin du passage' : '');
+    if (piBip && reste <= 5000 && reste > 3000 && piBipPour !== d.prochaine) { piBipPour = d.prochaine; piSon(880); }
+  } else if (d.phase === 'EN_RETARD') {
+    frac = 1; grand = '+' + piMmss(n - d.prochaine);
+    leg = 'En retard'; note = (d.suivante - ecoule > 0 ? 'peut-être dans ' + piMmss(d.suivante - ecoule) + ' (une image manquée)' : '') + (surQuoi ? ' · ' + surQuoi : '');
+  } else if (d.phase === 'EN_ATTENTE') {
+    grand = '—'; leg = 'En attente d’une image'; note = 'plus rien depuis deux périodes : le rythme n’est plus sûr';
+  } else if (d.phase === 'FIN_PASSAGE') {
+    grand = 'LOS'; leg = 'Fin du passage'; note = d.sat ? d.sat + ' est passé sous l’horizon' : '';
+  } else {
+    grand = '?'; leg = d.images ? 'Rythme pas encore connu' : 'En attente de la première image';
+    note = d.images === 1 ? 'estimé dès la deuxième image (ou l’horaire de la campagne)' : 'le compte à rebours part de la première image reçue';
+  }
+  el.className = 'pi-compte ' + d.phase + (d.confiance < 0.6 && d.phase !== 'EN_COURS' ? ' devine' : '') + (bientot ? ' bientot' : '');
+  el.querySelector('.pi-arc').setAttribute('stroke-dasharray', (frac * 213.6).toFixed(1) + ' 214');
+  const gr = el.querySelector('.pi-grand'); if (gr.textContent !== grand) gr.textContent = grand;
+  const l = el.querySelector('.pi-leg'); if (l.textContent !== leg) l.textContent = leg;
+  const no = el.querySelector('.pi-note'); if (no.textContent !== note) no.textContent = note;
+  el.setAttribute('aria-label', leg + (note ? ' — ' + note : ''));
+}
+setInterval(piCharge, 2000);
+setInterval(() => {
+  piRend(g('sstv-prochaine'), PI);
+  const e = typeof AP !== 'undefined' && AP && AP.enCours;
+  piRend(g('ap-prochaine'), e && e.prochaine && e.phase !== 'PRET' ? Object.assign({ visible: true, sat: e.sat }, e.prochaine) : null);
+}, 250);
 // The sound from 900 to 2600 Hz, the SSTV tones marked: the sync line shows where the receiver is tuned.
 function spectreSstv(D) {
   const c = g('sstv-spectre'), x = c.getContext('2d'), w = c.width, h = c.height;
@@ -10261,7 +10363,8 @@ function voisImage(n) {
   viN = (n + l.length) % l.length; const i = l[viN];
   g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
   txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle',
-    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
+    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '',
+    i.reunion ? 'réunie de ' + i.reunion.length + ' images partielles' : '', i.trous ? 'lignes perdues ' + i.trous.replace(/;/g, ', ').replace(/-/g, '–') : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
   VC = null; viCorrCharge();
@@ -10278,6 +10381,8 @@ function voisOutils() {
   if (!i || !D) return;
   const wav = viNom.replace(/\.png$/, '.wav'), gif = viNom.replace(/\.png$/, '.gif');
   g('vi-son').hidden = g('vi-redec').hidden = !i.son;
+  g('vi-reunir').hidden = !i.reunirAvec; g('vi-separer').hidden = !i.reunion;
+  if (i.reunirAvec) g('vi-reunir').title = 'Avec ' + i.reunirAvec + ' : une seule image coupée en deux (synchro perdue au milieu), remise ensemble depuis leur son à la bonne ligne. Les deux partielles restent gardées (cachées tant que l’image réunie existe).';
   if (i.son && viSonVu !== wav) { viSonVu = wav; g('vi-son').src = 'sstv/' + enc(wav); }
   g('vi-redec').disabled = D.redecodeProgres >= 0 || !D.peutRedecoder;
   g('vi-gif').hidden = !D.peutGif; g('vi-gif').disabled = !!D.gif;
@@ -10389,6 +10494,29 @@ async function viSatellite() {
   if (v == null || !v.trim() || v.trim() === i.sat) return;
   const j = await post('api/sstv/satellite?nom=' + enc(viNom) + '&sat=' + enc(v.trim()));
   if (j && j.ok !== false) { i.sat = v.trim(); imagesVus = ''; voisImage(viN); }
+}
+// « Réunir »: two partial pictures that are one, put back together (the partial ones kept, hidden); « Séparer » undoes it.
+async function viReunit() {
+  if (!viNom) return;
+  const b = g('vi-reunir'); b.disabled = true; txt('vi-reunir', '⧉ Réunion…');
+  const j = await post('api/sstv/reunir?nom=' + enc(viNom));
+  b.disabled = false; txt('vi-reunir', '⧉ Réunir');
+  // A refusal is said by post() itself.
+  if (j && j.ok && j.nom) { imagesVus = ''; await viOuvreNom(j.nom); }
+}
+async function viSepare() {
+  if (!viNom || !confirm('Séparer ' + viNom + ' ? L’image réunie est supprimée, les deux images partielles reviennent.')) return;
+  const j = await post('api/sstv/separer?nom=' + enc(viNom));
+  if (j && j.ok !== false) { g('visionneuse').close(); imagesVus = ''; }
+}
+// Opens picture [nom] once the gallery has it (after a change).
+async function viOuvreNom(nom) {
+  for (let k = 0; k < 10; k++) {
+    try { S = await (await fetch('api/son')).json(); } catch (x) {}
+    const n = ((S && S.images) || []).findIndex(x => x.nom === nom);
+    if (n >= 0) { imagesMontrees = []; voisImage(n); return; }
+    await new Promise(r => setTimeout(r, 400));
+  }
 }
 async function viSupprime() {
   if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son, son GIF, sa version corrigée et sa marque « à garder ») ?')) return;
@@ -14841,11 +14969,19 @@ function apDessine() {
     '</td><td><span class="ap-bot" title="Auto-pilote">🤖</span> ' + esc(p.nom) + '<div class="petit">' + esc(p.sat) + (p.raison ? ' · ' + esc(p.raison) : '') + '</div></td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + AP_STATUTS[p.statut] + '</span></td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">' + (AP.campagnes.length ? 'aucun passage dans les campagnes actives' : 'les passages des campagnes viendront ici') + '</td></tr>';
   g('ap-histo').innerHTML = AP.historique.map(t => '<tr><td>' + jourHeure(t.aos) + '<div class="petit">' + t.el.toFixed(0) + '°</div></td><td>' + esc(t.nom) +
-    (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
+    (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') +
+    (t.reunir || []).map(n => '<button class="petit" onclick="apReunit(\'' + escA(n) + '\', this)" title="Deux images partielles de ce passage sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble depuis leur son, à la bonne ligne. Les partielles restent gardées.">⧉ Réunir ' + esc(n.replace(/^SatMe_SSTV_/, '').replace(/\.png$/, '')) + '</button>').join('') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
     '</td><td><span class="pastille ap-st-' + t.statut + '">' + AP_STATUTS[t.statut] + '</span>' + (t.raison ? '<div class="petit">' + esc(t.raison) + '</div>' : '') +
     (t.faits.length ? '<div class="petit" title="' + esc(t.faits.join('\n')).replace(/"/g, '&quot;') + '">' + t.faits.length + ' étape' + (t.faits.length > 1 ? 's' : '') + '</div>' : '') + '</td></tr>').join('') ||
     '<tr><td colspan="3" class="petit">rien encore</td></tr>';
   dessineAgendaAp();
+}
+// « Réunir » from the auto-pilot's history: the gallery's action, then the list read again.
+async function apReunit(nom, bouton) {
+  bouton.disabled = true;
+  const j = await post('api/sstv/reunir?nom=' + enc(nom));
+  if (!(j && j.ok)) bouton.disabled = false;
+  apVu = ''; imagesVus = '';
 }
 /** The campaigns' passes in the appointments' list too, with their 🤖. */
 function dessineAgendaAp() {

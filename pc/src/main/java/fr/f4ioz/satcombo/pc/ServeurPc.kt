@@ -238,6 +238,27 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
         emissionBe?.emet == true || ft8Tx?.arme == true
 
+    /**
+     * The countdown to the next SSTV picture ([fr.f4ioz.satcombo.sstv.ProchaineImageSstv]) of the
+     * satellite followed, while it is up (and a few minutes after its LOS, « fin du passage »);
+     * `visible` false otherwise.
+     */
+    private fun prochaineSstv(): JSONObject {
+        val x = son?.sstv ?: return JSONObject().put("visible", false)
+        val e = station.etat.value
+        val s = e.suivi ?: return JSONObject().put("visible", false)
+        val t = System.currentTimeMillis()
+        val p = e.passage?.takeIf { it.aosEpochMs <= t && t < it.losEpochMs }
+            ?: e.dernierPassage?.takeIf { t >= it.losEpochMs && t - it.losEpochMs < 5 * 60_000L }
+            ?: return JSONObject().put("visible", false)
+        val (horaire, mode) = autopilote?.horaireDe(s.name, s.catalogNumber) ?: ("" to "")
+        val etat = x.prochaine(s.name, p.aosEpochMs, p.losEpochMs, horaire, mode)
+        // Nothing yet to count from, after the pass: nothing to say.
+        if (etat.phase == fr.f4ioz.satcombo.sstv.ProchaineImageSstv.Phase.FIN_PASSAGE && x.images().none { it.timeMs >= p.aosEpochMs }) return JSONObject().put("visible", false)
+        return fr.f4ioz.satcombo.sstv.ProchaineImageSstv.json(etat, t).put("visible", true).put("sat", s.name).put("los", p.losEpochMs)
+            .put("horaire", horaire)
+    }
+
     /** The Pluto's narrow-band PTT routes: hold (demarre, ?confirme=1 on the air), still holding (vie), release (arrete). */
     private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
         val b = emissionBe ?: return JSONObject().put("ok", false).put("absent", true)
@@ -1308,6 +1329,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (classement?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sstv/correction" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (classement?.corrections?.api?.etat(q["nom"].orEmpty()) ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/sstv/prochaine" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", prochaineSstv().toString().toByteArray(Charsets.UTF_8))
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/api/sauvegarde" -> {
@@ -2365,6 +2387,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
                 // Its « à garder » mark goes with it (a picture of the same name received later is not kept for it).
                 optionsSstv?.oublieGarde(q["nom"].orEmpty())
+            }
+            "/api/sstv/reunir" -> {
+                // Two partial pictures that are one ([fr.f4ioz.satcombo.sstv.ReunionSstv]): ?nom= (its other half found) or ?nom=&avec=.
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                val nom = q["nom"].orEmpty()
+                val avec = q["avec"]?.takeIf { it.isNotEmpty() } ?: x.partenaire(nom)?.fileName
+                    ?: return JSONObject().put("ok", false).put("erreur", "pas_de_partenaire")
+                return x.reunit(nom, avec).fold({ JSONObject().put("ok", true).put("nom", it) }, { JSONObject().put("ok", false).put("erreur", it.message ?: it.javaClass.simpleName) })
+            }
+            "/api/sstv/separer" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                if (!x.separe(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
             }
             "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")

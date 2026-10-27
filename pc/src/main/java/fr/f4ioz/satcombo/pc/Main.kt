@@ -415,6 +415,7 @@ fun main(args: Array<String>) {
         kp = { serveur.espace?.etat()?.kp.orEmpty() }, ft8 = ft8Recents)
     // Its SSTV pictures as the journal chose them for the pass (as received unless chosen).
     journalWeb.rapport?.montre = { e -> journalWeb.sstv.montrees(e).mapValues { it.value.fichier } }
+    journalWeb.sstvPc = son.sstv
     serveur.spectreJournal = spectreJournal
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)
     serveur.iqSdr = iqSdr
@@ -579,6 +580,8 @@ fun main(args: Array<String>) {
     // « Re-décoder chaque image à la fin »: each picture kept live, decoded again from its sound in the background.
     val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin })
     son.sstv.imageGardee = { d, s -> redecodageAuto.demande(d, s) }
+    // « Réunir »: two partial pictures put together from the pass recording when their own sounds are gone.
+    son.sstv.enregistrementDe = { son.fichierEnregistrement(it) }
     serveur.optionsSstv = optionsSstv
     // « Réglages › Site web »: the SSTV pictures, planches, reports, contacts and videos published on the operator's site,
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
