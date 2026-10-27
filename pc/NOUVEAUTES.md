@@ -42,6 +42,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Tester l'encodeur** : quelques secondes codées par ffmpeg vers nulle part (H.264, H.265 et encodeurs matériels présents), gardé par débit et MODCOD, avec une recommandation et **Passer en H.265 / H.264**. Rien n'est émis.
 - **Source « Horloge en direct »** : cadran, heure UTC, indicatif et locator redessinés chaque seconde, un bip chaque seconde.
 - **Rampe ▼ / ■ / ▲** du gain pendant l'émission et **puissance calibrée par débit** (retenue quand la boucle MiniTiouner nous voit 1 à 6 dB sous la balise, proposée, jamais appliquée seule).
+- **Orbites › Tableau › Vitrine** : le globe se met **à côté de l'encart** (au-dessus en écran vertical) au lieu d'être caché derrière. **Taille de l'encart** (petite, moyenne, grande) et son **côté** (gauche, droite) dans *Informations ▾* ; le texte rapetisse pour tenir, jamais coupé. Plus de « venez écouter ! » d'office : les cartes disent seulement quand le satellite passe (« passe au-dessus de nous à 15:29 »), l'invitation revient avec **Réception sur le stand**.
+- **Tableau : déplacer le globe** (tous les thèmes) : *Informations ▾ › Le globe › Le déplacer* puis glisser (ou **Maj + glisser**, ou **deux doigts**), la molette ou l'écart des doigts pour sa taille, double-clic ou **Remettre le globe à sa place**. Gardé par thème ; l'onglet Orbites ne change pas.
 
 ### en
 - **Orbites full screen**: the logo and "SatMe" top left (bottom left in Classique radioamateur).
@@ -70,6 +72,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Tester l'encodeur** (encoder test): a few seconds coded by ffmpeg to nothing (H.264, H.265 and the hardware encoders present), kept per rate and MODCOD, with a recommendation and **Passer en H.265 / H.264**. Nothing is transmitted.
 - **« Horloge en direct » source** (live clock): dial, UTC time, callsign and locator drawn each second, a beep each second.
 - **Gain ramp ▼ / ■ / ▲** while transmitting and **power calibrated per rate** (remembered when the MiniTiouner loop sees us 1 to 6 dB under the beacon; offered, never applied by itself).
+- **Orbites › Tableau › Vitrine**: the globe stands **beside the card** (above it on a portrait screen) instead of hidden behind it. **Card size** (small, medium, large) and its **side** (left, right) in *Informations ▾*; the text shrinks to fit, never cut. No more "come and listen!" by default: the cards only say when the satellite passes ("passes over us at 15:29"); the invitation comes back with **Réception sur le stand** (a receiver on the stand).
+- **Tableau: move the globe** (every look): *Informations ▾ › Le globe › Le déplacer* then drag (or **Shift + drag**, or **two fingers**), the wheel or the fingers' spread for its size, double-click or **Remettre le globe à sa place** to put it back. Kept per look; the Orbites tab is unchanged.
 
 ## 2026.10.32
 

@@ -1057,7 +1057,9 @@ const Orbites = (function () {
       const r = canvas.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) return;
       if (canvas.width !== Math.round(r.width * rendu.getPixelRatio()) || canvas.height !== Math.round(r.height * rendu.getPixelRatio())) { rendu.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
-      if (sc.decal.x || sc.decal.y) camera.setViewOffset(r.width, r.height, -sc.decal.x * r.width, -sc.decal.y * r.height, r.width, r.height);
+      // Its centre shifted on the screen and its size (the journal's; the dashboard's look's: OB.tb.place).
+      const dc = mode === 'tab' && OB.tb && OB.tb.place ? OB.tb.place(r.width, r.height) : sc.decal, zs = dc.s || 1;
+      if (dc.x || dc.y || zs !== 1) camera.setViewOffset(r.width, r.height, r.width / 2 - (.5 + dc.x) * r.width / zs, r.height / 2 - (.5 + dc.y) * r.height / zs, r.width / zs, r.height / zs);
       else if (camera.view && camera.view.enabled) camera.clearViewOffset();
       const dt = Math.min(.1, (now - derniere) / 1000); derniere = now;
       const gm = satellite.gstime(new Date(t)); sc.gm = gm;
@@ -2048,7 +2050,7 @@ const Orbites = (function () {
     /** The tab's time back to the present, at its real pace (the dashboard shows now). */
     tempsReel: () => direct(),
     /**
-     * The dashboard open ([o]: {style, vue, tourne, astres, pedago, vitrine, surVue(v)}) or closed (null): its look and view taken without
+     * The dashboard open ([o]: {style, vue, tourne, astres, pedago, vitrine, place(w, h) → the globe's {x, y, s} on the screen, surVue(v)}) or closed (null): its look and view taken without
      * being kept, the tab's own given back when it closes. The Vitrine's ([o.vitrine]): 30 s of every 90 the Earth seen from the satellite chosen.
      */
     tableauMode: o => {

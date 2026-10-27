@@ -15,7 +15,7 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 
 SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point est détaillé dans le [guide intégré](docs/station-pc.fr.md) (**F1** dans SatMe-PC) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
 
-**Orbites, et son tableau plein écran.** La Terre en 3D avec tes satellites sur leur orbite, leurs empreintes et près de 250 monuments. **⛶ Tableau** en fait un écran mural, avec six thèmes : *Dessin animé* (le globe tourne seul), *Pédagogique* (des fiches qui expliquent, « Le savais-tu ? »), et **Vitrine** pour le stand d'un club — de grandes cartes qui défilent : « AO-91 passe au-dessus de nous dans 30 min — venez écouter ! », un satellite et son histoire, ton club et son QR code.
+**Orbites, et son tableau plein écran.** La Terre en 3D avec tes satellites sur leur orbite, leurs empreintes et près de 250 monuments. **⛶ Tableau** en fait un écran mural, avec six thèmes : *Dessin animé* (le globe tourne seul), *Pédagogique* (des fiches qui expliquent, « Le savais-tu ? »), et **Vitrine** pour le stand d'un club — de grandes cartes qui défilent : « AO-91 passe au-dessus de nous à 15:29 », le globe à côté, un satellite et son histoire, ton club et son QR code.
 
 <p align="center">
 <img src="docs/images/pc-orbites-tableau.webp" width="49%" alt="Orbites en plein écran, thème Dessin animé : le globe dessiné avec la station QF4DMO, l'ISS et son orbite, les panneaux de l'heure, du Soleil et de la Lune, des prochains passages et de la position de l'ISS">
