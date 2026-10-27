@@ -15,6 +15,7 @@ import fr.f4ioz.satcombo.demo.PageJournal
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.Doppler
+import fr.f4ioz.satcombo.domain.JournalFt
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.i18n.t
@@ -87,7 +88,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
     private fun d(v: Double) = "%.2f".format(Locale.US, v)
 
-    private class Travail(@Volatile var progres: Float = 0f, @Volatile var fichier: File? = null, @Volatile var fini: Boolean = false)
+    private class Travail(@Volatile var progres: Float = 0f, @Volatile var fichier: File? = null, @Volatile var fini: Boolean = false,
+                          /** An FT8/FT4 re-reading: how many messages it found (-1: not one, or failed). */
+                          @Volatile var trouves: Int = -1)
     private val travaux = ConcurrentHashMap<String, Travail>()
 
     private fun opt(p: (String) -> String, nom: String, defaut: Boolean) = when (p(nom)) { "1" -> true; "0" -> false; else -> defaut }
@@ -172,7 +175,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "/supprime" -> {
                 if (methode != "POST") return ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
                 val e = j.passage(p("id")) ?: return NON
-                j.rangement.supprime(e)
+                j.rangement.supprime(e); j.ft.oublie(e)
                 json("{\"ok\":true}")
             }
             "/liste" -> {
@@ -210,6 +213,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                         "{\"n\":$i,\"nom\":\"${js(m.f.name)}\",\"o\":${m.origine},\"an\":${m.annonce},\"du\":${m.dureeMs}}" })
                     append(",\"sig\":").append(e.signal.joinToString(",", "[", "]") { "[${it.tMs},${it.s}]" })
                     append(",\"freq\":").append(frequences(e, l).joinToString(",", "[", "]") { "[${it.first},${it.second}]" })
+                    append(",\"ft\":").append(ftJson(e, l)).append(",\"ftAff\":").append(ftAffJson(e.options.ft))
                     append(",\"doppler\":").append(station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(it, e.satName, e.debutMs, e.finMs) }
                         .orEmpty().joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                     append("}")
@@ -284,9 +288,33 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 // The session's older words: on the globe unless a view is asked; « avant » / « apres » its margins (ms).
                 fabriqueEditeur(es) { k -> when (k) { "vue" -> vueDemandee(p, "globe"); else -> p(k) } }
             }
+            // The FT8/FT4 panel as placed on the page, kept with each pass asked (« ids », else « id »).
+            "/ft/choix" -> {
+                val ids = p("ids").split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(p("id")) }
+                val es = ids.mapNotNull { j.passage(it) }.ifEmpty { return NON }
+                var a = JournalFt.Affichage.DEFAUT
+                for (e in es) {
+                    a = JournalFt.Affichage.depuis(p, e.options.ft)
+                    if (a != e.options.ft) j.rangement.enregistre(e.copy(options = e.options.copy(ft = a)))
+                }
+                json("{\"ok\":true,\"ftAff\":${ftAffJson(a)}}")
+            }
+            // The pass's recordings read again by SatMe's FT8/FT4 decoder (« mode »), in the background (« /travail »).
+            "/ft/redecode" -> {
+                val e = j.passage(p("id")) ?: return NON
+                val m = j.morceaux(e).ifEmpty { return json("{\"ok\":false,\"raison\":\"son\"}") }
+                val mode = if (p("mode").uppercase() == "FT4") "FT4" else "FT8"
+                val (n, t) = travail()
+                kotlin.concurrent.thread(name = "JournalWebPc-ft", isDaemon = true) {
+                    val k = runCatching { j.ft.redecode(e, m, JournalPc.decodeur, mode) { t.progres = it } }
+                        .onFailure { System.err.println("journal : FT de ${e.id} : $it") }.getOrDefault(-1)
+                    t.trouves = k; t.progres = 1f; t.fini = true
+                }
+                json("{\"ok\":true,\"travail\":\"$n\"}")
+            }
             "/travail" -> {
                 val t = travaux[p("n")] ?: return NON
-                json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")
+                json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null || t.trouves >= 0},\"trouves\":${t.trouves},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")
             }
             // A Doppler/CAT log (CSV), by its name.
             "/doppler" -> {
@@ -302,6 +330,25 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             else -> NON
         }
     }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
+
+    /**
+     * The pass's FT8/FT4 messages for the page: slot (« t »), mode, dB, dt, Hz, message (« x »), who calls (« de »), the
+     * square (« lo »), a CQ (« c »), my callsign in it (« mi »), a station of the pass's contacts (« q »), the flag and country.
+     */
+    private fun ftJson(e: JournalPassage.Entree, l: JournalPc.Liens): String {
+        val moi = s.callsign; val qsos = l.qsos.map { it.callsign }
+        return j.ft.duPassage(e).joinToString(",", "[", "]") { d ->
+            val o = org.json.JSONObject().put("t", d.tMs).put("m", d.mode).put("db", d.db).put("dt", d.dt).put("hz", d.hz).put("x", d.message)
+            d.appelant?.let { o.put("de", it) }; d.locator?.let { o.put("lo", it) }
+            if (JournalFt.estCq(d)) o.put("c", 1)
+            if (JournalFt.pourMoi(d, moi)) o.put("mi", 1)
+            if (JournalFt.avecQso(d, qsos)) o.put("q", 1)
+            d.appelant?.let { c -> fr.f4ioz.satcombo.domain.Dxcc.entite(c)?.let { x -> o.put("py", x.nom).put("iso", x.iso).put("dr", fr.f4ioz.satcombo.domain.Dxcc.emoji(x)) } }
+            o.toString()
+        }
+    }
+
+    private fun ftAffJson(a: JournalFt.Affichage) = "{\"aff\":${a.affiche},\"cadre\":\"${a.cadre?.texte() ?: ""}\",\"op\":${a.opacite},\"haut\":${a.recentEnHaut}}"
 
     /** The view asked: the globe (« vue=globe »), the map (« vue=carte » or the phone's « carte=1 »), the sky; else [defaut]. */
     private fun vueDemandee(p: (String) -> String, defaut: String): String = when (p("vue").trim()) {
@@ -495,6 +542,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 if (cx != null && cy != null && z != null && cw != null && cw > 0f) JournalPassage.VueCarte(cx, cy, z) to cw else null
             },
             cadreSstv = cadreSstv(p("cadreSstv")),
+            // The FT8/FT4 panel as the page shows it (its words), else as kept with the pass.
+            ft = j.ft.duPassage(e), affFt = JournalFt.Affichage.depuis(p, e.options.ft), ftMoi = s.callsign, ftQsos = l.qsos.map { it.callsign }.toSet(),
             paysage = p("format") == "paysage", vertical = p("format") == "telephone", cielEntier = p("format").isNotEmpty(),
             tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } },
             options = e.options, donnees = if (elements) runCatching { sstv.donnees(e) }.getOrNull() else null,

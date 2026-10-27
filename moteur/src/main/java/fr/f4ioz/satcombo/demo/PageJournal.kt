@@ -54,7 +54,9 @@ object PageJournal {
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
         "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
-        "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul")
+        "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
+        "pj_ft_titre", "pj_ft_aide", "pj_ft_visibilite", "pj_ft_ordre", "pj_ft_bas", "pj_ft_haut", "pj_ft_aucun", "pj_ft_redecoder",
+        "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -229,6 +231,7 @@ object PageJournal {
   #porte { max-width:420px; margin:60px auto; background:var(--carte); border:1px solid var(--bord); border-radius:14px; padding:22px; }
   #porte input { font-size:28px; letter-spacing:6px; width:100%; text-align:center; }
   .cache { display:none !important; }
+${PageJournalFt.CSS}
 </style>
 <body>
 <div id="porte" class="cache">
@@ -372,7 +375,8 @@ async function ouvreEditeur(ids, o) {
   o = o || {};
   arrete();
   const z = o.zone || g('vue'), vieux = o.recharge ? S : null;
-  if (!vieux) { ajoutFait = ''; deQuoi = 'tout'; sel = null; }
+  if (!vieux) { ajoutFait = ''; deQuoi = 'tout'; sel = null; ftMsg = ''; }
+  ftCle = '';
   if (ids.length > 1) { z.innerHTML = ''; z.appendChild(el('div', { class: 'aide', id: 'chargement' })); }
   const ps = [];
   for (let k = 0; k < ids.length; k++) {
@@ -579,6 +583,7 @@ function placeAuto(v) {
 }
 function borneSstv(c, v) { const r = placeSstv(c, v.w, v.h); return { x: r.x / v.w, y: r.y / v.h, l: r.l / v.w }; }
 function majSstv() {
+  majFt();
   const o = g('cadreSstv'); if (!o || !P) return;
   const v = vueSstv(), possible = !!(O.sstv && v && P.marques.some(m => m.k === 'SSTV' && m.f));
   o.classList.toggle('possible', possible);
@@ -1572,6 +1577,8 @@ function panneauOptions(p) {
     .concat(pc ? [['vignettes', T.s_vignettes]] : []).forEach(q => c.appendChild(caseOpt(q[0], q[1], () => { if (q[2]) q[2](); rafraichit(); })));
   p.appendChild(c);
   p.appendChild(curseurPolice(rafraichit));
+  // The FT8/FT4 messages over the replay, when the pass has some (or a recording to read them from).
+  blocFt(p);
   // The accelerated replay, quick and silent where nothing was logged nor heard: the page and the files.
   p.appendChild(titreBloc(T.accel_titre));
   const a = el('div', { class: 'colonnes' });
@@ -1644,7 +1651,7 @@ async function fabrique(quoi) {
     res: O.res, format: O.format === 'telephone' ? 'telephone' : 'paysage', vue: O.vue, sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq),
     locator: b(O.locator), ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
     etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), accelere: b(O.accelere), rapide: O.rapide, accAvant: O.avant, accApres: O.apres,
-    surActivite: b(O.surActivite), contacts: b(O.paquetQsos) }, optionsSession(S.sat), Orbites.cadrage());
+    surActivite: b(O.surActivite), contacts: b(O.paquetQsos) }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { q.de = Math.round(sel[0]); q.a = Math.round(sel[1]); }
   // The map as framed here, in the file's frame: its view's centre and width — for the pass it shows, the others framed to themselves.
   if (O.vue === 'carte') { const c = g('carte'), f = cadreFichier(); q.mcx = mcx; q.mcy = mcy; q.zc = zc; q.cw = c.clientWidth; q.ch = c.clientHeight; q.carteId = P.id;
@@ -1720,7 +1727,7 @@ async function suitTravail(j, zone, barre, mot) {
     return;
   }
 }
-
+${PageJournalFt.JS}
 g('tPorte').textContent = T.titre; g('tCode').textContent = T.code; g('entrer').textContent = T.entrer;
 g('tTitre').textContent = 'SatMe · ' + T.titre; g('tSous').textContent = T.sous; g('tChoisir').textContent = T.choisir;
 g('lienPupitre').textContent = T.pupitre; g('lienPupitre').href = base + '/';
