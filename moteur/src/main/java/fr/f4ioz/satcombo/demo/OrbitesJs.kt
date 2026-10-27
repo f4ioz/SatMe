@@ -2073,6 +2073,23 @@ const Orbites = (function () {
     },
     /** The station's satellites [{nom, catnum, couleur, fav}] (the Vitrine's cards pick among them). */
     satellites: () => OB.sats.map(s => ({ nom: s.nom, catnum: s.catnum, couleur: s.couleur, fav: s.fav || s.suivi })),
+    /**
+     * Where satellite [n] is now, for the ISS's live window: {nom, lat, lon, alt, vitesse (km/s), soleil (the Sun's height
+     * under it, °), terre (over land, from the coastline), az, el, vu (the station known)}; null when it has no elements.
+     */
+    sousSat: n => {
+      const s = OB.sats.find(x => x.catnum === n); if (!s || typeof satellite === 'undefined') return null;
+      const t = Date.now(), e = etat(s, t); if (!e) return null;
+      // Over land: a ray to the east crossing the coastline's rings an odd number of times.
+      let terre = false;
+      (OB.terres || []).forEach(l => { for (let i = 0, j = l.length - 2; i < l.length; j = i, i += 2) {
+        const yi = l[i + 1], yj = l[j + 1];
+        if ((yi > e.lat) !== (yj > e.lat) && e.lon < l[j] + (e.lat - yj) / (yi - yj) * (l[i] - l[j])) terre = !terre; } });
+      return { nom: s.nom, lat: e.lat, lon: e.lon, alt: e.alt, vitesse: e.vel ? Math.hypot(e.vel.x, e.vel.y, e.vel.z) : null,
+        soleil: obHauteurSoleil(t, e.lat, e.lon), terre: terre, az: e.az, el: e.el, vu: !!OB.obs };
+    },
+    /** Satellite [n] chosen as from the tab's list (shown, followed by the views); false when the station has no elements for it. */
+    choisir: n => { const s = OB.sats.find(x => x.catnum === n); if (!s || !tab) return false; choisis(s); listeSats(); return true; },
     monuments: v => prendMonuments(v),
     monumentsActifs: () => OB.monuments,
     /** The landmarks' size (0.7 small … 2.4 very big), kept in this browser. */
