@@ -960,6 +960,12 @@ ${STYLE_JETONS}
   .r-barre i { display:block; height:100%; width:0; background:var(--vert); }
   .r-cascade { position:relative; height:360px; }
   .r-cascade canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .r-echelle { position:relative; height:52px; flex:none; }
+  .r-echelle canvas { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  #r-echelle:focus-visible { outline:1px solid var(--rx); outline-offset:-1px; }
+  .r-ech-info { position:absolute; z-index:8; top:54px; width:max-content; max-width:min(320px,calc(100vw - 24px)); padding:5px 9px; border-radius:6px; pointer-events:none;
+    background:rgba(6,19,26,.95); border:1px solid var(--ligne-forte); font-size:11px; line-height:1.45; color:#E8F0F7; }
+  .r-ech-info b { font-weight:700; } .r-ech-info .gris { color:#9AA7B4; }
   .r-droite { display:flex; flex-direction:column; min-width:0; }
   .sp-b { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; font-size:var(--fs-s); }
   .sp-b .ico { width:16px; height:16px; fill:currentColor; }
@@ -4219,12 +4225,13 @@ ${rail()}
       <button class="sp-b" id="sp-b-iq" onclick="rqOuvre(this)" title="I/Q : remonter le temps (les dernières minutes gardées), enregistrer, rejouer">${IconesPc.svg("history")}<span>I/Q</span><i class="rq-point" id="rq-point" hidden></i></button>
       <button class="sp-b" id="sp-b-crete" hidden onclick="spRaz()" title="Effacer les crêtes et les minimums tenus">⟲ crêtes</button>
       <span class="petit" id="sp-zoom" title="Le zoom de la vue (molette sur le spectre ; 0 : vue entière)"></span>
-      <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
+      <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Échelle des satellites (entre le spectre et la cascade) : chaque émetteur connu à sa fréquence entendue ici, Doppler et correction compris (vert : au-dessus de l'horizon, blanc : lever dans les 5 min, gris : couché ; en bleu, la bande d'un transpondeur linéaire) ; un clic sur un nom suit cet émetteur, un clic dans une bande s'y accorde en gardant la place dans la bande, ailleurs une fréquence fixe ; molette sur la bande passante : accord fin (Alt : plus vite) ; Ctrl + molette ou Ctrl + glisser sur un satellite : sa correction manuelle, gardée pour lui. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
       <span class="petit" id="r-vernier-l" style="margin-left:auto">Vernier</span><span id="r-ratios" class="ligne" style="margin:0;gap:4px"></span></div>
     <canvas id="r-vernier" style="width:100%;height:44px;display:block;margin-top:6px;cursor:ew-resize;touch-action:none" title="Glisser pour pousser la fréquence (comme un cadran) ; molette aussi"></canvas>
     <div id="r-loupe-boite"><div class="ligne" style="margin-top:6px"><span class="petit">Loupe</span><select id="r-loupe-span" style="flex:none" onchange="post('api/sdr/accord?loupeSpan=' + this.value).then(ticSdr)"><option value="3000">3 kHz</option><option value="5000">5 kHz</option><option value="10000">10 kHz</option><option value="20000">20 kHz</option></select><span class="petit">autour de l'écoute · cliquer pour s'y poser · Maj+clic : notch</span></div>
       <canvas id="r-loupe" style="width:100%;height:80px;display:block;margin-top:4px;cursor:crosshair"></canvas></div>
     <canvas id="r-spectre" tabindex="0" aria-label="Spectre : cliquer pour s'accorder, Maj+clic pour y poser le notch, molette pour zoomer, glisser pour déplacer la vue, flèches pour accorder" style="width:100%;height:130px;display:block;margin-top:8px;cursor:crosshair;touch-action:none"></canvas>
+    <div class="r-echelle"><canvas id="r-echelle" tabindex="0" aria-label="Échelle des satellites : un clic sur un nom suit cet émetteur, dans une bande de transpondeur s'y accorde, ailleurs accorde la fréquence ; molette : zoom, sur la bande passante accord fin (Alt : plus vite) ; Ctrl + molette ou Ctrl + glisser sur un satellite : sa correction manuelle"></canvas><div id="r-ech-info" class="r-ech-info" role="tooltip" hidden></div></div>
     <div class="r-cascade"><canvas id="r-cascade" tabindex="0" aria-label="Cascade : cliquer pour s'accorder, molette pour accorder" style="touch-action:none"></canvas><canvas id="r-cascade-sur" aria-hidden="true" style="pointer-events:none"></canvas></div>
   </div>
 </div>
@@ -13601,6 +13608,7 @@ function spPeint() {
   if (rDernier && spMoy) spSpectre();
   spCascade();
   spSur();
+  echPeint();
   spMesure.ms += performance.now() - t0; spMesure.n++;
 }
 const spMesure = { ms: 0, n: 0 };
@@ -13731,6 +13739,7 @@ function spSur() {
   for (const e of [spPx(ba, w), spPx(bb, w)]) { x.beginPath(); x.moveTo(e, 0); x.lineTo(e, h); x.stroke(); }
   x.setLineDash([]);
   spDrapeaux(x, w, ciel, 0, false);
+  echSur(x, w, h, ciel);
   const s = spSouris;
   if (s && s.c === 'cascade') { x.strokeStyle = 'rgba(232,240,247,.45)'; x.beginPath(); x.moveTo(s.x + .5, 0); x.lineTo(s.x + .5, h); x.stroke(); }
 }
@@ -13853,6 +13862,7 @@ function spZoom(facteur, px, w) {
   }
   new ResizeObserver(() => spSale(true)).observe(ca);
 })();
+${EchelleSdrJs.CODE}
 
 // ---- « Affichage »: the options, in a popover over the spectrum (or the QO-100 waterfall)
 function popPlace(p, ancre) {

@@ -1004,6 +1004,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sdr/nettoyage" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.nettoyage(it) } ?: JSONObject().put("ok", false)).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            // The waterfall's scale: the satellites' downlinks in the receiver's view, Doppler applied.
+            "/api/sdr/echelle" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (sdr?.let { fr.f4ioz.satcombo.domain.EchelleSdr.json(it.echelle(), System.currentTimeMillis()) } ?: JSONObject().put("ok", false)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute", q["dx"]?.toIntOrNull() ?: 0) } ?: JSONObject()).toString().toByteArray())
             "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
@@ -1565,6 +1568,27 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sdr/arreter" -> { trafic?.oublie(); sdr?.arrete() }
             // A tuning by hand stops the scan (as a dial turned on a scanner).
             "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { balayage?.arrete("accord à la main", main = true); sdr?.decalageHz = it }
+            // A click on the scale: a transmitter (n, tx), else what lies at hz (a transponder, or a plain frequency; tol: the click's reach).
+            "/api/sdr/echelle/accorde" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val hz = q["hz"]?.toLongOrNull() ?: return JSONObject().put("ok", false).put("erreur", "quelle fréquence ?")
+                val n = q["n"]?.toIntOrNull(); val tx = q["tx"]
+                val a = if (n != null && !tx.isNullOrEmpty()) fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Emetteur(n, tx)
+                    else fr.f4ioz.satcombo.domain.EchelleSdr.clic(hz, d.echelle(), (q["tol"]?.toLongOrNull() ?: 0L).coerceIn(0L, 20_000L))
+                balayage?.arrete("accord à la main", main = true)
+                d.accordeEchelle(a, hz)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                return JSONObject().put("ok", true).put("accord", when (a) {
+                    is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Emetteur -> "emetteur"
+                    is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Bande -> "bande"
+                    is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Terrestre -> "terrestre"
+                })
+            }
+            // A satellite's « correction manuelle » from the scale (Ctrl + wheel or drag): moved by dhz, or set to hz.
+            "/api/sdr/echelle/correction" -> {
+                val n = q["n"]?.toIntOrNull() ?: return JSONObject().put("ok", false).put("erreur", "quel satellite ?")
+                val v = station.correctionSat(n, q["dhz"]?.toLongOrNull(), q["hz"]?.toLongOrNull())
+                return JSONObject().put("ok", true).put("corr", v)
+            }
             "/api/sdr/pic" -> sdr?.calePic()
             "/api/sdr/voix" -> if (sdr?.caleVoix() != true) return JSONObject().put("ok", false).put("erreur", "le calage sur la voix sert en BLU (USB / LSB)")
             // The vernier: the listened frequency pushed by [hz] (the dongle's software offset, ±80 kHz).

@@ -173,4 +173,22 @@ class ModeDemoTest {
         // Below the half, the lost signal: dark.
         assertTrue((partielle.getRGB(160, 200) and 0xFF) < 40)
     }
+    /** The generator's signals go onto the satellites up in its view; nothing moves for those down. */
+    @Test fun signaux_sur_les_satellites_leves() {
+        fun tx(d: String, mode: String, bas: Long, haut: Long? = null) =
+            fr.f4ioz.satcombo.data.Transmitter(d, mode, null, null, bas, haut, haut != null, true, if (haut != null) "Transponder" else "Transmitter")
+        val leve = fr.f4ioz.satcombo.domain.EchelleSdr.Sat(1, "UP", 20.0, 0.0, 0.0)
+        val couche = fr.f4ioz.satcombo.domain.EchelleSdr.Sat(2, "DOWN", -20.0, 0.0, 0.0)
+        val c = GenerateurDemo.SDR_CENTRE_HZ
+        val m = fr.f4ioz.satcombo.domain.EchelleSdr.marques(listOf(
+            leve to listOf(tx("Voice", "FM", c + 40_000), tx("Linear", "USB", c - 60_000, c - 10_000), tx("Beacon", "CW", c + 70_000)),
+            couche to listOf(tx("SSTV", "FM", c - 80_000))), c - 88_200, c + 88_200, 0L)
+        val r0 = fr.f4ioz.satcombo.sdr.GenerateurIq.Reglages()
+        val r = ModeDemo.surSatellites(r0, m, c)
+        assertEquals(40_000, r.fm.decalageHz)
+        assertEquals(70_000, r.cw.decalageHz)
+        assertEquals(-40_000, r.blu.decalageHz)
+        assertEquals("down: left alone", r0.sstv, r.sstv)
+        assertEquals(r, ModeDemo.surSatellites(r, m, c))
+    }
 }

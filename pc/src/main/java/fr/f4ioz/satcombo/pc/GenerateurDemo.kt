@@ -190,6 +190,8 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
             .putString(CLE_VERSION_VUE, versionPc())
             .putBoolean(MiseAJourPc.CLE_ACTIF, false)
             .putString(SdrPc.CLE_RECEPTEUR, SdrPc.GENERATEUR)
+            // The generator centred where the scale marks several satellites (ISS SSTV and APRS, the FM and linear ones on 2 m).
+            .putLong(SdrPc.CLE_MANUELLE, SDR_CENTRE_HZ)
             .putString("pc_son_carte", SonDemo.NOM)
             // The functions not about satellites shown: the trial aircraft and ships run at start.
             .putStringSet(fr.f4ioz.satcombo.demo.FonctionsNonSat.CLE, fr.f4ioz.satcombo.demo.FonctionsNonSat.ONGLETS.keys.toSet())
@@ -395,6 +397,9 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
             SatDemo(7530, Genre.LINEAIRE, 145.950, 432.150, "Mode B Linear Transponder", 2),
             SatDemo(QO100, Genre.GEO, 10489.750, 2400.250, "NB Transponder", 0),
         )
+
+        /** The demonstration's SDR (its test generator) centred here, sky Hz. */
+        const val SDR_CENTRE_HZ = 145_885_000L
 
         /** The favourites: those worked, and two more FM satellites. */
         val FAVORIS = SATELLITES.map { it.catnum } + listOf(61781, 43678)

@@ -391,6 +391,56 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The mode demodulated now (the chosen one, or the transmitter's). */
     fun modeEffectif(): String = mode().name
 
+    // ------------------------------------------------------------ the waterfall's scale
+
+    /** What the receiver follows now, for the scale: the satellite and its transmitter, or null (manual, QO-100, a sonde, a scan). */
+    fun suiviEchelle(): Pair<Int, String>? {
+        if (!suitSatellite || passager != null || pourSonde || pourQo100()) return null
+        val s = station.etat.value.suivi ?: return null
+        val t = station.emetteurChoisi() ?: return null
+        return s.catalogNumber to t.description
+    }
+
+    /** The scale's markers over all the receiver sees (its centre ± half the rate). */
+    fun echelle(): List<fr.f4ioz.satcombo.domain.EchelleSdr.Marque> {
+        val c = _etat.value.cielHz.takeIf { it > 0 } ?: return emptyList()
+        val demi = Dsp.RTL_RATE / 2L
+        return station.echelleSdr(c - demi, c + demi, suiviEchelle())
+    }
+
+    /**
+     * A click on the scale at sky [hz] ([accord] what it means): a
+     * transmitter or a transponder followed with its Doppler, or a plain
+     * frequency (the receiver's centre stays, the offset goes there). With a
+     * recording or the generator the centre is fixed: the offset goes to the
+     * place clicked in every case. Null when done, else why not.
+     */
+    fun accordeEchelle(accord: fr.f4ioz.satcombo.domain.EchelleSdr.Accord, hz: Long): String? {
+        if (pourQo100()) return "le récepteur est sur QO-100 (onglet QO-100)"
+        if (pourSonde) return "le récepteur écoute une radiosonde"
+        val centre = _etat.value.cielHz.takeIf { it > 0 } ?: hz
+        val fixe = fictif
+        val ecart = { (hz - centre).coerceIn(-DECALAGE_MAX_HZ, DECALAGE_MAX_HZ).toInt() }
+        when (accord) {
+            is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Emetteur -> {
+                if (!station.suisEmetteur(accord.catnum, accord.emetteur)) return "satellite ou émetteur inconnu"
+                passager = null; suitSatellite = true
+                decalageHz = if (fixe) ecart() else 0
+            }
+            is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Bande -> {
+                if (!station.suisEmetteur(accord.catnum, accord.emetteur, accord.reposHz)) return "satellite ou transpondeur inconnu"
+                passager = null; suitSatellite = true
+                decalageHz = if (fixe) ecart() else 0
+            }
+            is fr.f4ioz.satcombo.domain.EchelleSdr.Accord.Terrestre -> {
+                passager = null
+                if (!fixe && fiPoste == null) { suitSatellite = false; manuelleHz = centre }
+                decalageHz = ecart()
+            }
+        }
+        return null
+    }
+
     // ------------------------------------------------------------ running
 
     @Volatile private var cle: SourceIq? = null
@@ -958,6 +1008,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_BIAS = "pc_sdr_bias"
         const val CLE_MODE = "pc_sdr_mode"
         const val CLE_MANUELLE = "pc_sdr_manuelle"
+        /** The listening offset's reach from the centre (Hz), as the vernier's. */
+        const val DECALAGE_MAX_HZ = 80_000L
         const val CLE_SUIT = "pc_sdr_suit"
         const val CLE_RECEPTEUR = "pc_sdr_recepteur"
         const val CLE_PLUTO_HOTE = "pc_sdr_pluto_hote"
