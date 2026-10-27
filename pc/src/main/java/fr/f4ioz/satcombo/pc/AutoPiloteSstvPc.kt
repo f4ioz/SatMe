@@ -174,6 +174,19 @@ class AutoPiloteSstvPc(
     data class Activation(val campagne: Campagne, val nouvelle: Boolean, val maitreAllume: Boolean)
 
     /** The campaign made from [a] in one click, if any: by its id, else (an activity merged since) the same satellite over the same period. */
+    /**
+     * The timetable announced for [sat] now (« 36 s on / 2 min off ») and its
+     * SSTV mode: the campaign under way on it, else an active one whose days
+     * hold now ("" when none says one), for the countdown to the next picture.
+     */
+    fun horaireDe(sat: String, catnum: Int = -1): Pair<String, String>? {
+        val t = horloge()
+        fun n(x: String) = x.lowercase().filter { it.isLetterOrDigit() }
+        val c = pilote.enCours?.campagne?.takeIf { it.catnum == catnum || n(it.satNom) == n(sat) }
+            ?: donnees.campagnes.firstOrNull { it.active && t in it.debutMs..it.finMs && (it.catnum == catnum || n(it.satNom) == n(sat)) }
+        return c?.let { it.horaire to it.modeSstv }
+    }
+
     fun campagneDe(a: ActivitesAVenir.Activite): Campagne? = donnees.campagnes.let { l ->
         l.firstOrNull { it.activite.isNotBlank() && it.activite == a.id }
             ?: l.firstOrNull { it.activite.isNotBlank() && a.catnum > 0 && it.catnum == a.catnum &&
@@ -363,6 +376,10 @@ class AutoPiloteSstvPc(
                     .put("mode", e.campagne.modeSstv).put("freqHz", frequence(e.campagne)).put("faits", JSONArray(e.faits))
                     .put("enregistrement", s?.etat?.value?.enregistrement.orEmpty())
                     .put("images", runCatching { s?.images()?.count { it.timeMs >= e.passage.aosEpochMs - 60_000L } ?: 0 }.getOrDefault(0))
+                    // The countdown to the next picture, from the campaign's timetable or the pictures received.
+                    .put("prochaine", runCatching { s?.sstv?.let { x -> fr.f4ioz.satcombo.sstv.ProchaineImageSstv.json(
+                        x.prochaine(station.etat.value.suivi?.name?.takeIf { it.isNotBlank() } ?: e.campagne.satNom, e.passage.aosEpochMs, e.passage.losEpochMs,
+                            e.campagne.horaire, e.campagne.modeSstv), t) } }.getOrNull() ?: JSONObject.NULL)
             } ?: JSONObject.NULL)
             .put("historique", JSONArray(donnees.historique.takeLast(30).reversed().let { hs ->
                 // « Réunir »: a pass's partial pictures that are one picture cut in two (left after the pass, or from before).

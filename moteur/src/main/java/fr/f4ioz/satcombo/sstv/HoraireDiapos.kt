@@ -74,13 +74,16 @@ object HoraireDiapos {
     }
 
     /** « 36 s on / 2 min off », « 36 seconds on with 2 minutes off » → seconds between starts; [PERIODE_ANNONCEE_S] when unreadable. */
-    fun periode(horaire: String): Double {
+    fun periode(horaire: String): Double = periodeOuNull(horaire) ?: PERIODE_ANNONCEE_S
+
+    /** As [periode], null when [horaire] says no period. */
+    fun periodeOuNull(horaire: String): Double? {
         val m = Regex("(\\d+(?:[.,]\\d+)?)\\s*s\\w*\\s+on\\D+(\\d+(?:[.,]\\d+)?)\\s*(min|s)", RegexOption.IGNORE_CASE).find(horaire)
-            ?: return PERIODE_ANNONCEE_S
-        val on = m.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return PERIODE_ANNONCEE_S
-        val off = m.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return PERIODE_ANNONCEE_S
+            ?: return null
+        val on = m.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
+        val off = m.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return null
         val s = on + if (m.groupValues[3].lowercase() == "min") off * 60 else off
-        return if (s in 40.0..1200.0) s else PERIODE_ANNONCEE_S
+        return if (s in 40.0..1200.0) s else null
     }
 
     /** Slot of [d] (1..nb) nearest to time [t] counted from [t0], [d0] being there. */

@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sstv.CibleAfc
 import fr.f4ioz.satcombo.sstv.SstvAccord
+import fr.f4ioz.satcombo.sstv.ProchaineImageSstv
 import fr.f4ioz.satcombo.sstv.QualiteSstv
 import fr.f4ioz.satcombo.sstv.ReunionSstv
 import fr.f4ioz.satcombo.sstv.SstvAfc
@@ -207,7 +208,7 @@ class SstvPc(
         calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
         calage = null
         sourceActive = src; rateActif = rate
-        enCours = null; pannes = 0
+        enCours = null; pannes = 0; debutEnCoursMs = 0L
         memoire = SstvSon.Memoire(rate)
         accord = SstvAccord(rate)
         val q = QualiteSstv(rate, horloge).also { qualite = it }
@@ -230,6 +231,12 @@ class SstvPc(
             _etat.update { it.copy(mode = mode.name, lignes = 0, hauteur = mode.height, erreur = "") }
         }
         override fun onProgress(mode: SstvMode, pixels: IntArray, linesDone: Int) {
+            // When this picture began (its row 0), once: a picture continued after a lost sync keeps its own.
+            val d = decodeur
+            if (debutEnCoursMs == 0L && d != null && rateActif > 0) {
+                debutEnCoursMs = horloge() - (d.echantillons - d.debutImage).coerceAtLeast(0L) * 1000L / rateActif
+                enCoursEntete = d.avecEntete
+            }
             enCours = mode to pixels.copyOf()
             _etat.update { it.copy(mode = mode.name, lignes = linesDone, hauteur = mode.height, version = it.version + 1) }
         }
@@ -238,6 +245,12 @@ class SstvPc(
             val h = runCatching { horsAntenne(sourceActive) }.getOrNull()
             runCatching { qualite?.fin() }
             enCours = null
+            // Its start, for the countdown to the next picture (one begun on its header only: one joined late says nothing of the rhythm).
+            if (debutEnCoursMs > 0L && enCoursEntete && h?.genre != ESSAI) synchronized(debuts) {
+                debuts += Triple(debutEnCoursMs, runCatching { satelliteDe(sourceActive) }.getOrNull() ?: c.satellite, mode.name)
+                while (debuts.size > 40) debuts.removeAt(0)
+            }
+            debutEnCoursMs = 0L
             // The test generator's pictures: seen while they come, never in the gallery (nor anything fed from it).
             if (h?.genre == ESSAI) { _etat.update { it.copy(mode = "", lignes = 0, essais = it.essais + 1, version = it.version + 1) }; return }
             // The satellite of the sound that made it; the campaign's note only on the campaign's satellite.
@@ -260,6 +273,32 @@ class SstvPc(
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
         }
+    }
+
+    // ------------------------------------------------------------------ the next picture
+
+    /** When the picture arriving began (UTC ms, 0: none), and whether on its header. */
+    @Volatile private var debutEnCoursMs = 0L
+    @Volatile private var enCoursEntete = false
+    /** The starts of the pictures received on their header: when, the satellite, the mode. */
+    private val debuts = ArrayList<Triple<Long, String, String>>()
+
+    /**
+     * The countdown to the next picture of [sat] ([ProchaineImageSstv]):
+     * the starts received since [aosMs] (the pass's AOS; else the last half
+     * hour), the picture arriving, [horaire] the announced timetable
+     * (« 36 s on / 2 min off », "" none), [losMs] the pass's LOS.
+     */
+    fun prochaine(sat: String, aosMs: Long?, losMs: Long?, horaire: String = "", modeAnnonce: String = ""): ProchaineImageSstv.Etat {
+        val t = horloge()
+        val depuis = (aosMs ?: (t - 30 * 60_000L)) - 60_000L
+        fun n(x: String) = x.lowercase().filter { it.isLetterOrDigit() }
+        val l = synchronized(debuts) { debuts.filter { n(it.second) == n(sat) && it.first >= depuis } }
+        val d = decodeur
+        val m = d?.currentMode
+        val ec = if (m != null && debutEnCoursMs > 0L) ProchaineImageSstv.EnCours(debutEnCoursMs, _etat.value.lignes, m) else null
+        val mode = m ?: l.lastOrNull()?.third?.let { SstvMode.byName(it) } ?: SstvMode.byName(modeAnnonce)
+        return ProchaineImageSstv.etat(t, l.map { it.first }, ec, fr.f4ioz.satcombo.sstv.HoraireDiapos.periodeOuNull(horaire), losMs, mode)
     }
 
     // ------------------------------------------------------------------ by hand

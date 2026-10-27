@@ -74,6 +74,10 @@ class SstvDecoder(
     @Volatile var finTrame: Long = 0L
         private set
 
+    /** The current picture began on its header (else on its pulses, or by hand: perhaps joined late). */
+    @Volatile var avecEntete: Boolean = false
+        private set
+
     /** Where the current picture's row 0 begins, in samples fed (its first block, as placed). */
     @Volatile var debutImage: Long = 0L
         private set
@@ -562,6 +566,7 @@ class SstvDecoder(
         emitSuspendu()
         prepare(m)
         forcedAnchor = true
+        avecEntete = false
         debutTrame = (total - (300 * spms).toLong()).coerceAtLeast(0L)
         huntFrom = total
         huntLimit = total + ((m.blockMs + 40.0) * spms).toLong()
@@ -973,6 +978,7 @@ class SstvDecoder(
         for (i in 0 until histLen) histK[i] -= 1.0
         blockStart = lastStart + period - m.syncAtMs * spms
         debutImage = blockStart.toLong()
+        avecEntete = false
         lastSync = lastStart
         pulseCount = 0
         state = State.IMAGE
@@ -1004,6 +1010,7 @@ class SstvDecoder(
         emitSuspendu()
         prepare(m)
         forcedAnchor = false
+        avecEntete = true
         // Leader, break, leader and VIS: 910 ms before its end; and a margin.
         debutTrame = (visEndAbs - (1_300 * spms).toLong()).coerceAtLeast(0L)
         blockStart = visEndAbs.toDouble()
