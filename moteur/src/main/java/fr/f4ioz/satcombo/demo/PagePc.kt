@@ -1261,6 +1261,7 @@ ${STYLE_JETONS}
   #v-orbites.ob-tableau .ob-haut > :not(.ob-tb):not(.ob-tb-garde):not(.ob-cadreur) { display:none; }
   #v-orbites.ob-tableau.ob-calme .ob-haut:not(:hover):not(:focus-within) { opacity:.2; }
   #v-orbites.ob-tableau.ob-calme .ob-scene { cursor:none; }
+  #v-orbites.ob-tableau.ob-deplace:not(.ob-calme) #ob-3d { cursor:move; }
   .ob-coin { display:none; }
   #v-orbites.ob-tableau .ob-coin { position:absolute; z-index:3; display:flex; flex-direction:column; gap:10px; max-width:min(38%, 440px); pointer-events:none; overflow:hidden; }
   /* The full screen's mark: the logo and « SatMe », top left (above the first corner). */
@@ -1293,6 +1294,7 @@ ${STYLE_JETONS}
   @media (max-width:700px) { #v-orbites.ob-tableau .ob-coin { max-width:calc(50% - 20px); } .ob-w { padding:6px 10px; } }
   @media (pointer:coarse) { .ob-tb button { min-height:36px; } .ob-infos label { min-height:40px; } }
   .ob-infos { max-height:calc(100vh - 140px); overflow:auto; }
+  .ob-infos .ob-place-r { margin:4px 0; }
   .ob-infos .ob-menu-t { font-size:var(--fs-xs); font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--texte-3); margin:8px 0 2px; }
   .ob-infos .ob-menu-t:first-child { margin-top:0; }
   .ob-mon-pastille { display:inline-block; width:10px; height:10px; border-radius:3px; flex:none; }
@@ -1417,9 +1419,13 @@ ${STYLE_JETONS}
     font-size:1.35em; font-weight:800; text-shadow:0 3px 0 #0a1230, 0 0 18px rgba(0,0,0,.6); }
   .ob-vit-tete span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .ob-vit-heure { font-family:var(--mono); flex:none; }
-  .ob-vit-carte { position:absolute; left:3vw; top:52%; transform:translateY(-50%); width:min(48vw, 960px); max-height:calc(100% - 15vh - 120px); overflow:hidden; box-sizing:border-box;
+  /* The card's size (« Taille de l'encart »: --vit-k) and its side; the globe stands beside it (obPlace). */
+  .ob-vit-carte { position:absolute; left:3vw; top:52%; transform:translateY(-50%); width:calc(min(48vw, 960px) * var(--vit-k, 1)); max-height:calc(100% - 15vh - 120px); overflow:hidden; box-sizing:border-box;
+    font-size:calc(100% * var(--vit-k, 1));
     background:rgba(255,255,255,.96); border:4px solid #0a1230; border-radius:28px; padding:clamp(14px, 1.6vw, 34px); box-shadow:0 8px 0 rgba(10,18,48,.45); animation:ob-vit-entre .7s cubic-bezier(.3, 1.5, .5, 1); }
   @keyframes ob-vit-entre { 0% { opacity:0; transform:translateY(-50%) translateX(-6vw) scale(.92); } 100% { opacity:1; transform:translateY(-50%); } }
+  .ob-vitrine.ob-vit-droite .ob-vit-carte:not(.ob-vit-legende) { left:auto; right:3vw; animation-name:ob-vit-entre-d; }
+  @keyframes ob-vit-entre-d { 0% { opacity:0; transform:translateY(-50%) translateX(6vw) scale(.92); } 100% { opacity:1; transform:translateY(-50%); } }
   .ob-vit-carte.ob-vit-legende { top:auto; bottom:calc(2.6em + 2vh); left:50%; transform:translateX(-50%); width:max-content; max-width:92vw; text-align:center; border-radius:999px; padding:.4em 1.2em; animation:ob-entre .6s ease-out; }
   .ob-vit-t { display:inline-block; white-space:nowrap; background:#FF6B6B; color:#fff; border-radius:999px; padding:.1em .8em; font-size:.8em; margin-bottom:.4em; }
   .ob-vit-gros { font-size:2.3em; font-weight:800; line-height:1.05; color:#E8743B; overflow-wrap:anywhere; }
@@ -1430,7 +1436,7 @@ ${STYLE_JETONS}
   .ob-vit-duo { display:grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.4fr); gap:1em; align-items:center; }
   .ob-vit-passage .ob-vit-gros { font-size:2.6em; } .ob-vit-passage .ob-vit-vivant { font-size:1.5em; line-height:1.15; }
   .ob-vit-contact .ob-vit-duo { grid-template-columns:minmax(0, 1fr) auto; }
-  .ob-vit-qr { width:min(26vh, 20vw); height:auto; background:#fff; border-radius:12px; border:3px solid #0a1230; }
+  .ob-vit-qr { width:calc(min(26vh, 20vw) * var(--vit-k, 1)); height:auto; background:#fff; border-radius:12px; border:3px solid #0a1230; }
   .ob-vit-liste { margin:.2em 0 0; padding-left:1.1em; } .ob-vit-liste li { margin:.25em 0; }
   .ob-vitrine .ob-photo { margin:0; } .ob-vitrine .ob-photo img, .ob-vitrine .ob-photo svg { max-height:min(34vh, 9em); border-radius:18px; }
   .ob-vitrine .ob-photo figcaption { font-size:clamp(10px, .7vw, 14px); color:#4a5878; font-weight:500; }
@@ -1438,7 +1444,8 @@ ${STYLE_JETONS}
   .ob-vitrine .ob-fiche-t { font-size:1.5em; font-weight:800; color:#E8743B; line-height:1.1; }
   .ob-vitrine .ob-fiche-g { font-size:.78em; gap:0 .7em; } .ob-vitrine .ob-fiche-g span { color:#4a5878; } .ob-vitrine .ob-fiche-a { font-size:.85em; margin-top:.4em; }
   @media (max-aspect-ratio:1/1) {
-    .ob-vit-carte { left:3vw; right:3vw; width:auto; top:auto; bottom:calc(2.6em + 2vh); transform:none; max-height:52%; }
+    .ob-vit-carte { left:3vw; right:3vw; width:auto; top:auto; bottom:calc(2.6em + 2vh); transform:none; max-height:calc(52% * var(--vit-k, 1)); }
+    .ob-vitrine.ob-vit-droite .ob-vit-carte:not(.ob-vit-legende) { left:3vw; right:3vw; animation-name:ob-vit-entre; }
     @keyframes ob-vit-entre { 0% { opacity:0; transform:translateY(4vh); } 100% { opacity:1; transform:none; } }
     .ob-vit-sat .ob-photo { width:40%; }
   }
@@ -6232,7 +6239,7 @@ g('ob-theme').value = obTh;
 /** What the globe takes from the look: its Earth, its view (as last chosen in it), turning by itself, the Sun and Moon, the explanations. */
 function obThOpts() {
   const T = OB_THEMES[obTh];
-  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago, vitrine: !!T.vitrine,
+  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago, vitrine: !!T.vitrine, place: obPlace,
     surVue: v => { if (v !== 'passage') { obVues[obTh] = v; obGarde('ob-th-vues', obVues); } } };
 }
 function obTableau(on) {
@@ -6247,7 +6254,7 @@ function obTableau(on) {
     v.addEventListener('pointermove', obReveil); obReveil();
   } else if (!on && v.classList.contains('ob-tableau')) {
     if (document.fullscreenElement === v) document.exitFullscreen().catch(() => {});
-    v.classList.remove('ob-tableau', 'ob-pseudo', 'ob-calme', 'ob-avec-defile', ...Object.keys(OB_THEMES).map(k => 'ob-th-' + k));
+    v.classList.remove('ob-tableau', 'ob-pseudo', 'ob-calme', 'ob-avec-defile', 'ob-deplace', ...Object.keys(OB_THEMES).map(k => 'ob-th-' + k)); obDeplace = false;
     clearInterval(obTbT); clearInterval(obBulT); clearTimeout(obCalmeT); v.removeEventListener('pointermove', obReveil);
     g('ob-infos').hidden = true; g('ob-bulles').innerHTML = ''; g('ob-vitrine').hidden = true; g('ob-vitrine').innerHTML = '';
     Orbites.tableauMode(null);
@@ -6284,7 +6291,13 @@ document.addEventListener('keydown', e => {
   if (!g('ob-infos').hidden) { g('ob-infos').hidden = true; g('ob-infos-b').setAttribute('aria-expanded', false); g('ob-infos-b').focus(); return; }
   obTableau(false);
 });
-/** The dashboard's menu: the panels, the landmarks, the explanations (Pédagogique). */
+/** A choice in the dashboard's menu: [[value, text]], the one chosen, what follows. */
+function obChoix(texte, l, v, change) {
+  const e = document.createElement('label'), s = document.createElement('select');
+  l.forEach(o => { const p = document.createElement('option'); p.value = o[0]; p.textContent = o[1]; s.appendChild(p); });
+  s.value = v; s.onchange = () => change(s.value); e.append(document.createTextNode(texte), s); g('ob-infos').appendChild(e);
+}
+/** The dashboard's menu: the panels, the landmarks, the explanations (Pédagogique), the globe's place. */
 function obMenu() {
   const m = g('ob-infos'), titre = t => { const d = document.createElement('div'); d.className = 'ob-menu-t'; d.textContent = t; m.appendChild(d); };
   const coche = (texte, on, change) => { const l = document.createElement('label'), c = document.createElement('input');
@@ -6303,7 +6316,15 @@ function obMenu() {
       i.oninput = () => { obVit[c[0]] = i.value.trim(); obGarde('ob-vitrine', obVit); g('ob-vitrine').innerHTML = ''; };
       l.append(document.createTextNode(c[1]), i); m.appendChild(l);
     });
+    titre('Vitrine : l’encart');
+    obChoix('Taille ', [['petite', 'petite'], ['moyenne', 'moyenne'], ['grande', 'grande']], obVit.taille || 'moyenne', v => { obVit.taille = v; obGarde('ob-vitrine', obVit); g('ob-vitrine').innerHTML = ''; });
+    // Its other side: the globe back beside it.
+    obChoix('Côté ', [['gauche', 'à gauche'], ['droite', 'à droite']], obVit.cote || 'gauche', v => { obVit.cote = v; obGarde('ob-vitrine', obVit); obPlaceRemet(); g('ob-vitrine').innerHTML = ''; });
+    coche('Réception sur le stand (« venez écouter ! »)', !!obVit.rx, on => { obVit.rx = on; obGarde('ob-vitrine', obVit); g('ob-vitrine').innerHTML = ''; });
   }
+  titre('Le globe');
+  coche('Le déplacer : glisser (ou Maj + glisser, deux doigts), molette : sa taille, double clic : à sa place', obDeplace, on => { obDeplace = on; g('v-orbites').classList.toggle('ob-deplace', on); });
+  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'ob-place-r'; rb.textContent = 'Remettre le globe à sa place'; rb.onclick = obPlaceRemet; m.appendChild(rb);
   if (OB_THEMES[obTh].pedago) { titre('Explications'); OB_PEDAGO.forEach(i => coche(i[1], obPedaOn(i[0]), on => { obPeda[i[0]] = on; obGarde('ob-pedago', obPeda); obTbMaj(); obBulles(); })); }
   titre('Monuments');
   const l = document.createElement('label'), s = document.createElement('select');
@@ -6593,14 +6614,71 @@ function obFicheTab(s) {
 }
 // ------------------------------------------------------------------ Vitrine: the dashboard as a stand's poster
 /*
- * For a club's stand (a fair, an open day): the globe turning by itself and, over it, big cards one after another — the
- * next pass over the stand (« come and listen! »), a satellite's photo and story, what amateur radio is, how to reach the
+ * For a club's stand (a fair, an open day): the globe turning by itself beside big cards one after another — the
+ * next pass over the stand (« come and listen! » only when the stand has a receiver), a satellite's photo and story, what amateur radio is, how to reach the
  * club (its link as a QR code, drawn by the station), a fact; the ticker below. Nothing to touch, the cursor hidden.
  */
 const OB_VEDETTES = [25544, 43700, 27607, 43017, 44909, 48274, 7530, 24278, 53106, 39444, 57166];
 const OB_VIT_DUREE = 12000;
-let obVit = { club: '', indicatif: '', lien: '', message: '' }, obVitN = 0, obVitT = 0;
+let obVit = { club: '', indicatif: '', lien: '', message: '', taille: 'moyenne', cote: 'gauche', rx: false }, obVitN = 0, obVitT = 0;
 try { Object.assign(obVit, JSON.parse(localStorage.getItem('ob-vitrine')) || {}); } catch (x) {}
+/* The card's sizes (« Taille de l'encart »), its width and its letters. */
+const OB_VIT_K = { petite: .72, moyenne: .86, grande: 1 };
+/*
+ * The dashboard's globe on the screen, kept for each look: {x, y} its centre's shift (a share of the width, of the height),
+ * s its size. Moved by hand (« Le déplacer » ticked, Shift held, or two fingers; the wheel or the fingers' spread its size),
+ * else the look's own: the Vitrine's beside its card (above it on a tall screen), the others' in the middle.
+ */
+let obPlaces = {}, obDeplace = false, obTirG = null;
+try { obPlaces = JSON.parse(localStorage.getItem('ob-place')) || {}; } catch (x) {}
+function obPlace(w, h) {
+  const p = obPlaces[obTh];
+  if (p) return p;
+  if (!OB_THEMES[obTh].vitrine) return { x: 0, y: 0, s: 1 };
+  const k = OB_VIT_K[obVit.taille] || OB_VIT_K.moyenne, d = .8 * h; // the globe's width at its own size
+  if (h > w) {
+    const haut = .07 * h + 60, bas = h * (1 - .52 * k) - 110, l = Math.max(120, bas - haut);
+    return { x: 0, y: (haut + bas) / 2 / h - .5, s: Math.min(1, .94 * Math.min(w, l) / d) };
+  }
+  const bord = .03 * w + Math.min(.48 * w, 960) * k;
+  return { x: (obVit.cote === 'droite' ? -1 : 1) * bord / 2 / w, y: .03, s: Math.min(1, .92 * Math.min(w - bord, .8 * h) / d) };
+}
+function obPlaceRemet() { delete obPlaces[obTh]; obGarde('ob-place', obPlaces); }
+(() => {
+  const cv = g('ob-3d'), sc = cv.parentNode, doigts = new Map();
+  const libre = e => g('v-orbites').classList.contains('ob-tableau') && e.target === cv;
+  const centre = () => { const l = [...doigts.values()], n = l.length;
+    return { x: l.reduce((a, q) => a + q.x, 0) / n, y: l.reduce((a, q) => a + q.y, 0) / n, e: n > 1 ? Math.hypot(l[0].x - l[1].x, l[0].y - l[1].y) : 0 }; };
+  const depart = () => { const r = cv.getBoundingClientRect(); obTirG = { c: centre(), p: Object.assign({ s: 1 }, obPlace(r.width, r.height)) }; };
+  // Caught on the way down, before the globe's own turning by hand.
+  sc.addEventListener('pointerdown', e => {
+    if (!libre(e)) return;
+    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!obTirG && !obDeplace && !e.shiftKey && doigts.size < 2) return;
+    e.stopPropagation(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} depart();
+  }, true);
+  sc.addEventListener('pointermove', e => {
+    if (!doigts.has(e.pointerId)) return;
+    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!obTirG) return;
+    e.stopPropagation();
+    const r = cv.getBoundingClientRect(), c = centre(), a = obTirG, b = v => Math.max(-.5, Math.min(.5, v));
+    obPlaces[obTh] = { x: b(a.p.x + (c.x - a.c.x) / r.width), y: b(a.p.y + (c.y - a.c.y) / r.height),
+      s: Math.max(.3, Math.min(3, a.p.s * (c.e && a.c.e ? c.e / a.c.e : 1))) };
+  }, true);
+  const fin = e => {
+    if (!doigts.delete(e.pointerId) || !obTirG) return;
+    if (doigts.size) depart(); else { obTirG = null; obGarde('ob-place', obPlaces); }
+  };
+  sc.addEventListener('pointerup', fin, true); sc.addEventListener('pointercancel', fin, true);
+  sc.addEventListener('wheel', e => {
+    if (!libre(e) || (!obDeplace && !e.shiftKey)) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = cv.getBoundingClientRect(), p = Object.assign({ s: 1 }, obPlace(r.width, r.height));
+    p.s = Math.max(.3, Math.min(3, p.s * (1 - Math.sign(e.deltaY || e.deltaX) * .08))); obPlaces[obTh] = p; obGarde('ob-place', obPlaces);
+  }, { capture: true, passive: false });
+  sc.addEventListener('dblclick', e => { if (libre(e) && (obDeplace || e.shiftKey)) { e.stopPropagation(); obPlaceRemet(); } }, true);
+})();
 /** The satellites shown on their cards: the station's well-known ones, the chosen one first. */
 function obVitSats(d) {
   const l = Orbites.satellites(), o = [];
@@ -6614,12 +6692,14 @@ function obVitDiapos(d, l) {
   // The next pass over the stand, within three hours (the one under way first).
   const p = (l || []).find(q => q.aos - (d ? d.t : Date.now()) < 3 * 3600000);
   if (p && d) {
-    const la = p.aos <= d.t, q = { nom: p.nom, catnum: p.catnum, couleur: p.couleur }, f = obSatFiche(q);
-    o.push({ cle: 'passage-' + p.nom + '-' + p.aos + '-' + la + (f && f.photo ? '-p' : ''), type: 'passage',
+    // Facts only; « come and listen! » when the stand has a receiver (« Réception sur le stand »).
+    const la = p.aos <= d.t, q = { nom: p.nom, catnum: p.catnum, couleur: p.couleur }, f = obSatFiche(q), rx = !!obVit.rx;
+    o.push({ cle: 'passage-' + p.nom + '-' + p.aos + '-' + la + '-' + rx + (f && f.photo ? '-p' : ''), type: 'passage',
       html: '<div class="ob-vit-duo">' + obCarteSat(q, f, { grand: true, court: true }).split('<div class="ob-fiche-c">')[0] +
-        '<div><div class="ob-vit-t">' + (la ? '📡 En ce moment !' : '⏱ Bientôt ici') + '</div><div class="ob-vit-gros">' + esc(p.nom) + '</div>' +
-        '<div class="ob-vit-vivant"></div><div class="ob-vit-sous">jusqu’à ' + p.max.toFixed(0) + '° au-dessus de l’horizon · <b>venez écouter !</b></div></div></div>',
-      vivant: la ? 'passe au-dessus de nous, encore ' + obDuree(p.los - d.t) : 'passe au-dessus de nous dans ' + obDuree(p.aos - d.t) });
+        '<div><div class="ob-vit-t">' + (la ? (rx ? '📡 En ce moment !' : '🛰 En ce moment') : '⏱ Bientôt ici') + '</div><div class="ob-vit-gros">' + esc(p.nom) + '</div>' +
+        '<div class="ob-vit-vivant"></div><div class="ob-vit-sous">jusqu’à ' + p.max.toFixed(0) + '° au-dessus de l’horizon' + (rx ? ' · <b>venez écouter !</b>' : '') + '</div></div></div>',
+      vivant: la ? 'passe au-dessus de nous, encore ' + obDuree(p.los - d.t)
+        : 'passe au-dessus de nous à ' + new Date(p.aos).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' (dans ' + obDuree(p.aos - d.t) + ')' });
   }
   const ls = obVitSats(d);
   if (ls.length) {
@@ -6646,6 +6726,7 @@ function obVitrine(d, l) {
   const b = g('ob-vitrine'), on = g('v-orbites').classList.contains('ob-tableau') && !!OB_THEMES[obTh].vitrine;
   if (!on) { if (!b.hidden) { b.hidden = true; b.innerHTML = ''; } return; }
   b.hidden = false;
+  b.style.setProperty('--vit-k', OB_VIT_K[obVit.taille] || OB_VIT_K.moyenne); b.classList.toggle('ob-vit-droite', obVit.cote === 'droite');
   const now = Date.now();
   if (now - obVitT > OB_VIT_DUREE) { obVitT = now; obVitN++; }
   const l2 = obVitDiapos(d, l), pas = l2.find(q => q.type === 'passage');
@@ -6654,7 +6735,7 @@ function obVitrine(d, l) {
   const tete = '<div class="ob-vit-tete"><span>' + esc([obVit.club, obVit.indicatif || (d && d.indicatif)].filter(Boolean).join(' · ') || 'Radioamateurs et satellites') + '</span><span class="ob-vit-heure">' +
     new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
   let c = b.querySelector('.ob-vit-carte');
-  if (b.dataset.tete !== tete) { b.dataset.tete = tete; const t = b.querySelector('.ob-vit-tete'); if (t) t.outerHTML = tete; else b.insertAdjacentHTML('afterbegin', tete); }
+  if (b.dataset.tete !== tete || !b.querySelector('.ob-vit-tete')) { b.dataset.tete = tete; const t = b.querySelector('.ob-vit-tete'); if (t) t.outerHTML = tete; else b.insertAdjacentHTML('afterbegin', tete); }
   if (!c || b.dataset.k !== k.cle) {
     if (c) c.remove();
     b.dataset.k = k.cle; b.insertAdjacentHTML('beforeend', '<div class="ob-vit-carte ob-vit-' + k.type + '">' + k.html + '</div>');
@@ -6665,11 +6746,11 @@ function obVitrine(d, l) {
   if (v && k.vivant != null && v.textContent !== k.vivant) { v.textContent = k.vivant; refait = true; }
   if (refait) { c.dataset.taille = taille; obVitAjuste(c); c.querySelectorAll('img').forEach(i => { i.onload = () => obVitAjuste(c); }); }
 }
-/** A Vitrine card's text made smaller until all of it fits (never cut), from its full size each time. */
+/** A Vitrine card's text made smaller until all of it fits (never cut, in height or width), from its full size each time. */
 function obVitAjuste(c) {
   c.style.fontSize = '';
   let f = parseFloat(getComputedStyle(c).fontSize), n = 0;
-  while (c.scrollHeight > c.clientHeight + 1 && f > 11 && n++ < 40) { f *= .94; c.style.fontSize = f.toFixed(1) + 'px'; }
+  while ((c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1) && f > 11 && n++ < 40) { f *= .94; c.style.fontSize = f.toFixed(1) + 'px'; }
 }
 const ETQ_H = 14;
 function pointsDuPassage(m) {
