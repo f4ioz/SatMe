@@ -97,6 +97,9 @@ object Ft8EmissionJs {
         <span class="petit f8tx-chien" id="f8tx-chien-r"></span></div>
       <div class="ligne"><span class="petit" style="min-width:110px">Niveau audio</span>
         <input type="range" id="f8tx-niv" min="-30" max="0" step="1" style="flex:1;max-width:160px" onchange="f8txPost('niveau=' + this.value)" aria-label="Niveau audio envoyé au poste (dB)"><span class="petit" id="f8tx-niv-v"></span></div>
+      <div class="ligne"><label class="petit" title="Pendant l'émission armée, SatMe met le poste en USB-D / LSB-D (les deux bandes en mode satellite) : le son vient alors de DATA MOD (USB). Le mode d'avant est remis à l'arrêt. Jamais pendant le PTT."><input type="checkbox" id="f8tx-donnees" onchange="f8txPost('donnees=' + (this.checked ? 1 : 0))"> Mode données (USB-D)</label>
+        <span class="petit" id="f8tx-mode"></span></div>
+      <div class="ligne"><span class="petit" id="f8tx-donnees-aide"></span></div>
       <div class="ligne"><span class="petit" id="f8tx-horloge"></span></div>
       <div class="ligne"><span class="petit" id="f8tx-ou"></span></div>
     </div>
@@ -205,6 +208,14 @@ function f8txRend() {
   const val = (id, x) => { const e = g(id); if (e && document.activeElement !== e) e.value = String(x); };
   val('f8tx-hz', X.hz); val('f8tx-pair', X.pairCq ? '1' : '0'); val('f8tx-chien', X.chienMin); val('f8tx-niv', X.niveau);
   g('f8tx-tient').checked = !!X.tient; g('f8tx-auto').checked = !!X.auto; g('f8tx-rrr').checked = !!X.rrr;
+  // The rig's data mode: switched by SatMe on an IC-9700 when ticked; otherwise the rig's menus decide.
+  g('f8tx-donnees').checked = !!X.donnees;
+  txt('f8tx-mode', X.modePoste ? 'poste : ' + X.modePoste + (X.donneesActif ? ' ✓' : '') : '');
+  txt('f8tx-donnees-aide', !X.donneesPossible
+      ? 'Ce poste : mode données non commuté par SatMe (IC-9700 seulement) ; régler DATA OFF MOD = USB (ou MIC,USB) pour que la BLU prenne le son USB.'
+    : X.donnees
+      ? 'USB-D pendant l’émission armée, mode d’avant remis à l’arrêt ; sur le poste : DATA MOD = USB (LAN par le réseau).'
+      : 'Mode données coupé : SatMe ne touche pas au mode ; régler DATA OFF MOD = USB (ou MIC,USB) sur l’IC-9700.');
   txt('f8tx-niv-v', X.niveau + ' dB');
   const c = g('f8tx-chien-r');
   c.textContent = X.chienS != null ? 'reste ' + Math.floor(X.chienS / 60) + ':' + String(X.chienS % 60).padStart(2, '0') : '';

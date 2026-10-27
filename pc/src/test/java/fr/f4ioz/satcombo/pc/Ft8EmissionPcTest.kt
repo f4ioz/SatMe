@@ -69,13 +69,54 @@ class Ft8EmissionPcTest {
 
     private class Banc(val st: StationPc, val ft8: Ft8Pc, val tx: Ft8EmissionPc)
 
-    private fun banc(simule: () -> Boolean = { false }): Banc {
+    private fun banc(simule: () -> Boolean = { false }, donnees: Boolean = false): Banc {
         val st = station()
         val ft8 = Ft8Pc { t }
         ft8.demarre("FT8")
         val poste = EmissionPostePc(st, { null }, { t }, { _, _ -> fausse })
-        val tx = Ft8EmissionPc(StockageMemoire(), ft8, poste, { "F4IOZ" }, { "JN18FS" }, horloge = { t }, simule = simule)
+        val md = if (!donnees) null else object : Ft8EmissionPc.ModeDonnees {
+            override fun possible() = st.donneesPossibles()
+            override fun pret() = st.donneesPretes()
+            override fun modePoste() = st.modePoste()
+        }
+        val tx = Ft8EmissionPc(StockageMemoire(), ft8, poste, { "F4IOZ" }, { "JN18FS" }, horloge = { t }, simule = simule, modeDonnees = md)
+        if (donnees) { st.donneesFt8 = { tx.veutDonnees }; st.posteEmet = { poste.poste.etat.emet || tx.emet } }
         return Banc(st, ft8, tx)
+    }
+
+    @Test fun usb_d_avant_la_cle_et_remis_apres() {
+        val b = banc(donnees = true)
+        val sim = b.st.posteSimule!!
+        assertTrue(b.st.donneesPossibles())
+        assertFalse(sim.mainData)
+        assertNull(b.tx.appelleCq())
+        assertTrue(b.tx.veutDonnees)
+        // Switched by the CAT loop, between two Doppler rounds; not keyed before.
+        attends { b.st.basculeDonnees.actif }
+        assertTrue(sim.mainData)
+        assertTrue(b.st.donneesPretes())
+        avance(b, 14_500)
+        assertEquals(listOf(true, false), sim.commandesPtt)
+        assertTrue("no mode written while keyed", sim.modesPendantEmission.isEmpty())
+        assertTrue(b.tx.json().getBoolean("donneesActif"))
+        // Halted: the flag as it was.
+        b.tx.arrete()
+        assertFalse(b.tx.veutDonnees)
+        attends { !b.st.basculeDonnees.actif }
+        assertFalse(sim.mainData)
+        attends { b.tx.json().optString("modePoste") == "USB" }
+    }
+
+    @Test fun mode_donnees_decoche_rien_n_est_commute() {
+        val b = banc(donnees = true)
+        b.tx.reglage(mapOf("donnees" to "0"))
+        assertNull(b.tx.appelleCq())
+        assertFalse(b.tx.veutDonnees)
+        avance(b, 14_500)
+        assertEquals(listOf(true, false), b.st.posteSimule!!.commandesPtt)
+        assertFalse(b.st.posteSimule!!.mainData)
+        assertFalse(b.st.basculeDonnees.actif)
+        assertFalse(b.tx.json().getBoolean("donnees"))
     }
 
     /** Runs the loop from now to [jusqua] ms later, 20 ms a step, the page saying it is there. */
@@ -129,7 +170,7 @@ class Ft8EmissionPcTest {
 
     @Test fun la_demonstration_ne_cle_jamais() {
         ModeDemo.active()
-        val b = banc { ModeDemo.actif }
+        val b = banc(simule = { ModeDemo.actif })
         assertNull(b.tx.appelleCq())
         avance(b, 14_500)
         assertEquals(1, b.tx.envois)              // simulated

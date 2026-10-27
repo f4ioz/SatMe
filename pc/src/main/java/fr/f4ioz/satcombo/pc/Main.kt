@@ -437,7 +437,16 @@ fun main(args: Array<String>) {
             val l = liaisonFt8(station)
             carnet.ajouteNumerique(f.indicatif, f.carre, f.rapportEnvoye, f.rapportRecu, note, mode, l.satellite != null,
                 station.stationCat.etat.value.descenteHz)
+        },
+        // « Mode données (USB-D) »: the IC-9700's data flags switched by the station between two Doppler rounds.
+        modeDonnees = object : Ft8EmissionPc.ModeDonnees {
+            override fun possible() = station.donneesPossibles()
+            override fun pret() = station.donneesPretes()
+            override fun modePoste() = station.modePoste()
         })
+    station.donneesFt8 = { ft8Tx.veutDonnees }
+    // No mode written while the rig is keyed, by FT8/FT4 or anyone else's PTT.
+    station.posteEmet = { emissionPoste.poste.etat.emet || ft8Tx.emet }
     ft8Tx.demarreBoucle()
     serveur.ft8Tx = ft8Tx
     if (ModeDemo.actif) {

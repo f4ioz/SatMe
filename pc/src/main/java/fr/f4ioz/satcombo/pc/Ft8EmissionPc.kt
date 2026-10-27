@@ -55,8 +55,23 @@ class Ft8EmissionPc(
     private val simule: () -> Boolean = { ModeDemo.actif },
     /** Notes a finished contact in the log; null when noted, else why not. */
     private val noteur: (Ft8Qso.Fin, String, String) -> String? = { _, _, _ -> "carnet indisponible" },
+    /** The rig's data mode (USB-D); null: not switched (the tests of the sequence alone). */
+    private val modeDonnees: ModeDonnees? = null,
     val cadence: Int = 48_000,
 ) {
+    /**
+     * The rig's data mode as the station switches it ([StationPc.basculeDonnees]):
+     * whether it can, whether it is on, the mode it shows.
+     */
+    interface ModeDonnees {
+        /** The connected rig's data mode is switched by SatMe (an IC-9700). */
+        fun possible(): Boolean
+        /** Keying may go ahead: the data mode is on when wanted. */
+        fun pret(): Boolean
+        /** The rig's mode as read (« USB-D »), null when unknown. */
+        fun modePoste(): String?
+    }
+
     /** The rig's situation for an FT8/FT4 transmission. */
     data class Liaison(
         /** The satellite worked (null: terrestrial, the rig's own frequency). */
@@ -105,6 +120,15 @@ class Ft8EmissionPc(
         get() = stockage.getBoolean("pc_ft8_tx_rrr", false)
         set(v) { stockage.edit().putBoolean("pc_ft8_tx_rrr", v).apply(); qso.rrr = v }
 
+    /**
+     * « Mode données (USB-D) »: while transmitting is armed, the rig goes to
+     * USB-D / LSB-D (both bands in satellite mode) and takes its audio from
+     * *DATA MOD*; its flags are put back after. On by default.
+     */
+    var donnees: Boolean
+        get() = stockage.getBoolean("pc_ft8_tx_donnees", true)
+        set(v) { stockage.edit().putBoolean("pc_ft8_tx_donnees", v).apply() }
+
     init { qso.chienMin = chienMin; qso.rrr = rrr }
 
     // ------------------------------------------------------------ state
@@ -132,6 +156,14 @@ class Ft8EmissionPc(
     @Volatile var dernier: Triple<String, Long, Int>? = null; private set
 
     val emet: Boolean get() = enCours?.let { !it.simule } == true
+
+    /**
+     * The rig should be in its data modes now: « Mode données » ticked,
+     * listening, transmitting armed or an over under way; never in the
+     * demonstration. False again when disarmed, listening stopped, or the
+     * page gone (that disarms): the flags are put back then.
+     */
+    val veutDonnees: Boolean get() = donnees && !simule() && ft8.enMarche && (arme || enCours != null)
     val emetSimule: Boolean get() = enCours?.simule == true
 
     private fun ft4() = ft8.mode == "FT4"
@@ -284,6 +316,8 @@ class Ft8EmissionPc(
         // The previous slot's decode first (what it holds may change the message), a little while at most.
         val attente = max - (if (ft4()) 500L else 1_000L)
         if (ft8.derniereTrancheDecodee < debutTranche - duree() && dans < attente) return
+        // The rig not yet in USB-D (switched between two Doppler rounds, a few tenths of a second): wait, or skip this slot.
+        if (veutDonnees && modeDonnees?.pret() == false) return
         derniereTranche = n
         demarre(n, debutTranche, texte, t)
     }
@@ -385,6 +419,9 @@ class Ft8EmissionPc(
             .put("refus", if (arme && e == null) "" else refusPermanent(t) ?: "")
             .put("envois", envois)
             .put("largeur", Ft8Qso.largeurHz(ft4()))
+            .put("donnees", donnees).put("donneesPossible", modeDonnees?.possible() == true)
+            .put("donneesActif", veutDonnees && modeDonnees?.possible() == true && modeDonnees.pret())
+            .put("modePoste", modeDonnees?.modePoste() ?: "")
         if (e != null) o.put("enCours", JSONObject().put("texte", e.texte).put("tx", e.tx).put("hz", e.hz)
             .put("progres", if (e.pcm.isEmpty()) 1.0 else Math.round(e.pousses * 1000.0 / e.pcm.size) / 1000.0))
         dernier?.let { (tx, tr, hz) -> o.put("dernierEnvoi", JSONObject().put("texte", tx).put("t", tr).put("hz", hz)) }
@@ -409,6 +446,7 @@ class Ft8EmissionPc(
         q["chien"]?.toIntOrNull()?.let { chienMin = it; geste() }
         q["pair"]?.let { synchronized(this) { pairCq = it == "1"; if (qso.etape == Ft8Qso.Etape.CQ) qso.appelleCq(pairCq, horloge()) } }
         q["rrr"]?.let { rrr = it == "1"; geste() }
+        q["donnees"]?.let { donnees = it == "1"; geste() }
         q["tx"]?.toIntOrNull()?.let { choisit(it) }
         for (i in 1..6) q["msg$i"]?.let { edite(i, it)?.let { m -> return non(m) } }
         if (q["oublie"] == "1") oublieFin()

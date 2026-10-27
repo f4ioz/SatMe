@@ -64,6 +64,11 @@ class FausseRadioIcom(
     val reprisesAudio = CopyOnWriteArrayList<Int>()
     @Volatile var renouvellements = 0
     @Volatile var frequenceHz = 145_800_000L
+    /** Satellite mode (16 5A), the band selected (07 D0/D1), each band's data flag (1A 06). */
+    @Volatile var satellite = false
+    @Volatile var surSub = false
+    @Volatile var donneesMain = false
+    @Volatile var donneesSub = false
     /** The sound sent (sample number, rate → sample); null: a 1 kHz tone. Its IF, set to IF. */
     @Volatile var son: ((Long, Int) -> Short)? = null
     private var echantillon = 0L
@@ -223,6 +228,11 @@ class FausseRadioIcom(
             0x1C -> if (t.size >= 8 && t[5].toInt() == 0x00) { emet = t[6].toInt() != 0; commandesPtt += emet; repondCiv(ok) }
                 else repondCiv(reponse(0x1C, 0x00, if (emet) 1 else 0))
             0x27 -> { if (t.size >= 8 && (t[5].toInt() and 0xFF) == 0x11) spectre = t[6].toInt() == 1; repondCiv(ok) }
+            0x07 -> { if ((t[5].toInt() and 0xFF) == 0xD0) surSub = false else if ((t[5].toInt() and 0xFF) == 0xD1) surSub = true; repondCiv(ok) }
+            0x16 -> if ((t[5].toInt() and 0xFF) == 0x5A && t.size == 7) repondCiv(reponse(0x16, 0x5A, if (satellite) 1 else 0))
+                else { if ((t[5].toInt() and 0xFF) == 0x5A) satellite = t[6].toInt() == 1; repondCiv(ok) }
+            0x1A -> if ((t[5].toInt() and 0xFF) == 0x06 && t.size == 7) repondCiv(reponse(0x1A, 0x06, if (if (surSub) donneesSub else donneesMain) 1 else 0, 0x01))
+                else { if ((t[5].toInt() and 0xFF) == 0x06) { val on = t[6].toInt() == 1; if (surSub) donneesSub = on else donneesMain = on }; repondCiv(ok) }
             else -> repondCiv(ok)
         }
     }
