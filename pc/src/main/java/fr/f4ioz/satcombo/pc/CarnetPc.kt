@@ -97,7 +97,9 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      */
     fun ajoute(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String = "",
                fiche: QrzReponse.Fiche? = null, demande: ChoixCarnet.Demande = ChoixCarnet.Demande.AUTO,
-               depuisCockpit: Boolean = false): LogEntry? {
+               depuisCockpit: Boolean = false,
+               /** The mode to log (FT8, FT4) rather than the transmitter's. */
+               modeForce: String? = null): LogEntry? {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return null
         val e = station.etat.value
@@ -123,7 +125,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
             rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(),
             locatorOrigine = if (locator.isBlank()) "INCONNU" else if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else "SAISI",
-            mode = qo?.modeCarnet ?: mode(t),
+            mode = modeForce ?: qo?.modeCarnet ?: mode(t),
             downlinkMhz = dl?.let { it / 1e6 } ?: 0.0, uplinkMhz = ul?.let { it / 1e6 } ?: 0.0,
             nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
             qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
@@ -131,6 +133,33 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         store.add(c); oublieMemoire()
         annonce(c)
         return c
+    }
+
+    /**
+     * An FT8/FT4 contact made from the cockpit's FT8 tab, now: on the
+     * satellite the rig works ([surSatellite]), in that mode; else
+     * terrestrial (no satellite, so no PROP_MODE SAT in the ADIF), at the
+     * rig's frequency [frequenceHz]. Null when noted, else why not.
+     */
+    fun ajouteNumerique(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String, mode: String,
+                        surSatellite: Boolean, frequenceHz: Long?): String? {
+        val call = indicatif.trim().uppercase()
+        if (call.isEmpty()) return "il faut un indicatif"
+        if (surSatellite) return if (ajoute(call, locator, rstEnvoye, rstRecu, note, modeForce = mode) != null) null
+            else "aucun satellite suivi pour noter ce QSO"
+        val e = station.etat.value
+        val passes = historique(call)
+        val c = LogEntry(
+            timeMs = horloge(), satName = "", catnum = 0, azimuthDeg = 0.0, elevationDeg = 0.0,
+            myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
+            rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(),
+            locatorOrigine = if (locator.isBlank()) "INCONNU" else "SAISI", mode = mode,
+            downlinkMhz = (frequenceHz ?: 0L) / 1e6, uplinkMhz = (frequenceHz ?: 0L) / 1e6,
+            nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom.orEmpty(),
+            qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty())
+        store.add(c); oublieMemoire()
+        annonce(c)
+        return null
     }
 
     /**

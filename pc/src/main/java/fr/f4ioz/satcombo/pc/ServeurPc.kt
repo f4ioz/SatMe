@@ -103,6 +103,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** The IC-9700 transmitting: PTT, microphone, power (set before [demarre]). */
     @Volatile var emissionPoste: EmissionPostePc? = null
+    /** FT8/FT4 on the air from the FT8 tab (through [emissionPoste]'s PTT). */
+    @Volatile var ft8Tx: Ft8EmissionPc? = null
     /** QO-100's narrow band by the Pluto: SSB, CW, digital; the uplink profiles (set before [demarre]). */
     @Volatile var emissionBe: EmissionBandeEtroitePc? = null
 
@@ -232,7 +234,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/be/emission/demarre", "/api/be/emission/vie", "/api/be/emission/arrete")
 
     private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
-        emissionBe?.emet == true
+        emissionBe?.emet == true || ft8Tx?.arme == true
 
     /** The Pluto's narrow-band PTT routes: hold (demarre, ?confirme=1 on the air), still holding (vie), release (arrete). */
     private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
@@ -282,6 +284,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
     }
 
+    /** The decoded line the page answers (double-click): its text, callsigns, grid, SNR, frequency and slot. */
+    private fun recuFt8(q: Map<String, String>, mode: String): fr.f4ioz.satcombo.domain.Ft8Qso.Recu {
+        val t = q["t"]?.toLongOrNull() ?: error("créneau de la ligne manquant")
+        val ft4 = mode == "FT4"
+        return fr.f4ioz.satcombo.domain.Ft8Qso.Recu(q["repond"].orEmpty(), q["de"]?.ifBlank { null }, q["a"]?.ifBlank { null },
+            q["loc"]?.ifBlank { null }, q["db"]?.toIntOrNull() ?: -10, q["hz"]?.toIntOrNull() ?: 0, t,
+            fr.f4ioz.satcombo.domain.Ft8Qso.estPaire(fr.f4ioz.satcombo.domain.Ft8Qso.tranche(t, ft4)))
+    }
+
     /**
      * A measurement on our own downlink: the Pluto's error ([quoi] "pluto"),
      * or the IC-9700 chain's uplink oscillator ("poste": the rig keyed in CW
@@ -306,7 +317,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             while (socket?.isClosed != true) {
                 runCatching {
                     if (!emetQuelqueChose()) controle.libere()
-                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); emissionPoste?.relache(r); emissionBe?.relache(r); controle.libere() }
+                    else controle.perdu()?.let { r -> ft8Tx?.arrete(r); emission?.arrete(r); emissionSstv?.arrete(r); emissionPoste?.relache(r); emissionBe?.relache(r); controle.libere() }
                 }
                 Thread.sleep(200)
             }
@@ -954,6 +965,33 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 !local -> JSONObject().put("ok", false).put("erreur", "seulement depuis le PC de la station")
                 chemin == "/api/https/regenere" -> { runCatching { certificat?.regenere() }; relanceHttps(); jsonHttps(local, r) }
                 else -> reglageHttps(q)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: jsonHttps(local, r)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // FT8/FT4 on the air: its state (GET; the page's « still there » with vie=1), its settings and actions (POST).
+        // A contact started (CQ, an answer, enable) goes through the controller's rules; STOP (arret) from anyone.
+        if (chemin == "/api/ft8/tx") {
+            val f = ft8Tx
+            val cl = fr.f4ioz.satcombo.datv.ControleEmission.Client(q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress },
+                !local, c.inetAddress?.hostAddress.orEmpty())
+            val o = when {
+                f == null -> JSONObject().put("ok", false).put("absent", true)
+                r.methode != "POST" -> { if (q["vie"] == "1" && f.arme && controle.vie(cl)) f.vie(); f.json().put("controle", controle.json(cl)) }
+                q["arret"] == "1" -> { f.arrete(if (cl.distant) "arrêt demandé depuis un autre appareil" else "arrêt demandé"); f.json() }
+                q["actif"] == "0" -> { f.active(false); f.json() }
+                q["cq"] == "1" || q["repond"] != null || q["actif"] == "1" -> controle.refus(cl, emetQuelqueChose())
+                    ?.let { JSONObject().put("ok", false).put("erreur", it).put("controle", controle.json(cl)) } ?: run {
+                    val err = runCatching {
+                        when {
+                            q["cq"] == "1" -> f.appelleCq()
+                            q["actif"] == "1" -> f.active(true)
+                            else -> f.repond(recuFt8(q, son?.ft8?.mode ?: "FT8"))
+                        }
+                    }.getOrElse { it.message ?: "erreur" }
+                    if (err == null) controle.prend(cl, "FT8/FT4")
+                    f.json().also { if (err != null) it.put("ok", false).put("erreur", err) }
+                }
+                else -> f.reglage(q)
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }

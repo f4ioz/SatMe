@@ -242,9 +242,9 @@ object Ft8 {
      *
      * Handled: **types 1 and 2** (two callsigns and a grid square or report,
      * `/R` or `/P` on either), **type 4** (one compound callsign in clear,
-     * the other hashed) and **type 0.1** (the DXpedition's double message).
-     * Other types (contest, free text, telemetry) are rejected rather than
-     * guessed. An approximate callsign is worse than none: it would end up in
+     * the other hashed), **type 0.1** (the DXpedition's double message) and
+     * **type 0.0** (free text, no callsign taken from it). Other types
+     * (contest, telemetry) are rejected rather than guessed. An approximate callsign is worse than none: it would end up in
      * a log.
      *
      * Every callsign read in clear goes into [connus]; a hashed one is shown
@@ -257,7 +257,12 @@ object Ft8 {
             1 -> deplieStandard(message, "/R", connus)
             2 -> deplieStandard(message, "/P", connus)
             4 -> deplieCompose(message, connus)
-            0 -> if (lisEntier(message, 71, 3) == 1L) deplieExpedition(message, connus) else null
+            0 -> when (lisEntier(message, 71, 3)) {
+                1L -> deplieExpedition(message, connus)
+                // Free text (type 0.0): 13 characters, shown as sent, no callsign taken from it.
+                0L -> Ft8Pliage.texteLibre(message)?.let { Message(it, null, null, null, null) }
+                else -> null
+            }
             else -> null
         }
     }
@@ -302,8 +307,11 @@ object Ft8 {
         // "RR73" sent in the square's place (a square in the middle of the Pacific): the acknowledgement,
         // as everyone reads it — else a station saying 73 is drawn 5 000 km away, a "new square" too.
         if (carre == "RR73") { carre = null; accuse = "RR73" }
-        val bout = carre ?: accuse
-            ?: rapport?.let { (if (it >= 0) "+" else "") + it } ?: ""
+        // Bit 58, the « roger »: "R-12" is not "-12" — it says the report was received, and the
+        // sequence of a QSO turns on it. Shown as sent ("R-12", "R JN18").
+        val roger = message[58]
+        val bout = carre?.let { if (roger) "R $it" else it } ?: accuse
+            ?: rapport?.let { (if (roger) "R" else "") + (if (it >= 0) "+" else "-") + Math.abs(it).toString().padStart(2, '0') } ?: ""
         return Message(
             brut = listOf(appele.texte, appelant.texte, bout).filter { it.isNotBlank() }
                 .joinToString(" "),

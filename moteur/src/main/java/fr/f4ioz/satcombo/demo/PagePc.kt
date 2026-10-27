@@ -390,7 +390,7 @@ object PagePc {
   }
   async function radio() {
     if (document.hidden) return;
-    [S, D, X.dtx, X.stx, X.iq, X.ptx, X.btx] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq'), json('api/poste/emission'), json('api/be/emission')]);
+    [S, D, X.dtx, X.stx, X.iq, X.ptx, X.btx, X.f8] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq'), json('api/poste/emission'), json('api/be/emission'), json('api/ft8/tx')]);
     sb('sb-sdr', S && !S.absent ? (S.actif ? (S.erreur ? 'warn' : 'ok') : (S.erreur ? 'danger' : '')) : '',
       S && !S.absent ? (S.actif ? (S.tuner || S.recepteur || 'réception') : (S.datvTient ? 'prêtée à la DATV' : 'arrêtée')) : '—');
     sb('sb-datv', D && D.actif ? (D.verrouille ? 'ok' : 'info') : '', D && D.ok !== false ? (D.actif ? D.libelle : 'arrêtée') : '—');
@@ -400,6 +400,7 @@ object PagePc {
     if (X.iq && X.iq.actif) tx.push('calibration I/Q');
     if (X.ptx && X.ptx.emet) tx.push('IC-9700');
     if (X.btx && X.btx.emet) tx.push('BLU Pluto');
+    if (X.f8 && X.f8.arme && !(X.ptx && X.ptx.emet)) tx.push((X.f8.mode || 'FT8') + (X.f8.simule ? ' (simulé)' : ' armé'));
     const h = g('h-tx'); if (h) { h.hidden = !tx.length; g('h-tx-q').textContent = tx.join(' · '); }
     document.body.classList.toggle('en-tx', tx.length > 0);
     const rx = (S && S.actif) || (D && D.actif) || (E && E.cat && E.cat.connecte);
@@ -407,7 +408,7 @@ object PagePc {
   }
   // The light: only stops (never starts anything).
   const htx = g('h-tx');
-  if (htx) htx.onclick = () => Promise.all(['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete', 'api/be/emission/arrete']
+  if (htx) htx.onclick = () => Promise.all(['api/ft8/tx?arret=1', 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete', 'api/be/emission/arrete']
     .map(u => fetch(u, { method: 'POST' }).catch(() => null))).then(radio);
   heure(); setInterval(heure, 1000); etat(); setInterval(etat, 15000); radio(); setInterval(radio, 3000);
   // The tabs the server offers (the phone some of them): the others hidden, an empty workspace too.
@@ -1523,7 +1524,7 @@ ${DiplomesJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
   .tq-onglets button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
-  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
+${Ft8EmissionJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
   .ck-l button { padding:2px 7px !important; }
   .ck-texte { margin-top:4px; height:120px; overflow-y:auto; padding:6px 8px; border-radius:8px; background:#0E1720; font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.45; word-break:break-word; }
   .ck-texte .ck-h { color:var(--texte-3); font-size:11px; margin-right:8px; }
@@ -4550,6 +4551,7 @@ ${DiplomesJs.HTML}</div>
   </div>
 </div>
 </div>
+${Ft8EmissionJs.BANDEAU}
 <div class="vue" id="v-ft8" hidden>
 <div class="f8">
   <div class="carte f8-tete">
@@ -4577,6 +4579,7 @@ ${DiplomesJs.HTML}</div>
       </div>
     </div>
   </div>
+${Ft8EmissionJs.HTML}
   <div class="f8-diag" id="8-diag" role="status" hidden></div>
   <div class="f8-grille">
     <div class="carte f8-cascade-boite">
@@ -15383,14 +15386,16 @@ function listeFt8() {
   if (cle === ft8Vu) { dessineRadar(); return; }
   ft8Vu = cle;
   let avant = 0;
-  g('8-liste').innerHTML = l.slice(0, 250).map(e => {
+  f8txLignes = l.slice(0, 250);
+  g('8-liste').innerHTML = f8txLignes.map((e, i) => {
     const cl = [avant && e.t !== avant ? 'f8-sep' : '', e.guettee ? 'f8-guettee' : ''].filter(Boolean).join(' '), sep = cl ? ' class="' + cl + '"' : ''; avant = e.t;
     const coul = e.moi ? '#FF5FA2' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#6B7C8F' : '#E8F0F7';
     const barre = '<span class="f8-db"><i style="width:' + Math.max(4, Math.min(100, (e.db + 24) * 3)) + '%;background:' + (e.db >= -5 ? '#5BD68A' : e.db >= -15 ? '#FFB454' : '#FF5FA2') + '"></i></span>';
-    return '<tr' + sep + '><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td title="' + esc(e.pays || '') + (e.cont ? ' · ' + (F8_CONT[e.cont] || e.cont) : '') + '">' + f8Drapeau(e.drapeau) +
+    return '<tr' + sep + ' data-i="' + i + '"' + (e.de ? ' title="Double-clic : répondre à ' + esc(e.de) + '"' : '') + '><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td title="' + esc(e.pays || '') + (e.cont ? ' · ' + (F8_CONT[e.cont] || e.cont) : '') + '">' + f8Drapeau(e.drapeau) +
       '</td><td style="color:' + coul + ';font-weight:700">' + esc(e.de || '') + (e.nouveauPays ? ' ★' : '') + '</td><td>' + barre + '<span class="petit">' + e.db + '</span></td><td class="petit">' + e.hz +
       '</td><td style="font-family:ui-monospace,Consolas,monospace;color:' + coul + '">' + esc(e.texte) + f8Tags(e, true) +
-      '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td>' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>';
+      '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td style="white-space:nowrap">' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' +
+        '<button class="f8-rep" title="Répondre à cette station (émission FT8/FT4)" onclick="f8txRepond(f8txLignes[' + i + '])">↩</button>' : '') + '</td></tr>';
   }).join('') || '<tr><td colspan="8" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
   dessineRadar();
 }
@@ -15459,13 +15464,17 @@ function dessineCascade() {
   // The audio frequencies.
   x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px Drapeaux,system-ui';
   for (let f = 500; f < H.haute; f += 500) { const px = X(f); x.fillRect(px, h - 5, 1, 5); x.fillText(f, px + 2, h - 6); }
+  if (typeof f8txMarque === 'function') f8txMarque(x, X, h);
   if (f8Clic) { x.strokeStyle = '#FF5FA2'; x.beginPath(); x.moveTo(X(f8Clic), 0); x.lineTo(X(f8Clic), h); x.stroke(); x.fillStyle = '#FF5FA2'; x.fillText(f8Clic + ' Hz', X(f8Clic) + 3, 26); }
   // The spectrum: the newest row, as a line.
   const sp = g('8-spectre'), [y2, sw, sh] = toile(sp), der = f8Lignes[n - 1];
   y2.fillStyle = '#05070D'; y2.fillRect(0, 0, sw, sh); y2.strokeStyle = '#3FE0C8'; y2.lineWidth = 1.2; y2.beginPath();
   for (let k = 0; k < der.length; k++) { const px = sw * k / der.length, py = sh - 2 - der[k] / 255 * (sh - 4); if (k) y2.lineTo(px, py); else y2.moveTo(px, py); } y2.stroke();
 }
-g('8-cascade').addEventListener('click', ev => { if (!H) return; const b = ev.currentTarget.getBoundingClientRect(); f8Clic = Math.round((H.basse + (ev.clientX - b.left) / b.width * (H.haute - H.basse)) / 5) * 5; dessineCascade(); });
+g('8-cascade').addEventListener('click', ev => { if (!H) return; const b = ev.currentTarget.getBoundingClientRect(); const hz = Math.round((H.basse + (ev.clientX - b.left) / b.width * (H.haute - H.basse)) / 5) * 5;
+  // Maj+clic: the TX frequency there (as in WSJT-X); a plain click only reads the frequency.
+  if (ev.shiftKey && typeof f8txPost === 'function') { f8txPost('hz=' + hz); return; }
+  f8Clic = hz; dessineCascade(); });
 // The radar: an azimuthal map around the station — each one at its bearing and distance.
 function dessineRadar() {
   const c = g('8-radar'); if (!c || !H) return;
@@ -15576,7 +15585,7 @@ function noteFt8(call, loc, db) {
 g('8-filtre').oninput = () => { ft8Vu = ''; ticFt8(); };
 g('8-cq').onchange = () => { ft8Vu = ''; ticFt8(); };
 setInterval(ticFt8, 1000);
-
+${Ft8EmissionJs.CODE}
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
 // The KISS radio: its port, its state, where it listens.
@@ -18816,6 +18825,8 @@ function emissionsEnCours() {
   if (HX.iq && HX.iq.actif) l.push('calibration I/Q');
   if (HX.ptx && HX.ptx.emet) l.push('IC-9700');
   if (HX.btx && HX.btx.emet) l.push('BLU Pluto');
+  // FT8/FT4 armed (its own poll, api/ft8/tx): keyed in its next slot.
+  if (typeof F8TX !== 'undefined' && F8TX && F8TX.arme && !(HX.ptx && HX.ptx.emet)) l.push((F8TX.mode || 'FT8') + (F8TX.simule ? ' (simulé)' : ' armé'));
   return l;
 }
 function erreursServeur() {
@@ -18901,7 +18912,7 @@ function annonce(t, tx) {
  */
 async function arretEmissions() {
   const avant = emissionsEnCours(), inconnu = !HX.dtx && !HX.stx;
-  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT, 'api/be/emission/arrete?client=' + TX_CLIENT];
+  const l = ['api/ft8/tx?arret=1&client=' + TX_CLIENT, 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT, 'api/be/emission/arrete?client=' + TX_CLIENT];
   if (!HX.iq || HX.iq.actif) l.push('api/iq/arrete');
   pxTenu = false; pxVie(false);
   bxTenu = false; bxVerrouille = false; bxCwAuto = false; bxVie(false); { const b = g('btx-ptt'); if (b) b.classList.remove('on'); }

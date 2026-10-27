@@ -226,6 +226,23 @@ class EmissionPostePc(
         runCatching { s.ferme() }
     }
 
+    /**
+     * Samples made by SatMe itself (FT8/FT4) for [client], the PTT holder:
+     * to the rig as the microphone's are; null when taken, else why not.
+     */
+    fun sonInterne(client: String, pcm: ShortArray, n: Int, taux: Int): String? {
+        if (!poste.tenuPar(client)) return "PTT non tenu"
+        poste.vie(client)
+        val s = sortie ?: return sortieErreur.ifBlank { "pas de sortie son vers le poste" }
+        val err = s.pousse(pcm, n, taux)
+        if (err != null) { sortieErreur = err; return err }
+        echantillons.addAndGet(n.toLong())
+        return null
+    }
+
+    /** Why the rig cannot be keyed now (not connected, not allowed, QO-100's rules), or null. */
+    fun refus(): String? = posteLienPret() ?: (if (perteLien) "le poste ne répond plus" else null)
+
     /** A frame of microphone from [client]: to the rig while it holds the PTT, else dropped. */
     fun micro(client: String, l: SonDistant.Lue) {
         trames.incrementAndGet()

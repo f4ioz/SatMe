@@ -64,6 +64,8 @@ class Ft8Pc(
      * in the last three minutes; reports exchanged once it sent me one.
      */
     fun apriori(): Ft8Decodeur.Apriori? {
+        // The contact SatMe transmits in: its partner expected even before it answered.
+        qsoEnCours?.let { return it }
         val moi = indicatif.trim().uppercase().ifEmpty { return null }
         val recents = entendus.filter { horloge() - it.tranche < 180_000L && it.appele == moi && it.appelant != null }
         val lui = recents.firstOrNull()?.appelant ?: return null
@@ -125,6 +127,23 @@ class Ft8Pc(
         while (dopplers.isNotEmpty() && dopplers.first().first < t - 60_000L) dopplers.removeFirst()
     }
 
+    /** The contact the transmitter works ([Ft8EmissionPc]), for decoding with what it lets us expect. */
+    @Volatile var qsoEnCours: Ft8Decodeur.Apriori? = null
+    /** FT8/FT4 transmit armed ([Ft8EmissionPc]): a quick decode rather than a deep one. */
+    @Volatile var presse = false
+    /** The start (UTC ms) of the last slot decoded, -1 before any: the transmitter waits for it. */
+    @Volatile var derniereTrancheDecodee = -1L
+        private set
+
+    /**
+     * Lines added as if decoded (the demonstration's fake stations): newest
+     * first, never sent to PSK Reporter.
+     */
+    @Synchronized fun injecte(l: List<Entendu>) {
+        if (l.isEmpty()) return
+        entendus = (l + entendus).take(500)
+    }
+
     /** The followed satellite's elevation, null when none is followed or it is down. */
     @Volatile private var elevation: Double? = null
     /** How long the last slot took to decode, ms. */
@@ -139,6 +158,8 @@ class Ft8Pc(
      * falls back to normal.
      */
     fun profondeur(): Ft8Decodeur.Profondeur {
+        // Transmitting: the slot's decodes are needed at once, to answer in the next one.
+        if (presse) return Ft8Decodeur.Profondeur.NORMALE
         val budget = dureeTranche() * 0.4
         val bas = elevation?.let { it < 15.0 } ?: false
         return if (dernierDecodageMs < budget || (bas && dernierDecodageMs < dureeTranche() * 0.6))
@@ -242,6 +263,7 @@ class Ft8Pc(
             // Newest first, capped: an evening of listening would otherwise hold thousands of lines.
             entendus = (nouveaux + entendus).take(500)
             tranches++
+            derniereTrancheDecodee = debut
             sansDecodage = if (nouveaux.isEmpty()) sansDecodage + 1 else 0
         }
         if (nouveaux.isNotEmpty()) auDecode?.let { runCatching { it(nouveaux) } }

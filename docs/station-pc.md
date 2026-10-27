@@ -689,6 +689,24 @@ A tab made to see the band, not only to read it:
 
 **PSK Reporter** (Réglages, off by default): the FT8 / FT4 stations heard sent every 5 minutes with their square, the frequency and the satellite — only when the frequency is sure (rig on CAT).
 
+### FT8 / FT4 transmit
+
+The tab's **Émission** card, under the slot ring, sends FT8 and FT4 through the **IC-9700** SatMe already keys (Settings › Transmit): its PTT over CAT, the audio to the rig's USB sound card or over the network link. Encoded in SatMe from the protocol description published in QEX (July–August 2020, public domain) — 77-bit message, CRC-14, LDPC (174, 91), 8-tone GFSK (FT8, BT = 2) or 4-tone (FT4, BT = 1) with ramps — and checked by running every message back through SatMe's own decoder.
+
+- **Six messages** as in WSJT-X: Tx1 (call with grid), Tx2 (report), Tx3 (R + report), Tx4 (RR73, or RRR), Tx5 (73), Tx6 (CQ). Made from your callsign and grid and the chosen station, editable (a text that cannot be encoded is flagged); clicking **Tx** picks the next one sent. Compound callsigns (`EA8/F4IOZ`, `PJ4/K1ABC`), hashed callsigns `<…>`, and 13-character free text are supported.
+- **Starting**: **double-click a decoded line** (or the ↩ button) to answer that station, in the slot opposite to its own; or **📣 Appeler CQ**, in the even or odd slot. The **automatic sequence** (on by default) then moves on by itself: report → R + report → RR73 → 73. A station calling you while nothing was started is shown, never answered by itself.
+- **TX frequency**: marked in red on the waterfall; **Shift + click** in the waterfall moves it, **▼ place libre** puts it on the clear spot found. When a QSO starts, SatMe moves it to a clear spot if a decoded station sits there — **never onto the called station's frequency**; « Garder la fréquence d'émission » keeps it still.
+- **End of the QSO**: once RR73 or 73 is sent (or 73 received after your RR73), transmitting stops and the **QSO terminé** card offers the contact, prefilled (callsign, grid, reports sent and received, mode FT8 or FT4, satellite and SAT propagation mode for ADIF, or terrestrial): **✓ Noter le QSO** writes it to the log; nothing is logged without that click.
+- **On a satellite** (linear transponder, RS-44 for instance): the uplink follows the Doppler and the satellite's TX offset (« Aligner… ») as in voice; on an inverting transponder the uplink is LSB and the signal comes back on the downlink at the same audio offset above the dial (USB). The card says where it goes up and where it comes back; SatMe refuses when the signal would leave the uplink passband, when the chosen transmitter has no uplink (a beacon) or is not a linear transponder. On QO-100 the IC-9700's rules stay (never on a beacon, LEILA cuts). **Data mode (USB-D)** is not switched by SatMe: the satellite loop owns the mode; set the rig so SSB takes the USB audio (IC-9700: *DATA OFF MOD* = USB, or MIC,USB), as for the page's microphone.
+
+**The FT8 / FT4 rule: no robotic or unattended QSO.** It is a condition attached to the names FT8 and FT4. In SatMe-PC a QSO only starts from your action (double-click, « Appeler CQ »); an **attendance watchdog** (3 min by default, 1 to 10) stops transmitting after that long without an action from you — CQ included, with the countdown shown; the page closed or unreachable for more than 15 s stops it too. **■ Arrêter l'émission** is always there: on the card, in a band shown on every tab while transmitting is armed, in the header's TX light, and **Esc**.
+
+**Before transmitting**, SatMe checks: FT8/FT4 listening on (transmitting follows the decoder), the **PC's clock** read from the stations (refused beyond **±0.5 s in FT4**, ±1 s in FT8), the rig connected and allowed (the rules of Settings › Transmit: time-out, power cap, transmitting over the network). The PTT is keyed 0.2 s before the audio and released once the audio is out; the start may slip up to 2 s (FT8) or 1.3 s (FT4) into the slot to wait for the previous slot's decode. PSK Reporter is unchanged.
+
+**Demo** (`--demo`): nothing is ever transmitted — transmitting is simulated (the audio made then dropped) and made-up stations (Q callsigns) call CQ and answer, to try the page without a radio.
+
+**Suggested first test**: low power, terrestrial or on QO-100 narrow band (digital segment), watching the downlink; then RS-44 high in a pass.
+
 <p align="center">
 <img src="images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar of the stations, who to call now">
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, and the stream as bubbles">

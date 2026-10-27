@@ -429,6 +429,22 @@ fun main(args: Array<String>) {
     emissionPoste.signauxQo100 = { qo100.signaux.recents() }
     emissionPoste.demarre()
     serveur.emissionPoste = emissionPoste
+    // FT8 / FT4 on the air from the FT8 tab: through the PTT above, in the decoder's slots; a contact is started by
+    // the operator only, the attendance watchdog stops the rest. The demonstration simulates, its fake stations answer.
+    val ft8Tx = Ft8EmissionPc(station.stockage, son.ft8, emissionPoste, { station.settings.callsign }, { station.etat.value.locator },
+        liaison = { liaisonFt8(station) },
+        noteur = { f, mode, note ->
+            val l = liaisonFt8(station)
+            carnet.ajouteNumerique(f.indicatif, f.carre, f.rapportEnvoye, f.rapportRecu, note, mode, l.satellite != null,
+                station.stationCat.etat.value.descenteHz)
+        })
+    ft8Tx.demarreBoucle()
+    serveur.ft8Tx = ft8Tx
+    if (ModeDemo.actif) {
+        val ft8Demo = Ft8DemoPc(son.ft8, { station.settings.callsign })
+        ft8Tx.auEnvoi = { tx, debut, hz -> ft8Demo.envoye(tx, debut, hz) }
+        kotlin.concurrent.thread(isDaemon = true, name = "satme-ft8-demo") { while (true) { runCatching { ft8Demo.tic() }; Thread.sleep(20) } }
+    }
     // QO-100's narrow band by the Pluto (SSB, CW, digital) and the uplink profiles: nothing keyed until a button is held,
     // every start back into the dummy load; LEILA heard while transmitting cuts it.
     val emissionBe = EmissionBandeEtroitePc(station.stockage, indicatif = { station.settings.callsign },
@@ -440,7 +456,8 @@ fun main(args: Array<String>) {
             if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord"
             else if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord"
             else if (iq.enCours) iqEnCours
-            else if (emissionPoste.poste.etat.emet) "l'IC-9700 émet : relâcher son PTT d'abord" else null
+            else if (emissionPoste.poste.etat.emet) "l'IC-9700 émet : relâcher son PTT d'abord"
+            else if (ft8Tx.arme) "FT8/FT4 en émission par l'IC-9700 (onglet FT8) : l'arrêter d'abord" else null
         },
         gainMaxDb = { emission.gainMaxDb }, reseauAutorise = { station.txReseauAutorise },
         descenteCockpit = { station.qo100.etat.value.descenteHz },
@@ -456,7 +473,8 @@ fun main(args: Array<String>) {
     val polarisation = PolarisationPc(station, dossier)
     polarisation.emissions = {
         buildList {
-            if (emissionPoste.poste.etat.emet) add(station.stationCat.etat.value.monteeHz)
+            // FT8/FT4 armed: keyed in its next slot, so its antenna is held between overs too.
+            if (emissionPoste.poste.etat.emet || ft8Tx.arme) add(station.stationCat.etat.value.monteeHz)
             if (emissionBe.emet) add(emissionBe.cadranHz)
             if (emissionSstv.etat.emet) add(emissionSstv.etat.frequenceHz.takeIf { it > 0 })
             if (emission.etat.emet) add(emission.etat.frequenceKhz.takeIf { it > 0 }?.let { it * 1000L })
@@ -613,6 +631,7 @@ fun main(args: Array<String>) {
     }
     Runtime.getRuntime().addShutdownHook(Thread {
         // The rig's PTT released first, while the CAT still reaches it.
+        runCatching { ft8Tx.arrete("SatMe-PC fermé") }
         runCatching { emissionPoste.arreteTout("SatMe-PC fermé") }
         // The Pluto's narrow band: its LO powered down.
         runCatching { emissionBe.arreteTout("SatMe-PC fermé") }
@@ -653,6 +672,22 @@ fun main(args: Array<String>) {
  * satellite. QO-100 when it is set on the dongle or the rig; the dongle's
  * frequency; the rig's by CAT.
  */
+/**
+ * Where the rig is for FT8/FT4: on QO-100 (« Appliquer au poste »), on the
+ * followed satellite while the Doppler loop drives its uplink (its
+ * transponder, inverting or not), else terrestrial (the rig's own frequency).
+ */
+private fun liaisonFt8(station: StationPc): Ft8EmissionPc.Liaison {
+    val e = station.etat.value
+    val ce = station.stationCat.etat.value
+    if (station.qo100.etat.value.auPoste) return Ft8EmissionPc.Liaison("QO-100", false, ce.monteeHz, ce.descenteHz, false)
+    val sat = e.suivi ?: return Ft8EmissionPc.Liaison()
+    val t = station.emetteurChoisi()
+    if (!e.catConnecte || t == null || ce.monteeHz == null) return Ft8EmissionPc.Liaison()
+    return Ft8EmissionPc.Liaison(sat.name, t.uplinkLowHz == null, ce.monteeHz, ce.descenteHz, t.invert,
+        t.uplinkLowHz, t.uplinkHighHz ?: t.uplinkLowHz, e.position?.rangeRateKmS ?: 0.0, lineaire = t.isTransponder)
+}
+
 private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair<Long?, String> {
     val q = station.qo100.etat.value
     val e = station.etat.value
