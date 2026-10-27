@@ -1116,7 +1116,8 @@ object GlobeRenduPc {
 
     /**
      * The capitals, the most populous first: a dot, then the name, its
-     * country's code on a small badge (the page's flag) or both, where it finds
+     * country's flag (the page's, [DrapeauxPc]; its code on a small badge when
+     * there is none) or both, where it finds
      * room; the 40 largest keep their dot without it, the others go.
      */
     private fun capitales(g: Graphics2D, cam: Camera, style: String, dp: Float, boites: MutableList<Rectangle2D.Float>, o: Options) {
@@ -1133,8 +1134,11 @@ object GlobeRenduPc {
             val grande = rangC < 40
             val r = (if (rangC < 15) 3.2f else if (grande) 2.6f else 2f) * dp
             val badge = o.etiquettes != "nom" && v.pays.isNotBlank()
-            val lb = if (badge) fmb.stringWidth(v.pays) + 6 * dp else 0f
-            val l = (if (nom) fm.stringWidth(v.nom).toFloat() else 0f) + (if (badge && nom) lb + 3 * dp else lb)
+            // The page's flag before the name, set in its line of text (a space after it); its code on a badge when there is none.
+            val drapeau = badge && DrapeauxPc.connu(v.pays)
+            val lb = if (drapeau) DrapeauxPc.largeur(v.pays, DrapeauxPc.em.h * f.size2D) else if (badge) fmb.stringWidth(v.pays) + 6 * dp else 0f
+            val ecart = if (drapeau) fm.stringWidth(" ").toFloat() else 3 * dp
+            val l = (if (nom) fm.stringWidth(v.nom).toFloat() else 0f) + (if (badge && nom) lb + ecart else lb)
             if (l <= 0f) {
                 // Neither name nor code (a flag asked of a capital without country): the dot alone.
                 if (grande || boites.none { it.contains(x.toDouble(), y.toDouble()) }) point(g, x, y, r, style, rangC < 15)
@@ -1148,7 +1152,13 @@ object GlobeRenduPc {
             boites += b
             val alpha = (255 * ((z - 0.15) / 0.2).coerceIn(0.0, 1.0)).toInt()
             var tx = b.x
-            if (badge) {
+            if (drapeau) {
+                val avant = g.composite
+                if (alpha < 255) g.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, ((avant as? AlphaComposite)?.alpha ?: 1f) * alpha / 255f)
+                DrapeauxPc.dessineDansTexte(g, v.pays, tx, y + fm.ascent * 0.35f, f.size2D)
+                g.composite = avant
+                tx += lb + ecart
+            } else if (badge) {
                 val hb = fmb.ascent + 3 * dp
                 val chip = RoundRectangle2D.Float(tx, y - hb / 2 - fm.ascent * 0.08f, lb, hb, hb * 0.6f, hb * 0.6f)
                 if (style == "cartoon") {

@@ -56,6 +56,7 @@ celle de la tradition du logiciel radioamateur.
 | `com.google.android.play:app-update-ktx` | Propriétaire Google | Détection de mise à jour |
 | JUnit, Robolectric (essais seulement) | EPL-1.0, Apache-2.0 | Bancs d'essai |
 | `ft8_lib` de Kārlis Goba (tables du code correcteur, recopiées) | MIT | Décodage FT8 et FT4 |
+| Police Twemoji Country Flags (`drapeaux.woff2`, de country-flag-emoji-polyfill 0.1.10 ; dessins des drapeaux de Twemoji, Twitter, Inc. et contributeurs ; `drapeaux-LICENCE.txt` à côté) et ses drapeaux dessinés en images (`pc/src/main/resources/…/pc/drapeaux/drapeaux.png`, faite par `tools/drapeaux/genere-atlas.mjs`, `LICENCE.txt` à côté) | CC BY 4.0 | Les drapeaux des pays dans les pages ; les mêmes dans les vidéos et images de SatMe-PC (journal : cadre FT4/FT8, capitales du globe) |
 
 **Sur LAME et la LGPL.** La bibliothèque native est embarquée en tant que
 `.so` distinct, non fusionné au reste de l'application. C'est ce qui permet à
