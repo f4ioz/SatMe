@@ -285,7 +285,7 @@ class EmissionPostePc(
     /** The rig's TX frequency now (its uplink when the loop drives it, else the dial read), for the watts. */
     private fun frequenceTx(): Long? {
         val ce = station.stationCat.etat.value
-        return ce.monteeHz?.let { station.convTx().versPoste(it) } ?: ce.descenteHz
+        return ce.monteeHz?.let { station.posteTxCat(it) } ?: ce.descenteHz
     }
 
     fun json(client: String?): JSONObject {

@@ -1955,4 +1955,13 @@ class SettingsStore(
     var convTxHautHz: Long
         get() = prefs.getLong("conv_tx_haut", 2_450_000_000L)
         set(v) { prefs.edit().putLong("conv_tx_haut", v.coerceAtLeast(0L)).apply() }
+
+    /**
+     * The converter table (SatMe-PC, Réglages › Poste et rotor), as
+     * [fr.f4ioz.satcombo.domain.TableConversion.ecrit] writes it; null until
+     * first made, from the two converters above.
+     */
+    var convBandes: String?
+        get() = prefs.getString("conv_bandes", null)
+        set(v) { prefs.edit().putString("conv_bandes", v).apply() }
 }

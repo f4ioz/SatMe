@@ -20,6 +20,9 @@ import fr.f4ioz.satcombo.demo.RequeteHttp
 import org.json.JSONArray
 import org.json.JSONObject
 import fr.f4ioz.satcombo.domain.JournalPaquet
+import fr.f4ioz.satcombo.domain.Convertisseur
+import fr.f4ioz.satcombo.domain.TableConversion
+import fr.f4ioz.satcombo.domain.UsageConversion
 import fr.f4ioz.satcombo.sdr.Dsp
 import java.io.OutputStream
 import java.net.InetAddress
@@ -285,7 +288,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val p = emissionPoste
         if (p == null || !p.poste.etat.emet) return JSONObject().put("ok", false).put("erreur", "mettre l'IC-9700 en émission (CW, porteuse) par SatMe d'abord")
         val q = station.qo100.etat.value
-        val f = station.stationCat.etat.value.monteeHz?.let { station.convTx().versPoste(it) }
+        val f = station.stationCat.etat.value.monteeHz?.let { station.posteTxCat(it) }
             ?: return JSONObject().put("ok", false).put("erreur", "fréquence d'émission du poste inconnue")
         val (ol, msg) = b.mesureOlPoste(f, q.descenteHz)
         if (ol == null) return JSONObject().put("ok", false).put("erreur", msg)
@@ -1022,6 +1025,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // The waterfall's scale: the satellites' downlinks in the receiver's view, Doppler applied.
             "/api/sdr/echelle" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { fr.f4ioz.satcombo.domain.EchelleSdr.json(it.echelle(), System.currentTimeMillis()) } ?: JSONObject().put("ok", false)).toString().toByteArray())
+            "/api/conversion" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.tableConversion(station, sdr).toString().toByteArray())
+            "/api/calibration" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", calibration.references().toString().toByteArray())
+            "/api/calibration/fcch" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", calibration.fcch(q["arfcn"]?.trim()?.toIntOrNull() ?: -1).toString().toByteArray())
+            "/api/calibration/mesure" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (q["hz"]?.toLongOrNull()?.let {
+                calibration.mesure(it, q["fenetre"]?.toDoubleOrNull() ?: 20_000.0, q["maintien"] == "1", q["pic"]?.toLongOrNull(), q["lobes"] == "1")
+            } ?: JSONObject().put("ok", false).put("erreur", "fréquence ?")).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute", q["dx"]?.toIntOrNull() ?: 0) } ?: JSONObject()).toString().toByteArray())
             "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
@@ -1481,6 +1490,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         return JSONObject().put("ok", true).put("satellite", sat.name).put("fait", JSONArray(fait))
             .put("decodeurs", JSONArray(p.decodeurs))
     }
+
+    /** The SDR calibration assistant (receive only). */
+    private val calibration by lazy { CalibrationSdrPc(station) { sdr } }
 
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
         val ok = JSONObject().put("ok", true)
@@ -1979,6 +1991,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qo100/calage-zero" -> station.qo100.annuleCalage()
             "/api/qo100/auto" -> qo100?.auto = q["on"] == "1"
             "/api/qo100/verrou" -> qo100?.verrouBalise = q["on"] == "1"
+            // The converter table, sent whole from the page (JSON lines); « Rétablir les préréglages ».
+            "/api/conversion/table" -> {
+                val a = runCatching { JSONArray(q["t"].orEmpty()) }.getOrNull() ?: return JSONObject().put("ok", false).put("erreur", "table illisible")
+                val t = (0 until minOf(a.length(), TableConversion.MAX_LIGNES)).mapNotNull { i -> a.optJSONObject(i)?.let { o ->
+                    fr.f4ioz.satcombo.domain.BandeConversion(o.optString("nom").trim().take(80).ifEmpty { "Bande " + (i + 1) },
+                        o.optLong("bas"), o.optLong("haut"), o.optLong("ol"), o.optBoolean("inv"),
+                        o.optBoolean("sdr"), o.optBoolean("catRx"), o.optBoolean("catTx"), o.optBoolean("actif", true),
+                        o.optString("chaine").takeIf { it == TableConversion.CHAINE_RX || it == TableConversion.CHAINE_TX }.orEmpty()) } }
+                station.poseBandes(t)
+            }
+            "/api/conversion/retablir" -> station.retablitBandes()
+            // The calibration assistant: tune the SDR (receive only), save what was measured.
+            "/api/calibration/accorde" -> return q["hz"]?.toLongOrNull()?.let { calibration.accorde(it) } ?: JSONObject().put("ok", false).put("erreur", "fréquence ?")
+            "/api/calibration/ppm" -> return q["v"]?.trim()?.toIntOrNull()?.let { calibration.posePpm(it) } ?: JSONObject().put("ok", false).put("erreur", "ppm ?")
+            "/api/calibration/ol" -> return calibration.poseOl(entier("i") ?: -1, q["nom"].orEmpty(), q["hz"]?.toLongOrNull() ?: 0L)
             "/api/convertisseurs" -> {
                 // MHz on the page, Hz here; an empty field leaves it as it is.
                 fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
@@ -2513,6 +2540,45 @@ object JsonPc {
             gammeCle ?: ApiQo100.GAMME_CLE)
     }
 
+    /**
+     * What the rig is sent through the converter table: for each side the
+     * sky, the IF actually sent and its line, or why nothing is sent ([avert]
+     * when the CAT is connected: the status bar's warning).
+     */
+    fun conversionCat(st: StationPc, dl: Long?, ul: Long?, catDl: Long?, catUl: Long?, connecte: Boolean): JSONObject {
+        val q = st.qo100.etat.value
+        val cielDl = if (q.auPoste) q.descenteHz + q.calageHz else catDl ?: dl
+        val cielUl = if (q.auPoste) q.monteeHz else catUl ?: ul
+        val o = JSONObject()
+        val refus = mutableListOf<String>()
+        fun cote(k: String, ciel: Long?, u: UsageConversion) {
+            if (ciel == null || ciel <= 0L) return
+            val f = st.fiCat(ciel, u)
+            o.put(k, JSONObject().put("ciel", f.cielHz).put("fi", f.fiHz).put("bande", f.bande ?: JSONObject.NULL).put("refus", f.refus ?: JSONObject.NULL))
+            f.refus?.let { refus += it }
+        }
+        cote("dl", cielDl, UsageConversion.CAT_RX)
+        cote("ul", cielUl, UsageConversion.CAT_TX)
+        if (connecte && refus.isNotEmpty()) o.put("avert", refus.joinToString(" · "))
+        return o
+    }
+
+    /** The converter table for the page: its lines, each one's IF window and problem, and what each device gets now. */
+    fun tableConversion(st: StationPc, sdr: SdrPc?): JSONObject {
+        val t = st.bandes()
+        val a = JSONArray(t.map { b ->
+            JSONObject().put("nom", b.nom).put("bas", b.basHz).put("haut", b.hautHz).put("ol", b.olHz).put("inv", b.inverse)
+                .put("sdr", b.sdr).put("catRx", b.catRx).put("catTx", b.catTx).put("actif", b.actif).put("chaine", b.chaine)
+                .put("probleme", b.probleme() ?: JSONObject.NULL)
+                .put("fiBas", b.fenetreFi().first).put("fiHaut", b.fenetreFi().last)
+        })
+        val o = JSONObject().put("bandes", a).put("max", TableConversion.MAX_LIGNES)
+            .put("presets", JSONArray(TableConversion.PRESETS.map { JSONObject().put("nom", it.nom) }))
+        sdr?.let { d -> val e = d.etat.value
+            if (e.actif && e.pllHz > 0) o.put("cle", JSONObject().put("ciel", d.cielDePll(e.pllHz)).put("fi", e.pllHz)) }
+        return o
+    }
+
     fun etat(st: StationPc, carnet: CarnetPc? = null): JSONObject {
         val e = st.etat.value
         val r = st.stationRotor.etat.value
@@ -2539,11 +2605,16 @@ object JsonPc {
         o.put("agenda", fr.f4ioz.satcombo.demo.ApiCalculs.agendaJson(e.agenda, e.maintenant))
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
-        val rx = st.convRx(); val tx = st.convTx()
         o.put("amsatAuto", st.settings.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
+        // QO-100's converters as the station chain reads them (the Montage tab): the table's lines for its beacon and uplink.
+        val bandes = st.bandes()
+        val rx = TableConversion.bande(bandes, Convertisseur.BALISE_MEDIANE_HZ, UsageConversion.SDR)
+            ?: TableConversion.bande(bandes, Convertisseur.BALISE_MEDIANE_HZ, UsageConversion.CAT_RX)
+        val tx = TableConversion.bande(bandes, TableConversion.QO100_UL_BAS + 50_000L, UsageConversion.CAT_TX)
         o.put("convertisseurs", JSONObject()
-            .put("rxOl", if (rx.configure) rx.olHz else 0).put("rxInv", rx.inverseur)
-            .put("txOl", if (tx.configure) tx.olHz else 0).put("txInv", tx.inverseur))
+            .put("rxOl", rx?.olHz ?: 0).put("rxInv", rx?.inverse == true)
+            .put("txOl", tx?.olHz ?: 0).put("txInv", tx?.inverse == true))
+        o.put("conversion", conversionCat(st, dl, ul, c.descenteHz, c.monteeHz, e.catConnecte))
         o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler))
         o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r))
         // The log's pass: the skeds announced for the pass under way or next, the contacts of the one under way

@@ -73,6 +73,11 @@ interface MondeCat {
     fun satDepuisPoste(posteHz: Long): Long
     fun posteTx(satHz: Long): Long
     fun satDepuisPosteTx(posteHz: Long): Long
+    /**
+     * May the rig be sent [posteHz]? By default one of the satellite bands;
+     * the PC adds the IFs of its converter table (a 28 MHz transverter).
+     */
+    fun atteignable(posteHz: Long): Boolean = BandPlan.band(posteHz) != BandPlan.Band.AUTRE
 }
 
 /** What the loop shows: the rig's frequencies (sky), who drives the RX dial, its mode read back. */
@@ -208,8 +213,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
      * silent NAK ten times a second. Hence this guard, right where the
      * frequency becomes a frame.
      */
-    fun atteignableParLePoste(posteHz: Long): Boolean =
-        BandPlan.band(posteHz) != BandPlan.Band.AUTRE
+    fun atteignableParLePoste(posteHz: Long): Boolean = monde.atteignable(posteHz)
 
     /**
      * Does the downlink reach the rig? Asked before reading it back: otherwise

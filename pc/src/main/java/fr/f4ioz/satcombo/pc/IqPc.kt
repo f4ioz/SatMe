@@ -104,7 +104,7 @@ class IqPc(
         val sat = if (sdr.generateur != null) "" else e.satellite
         val norad = if (sdr.suitSatellite && suivi != null && sat == suivi.name) suivi.catalogNumber else 0
         val pass = if (norad > 0) station.passageEnCours(norad, debutMs) else null
-        val conv = station.convRx()
+        val conv = station.convSdrDeFi(e.pllHz)
         return SigMF.Meta(format, Dsp.RTL_RATE.toDouble(), debutMs,
             materiel = e.tuner, enregistreur = "SatMe-PC " + versionPc(), auteur = station.settings.callsign,
             description = if (sdr.generateur != null) "Générateur d'essai de SatMe (aucune antenne)" else "",
