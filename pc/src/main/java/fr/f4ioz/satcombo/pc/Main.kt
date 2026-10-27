@@ -466,7 +466,7 @@ fun main(args: Array<String>) {
             else if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord"
             else if (iq.enCours) iqEnCours
             else if (emissionPoste.poste.etat.emet) "l'IC-9700 émet : relâcher son PTT d'abord"
-            else if (ft8Tx.arme) "FT8/FT4 en émission par l'IC-9700 (onglet FT8) : l'arrêter d'abord" else null
+            else if (ft8Tx.arme) "FT8/FT4 en émission par l'IC-9700 (onglet FT8/FT4) : l'arrêter d'abord" else null
         },
         gainMaxDb = { emission.gainMaxDb }, reseauAutorise = { station.txReseauAutorise },
         descenteCockpit = { station.qo100.etat.value.descenteHz },

@@ -251,7 +251,7 @@ object CatalogueMateriel {
         // ---- boîtes: programs and services beside the computer (display only)
         boite("boite-wavelog", "Wavelog (carnet en ligne)", "wavelog", "Le carnet en ligne : adresse et clé dans Réglages › Carnet. La page du montage n'y envoie rien."),
         boite("boite-qrz", "QRZ.com (recherche d'indicatifs)", "qrz", "Les fiches des indicatifs : identifiant dans Réglages."),
-        boite("boite-psk", "PSK Reporter", "psk", "Les stations FT8 / FT4 entendues, envoyées seulement si tu l'as choisi (onglet FT8)."),
+        boite("boite-psk", "PSK Reporter", "psk", "Les stations FT8 / FT4 entendues, envoyées seulement si tu l'as choisi (onglet FT8/FT4)."),
         boite("boite-chat", "Spectre large bande et chat DATV", "chat", "Le spectre large bande de QO-100 et le chat des stations DATV (onglet DATV)."),
         boite("boite-carnets", "Programmes de carnet (rigctld)", "carnets", "Les logiciels de carnet qui lisent la fréquence de SatMe (Réglages › Interfaces)."),
         boite("boite-lien", "Lien satellite (WebSocket)", "lien", "Les programmes et le téléphone qui suivent le satellite par le lien de SatMe."),

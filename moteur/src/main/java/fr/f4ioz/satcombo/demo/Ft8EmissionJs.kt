@@ -9,7 +9,7 @@
 package fr.f4ioz.satcombo.demo
 
 /**
- * SatMe-PC's FT8/FT4 transmit panel (the FT8 tab of the cockpit's
+ * SatMe-PC's FT8/FT4 transmit panel (the FT8/FT4 tab of the cockpit's
  * « Modes »), served with [PagePc] and inserted in it: the six messages
  * (Tx1–Tx6, editable), « Appeler CQ », enable and halt, the TX frequency
  * (its marker on the waterfall, Maj+clic to move it), the slot parity, the
@@ -26,24 +26,36 @@ object Ft8EmissionJs {
     const val CSS = """
   .f8tx { margin:0; }
   .f8tx[hidden] { display:none; }
-  .f8tx-tete { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .f8tx-tete b { font-size:15px; }
-  .f8tx-grille { display:grid; grid-template-columns:minmax(0, 1.3fr) minmax(0, 1fr); gap:14px; margin-top:8px; }
-  @media (max-width: 900px) { .f8tx-grille { grid-template-columns:1fr; } }
-  .f8tx-ligne { display:flex; gap:6px; align-items:center; margin:3px 0; }
-  .f8tx-ligne label { min-width:52px; font-weight:700; cursor:pointer; white-space:nowrap; }
-  .f8tx-ligne input[type=text] { flex:1; min-width:0; font-family:ui-monospace,Consolas,monospace; text-transform:uppercase; }
+  .f8tx-tete { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; margin:0; }
+  .f8tx-tete b { font-size:14px; }
+  .f8tx-tete .f8tx-chien { margin-left:auto; }
+  .f8tx-boutons { display:flex; flex-wrap:wrap; gap:4px; padding:4px 0; background:var(--s2); }
+  .f8tx-boutons button { padding:3px 7px; font-size:12px; white-space:nowrap; }
+  /* On a computer the card scrolls in its column when short of room: its buttons (« Arrêter » first of all) stay in sight. */
+  @media (min-width:1101px) and (min-height:600px) { .f8tx-boutons { position:sticky; top:-8px; z-index:2; } }
+  .f8tx-statut { display:block; min-height:1.2em; }
+  .f8tx-msgs { margin-top:4px; }
+  .f8tx-ligne { display:flex; gap:4px; align-items:center; margin:1px 0; }
+  .f8tx-ligne label { min-width:42px; font-weight:700; cursor:pointer; white-space:nowrap; font-size:var(--fs-s); }
+  .f8tx-ligne label input { margin:0 2px 0 0; }
+  .f8tx-ligne input[type=text] { flex:1; min-width:0; padding:2px 6px; font-family:ui-monospace,Consolas,monospace; font-size:13px; text-transform:uppercase; }
   .f8tx-ligne.suivant input[type=text] { border-color:var(--tx); box-shadow:0 0 0 2px rgba(255,90,54,.25); }
   .f8tx-ligne.envoi input[type=text] { background:rgba(255,90,54,.18); }
-  .f8tx-type { font-size:var(--fs-xs); color:var(--gris); min-width:64px; }
+  .f8tx-type { font-size:var(--fs-xs); color:var(--gris); width:58px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .f8tx-type.non { color:var(--rose); }
-  .f8tx-reglages .ligne { margin:4px 0; flex-wrap:wrap; }
-  .f8tx-qso { margin-top:8px; padding:6px 10px; border-radius:8px; background:var(--s3); font-size:var(--fs-s); }
+  .f8tx .ligne { margin:4px 0 0; gap:3px 6px; }
+  .f8tx .ligne select { flex:none; padding:2px 4px; }
+  .f8tx-etat { margin-top:4px; line-height:1.35; }
+  .f8tx-etat span:empty { display:none; }
+  .f8tx-etat span:not(:empty) ~ span:not(:empty)::before { content:'· '; }
+  .f8tx-plus { margin-top:4px; }
+  .f8tx-plus > summary { cursor:pointer; font-size:var(--fs-s); color:var(--texte-2); }
+  .f8tx-qso { margin-top:4px; padding:3px 8px; border-radius:6px; background:var(--s3); font-size:var(--fs-s); }
   .f8tx-qso b { color:var(--clair); }
-  .f8tx-barre { height:4px; border-radius:2px; background:var(--s3); overflow:hidden; margin-top:6px; }
+  .f8tx-barre { height:4px; border-radius:2px; background:var(--s3); overflow:hidden; margin-top:4px; }
   .f8tx-barre i { display:block; height:100%; background:var(--tx); width:0; }
-  .f8tx-noter { margin-top:10px; padding:8px 10px; border:1px solid var(--vert); border-radius:8px; }
-  .f8tx-noter input { max-width:110px; }
+  .f8tx-noter { margin-top:6px; padding:6px 8px; border:1px solid var(--vert); border-radius:8px; }
+  .f8tx-noter input { max-width:100px; }
   .f8tx-chien { font-variant-numeric:tabular-nums; }
   .f8tx-chien.bas { color:var(--rose); font-weight:700; }
   .f8tx-bandeau { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:60; display:flex; gap:10px; align-items:center;
@@ -68,42 +80,35 @@ object Ft8EmissionJs {
 
     const val HTML = """
 <div class="carte f8tx" id="f8tx" hidden>
-  <div class="f8tx-tete">
-    <b>Émission</b><span class="pastille f8tx-pastille" id="f8tx-pastille">réception seule</span>
+  <div class="paire f8tx-tete"><b>Émission FT8/FT4</b><span class="pastille f8tx-pastille" id="f8tx-pastille">réception seule</span>
+    <span class="petit f8tx-chien" id="f8tx-chien-r" title="Le chien de garde : sans geste de l'opérateur pendant ce temps, l'émission s'arrête"></span></div>
+  <div class="f8tx-boutons">
     <button class="primaire" id="f8tx-cq" onclick="f8txCq()" title="Lancer un appel général dans le créneau choisi (pair ou impair). Il se répète jusqu'à une réponse, ou jusqu'au chien de garde.">📣 Appeler CQ</button>
     <button id="f8tx-actif" onclick="f8txActive()" title="Reprendre l'envoi du message choisi (Tx1–Tx6) dans ses créneaux">Activer l'émission</button>
     <button class="arret" id="f8tx-stop" onclick="f8txArret()" title="Couper l'émission maintenant, PTT relâché (Échap marche partout)">■ Arrêter l'émission</button>
-    <span class="petit" id="f8tx-statut" style="flex:1;min-width:180px"></span>
   </div>
+  <span class="petit f8tx-statut" id="f8tx-statut"></span>
   <div class="f8tx-barre" id="f8tx-barre" hidden><i id="f8tx-progres"></i></div>
   <div class="f8tx-qso" id="f8tx-qso">Double-clic sur une ligne décodée (ou ↩) pour répondre à cette station ; « Appeler CQ » pour lancer un appel.</div>
-  <div class="f8tx-grille">
-    <div>
-      <div class="paire" style="margin:0 0 4px"><b class="petit">Messages</b><span class="petit">le prochain envoyé est encadré ; clic sur Tx pour en choisir un autre</span></div>
-      <div id="f8tx-msgs"></div>
-    </div>
-    <div class="f8tx-reglages">
-      <div class="ligne"><span class="petit" style="min-width:110px">Fréquence TX</span>
-        <input id="f8tx-hz" inputmode="numeric" style="max-width:80px" onchange="f8txPost('hz=' + enc(this.value))" aria-label="Fréquence audio d'émission (Hz)"><span class="petit">Hz</span>
-        <button onclick="f8txLibre()" title="Mettre la fréquence d'émission sur la place libre vue dans la cascade">▼ place libre</button></div>
-      <div class="ligne"><label class="petit" title="SatMe ne déplace jamais la fréquence d'émission, même vers une place libre au début d'un QSO"><input type="checkbox" id="f8tx-tient" onchange="f8txPost('tient=' + (this.checked ? 1 : 0))"> Garder la fréquence d'émission</label></div>
-      <div class="ligne"><span class="petit" style="min-width:110px">CQ en créneau</span>
-        <select id="f8tx-pair" onchange="f8txPost('pair=' + this.value)"><option value="1">pair (1er)</option><option value="0">impair (2e)</option></select>
-        <span class="petit" title="En réponse à une station, SatMe émet dans le créneau opposé au sien">réponse : créneau opposé à la station</span></div>
-      <div class="ligne"><label class="petit"><input type="checkbox" id="f8tx-auto" onchange="f8txPost('auto=' + (this.checked ? 1 : 0))"> Séquence automatique</label>
-        <label class="petit" title="Tx4 envoie RRR (la station doit encore dire 73) au lieu de RR73"><input type="checkbox" id="f8tx-rrr" onchange="f8txPost('rrr=' + (this.checked ? 1 : 0))"> RRR</label></div>
-      <div class="ligne"><span class="petit" style="min-width:110px" title="Sans geste de l'opérateur pendant ce temps, l'émission s'arrête (règle FT8/FT4 : pas de QSO sans opérateur)">Chien de garde</span>
-        <select id="f8tx-chien" onchange="f8txPost('chien=' + this.value)"><option value="1">1 min</option><option value="2">2 min</option><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option></select>
-        <span class="petit f8tx-chien" id="f8tx-chien-r"></span></div>
-      <div class="ligne"><span class="petit" style="min-width:110px">Niveau audio</span>
-        <input type="range" id="f8tx-niv" min="-30" max="0" step="1" style="flex:1;max-width:160px" onchange="f8txPost('niveau=' + this.value)" aria-label="Niveau audio envoyé au poste (dB)"><span class="petit" id="f8tx-niv-v"></span></div>
-      <div class="ligne"><label class="petit" title="Pendant l'émission armée, SatMe met le poste en USB-D / LSB-D (les deux bandes en mode satellite) : le son vient alors de DATA MOD (USB). Le mode d'avant est remis à l'arrêt. Jamais pendant le PTT."><input type="checkbox" id="f8tx-donnees" onchange="f8txPost('donnees=' + (this.checked ? 1 : 0))"> Mode données (USB-D)</label>
-        <span class="petit" id="f8tx-mode"></span></div>
-      <div class="ligne"><span class="petit" id="f8tx-donnees-aide"></span></div>
-      <div class="ligne"><span class="petit" id="f8tx-horloge"></span></div>
-      <div class="ligne"><span class="petit" id="f8tx-ou"></span></div>
-    </div>
-  </div>
+  <div class="f8tx-msgs" id="f8tx-msgs" role="group" aria-label="Messages" title="Le prochain envoyé est encadré ; clic sur Tx pour en choisir un autre"></div>
+  <div class="ligne"><span class="petit">Fréq. TX</span>
+    <input id="f8tx-hz" inputmode="numeric" style="max-width:64px;flex:none" onchange="f8txPost('hz=' + enc(this.value))" aria-label="Fréquence audio d'émission (Hz)"><span class="petit">Hz</span>
+    <button onclick="f8txLibre()" title="Mettre la fréquence d'émission sur la place libre vue dans la cascade">▼ place libre</button>
+    <label class="petit" title="SatMe ne déplace jamais la fréquence d'émission, même vers une place libre au début d'un QSO"><input type="checkbox" id="f8tx-tient" onchange="f8txPost('tient=' + (this.checked ? 1 : 0))"> Garder</label></div>
+  <div class="ligne"><label class="petit"><input type="checkbox" id="f8tx-auto" onchange="f8txPost('auto=' + (this.checked ? 1 : 0))"> Séq. auto</label>
+    <label class="petit" title="Tx4 envoie RRR (la station doit encore dire 73) au lieu de RR73"><input type="checkbox" id="f8tx-rrr" onchange="f8txPost('rrr=' + (this.checked ? 1 : 0))"> RRR</label>
+    <span class="petit" title="Le créneau de « Appeler CQ ». En réponse à une station, SatMe émet dans le créneau opposé au sien.">CQ</span>
+    <select id="f8tx-pair" onchange="f8txPost('pair=' + this.value)" aria-label="CQ en créneau" title="CQ en créneau ; réponse : créneau opposé à la station"><option value="1">pair (1er)</option><option value="0">impair (2e)</option></select>
+    <span class="petit" title="Sans geste de l'opérateur pendant ce temps, l'émission s'arrête (règle FT8/FT4 : pas de QSO sans opérateur)">Garde</span>
+    <select id="f8tx-chien" onchange="f8txPost('chien=' + this.value)" aria-label="Chien de garde"><option value="1">1 min</option><option value="2">2 min</option><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option></select></div>
+  <div class="petit f8tx-etat"><span id="f8tx-horloge"></span> <span id="f8tx-ou"></span> <span id="f8tx-mode"></span></div>
+  <details class="f8tx-plus">
+    <summary>Réglages : niveau audio, mode données (USB-D)</summary>
+    <div class="ligne"><span class="petit">Niveau audio</span>
+      <input type="range" id="f8tx-niv" min="-30" max="0" step="1" style="flex:1;max-width:160px" onchange="f8txPost('niveau=' + this.value)" aria-label="Niveau audio envoyé au poste (dB)"><span class="petit" id="f8tx-niv-v"></span></div>
+    <div class="ligne"><label class="petit" title="Pendant l'émission armée, SatMe met le poste en USB-D / LSB-D (les deux bandes en mode satellite) : le son vient alors de DATA MOD (USB). Le mode d'avant est remis à l'arrêt. Jamais pendant le PTT."><input type="checkbox" id="f8tx-donnees" onchange="f8txPost('donnees=' + (this.checked ? 1 : 0))"> Mode données (USB-D)</label></div>
+    <div class="petit" id="f8tx-donnees-aide"></div>
+  </details>
   <div class="f8tx-noter" id="f8tx-noter" hidden>
     <div><b>QSO terminé</b> <span class="petit" id="f8tx-n-titre"></span></div>
     <div class="ligne" style="flex-wrap:wrap">
@@ -117,7 +122,7 @@ object Ft8EmissionJs {
       <span class="petit" id="f8tx-n-etat"></span>
     </div>
   </div>
-  <div class="petit aide" style="margin-top:8px">L'émission passe par le PTT de l'IC-9700 que SatMe tient déjà (Réglages › Émission) : ses gardes restent (minuterie, plafond de puissance, autorisation par le réseau, balises et LEILA sur QO-100). Sur un satellite, la montée suit le Doppler du transpondeur et le décalage d'émission du satellite (« Aligner… ») ; le signal revient sur la descente à la même fréquence audio. <b>Règle FT8/FT4 : pas de QSO robotisé ni sans opérateur.</b> Un QSO ne commence que par ton geste (double-clic, « Appeler CQ ») ; la séquence peut ensuite avancer seule, mais sans geste pendant la durée du chien de garde l'émission s'arrête, et la page fermée l'arrête aussi. L'horloge du PC doit être juste : au-delà de ±0,5 s (FT4) ou ±1 s (FT8), SatMe refuse d'émettre.</div>
+  <div class="petit aide">L'émission passe par le PTT de l'IC-9700 que SatMe tient déjà (Réglages › Émission) : ses gardes restent (minuterie, plafond de puissance, autorisation par le réseau, balises et LEILA sur QO-100). Sur un satellite, la montée suit le Doppler du transpondeur et le décalage d'émission du satellite (« Aligner… ») ; le signal revient sur la descente à la même fréquence audio. « CQ » : le créneau de l'appel ; en réponse à une station, SatMe émet dans le créneau opposé au sien. <b>Règle FT8/FT4 : pas de QSO robotisé ni sans opérateur.</b> Un QSO ne commence que par ton geste (double-clic, « Appeler CQ ») ; la séquence peut ensuite avancer seule, mais sans geste pendant la durée du chien de garde (« Garde ») l'émission s'arrête, et la page fermée l'arrête aussi. L'horloge du PC doit être juste : au-delà de ±0,5 s (FT4) ou ±1 s (FT8), SatMe refuse d'émettre.</div>
 </div>"""
 
     const val CODE = """
@@ -218,7 +223,7 @@ function f8txRend() {
       : 'Mode données coupé : SatMe ne touche pas au mode ; régler DATA OFF MOD = USB (ou MIC,USB) sur l’IC-9700.');
   txt('f8tx-niv-v', X.niveau + ' dB');
   const c = g('f8tx-chien-r');
-  c.textContent = X.chienS != null ? 'reste ' + Math.floor(X.chienS / 60) + ':' + String(X.chienS % 60).padStart(2, '0') : '';
+  c.textContent = X.chienS != null ? 'garde ' + Math.floor(X.chienS / 60) + ':' + String(X.chienS % 60).padStart(2, '0') : '';
   c.classList.toggle('bas', X.chienS != null && X.chienS < 30);
   const h = X.horloge;
   txt('f8tx-horloge', h == null ? 'Horloge : pas encore lue (il faut quelques décodages)' : 'Horloge : ' + (h > 0 ? '+' : '') + String(h).replace('.', ',') + ' s ' +
