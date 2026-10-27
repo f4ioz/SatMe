@@ -549,6 +549,23 @@ fun main(args: Array<String>) {
     val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin })
     son.sstv.imageGardee = { d, s -> redecodageAuto.demande(d, s) }
     serveur.optionsSstv = optionsSstv
+    // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
+    val diplomes = DiplomesPc(station, dossier,
+        images = {
+            val notes = runCatching { classement.etat().groupes.flatMap { g -> g.notes.entries } }.getOrDefault(emptyList()).associate { it.key to it.value }
+            son.images().filter { it.source != SstvPc.ESSAI }.map { s ->
+                fr.f4ioz.satcombo.domain.Diplomes.Image(s.fileName, s.satName, s.timeMs, s.complete, notes[s.fileName] ?: -1, s.mode, s.traitement.isNotEmpty())
+            }
+        },
+        contacts = { carnet.contacts() },
+        activites = { runCatching { activites.liste() }.getOrDefault(emptyList()) },
+        infosImage = { optionsSstv.infosImage(it) },
+        fictifs = if (ModeDemo.actif) GenerateurDemo::diplomes else { _ -> emptyList() }, enLigneAutorise = !ModeDemo.actif)
+    serveur.diplomes = diplomes
+    portee.launch(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.delay(25_000)
+        while (true) { runCatching { diplomes.tic() }; repeat(60) { if (!diplomes.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }
+    }
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(30_000)
         while (true) { runCatching { optionsSstv.tic() }; kotlinx.coroutines.delay(30_000) }

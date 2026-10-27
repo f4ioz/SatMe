@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>AMSAT</title>
+	<atom:link href="https://www.amsat.org/feed/" rel="self" type="application/rss+xml" />
+	<link>https://www.amsat.org</link>
+	<description>The Radio Amateur Satellite Corporation</description>
+	<lastBuildDate>Sat, 24 Oct 2026 14:47:22 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.3</generator>
+	<item>
+		<title>ANS-298 AMSAT News Service Weekly Bulletins</title>
+		<link>https://www.amsat.org/ans-298-amsat-news-service-weekly-bulletins/</link>
+		
+		<dc:creator><![CDATA[Mark Johns]]></dc:creator>
+		<pubDate>Sun, 25 Oct 2026 00:00:32 +0000</pubDate>
+				<category><![CDATA[AMSAT General News]]></category>
+		<category><![CDATA[AMSAT News]]></category>
+		<category><![CDATA[AMSAT News Service]]></category>
+		<category><![CDATA[ANS]]></category>
+		<guid isPermaLink="false">https://www.amsat.org/?p=65847</guid>
+
+					<description></description>
+										<content:encoded><![CDATA[<p>Publication images are available at <a href="https://www.avinstar.com/ostrax/media/images">https://www.avinstar.com/ostrax/media/images</a></p>
+<p>The User Guide can be viewed at <a href="https://www.avinstar.com/ostrax/docs">https://www.avinstar.com/ostrax/docs</a></p>
+<p>A fully functional trial license is available for 15 days for each operating system version.</p>
+<p>For more information, please view the OsTrax web site at <a href="https://www.ostrax.com">https://www.ostrax.com</a> or contact Jim McCullers at <a href="mailto:jmccullers@avinstar.com">jmccullers@avinstar.com</a>.</p>
+<p>OsTrax was created by Jim McCullers, WA4CWI, an Extra Class amateur radio operator licensed since 1961. OsTrax combines his interest and experience in satellite operation with his professional programming experience. He is the developer of SigTrax, the signal tracking toolkit available on the Apple App Store for iOS devices and the Google Play Store for Android devices.</p>
+<p><em>[ANS thanks Jim McCullers, WA4CWI, for the above information.]</em></p>
+<hr />
+<h2>Changes to AMSAT TLE Distribution for Oct. 23, 2026</h2>
+<p>Two Line Elements or TLEs, often referred to as Keplerian elements or keps in the amateur community, are the inputs to the SGP4 standard mathematical model of spacecraft orbits used by most amateur tracking programs. Weekly updates are completely adequate for most amateur satellites. TLE bulletin files are updated daily in the first hour of the UTC day. New bulletin files will be posted immediately after reliable elements become available for new amateur satellites. More information may be found at <a href="https://www.amsat.org/keplerian-elements-resources/">https://www.amsat.org/keplerian-elements-resources/</a>.</p>
+<p class="wp-block-paragraph"><a href="https://www.amsat.org/tle/daily-bulletin.txt">Bulletin format elements</a> for all satellites of interest to radio amateurs.  This file is updated at least every 24 hours.<br /><a href="https://www.amsat.org/tle/dailytle.txt">Bare elements</a> are derived from the bulletin, but contain no header or footer.  These data are used as input to the <a title="AMSAT Pass Predictions" href="http://www.amsat.org/track/index.php">AMSAT Pass Predictions</a> page.</p>
+<p style="padding-left: 40px;"><em>This week there are no additions or deletions to the AMSAT TLE distribution.</em></p>
+<h3>General Perturbations Data Support</h3>
+<p>AMSAT is pleased to announce that modern forms of what are called General Perturbations data are being disseminated via modern formats including JSON, XML and KVN at <a href="https://newark192.amsat.org/gpdata/current/">https://newark192.amsat.org/gpdata/current/</a>. The reason this change is being made is that we are running out of 5-digit catalog numbers and the TLE format is not viable for satellites launched after July of this year. See <a href="https://celestrak.org/NORAD/documentation/gp-data-formats.php">https://celestrak.org/NORAD/documentation/gp-data-formats.php</a> for details.</p>
+<p>These data are presently considered in beta test for the next two months while hosted on the test server newark192.amsat.org, and we are very open to community feedback at webmaster at amsat.org. Testers may experience outages and errors while we make improvements. We intend to put this into production on our main web server in July as we expect that satellites launched after this summer will require one of the new formats to accommodate longer object numbers. AMSAT will continue to publish TLE bulletins for satellites launched before July 2026 indefinitely.</p>
+<p><em>[ANS thanks Joe Fitzgerald, KM1P, AMSAT Orbital Elements Manager, for the above information.]</em></p>
+<hr />
+<h2>ARISS SSTV Event in Progress</h2>
+<p>A series Slow-Scan Television (SSTV) transmissions from the International Space Station (ISS) is currently taking place, and will continue until Monday. Persons who upload  images they have received to the SSTV gallery at <a href="https://ariss-usa.org/ARISS_SSTV/">https://ariss-usa.org/ARISS_SSTV/</a> will receive an event certificate. Because this activity does not involve transmitting to the ISS, but only receiving, no amateur radio license is required to participate. More information is available at <a href="https://ariss-usa.org/ARISS_SSTV/">https://ariss-usa.org/ARISS_SSTV/</a>.</p>
+<p><img loading="lazy" decoding="async" class="aligncenter size-full wp-image-65849" src="https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway.jpg" alt="" width="800" height="800" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway.jpg 800w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway-300x300.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway-150x150.jpg 150w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway-768x768.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway-600x600.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/SSTV_Series_34_-_Post_3_-_Underway-100x100.jpg 100w" sizes="auto, (max-width: 800px) 100vw, 800px" /></p>
+<p><em>[ANS thanks the ARISS for the above information.]</em></p>
+<hr />
+<h3 class="PDq2pG_selectionAnchorContainer" style="text-align: center;" data-start="179" data-end="213"><em>Give Your Next Rove a Payload — Put Your Lunch into Orbit!</em></h3>
+<h3 style="text-align: center;" data-start="250" data-end="333"><strong data-start="250" data-end="333">Pack the rover dogs and hit the grid line with an all-new<br data-start="296" data-end="299" />AMSAT Round Logo Metal Lunchbox.</strong></h3>
+<h3 style="text-align: center;" data-start="335" data-end="353"><img loading="lazy" decoding="async" class="alignnone size-medium wp-image-65378" src="https://www.amsat.org/wordpress/wp-content/uploads/2026/09/AMSAT_Round_Logo_Metal_Lunchbox-300x239.jpg" sizes="auto, (max-width: 300px) 100vw, 300px" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2026/09/AMSAT_Round_Logo_Metal_Lunchbox-300x239.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2026/09/AMSAT_Round_Logo_Metal_Lunchbox-600x479.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2026/09/AMSAT_Round_Logo_Metal_Lunchbox.jpg 639w" alt="" width="300" height="239" /></h3>
+<h3 style="text-align: center;"><strong>Keep Amateur Radio in Space — and your lunch in the box!</strong></h3>
+<h3 style="text-align: center;"><a href="https://www.zazzle.com/amsat_round_logo_metal_lunchbox-256761530568368967">https://www.zazzle.com/amsat_round_logo_metal_lunchbox-256761530568368967</a></h3>
+<p>&nbsp;</p>
+<hr />
+<h2>AMSAT Ambassador Activities</h2>
+<p>AMSAT Ambassadors provide presentations, demonstrate communicating through amateur satellites, and host information tables at club meetings, hamfests, conventions, maker faires, and other events.</p>
+<div>
+<p>November 7, 2026<br /><strong>JARSfest (Johnston Amateur Radio Society Hamfest)</strong><br />The Farm at 95<br />215 Batten Rd.<br />Selma, NC 27576<br /><a href="https://jars.net/jarsfest-2026">https://jars.net/jarsfest-2026</a><br />KF4EAG</p>
+</div>
+<p class="wp-block-paragraph">November 14, 2026<br /><strong>Southern Arizona Fall Hamfest</strong><br />Oro Valley Amateur Radio Club<br />Marana Middle School<br />11285 W. Grier Rd. <br />Marana AZ<br /><a href="https://www.tucsonhamradio.org/hamfest">https://www.tucsonhamradio.org/hamfest</a><br />N1UW</p>
+<p><img loading="lazy" decoding="async" class="aligncenter size-medium wp-image-58085" src="https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-300x245.jpg" alt="" width="300" height="245" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-300x245.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-1024x835.jpg 1024w, https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-768x626.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-1536x1253.jpg 1536w, https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024-600x489.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2024/05/Ambassador-Logo-2024.jpg 1983w" sizes="auto, (max-width: 300px) 100vw, 300px" /></p>
+<p>Interested in becoming an AMSAT Ambassador? AMSAT Ambassadors provide presentations, demonstrate communicating through amateur satellites, and host information tables at club meetings, hamfests, conventions, maker faires, and other events. For more information go to:<a href="https://www.amsat.org/ambassador/"> https://www.amsat.org/ambassador/</a></p>
+<p><em>[ANS thanks Bo Lowrey, W4FCL, Director – AMSAT Ambassador Program, for the above information]</em></p>
+<hr />
+<h2>Satellite Shorts from All Over</h2>
+<div>
+<p>+ A Russian satellite just took a very close look at an American spacecraft in low Earth orbit. The snooping satellite, Kosmos 2612, rendezvoused with ICEYE-X36, a commercial craft that observes our planet using synthetic aperture radar (SAR). The close encounter, which occurred between Oct. 15 and Oct. 19, was reported by Marco Langbroek and other satellite trackers, with Langbroek calling it &#8220;a worrisome cat-and-mouse game&#8221; in orbit. The rendezvous has garnered a lot of attention in space circles, because it was non-consensual and startlingly close; at one point, the two spacecraft may have been separated by just a few meters. There are about 80 ICEYE spacecraft in LEO at the moment. At least some ICEYE satellites provide imagery to Ukraine, which Russia invaded in February 2022 and continues to assault with ground troops and missile and drone attacks. (ANS thanks Space.com for the above information. See the full story at <a href="https://www.space.com/space-exploration/satellites/russian-satellite-plays-cat-and-mouse-with-a-commercial-us-satellite-likely-used-by-ukraine-but-why-the-risky-close-encounter">https://www.space.com/space-exploration/satellites/russian-satellite-plays-cat-and-mouse-with-a-commercial-us-satellite-likely-used-by-ukraine-but-why-the-risky-close-encounter</a>.)</p>
+<p>+ NASA finally released its Request for Proposals (RFP) for the next phase of its Commercial LEO Destinations (CLD) program on October 9, about ten days later than promised. The CLD is the program to replace the International Space Station (ISS) with a privately developed orbiting platform. Seeking proposals from industry by December 8, the agency said it would select at least two companies by next April for initial awards to continue work on their stations, with at least one later selected for full development. Companies developing commercial space stations have an array of challenges to overcome, from the ongoing NASA competition to securing outside investment and non-NASA customers to the technical issues of building a commercial space station. (ANS thanks <em>The Space Review</em> for the above information. Read the full story at <a href="https://www.thespacereview.com/article/5340/1">https://www.thespacereview.com/article/5340/1</a>.)</p>
+<p>+ The space around Earth is turning into a junkyard. Researchers think a refundable deposit scheme could force satellite operators to clean up their act before a tipping point is reached. In a paper published last month in the journal <em>Nature Communications</em>, a group of scientists propose a scheme that would require satellite operators to post a bond of $200,000 before launch, refundable with interest upon the completion of a successful deorbit. Companies that fail to remove their junk would lose the money, which could go toward a shared pool funding active debris-removal missions. (ANS thanks Space.com for the above information. Read the full story at <a href="https://www.space.com/space-exploration/satellites/could-satellite-deorbit-deposits-prevent-a-space-debris-disaster">https://www.space.com/space-exploration/satellites/could-satellite-deorbit-deposits-prevent-a-space-debris-disaster</a>.)</p>
+<p>+ Online marketplace eBay has imposed new restrictions on listings of radio transmitting equipment in response to new FCC rules that took effect last week, but responded to ARRL, The National Association for Amateur Radio®, that its new policy will not apply to gear that operates exclusively on amateur radio frequencies. The FCC’s rules are intended to use its equipment authorization program to protect against “national security threats to the communications supply chain” and cover a wide variety of products. However, in response to a request from ARRL for a clarification relating to amateur radio equipment that does not require FCC authorization, an eBay spokesperson indicated that the marketplace will not restrict sales of equipment that does not require an FCC ID. Amateur radio equipment, except for commercial HF amplifiers, continues to not require FCC authorization. (ANS thanks ARRL for the above information. Read the full story at <a href="https://www.arrl.org/news/ebay-restricts-listings-of-radio-equipment-but-exempts-ham-band-only-gear">https://www.arrl.org/news/ebay-restricts-listings-of-radio-equipment-but-exempts-ham-band-only-gear</a>.)</p>
+</div>
+<hr />
+]]></content:encoded>
+					
+		
+		
+			</item>
+<item>
+		<title>ANS-291 AMSAT News Service Weekly Bulletins</title>
+		<link>https://www.amsat.org/ans-291-amsat-news-service-weekly-bulletins/</link>
+		
+		<dc:creator><![CDATA[Vidya Gopalakrishnan]]></dc:creator>
+		<pubDate>Sun, 18 Oct 2026 00:00:10 +0000</pubDate>
+				<category><![CDATA[AMSAT News]]></category>
+		<category><![CDATA[AMSAT News Service]]></category>
+		<category><![CDATA[ANS]]></category>
+		<guid isPermaLink="false">https://www.amsat.org/?p=65749</guid>
+
+					<description></description>
+										<content:encoded><![CDATA[<p>These data are presently considered in beta test for the next two months while hosted on the test server <a href="https://newark192.amsat.org/">newark192.amsat.org</a>, and we are very open to community feedback at webmaster [at] amsat.org. Testers may experience outages and errors while we make improvements. We intend to put this into production on our main web server in July as we expect that satellites launched after this summer will require one of the new formats to accommodate longer object numbers. AMSAT will continue to publish TLE bulletins for satellites launched before July 2026 indefinitely.</p>
+<p><em>[ANS thanks Joe Fitzgerald, KM1P, AMSAT Orbital Elements Manager, for the above information.]</em></p>
+<hr />
+<h2>ARISS News</h2>
+<p>Amateurs and others around the world may listen in on contacts between amateur radio operators at schools and astronauts and cosmonauts aboard the International Space Station. The downlink frequency on which to listen is 145.800 MHz worldwide.</p>
+<h3><strong>Scheduled Contacts</strong></h3>
+<p><em><strong>+ Recently Completed</strong></em></p>
+<p data-path-to-node="0"><b data-path-to-node="0" data-index-in-node="0">Ecole Internationale PACA de Manosque, Manosque, France — direct via F4KKM<br />
+</b><span data-path-to-node="2,0">The ISS callsign was  <strong>NA1SS</strong><br />
+</span><span data-path-to-node="3,0">The scheduled crewmember was <strong>Joshua Kutryk, KJ5BFU</strong><br />
+</span>The ARISS mentor is <strong class="rQesXe MPyX" data-sfc-cp="" data-sfc-root="ep" data-epip="" data-complete="true"><span class="iNqyIf" data-sfc-cp="" data-sfc-root="ep" data-epip="" data-complete="true"><span data-sfc-cp="" data-sfc-root="ep" data-epip="" data-complete="true"><span class="" data-sfc-cp="" data-sfc-root="c" data-ved="2ahUKEwjQta-Npb-XAxXBLlkFHcW6FPoQ0fERegYIAAgNEAI" data-complete="true" data-sfc-inited="2">F6ICS<!--TgQPHd|||[]--><!--TgQPHd|||[false,&quot;&quot;,false,{&quot;u&quot;:0},false,{&quot;u&quot;:0},{&quot;u&quot;:0}]--></span><!--TgQPHd|||[]--><!--TgQPHd|||[]--></span><!--TgQPHd|||[]--></span><!--TgQPHd|||[]--></strong><span class="iNqyIf" data-sfc-cp="" data-sfc-root="ep" data-epip="" data-complete="true" aria-owns="action-menu-parent-container"><br />
+</span>Contact was successful:  Fri 2026-10-16 10:03 UTC</p>
+<p data-path-to-node="0">Congratulations to the students of international school EIPACA, crew member Joshua Kutryk, KJ5BFU, and mentor F6ICS.</p>
+<p data-path-to-node="0"><b data-path-to-node="0" data-index-in-node="0">EcoTarium Science Center, Worcester, MA — telebridge via AB1OC<br />
+</b>The ISS callsign was <strong>NA1SS.<br />
+</strong>The scheduled crewmember is <strong>Luke Delaney, KJ5PPF</strong>.<br />
+The ARISS mentor was <strong>AB1OC<br />
+</strong>Contact was successful: Thu 2026-10-15 15:28 UTC</p>
+<p data-path-to-node="0">Congratulations to the students at EcoTarium Science Center, crew member Luke Delaney, KJ5PPF, and mentor AB1OC.</p>
+<p><em><strong>+ Upcoming Contacts</strong></em></p>
+<p><em>No Upcoming Contacts.</em></p>
+<p>Many times, a school makes a last-minute decision to do a Livestream or runs into a last-minute glitch requiring a change of the URL, but ARISS may not get the URL in time for publication. You can always check <a class="decorated-link" href="https://live.ariss.org/" target="_new" rel="noopener">https://live.ariss.org/</a> to see if a school is Livestreaming.</p>
+<p>As always, if there is an EVA, a docking, or an undocking, the ARISS radios are turned off as part of the safety protocol.</p>
+<p><strong><em>+ Upcoming SSTV Events</em></strong></p>
+<p><strong>2026-10-14 Expedition 75 Series 34 &#8220;ARISS Hardware&#8221;</strong><br />
+Begins Thursday, October 22; time TBD<br />
+Concludes Sunday, October 25; time TBD<br />
+Images will be transmitted at 437.55 MHz (+/- Doppler shift), decode with Robot 36 mode, transmission 36 seconds on, two minutes off.<br />
+Submit your images to the SSTV gallery for event certificate.</p>
+<h5 style="text-align: center;"><img loading="lazy" decoding="async" class="alignnone wp-image-65769" src="https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event-1001x1024.jpg" alt="" width="586" height="599" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event-1001x1024.jpg 1001w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event-293x300.jpg 293w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event-768x786.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event-600x614.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2026/10/Upcoming_SSTV_Event.jpg 1024w" sizes="auto, (max-width: 586px) 100vw, 586px" /><br />
+<em>SSTV Series 34 [Credit:<a href="https://www.ariss.org"> Ariss.org</a>]</em></h5>
+<p>The crossband repeater remains configured in the Columbus Module (145.990 MHz up {PL 67} &amp; 437.800 MHz down). If a crewmember decides to pick up the microphone and turn up the volume, you may hear the crew member on the air—so keep listening, as you never know when activity might occur.</p>
+]]></content:encoded>
+					
+		
+		
+			</item>
+<item>
+		<title>ANS-270 AMSAT News Service Weekly Bulletins</title>
+		<link>https://www.amsat.org/ans-270-amsat-news-service-weekly-bulletins/</link>
+		
+		<dc:creator><![CDATA[Paul Stoetzer]]></dc:creator>
+		<pubDate>Sun, 27 Sep 2026 00:00:15 +0000</pubDate>
+				<category><![CDATA[AMSAT News]]></category>
+		<category><![CDATA[AMSAT News Service]]></category>
+		<category><![CDATA[ANS]]></category>
+		<guid isPermaLink="false">https://www.amsat.org/?p=65576</guid>
+
+					<description></description>
+										<content:encoded><![CDATA[<p><strong><img loading="lazy" decoding="async" class="size-medium wp-image-45978 alignright" src="https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-300x300.jpg" alt="" width="300" height="300" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-300x300.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-150x150.jpg 150w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-768x768.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-600x600.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-100x100.jpg 100w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-200x200.jpg 200w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA-400x400.jpg 400w, https://www.amsat.org/wordpress/wp-content/uploads/2022/08/ANSlogoA.jpg 852w" sizes="auto, (max-width: 300px) 100vw, 300px" /></strong></p>
+<h2><em>AMSAT </em>News Service</h2>
+<h3><strong>ANS-270</strong><br /><strong>September 27, 2026</strong></h3>
+<p>In this edition:</p>
+<ul>
+<li>ARISS SSTV Series 33 to Feature Student Education Images October 2-6</li>
+<li>UNNE-1B Coordinated as Transporter-18 Prepares to Loft New Amateur Payloads</li>
+<li>AMSAT-DL&#8217;s ERMINAZ-2 PocketQube Trio Set for October 1 Launch on Transporter-18</li>
+<li>OrbitDeck for iOS Brings Full-Featured Satellite Tracking to iPhone and iPad</li>
+<li>Recent IARU Amateur Satellite Frequency Coordination Activity</li>
+<li>IARU Region 1 General Conference Concludes in Vienna; New Executive Committee Elected</li>
+<li>44th AMSAT Space Symposium Less Than Two Weeks Away</li>
+<li>ARICA-2 Opens Amateur Message-Relay Mission September 29</li>
+<li>Jim Hart, WD5RGW, Earns AMSAT Reverse VUCC Award #21</li>
+<li>Changes to AMSAT TLE Distribution for September 25, 2026</li>
+<li>ARISS News</li>
+<li>AMSAT Ambassador Activities</li>
+<li>Satellite Shorts From All Over</li>
+</ul>
+<p>The AMSAT® News Service bulletins are a free, weekly news and information service of AMSAT, The Radio Amateur Satellite Corporation.</p>
+<p>ANS publishes news related to Amateur Radio in Space including reports on the activities of a worldwide group of Amateur Radio operators who share an active interest in designing, building, launching and communicating through analog and digital Amateur Radio satellites.</p>
+<p>The news feed on <a href="https://www.amsat.org">https://www.amsat.org</a> publishes news of Amateur Radio in Space as soon as our volunteers can post it.</p>
+<p>Please send any amateur satellite news or reports to: ans-editor [at] amsat.org</p>
+<p>You can sign up for free e-mail delivery of the AMSAT News Service Bulletins via the ANS List; to join this list see: <a href="https://mailman.amsat.org/postorius/lists/ans.amsat.org/">https://mailman.amsat.org/postorius/lists/ans.amsat.org/</a></p>
+<hr />
+<h2>ARISS SSTV Series 33 to Feature Student Education Images October 2-6</h2>
+<p>Get the SSTV decoders ready. ARISS has announced that its next Slow Scan Television event, SSTV Series 33, will be transmitted from the International Space Station beginning Friday, October 2, at 09:00 UTC and concluding on Tuesday, October 6, at a time to be determined. This special Expedition 75 event will feature a series of images focused on the theme of student education.<br /><br />Images will be transmitted on 437.550 MHz FM using the Robot 36 mode, on a schedule of 36 seconds of transmission followed by a two-minute pause. Because the downlink is on 70 centimeters, Doppler shift is significant &#8211; stations should expect the signal to sweep from approximately 437.560 MHz at acquisition of signal down to 437.540 MHz at loss of signal &#8211; and should plan to tune accordingly. A Doppler correction summary sheet for the 437.550 MHz SSTV system is available at <a href="https://ariss-usa.org/ARISS_SSTV/SSTV_Event_437.550_MHz.pdf" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://ariss-usa.org/ARISS_SSTV/SSTV_Event_437.550_MHz.pdf&amp;source=gmail&amp;ust=1790425306470000&amp;usg=AOvVaw2Hwykp6FuqWiDhYfyjiDpR">https://ariss-usa.org/ARISS_<wbr />SSTV/SSTV_Event_437.550_MHz.<wbr />pdf</a><br /><br />As with previous events, SSTV transmissions may be paused briefly to accommodate scheduled ARISS school contacts, and the schedule remains subject to change based on station operations. The event&#8217;s dates overlap the start of World Space Week, October 4-10, whose theme this year is &#8220;Rocket Revolution.&#8221;<br /><br />Received images may be posted to the ARISS SSTV gallery, and participants who receive and submit images are eligible for a commemorative electronic award certificate. Details on the gallery, the award, and any schedule updates will be posted at <a href="https://www.ariss.org/upcoming-sstv-events.html" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://www.ariss.org/upcoming-sstv-events.html&amp;source=gmail&amp;ust=1790425306470000&amp;usg=AOvVaw2u-cTt0YodSWGm69O3X1eD">https://www.ariss.org/<wbr />upcoming-sstv-events.html</a> and on the ARISS social media channels.<br /><br /><em>[<span class="il">ANS</span> thanks ARISS for the above information]</em></p>
+<hr />
+<h2 style="text-align: center;"><em><strong>LIMITED TIME OFFER!!!</strong></em></h2>
+<p style="text-align: center;"><strong>AMSAT is offering a limited-time promotion for new and renewing members that includes a free digital copy of <em>Getting Started with Amateur Satellites</em>. The promotion is being offered as AMSAT begins the 2026 membership year.</strong></p>
+<p>The 44th AMSAT Space Symposium and Annual General Meeting is now less than two weeks away, October 8-11, 2026, at the Wyndham Jacksonville Hotel &amp; Conference Center in Jacksonville, Florida &#8211; the property formerly known as the Crowne Plaza Jacksonville Airport/I-95 &#8211; an easy fly-in location with a free airport shuttle.<br /><br />Registration remains open at <a href="https://launch.amsat.org/event-6789663" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://launch.amsat.org/event-6789663&amp;source=gmail&amp;ust=1790425306470000&amp;usg=AOvVaw1hc9YeVGHjGKk_9KmhGXaN">https://launch.amsat.org/<wbr />event-6789663</a>. Symposium registration is $90 and includes all presentation sessions, the Friday night social and auction, the Sunday morning AMSAT Members Breakfast, and a digital copy of the Symposium Proceedings; the Saturday banquet is $70, and an all-events package is available for $160.<br /><br />The weekend opens with the AMSAT Board of Directors meeting on Thursday, October 8, continuing Friday morning, at which the Directors elected in the recently concluded election (see <span class="il">ANS</span>-263) will take their seats. Symposium presentations begin Friday afternoon and continue through Saturday, capped by the Annual General Meeting at 3:00 p.m. Saturday and the evening banquet, complete with ham radio door prizes. Sunday brings the Members Breakfast and optional tours of the USS <em>Orleck</em> and the Jacksonville Zoo, with admission paid at the door. Live streaming will be available for members unable to attend in person.<br /><br />Although AMSAT&#8217;s group code has expired, attendees may still make direct hotel reservations at the Wyndham Jacksonville may be made through the booking link on the Symposium page at <a href="https://www.amsat.org/2026-amsat-symposium/" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://www.amsat.org/2026-amsat-symposium/&amp;source=gmail&amp;ust=1790425306470000&amp;usg=AOvVaw2lapFHm1x93ZdJQWscmfQ4">https://www.amsat.org/2026-<wbr />amsat-symposium/</a> or by phone at <a href="tel:(800)%20227-6963" target="_blank" rel="noopener">1-800-227-6963.</a></p>
+<p><em>[ANS thanks ARRL and the Huntsville Hamfest for the above information]</em></p>
+</div>
+<hr />
+<p style="text-align: center;"><strong>It&#8217;s August! Time is running out for the 2026 President&#8217;s Club Coin!<br />Help Support GOLF and FoxPlus.</strong></p>
+<p><img loading="lazy" decoding="async" class="aligncenter size-medium wp-image-63195" src="https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1-300x152.jpg" alt="" width="300" height="152" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1-300x152.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1-1024x518.jpg 1024w, https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1-768x389.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1-600x304.jpg 600w, https://www.amsat.org/wordpress/wp-content/uploads/2026/01/PC-2026-Coin-2S-Color-1.jpg 1446w" sizes="auto, (max-width: 300px) 100vw, 300px" /></p>
+<p style="text-align: center;"><strong>Annual memberships start at only $120</strong></p>
+<p style="text-align: center;"><strong>Join the AMSAT President’s Club today and help</strong> <strong>Keep Amateur Radio in Space!</strong> <a href="https://www.amsat.org/join-the-amsat-presidents-club/" target="_blank" rel="noreferrer noopener"><strong>https://www.amsat.org/join-the-amsat-presidents-club/</strong></a></p>
+<hr />
+<h2>ARICA-2 Opens Amateur Message-Relay Mission September 29</h2>
+<p>The ARICA-2 CubeSat will begin the first full operational phase of its amateur radio mission on Tuesday, September 29, giving radio amateurs an opportunity to exchange messages through the spacecraft.</p>
+<p>The Aoyama Gakuin University Sakamoto Laboratory announced September 24 that the mission will run from September 29 through October 13. ARICA-2 operates under the amateur radio call sign JS1YSD. For the first phase of the amateur mission, participants will be able to transmit messages to the spacecraft for subsequent relay. </p>
+<p>Both uplink and downlink are on 436.830 MHz, using 4800 bps GMSK and AX.25. The university notes that transmitted data uses a mission-specific format. Detailed operating software, packet-format information, and a reception-report form are expected to be made available or updated on the ARICA-2 project website as the operating period approaches.</p>
+<p>The message-relay experiment is the first of multiple planned amateur radio activities aboard ARICA-2. A later phase is expected to make images taken by the spacecraft available through the amateur radio system. The project continues to encourage reception reports from amateur satellite operators around the world.</p>
+<p>Operators interested in taking part should watch the project’s announcements for final operating instructions before transmitting.</p>
+<p><em>[ANS thanks JAMSAT and the Aoyama Gakuin University Sakamoto Laboratory ARICA-2 team for the above information]</em></p>
+<hr />
+<p>&nbsp;</p>
+<p><img loading="lazy" decoding="async" class="aligncenter size-full wp-image-62841" src="https://www.amsat.org/wordpress/wp-content/uploads/2025/12/SDR-Gen2-Ad-01_251214.jpg" alt="SDR Gen 2 Ad - 2026" width="879" height="516" srcset="https://www.amsat.org/wordpress/wp-content/uploads/2025/12/SDR-Gen2-Ad-01_251214.jpg 879w, https://www.amsat.org/wordpress/wp-content/uploads/2025/12/SDR-Gen2-Ad-01_251214-300x176.jpg 300w, https://www.amsat.org/wordpress/wp-content/uploads/2025/12/SDR-Gen2-Ad-01_251214-768x451.jpg 768w, https://www.amsat.org/wordpress/wp-content/uploads/2025/12/SDR-Gen2-Ad-01_251214-600x352.jpg 600w" sizes="auto, (max-width: 879px) 100vw, 879px" /></p>
+<hr />
+<h2>Jim Hart, WD5GRW, Earns AMSAT Reverse VUCC Award #21</h2>
+<p>One hundred grids is the goal. Jim Hart, WD5GRW, kept driving. Bruce Paige, KK5DO, AMSAT Director of Contests and Awards, has announced that Jim has earned AMSAT Reverse VUCC (VUCC/r) Award #21, with confirmed satellite contacts made from 111 different Maidenhead grid squares other than his home grid. &#8220;That is a lot of driving,&#8221; Bruce noted in announcing the award.<br /><br />The Reverse VUCC turns the familiar ARRL VUCC award on its head. Where a fixed station earns VUCC by confirming contacts with 100 grids, a rover earns VUCC/r by making confirmed contacts from 100 grids, packing up the station and moving on after every activation. The award was created by the Central States VHF Society, through the efforts of Bill Wageman, K5MAT, to recognize the work rovers put into activating grids for everyone else, and AMSAT has administered the satellite version since September 2021. ARRL VUCC rules apply with a few exceptions, contacts dated January 1, 1983 or later qualify, QSL confirmations are required and verified by the program administrator, and each certificate carries a unique serial number, with endorsement stickers available above the basic 100-grid level.<br /><br />Complete rules and application details for the Reverse VUCC Award are available at <a href="https://www.amsat.org/reverse-vucc-or-vucc-r-award/" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://www.amsat.org/reverse-vucc-or-vucc-r-award/&amp;source=gmail&amp;ust=1790425300614000&amp;usg=AOvVaw3ghHofqWYdxQRcYXfMkIyc">https://www.amsat.org/reverse-<wbr />vucc-or-vucc-r-award/</a>. Upcoming rover operations may be found, and publicized, at <a href="https://hams.at/" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://hams.at&amp;source=gmail&amp;ust=1790425300614000&amp;usg=AOvVaw2AeF2TLHqNfC4k3z5cIre0">https://hams.at</a>.<br /><br />Congratulations, Jim. In Bruce&#8217;s words, &#8220;Rovers Keep on Rov&#8217;in.&#8221;<br /><br /><em>[ANS thanks Bruce Paige, KK5DO, AMSAT Director of Contests and Awards, for the above information]</em></p>
+<hr />
+<h2>Changes to AMSAT TLE Distribution for September 25, 2026</h2>
+<p>Two Line Elements or TLEs, often referred to as Keplerian elements or keps in the amateur community, are the inputs to the SGP4 standard mathematical model of spacecraft orbits used by most amateur tracking programs. Weekly updates are completely adequate for most amateur satellites. TLE bulletin files are updated daily in the first hour of the UTC day. New bulletin files will be posted immediately after reliable elements become available for new amateur satellites. More information may be found at<a href="https://www.amsat.org/keplerian-elements-resources/"> https://www.amsat.org/keplerian-elements-resources/</a>.</p>
+]]></content:encoded>
+					
+		
+		
+			</item>
+</channel></rss>

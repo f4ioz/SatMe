@@ -188,6 +188,21 @@ class OptionsSstvPc(
         return f to s
     }
 
+    /**
+     * What a request form asks of picture [nom] (Agenda › Diplômes): its UTC
+     * date and time, satellite, frequency, mode, the pass, its mark. Null
+     * when it is not a picture of the gallery.
+     */
+    fun infosImage(nom: String): JSONObject? {
+        val (f, s) = image(nom) ?: return null
+        val (i, p, note) = runCatching { infos(s) }.getOrNull() ?: return null
+        return JSONObject().put("nom", f.name).put("quand", i.quandMs).put("sat", i.satNom).put("freqHz", i.freqHz).put("modulation", i.modulation)
+            .put("mode", i.mode).put("el", i.elDeg ?: JSONObject.NULL).put("serie", i.serie).put("diapo", i.diapo).put("diapos", i.diapos)
+            .put("aos", p?.aosEpochMs ?: JSONObject.NULL).put("los", p?.losEpochMs ?: JSONObject.NULL)
+            .put("elMax", p?.let { Math.round(it.maxElevationDeg) } ?: JSONObject.NULL).put("note", note).put("complete", s.complete)
+            .put("octets", f.length())
+    }
+
     /** The QSL card of a picture: its bytes and file name; null when it cannot be drawn. */
     fun qsl(nom: String, dispo: QslSstv.Disposition = options.qslDisposition, jpeg: Boolean = options.qslJpeg): Pair<ByteArray, String>? {
         val (f, s) = image(nom) ?: return null

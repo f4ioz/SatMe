@@ -199,17 +199,17 @@ object LectureActivites {
 
     private val MOTS = Regex("\\bSSTV\\b|slow[\\s-]?scan|\\bSSDV\\b", RegexOption.IGNORE_CASE)
 
-    private fun balise(item: String, nom: String): String? =
+    internal fun balise(item: String, nom: String): String? =
         Regex("<$nom(?:\\s[^>]*)?>(.*?)</$nom>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)).find(item)?.groupValues?.get(1)
             ?.replace(Regex("^\\s*<!\\[CDATA\\[(.*?)]]>\\s*$", RegexOption.DOT_MATCHES_ALL), "$1")
 
     /** A satellite named in a post without being known: « UMKA-1 », « SAKHACUBE-CHOLBON », else an AMSAT status name (« RS40S »). */
-    private fun nomCite(t: String): String =
+    internal fun nomCite(t: String): String =
         Regex("\\b([A-Z][A-Z0-9]{2,}(?:-[A-Z0-9]+)*-[A-Z0-9]{1,4})\\b").findAll(t).map { it.value }.firstOrNull { !it.startsWith("AMSAT") && !it.startsWith("ARISS") }
             ?: ActivitesAVenir.NOMS_AMSAT.map { it.substringBefore("_[") }.filter { it != "ISS" }
                 .firstOrNull { n -> Regex("(?<![A-Za-z0-9])" + Regex.escape(n) + "(?![A-Za-z0-9])").containsMatchIn(t) } ?: ""
 
-    private fun datePost(s: String): Long? = runCatching { SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US).parse(s.trim())!!.time }.getOrNull()
+    internal fun datePost(s: String): Long? = runCatching { SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", Locale.US).parse(s.trim())!!.time }.getOrNull()
         ?: iso(s)
 
     /**

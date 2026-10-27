@@ -155,6 +155,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var classement: ClassementSstvPc? = null
     /** The SSTV options (missing slide's notice, retention, QSL, ARISS pack). */
     @Volatile var optionsSstv: OptionsSstvPc? = null
+    /** « Agenda › Diplômes »: the awards, matched with the gallery and the log. */
+    @Volatile var diplomes: DiplomesPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -865,6 +867,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // The SSTV options: the settings, the live quality, a picture's QSL, the ARISS award pack (downloads only).
         if (chemin == "/api/sstv-options" || chemin.startsWith("/api/sstv-options/")) {
             val rep = optionsSstv?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // « Agenda › Diplômes »: the awards, what the station has for each, the request prepared (nothing sent).
+        if (chemin == "/api/diplomes" || chemin.startsWith("/api/diplomes/")) {
+            val rep = diplomes?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }

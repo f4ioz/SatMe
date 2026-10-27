@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:media="http://search.yahoo.com/mrss/"
+	>
+
+<channel>
+	<title>AMSAT-UK</title>
+	<atom:link href="https://amsat-uk.org/feed/" rel="self" type="application/rss+xml" />
+	<link>https://amsat-uk.org</link>
+	<description>Radio Amateur Satellites</description>
+	<lastBuildDate>Tue, 20 Oct 2026 21:13:40 +0000</lastBuildDate>
+	<language>en</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>http://wordpress.com/</generator>
+<site xmlns="com-wordpress:feed-additions:1">41081109</site><cloud domain='amsat-uk.org' port='80' path='/?rsscloud=notify' registerProcedure='' protocol='http-post' />
+<source:cloud xmlns:source='https://source.scripting.com/'>https://amsat-uk.org/?rsscloud=notify</source:cloud>
+<image>
+		<url>https://s2.wp.com/i/webclip.png</url>
+		<title>AMSAT-UK</title>
+		<link>https://amsat-uk.org</link>
+	</image>
+	<atom:link rel="search" type="application/opensearchdescription+xml" href="https://amsat-uk.org/osd.xml" title="AMSAT-UK" />
+	<atom:link rel='hub' href='https://amsat-uk.org/?pushpress=hub'/>
+	<item>
+		<title>ISS Slow Scan TV Oct 22-26</title>
+		<link>https://amsat-uk.org/2026/10/20/iss-slow-scan-tv-oct-22-26/</link>
+		
+		<dc:creator><![CDATA[amsatuk73]]></dc:creator>
+		<pubDate>Tue, 20 Oct 2026 18:58:19 +0000</pubDate>
+				<category><![CDATA[Daily Updates]]></category>
+		<category><![CDATA[Amateur Radio]]></category>
+		<category><![CDATA[ARISS]]></category>
+		<category><![CDATA[Ham Radio]]></category>
+		<category><![CDATA[Internatioanl Space Station]]></category>
+		<category><![CDATA[ISS]]></category>
+		<category><![CDATA[Slow Scan]]></category>
+		<category><![CDATA[SSTV]]></category>
+		<guid isPermaLink="false">http://amsat-uk.org/?p=36709</guid>
+
+					<description></description>
+										<content:encoded><![CDATA[<div dir="ltr">
+<div data-shortcode="caption" id="attachment_36195" style="width: 310px" class="wp-caption alignright"><a href="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp"><img aria-describedby="caption-attachment-36195" data-attachment-id="36195" data-permalink="https://amsat-uk.org/2025/07/02/amateur-radio-satellites-in-tes-magazine/international-space-station-image-credit-nasa/" data-orig-file="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp" data-orig-size="1368,740" data-comments-opened="0" data-image-title="International Space Station &amp;#8211; Image credit NASA" data-image-description="&lt;p&gt;International Space Station &amp;#8211; Image credit NASA&lt;/p&gt;
+" data-image-caption="&lt;p&gt;International Space Station &amp;#8211; Image credit NASA&lt;/p&gt;
+" data-large-file="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=584" class="size-medium wp-image-36195" src="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=300" alt="International Space Station - Image credit NASA" width="300" height="162" srcset="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=300 300w, https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=600 600w, https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=150 150w" sizes="(max-width: 300px) 100vw, 300px" /></a><p id="caption-attachment-36195" class="wp-caption-text">International Space Station &#8211; Image credit NASA</p></div>
+<p>An SSTV event on the ISS is scheduled to begin on Thursday October 22, 2026 around 15:10 UTC and will end on Monday October 26, 2026 at 17:45 UTC.</p>
+<p>The ARISS Series 34 images are about ARISS Hardware.</p>
+<p>The SSTV transmissions will be made using the amateur radio station in the ISS Service Module. The transmission frequency will be 437.550 MHz FM, (+/- 10 kHz Doppler shift) using SSTV mode Robot 36, 36 seconds on with 2 minutes off gap. The ISS callsign will be RS0ISS.</p>
+<p>To support everyone interested in such events, the European Space Agency released tutorials about how to receive pictures transmitted over amateur radio by the International Space Station; you can find them on: <a href="https://www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_pictures_from_the_International_Space_Station_via_amateur_radio" target="_blank" rel="noopener">https://www.esa.int/ESA_Multimedia/Videos/2020/07/How_to_get_pictures_from_the_International_Space_Station_via_amateur_radio</a></p>
+</div>
+<div dir="ltr">
+<p>You are invited to upload decoded images in the ARISS gallery, at: <a href="https://ariss-usa.org/ARISS_SSTV/" target="_blank" rel="noopener">https://ariss-usa.org/ARISS_SSTV/</a> Once you&#8217;ve submitted, just clicking on the dedicated button you can apply for the official ARISS SSTV award.</p>
+<p>Any changes to this activity will be updated in the ARISS operations calendar: <a href="https://www.amsat-on.be/ariss-calendar-with-scheduled-contacts-by-the-ariss-operation-team/" target="_blank" rel="noopener">https://www.amsat-on.be/ariss-calendar-with-scheduled-contacts-by-the-ariss-operation-team/</a></p>
+<p>The transceiver in the ISS Service Module will be set to 437.825 MHz in APRS mode following the SSTV transmission, and will remain that way until the end of this yearARISS-Europe News Bulletins are distributed by AMSAT Belgium.</p>
+<p>We can only maintain this service with your support: <a href="https://www.amsat-on.be/donation-ariss-europe-news-bulletin/" target="_blank" rel="noopener">https://www.amsat-on.be/donation-ariss-europe-news-bulletin/</a></p>
+</div>
+]]></content:encoded>
+					
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">36709</post-id>
+		<media:content url="https://1.gravatar.com/avatar/787e5765eb5b0f444a646e1a281ad3799fb1003e45a12c538b276807c92e9cb9?s=96&#38;d=https%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96&#38;r=G" medium="image">
+			<media:title type="html">amsatuk73</media:title>
+		</media:content>
+
+		<media:content url="https://amsat-uk.org/wp-content/uploads/2025/07/international-space-station-image-credit-nasa.webp?w=300" medium="image">
+			<media:title type="html">International Space Station - Image credit NASA</media:title>
+		</media:content>
+	</item>
+</channel></rss>
