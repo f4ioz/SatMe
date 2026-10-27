@@ -1225,6 +1225,7 @@ ${STYLE_JETONS}
   .ob-seg button[aria-pressed="true"] { background:var(--s3); color:var(--rx); }
   .ob-seg label { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
   .ob-seg select { padding:2px 6px; font-size:var(--fs-s); }
+  .ob-traces-choix { width:84px; min-width:0; flex:none; }
   .ob-temps { margin-left:auto; font-family:var(--mono); font-size:var(--fs-s); }
   .ob-temps button, .ob-temps select { padding:3px 8px; font-size:var(--fs-s); }
   .ob-temps span { padding:0 4px; color:var(--texte); }
@@ -4340,7 +4341,7 @@ ${rail()}
       <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, Soleil et Lune, météo spatiale). Échap pour sortir">⛶ Tableau</button><label id="ob-theme-l" hidden title="L'allure du tableau de bord">Thème <select id="ob-theme" onchange="obTheme(this.value)"></select></label><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
         <div class="ob-infos" id="ob-infos" role="dialog" aria-label="Informations du tableau de bord" hidden></div></div>
       <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
-      <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label><label title="Les monuments célèbres : aucun, les plus connus, ou tous (un à quelques-uns par pays)">Monuments <select id="ob-monuments" class="ob-mon-choix"><option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option></select></label><label title="La taille des monuments sur le globe et la carte (plus grands : lisibles de loin)">Taille <select id="ob-montaille" class="ob-montaille-choix"><option value="0.7">petite</option><option value="1">normale</option><option value="1.6">grande</option><option value="2.4">très grande</option></select></label><span class="ob-tb"><button type="button" id="ob-montypes-b" aria-expanded="false" aria-controls="ob-montypes" title="Les familles de monuments montrées">Types ▾</button><div class="ob-infos" id="ob-montypes" role="dialog" aria-label="Familles de monuments" hidden></div></span></div>
+      <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">carrés locators</option></select></label><label title="Les monuments célèbres : aucun, les plus connus, ou tous (un à quelques-uns par pays)">Monuments <select id="ob-monuments" class="ob-mon-choix"><option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option></select></label><label title="La taille des monuments sur le globe et la carte (plus grands : lisibles de loin)">Taille <select id="ob-montaille" class="ob-montaille-choix"><option value="0.7">petite</option><option value="1">normale</option><option value="1.6">grande</option><option value="2.4">très grande</option></select></label><label title="Les traces au sol des satellites, sur le globe et la carte : de discrètes (à gauche) à très marquées (épaisses, foncées, détourées)">Traces <input type="range" id="ob-traces" class="ob-traces-choix" min="0" max="100" step="5" aria-label="Traces au sol : discrètes à très marquées"></label><span class="ob-tb"><button type="button" id="ob-montypes-b" aria-expanded="false" aria-controls="ob-montypes" title="Les familles de monuments montrées">Types ▾</button><div class="ob-infos" id="ob-montypes" role="dialog" aria-label="Familles de monuments" hidden></div></span></div>
       <div class="ob-seg ob-temps"><button type="button" id="ob-pause" title="Pause">⏸</button><select id="ob-vitesse" aria-label="Vitesse du temps"><option value="1" selected>×1 réel</option><option value="10">×10</option><option value="60">×60</option><option value="300">×300</option><option value="1200">×1200</option></select><button type="button" id="ob-maint" title="Revenir à l'heure présente">Maintenant</button><span id="ob-horloge"></span></div>
       <div class="ob-cadreur" id="ob-cadreur" hidden>
         <div class="ob-seg" role="group" aria-label="Caméra du passage"><button type="button" data-ob-cam="poursuite">Poursuite</button><button type="button" data-ob-cam="sol">Depuis la station</button><button type="button" data-ob-cam="espace">Vue d'ensemble</button><button type="button" data-ob-cam="satellite" title="La Terre vue du satellite : son empreinte (l'horizon radio), les stations qui le voient, le jour et la nuit, sa trace au sol. Glisser pour regarder ailleurs, double-clic pour revenir">Vue du satellite</button></div>
@@ -6292,6 +6293,7 @@ function obMenu() {
   const l2 = document.createElement('label'), s2 = document.createElement('select');
   s2.className = 'ob-montaille-choix'; s2.innerHTML = '<option value="0.7">petite</option><option value="1">normale</option><option value="1.6">grande</option><option value="2.4">très grande</option>';
   s2.value = String(Orbites.monumentsTailleActive()); s2.onchange = () => Orbites.monumentsTaille(+s2.value); l2.append(document.createTextNode('Taille '), s2); m.appendChild(l2);
+  m.appendChild(rangeTraces());
   const ty = document.createElement('div'); m.appendChild(ty); Orbites.typesMonuments(ty);
 }
 g('ob-infos-b').onclick = ev => {
@@ -11468,9 +11470,12 @@ function dessineSked() {
   empreinte(m, cour[5], cour[6], cour[7]);
   // The ground track, the common window in green, the part already flown darker.
   const P = KT.points.map(p => [p[5], p[6], p[0]]);
-  traceCarte(m, P, 'rgba(30,40,55,.55)', 1.5, [5, 4]);
-  traceCarte(m, P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), '#2E9E5B', 4);
-  traceCarte(m, P.filter(p => p[2] <= cour[0]).concat([[cour[5], cour[6]]]), '#0B6E63', 2);
+  // As marked as « Traces » asks (shared with the globes): wider and more opaque, a light halo under the green.
+  const kt = Orbites.tracesActives() / 100, ht = kt < .05 ? 0 : 1 + 2 * kt;
+  traceCarte(m, P, 'rgba(30,40,55,' + (.4 + .45 * kt).toFixed(2) + ')', 1 + 2 * kt, [5, 4]);
+  if (ht) traceCarte(m, P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), 'rgba(255,255,255,' + (.75 * kt).toFixed(2) + ')', 3 + 3 * kt + 2 * ht);
+  traceCarte(m, P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), '#2E9E5B', 3 + 3 * kt);
+  traceCarte(m, P.filter(p => p[2] <= cour[0]).concat([[cour[5], cour[6]]]), '#0B6E63', 1.5 + 2.5 * kt);
   // Each station, its line to the satellite while it sees it.
   const station = (st, vu, couleur, nom) => {
     if (vu) { x.strokeStyle = couleur; x.lineWidth = 1.5; x.beginPath(); x.moveTo(m.px(st.lon), m.py(st.lat)); x.lineTo(m.px(cour[6]), m.py(cour[5])); x.stroke(); }
@@ -11530,7 +11535,16 @@ function reglagesGlobeSked() {
   choix('Monuments', 'ob-mon-choix', [['aucun', 'aucun'], ['principaux', 'principaux'], ['tous', 'tous']], Orbites.monumentsActifs(), q => Orbites.monuments(q));
   choix('Taille', 'ob-montaille-choix', [['0.7', 'petite'], ['1', 'normale'], ['1.6', 'grande'], ['2.4', 'très grande']], Orbites.monumentsTailleActive(), q => Orbites.monumentsTaille(+q),
     'La taille des monuments (plus grands : lisibles de loin)');
+  box.appendChild(rangeTraces());
   const ty = document.createElement('div'); ty.className = 'k-montypes'; box.appendChild(ty); Orbites.typesMonuments(ty);
+}
+/** « Traces » 0 (discreet) … 100 (very marked): the ground tracks, shared by the globes and the maps; the Sked's map follows. */
+function rangeTraces() {
+  const l = document.createElement('label'), r = document.createElement('input');
+  r.type = 'range'; r.min = 0; r.max = 100; r.step = 5; r.className = 'ob-traces-choix'; r.value = String(Orbites.tracesActives());
+  r.setAttribute('aria-label', 'Traces au sol : discrètes à très marquées'); l.title = 'Les traces au sol : de discrètes (à gauche) à très marquées';
+  r.oninput = () => { Orbites.traces(+r.value); dessineSked(); };
+  l.append(document.createTextNode('Traces '), r); return l;
 }
 majVueSked();
 

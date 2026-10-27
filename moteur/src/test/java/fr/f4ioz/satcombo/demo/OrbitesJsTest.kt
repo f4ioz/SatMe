@@ -46,6 +46,19 @@ class OrbitesJsTest {
     }
 
     @Test
+    fun les_traces_plus_ou_moins_marquees() {
+        // « Traces »: the tab's slider, the Sked's, one key; ribbons on the globe (a WebGL line is 1 px), the maps' strokes.
+        assertTrue(PagePc.HTML.contains("id=\"ob-traces\" class=\"ob-traces-choix\""))
+        assertTrue(PagePc.HTML.contains("box.appendChild(rangeTraces())"))
+        assertTrue(PagePc.HTML.contains("Orbites.tracesActives() / 100"))
+        assertTrue(OrbitesJs.JS.contains("lit('ob-traces', '60')"))
+        assertTrue(OrbitesJs.JS.contains("o.sol = ruban(sc)"))
+        assertTrue(OrbitesJs.JS.contains("o.orbite = ruban(sc, .6, true)"))
+        assertTrue(OrbitesJs.JS.contains("#include <logdepthbuf_vertex>"))
+        assertTrue(OrbitesJs.JS.contains("traces: n => prendTraces(n)"))
+    }
+
+    @Test
     fun la_terre_vue_du_satellite() {
         // A fourth camera: the tab's button, the Sked's choice, the Vitrine's turn; the globe on the satellite's vertical.
         assertTrue(PagePc.HTML.contains("data-ob-cam=\"satellite\""))
