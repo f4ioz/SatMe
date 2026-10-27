@@ -146,11 +146,12 @@ object Manuel {
 }
 
 /**
- * A small Markdown renderer, for the guide only: titles (with GitHub's
- * anchors, so the guide's own links work), paragraphs, bullet and numbered
- * lists (nested by indentation), fenced code, tables, bold, italics, inline
- * code, links. Raw HTML lines (the guide's pictures) are left out; every
- * character of the text is escaped.
+ * A small Markdown renderer, for the guide and the F4IOZ site's articles:
+ * titles (with GitHub's anchors, so the guide's own links work), paragraphs,
+ * bullet and numbered lists (nested by indentation), fenced code, tables,
+ * bold, italics, inline code, links, pictures (`![texte](/chemin)`, the
+ * site's own or https). Raw HTML lines (the guide's pictures) are left out;
+ * every character of the text is escaped.
  */
 object Markdown {
 
@@ -194,6 +195,16 @@ object Markdown {
                     val j = s.indexOf('`', i + 1)
                     if (j < 0) { b.append(esc(c.toString())); i++ }
                     else { b.append("<code>").append(esc(s.substring(i + 1, j))).append("</code>"); i = j + 1 }
+                }
+                c == '!' && s.startsWith("![", i) -> {
+                    // A picture: its address kept only when it is the site's own (/…) or on the web (https://…).
+                    val j = fermant(s, i + 1, '[', ']')
+                    val k = if (j > 0 && j + 1 < s.length && s[j + 1] == '(') fermant(s, j + 1, '(', ')') else -1
+                    val url = if (k > 0) s.substring(j + 2, k).trim() else ""
+                    if (k > 0 && adresseSure(url)) {
+                        b.append("<img src=\"").append(esc(url)).append("\" alt=\"").append(esc(texteSimple(s.substring(i + 2, j)))).append("\" loading=\"lazy\">")
+                        i = k + 1
+                    } else { b.append('!'); i++ }
                 }
                 c == '[' -> {
                     val j = fermant(s, i, '[', ']')
@@ -243,8 +254,15 @@ object Markdown {
         url.startsWith("#") -> "<a href=\"" + esc(url) + "\" data-ancre=\"" + esc(url.substring(1)) + "\">" + texte + "</a>"
         url.startsWith("http://") || url.startsWith("https://") -> "<a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">" + texte + "</a>"
         Regex("^[\\w.-]+\\.md(#.*)?$").matches(url) -> "<a href=\"" + esc(DEPOT + url) + "\" target=\"_blank\" rel=\"noopener\">" + texte + "</a>"
+        // A page of the same site (the F4IOZ site's articles): « /articles/… ».
+        url.startsWith("/") && !url.startsWith("//") && adresseSure(url) -> "<a href=\"" + esc(url) + "\">" + texte + "</a>"
         else -> texte
     }
+
+    /** An address that can be written in a page as it is: the site's own path, or https/http; no quote, space or backslash. */
+    private fun adresseSure(url: String): Boolean =
+        (url.startsWith("https://") || url.startsWith("http://") || (url.startsWith("/") && !url.startsWith("//"))) &&
+            url.none { it.isWhitespace() || it == '"' || it == '\'' || it == '\\' || it == '<' || it == '>' }
 
     private fun cellules(l: String): List<String> {
         var t = l.trim()

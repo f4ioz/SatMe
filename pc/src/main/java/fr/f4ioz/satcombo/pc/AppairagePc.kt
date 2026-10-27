@@ -8,9 +8,6 @@
  */
 package fr.f4ioz.satcombo.pc
 
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.qrcode.QRCodeWriter
 import fr.f4ioz.satcombo.demo.RequeteHttp
 import org.json.JSONObject
 import java.net.Inet4Address
@@ -147,13 +144,7 @@ class AppairagePc(
         }.getOrDefault(emptyList())
 
         /** A QR code as SVG: dark squares on white, a quiet zone of four. */
-        fun svg(contenu: String): String {
-            val m = QRCodeWriter().encode(contenu, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 4))
-            val sb = StringBuilder()
-            for (y in 0 until m.height) for (x in 0 until m.width) if (m[x, y]) sb.append("M$x ${y}h1v1h-1z")
-            return "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ${m.width} ${m.height}\" shape-rendering=\"crispEdges\">" +
-                "<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path d=\"$sb\" fill=\"#000\"/></svg>"
-        }
+        fun svg(contenu: String): String = fr.f4ioz.satcombo.demo.QrSvg.svg(contenu)
 
         private const val PAGE = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SatMe-PC</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.5">

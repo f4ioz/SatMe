@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.data.FusionGp
+import fr.f4ioz.satcombo.data.LectureElements
 import fr.f4ioz.satcombo.data.OmmParser
 import fr.f4ioz.satcombo.data.ServeurGp
 import fr.f4ioz.satcombo.data.Sources
@@ -176,25 +177,11 @@ class Catalogue(
         /** Asked from SatNOGS DB as AMSAT's bulletin lacks them: METEOR-M2-3 and M2-4 (LRPT pictures). */
         val SATNOGS_EN_PLUS = listOf(57166, 59051)
 
-        /** SatNOGS DB's elements: [{"tle0": name, "tle1", "tle2", …}]. */
-        fun lisTleSatnogs(json: String): List<TleEntry> = runCatching {
-            val a = JSONArray(json)
-            (0 until a.length()).mapNotNull { i ->
-                val o = a.optJSONObject(i) ?: return@mapNotNull null
-                runCatching { TleEntry(o.optString("tle0").removePrefix("0 ").trim(), o.getString("tle1"), o.getString("tle2")) }.getOrNull()
-            }
-        }.getOrDefault(emptyList())
+        /** SatNOGS DB's elements: [{"tle0": name, "tle1", "tle2", …}] ([LectureElements]). */
+        fun lisTleSatnogs(json: String): List<TleEntry> = LectureElements.tleSatnogs(json)
 
-        /** Elements of any source, the format recognised: OMM JSON, SatNOGS' TLE in JSON, or TLE; usable ones only. */
-        fun lis(texte: String): List<TleEntry> {
-            val t = texte.trimStart()
-            val brut = when {
-                t.startsWith("[") && t.contains("\"tle1\"") -> lisTleSatnogs(texte)
-                t.startsWith("[") || t.startsWith("{") -> runCatching { OmmParser.parse(texte) }.getOrDefault(emptyList())
-                else -> lisTle(texte)
-            }
-            return brut.filter { fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(it) }
-        }
+        /** Elements of any source, the format recognised: OMM JSON, SatNOGS' TLE in JSON, or TLE; usable ones only ([LectureElements]). */
+        fun lis(texte: String): List<TleEntry> = LectureElements.lis(texte)
 
         /** CelesTrak refuses this station's address: never asked from the PC. */
         fun interdit(url: String): Boolean = url.contains("celestrak", ignoreCase = true)
@@ -203,20 +190,8 @@ class Catalogue(
             OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
         }
 
-        /** A TLE file: name, line 1, line 2, again and again. */
-        fun lisTle(texte: String): List<TleEntry> {
-            val l = texte.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
-            val out = ArrayList<TleEntry>()
-            var i = 0
-            while (i + 2 < l.size) {
-                if (l[i + 1].startsWith("1 ") && l[i + 2].startsWith("2 ")) {
-                    runCatching { TleEntry(l[i].trim(), l[i + 1], l[i + 2]) }.getOrNull()
-                        ?.takeIf { it.catalogNumber > 0 }?.let { out += it }
-                    i += 3
-                } else i++
-            }
-            return out
-        }
+        /** A TLE file: name, line 1, line 2, again and again ([LectureElements]). */
+        fun lisTle(texte: String): List<TleEntry> = LectureElements.tle(texte)
 
         /**
          * One satellite per number: the name of the JSON bulletin (AMSAT's
