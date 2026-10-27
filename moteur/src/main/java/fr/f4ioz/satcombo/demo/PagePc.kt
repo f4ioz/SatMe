@@ -2158,6 +2158,7 @@ ${ConversionPagePc.CSS}
   .vue { animation:vue-in 160ms ease-out; }
   @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
 ${DemarragePagePc.CSS}
+${IssDirectJs.CSS}
 </style></head>
 <body>
 ${rail()}
@@ -6254,6 +6255,7 @@ function obMenu() {
   OB_INFOS.forEach(i => coche(i[1], obInfo(i[0]), on => { obInfos[obTh + '.' + i[0]] = on; obGarde('ob-infos2', obInfos);
     if (i[0] === 'astres') Orbites.tableauMode(obThOpts()); obTbMaj(); }));
   coche('Photos et résumés de Wikipédia (demandés une fois, puis gardés)', obPhotos, on => obPhotosChoix(on));
+  if (typeof IssDirect !== 'undefined') IssDirect.menu(titre, coche);
   if (OB_THEMES[obTh].vitrine) {
     titre('Vitrine : le club');
     [['club', 'Nom du club', 'Radio-club de…'], ['indicatif', 'Indicatif', 'F6KXX'], ['lien', 'Lien (site, page ; en QR code)', 'https://…'], ['message', 'Message', 'Venez nous voir !']].forEach(c => {
@@ -18990,6 +18992,7 @@ setInterval(() => {
 setInterval(chargeListe, 30000);
 setInterval(dessinePassages, 5000);
 ${DemarragePagePc.JS}
+${IssDirectJs.JS}
 </script>
 </body></html>
 """
