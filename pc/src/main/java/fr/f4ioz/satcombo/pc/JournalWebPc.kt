@@ -437,6 +437,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 }
             }.onFailure { System.err.println("journal : $quoi de ${es.size} passage(s) : $it"); it.printStackTrace() }.getOrNull()
             sons.values.forEach { it.close() }
+            if (quoi == "video") t.fichier?.let { f -> runCatching { videoFaite(f) } }
             t.progres = 1f; t.fini = true
         }
         return json("{\"ok\":true,\"travail\":\"$n\",\"passages\":${es.size}}")
@@ -552,6 +553,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** The SSTV picture's place sent with a request ("auto": by itself), else the one kept. */
     private fun cadreSstv(v: String): CadreSstv? = if (v.isBlank()) CadreSstv.lit(s.journalCadreSstv) else CadreSstv.lit(v)
+
+    /** Told of each video made by the editor (« Réglages › Site web »). */
+    @Volatile var videoFaite: (File) -> Unit = {}
 
     private val client by lazy { okhttp3.OkHttpClient() }
 

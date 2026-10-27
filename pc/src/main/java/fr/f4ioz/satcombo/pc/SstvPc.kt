@@ -168,6 +168,9 @@ class SstvPc(
      */
     @Volatile var imageGardee: (File, SstvMeta.SstvShot) -> Unit = { _, _ -> }
 
+    /** Told of each picture received on the air and kept (not a test, not a recording played back): « Réglages › Site web ». */
+    @Volatile var nouvelleImage: (String, SstvMeta.SstvShot) -> Unit = { _, _ -> }
+
     /** The sound card's blocks (the dongle's too when it is the card's source). */
     fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
         if (!actif) return
@@ -245,6 +248,7 @@ class SstvPc(
             if (nom != null) runCatching {
                 val s = SstvMeta.decode(nom, File(dossier, SstvMeta.sidecarName(nom)).readText(Charsets.UTF_8))
                 if (SstvSon.fichier(File(dossier, nom)).isFile) imageGardee(dossier, s)
+                if (h == null) nouvelleImage(nom, s)
             }
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }

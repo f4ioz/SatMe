@@ -159,6 +159,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var optionsSstv: OptionsSstvPc? = null
     /** « Agenda › Diplômes »: the awards, matched with the gallery and the log. */
     @Volatile var diplomes: DiplomesPc? = null
+    /** « Réglages › Site web »: what is published on the operator's web site (set before [demarre]). */
+    @Volatile var site: SitePc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -886,6 +888,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (chemin == "/api/autopilote" || chemin.startsWith("/api/autopilote/")) {
             val rep = autopilote?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // « Réglages › Site web »: its settings and its queue; a POST from this page's own origin only, its fields in the body
+        // (the token never in an address).
+        if (chemin == "/api/site" || chemin.startsWith("/api/site/")) {
+            val rep = site?.let { st ->
+                if (r.methode == "POST" && !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]))
+                    fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"erreur\":\"origine refusée\"}".toByteArray())
+                else {
+                    val f = if (r.methode == "POST") RequeteHttp.corps(c.getInputStream(), r, 8192)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty() else emptyMap()
+                    st.sert(chemin, r.methode) { k -> f[k] ?: q[k].orEmpty() }
+                }
+            } ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         // The SSTV options: the settings, the live quality, a picture's QSL, the ARISS award pack (downloads only).

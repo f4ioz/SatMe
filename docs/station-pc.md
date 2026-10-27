@@ -976,7 +976,7 @@ The **Montage** tab (workspace **Station**) draws the station: the antenna on th
 
 ## Réglages (settings)
 
-By category, a list on the left: **Ma station** (callsign, square, minimum elevation, horizon), **Modules** (what interests you, the profiles), **Poste et rotor** (CAT over USB or the network, TH-D72, rotator, antenna polarisation, converters, Doppler log, ADALM-PLUTO), **Satellites** (orbital elements, AMSAT, QO-100 at start), **Interfaces** (satellite link, rigctld, USB knob), **Annonces** (spoken announcements), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, hams.at skeds), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700: network allowed, time-out, power cap, sound card; the transmitters' I/Q correction), **Démarrage** (network, port, data folder, updates, quick setup), **Accès à distance** (password, HTTPS, app, screen kept on), **Sauvegarde** (the whole station in one file, restored at the next start; deployment to another PC).
+By category, a list on the left: **Ma station** (callsign, square, minimum elevation, horizon), **Modules** (what interests you, the profiles), **Poste et rotor** (CAT over USB or the network, TH-D72, rotator, antenna polarisation, converters, Doppler log, ADALM-PLUTO), **Satellites** (orbital elements, AMSAT, QO-100 at start), **Interfaces** (satellite link, rigctld, USB knob), **Annonces** (spoken announcements), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, hams.at skeds, web site), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700: network allowed, time-out, power cap, sound card; the transmitters' I/Q correction), **Démarrage** (network, port, data folder, updates, quick setup), **Accès à distance** (password, HTTPS, app, screen kept on), **Sauvegarde** (the whole station in one file, restored at the next start; deployment to another PC).
 
 ### The rig and the rotator
 
@@ -1083,6 +1083,17 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - `\dump_state`, `\chk_vfo`, `\get_powerstat`, `\dump_caps`, the long forms, and the extended answers (`+`, `;`).
 
 `T` (PTT) and every transmit setting are always refused (`RPRT -11`). `F` and `M` are refused too unless « Autoriser le changement de fréquence » is ticked, and then retune the SDR receiver only — never the rig, nor while QO-100 is on the rig.
+
+### Web site: publishing on your site
+
+**Réglages › Services en ligne › Site web** links SatMe-PC to your amateur radio web site — SatMe's `site` module, the one behind f4ioz.fr (see `site/README.md`):
+
+- The site's **address** (`https://f4ioz.fr`) and a **publication token**, made on the site's server (`f4ioz-site jeton`, which also gives the line for `site.conf`). The token stays on this PC, like the Wavelog key: never shown again nor written to a log. **Tester la connexion** asks the site whether it answers and takes the token, publishing nothing.
+- **Each kind Automatique / Sur clic / Jamais**: the **SSTV pictures** (Automatique by default: each picture received live, not the tests nor the recordings played back), the **planches** (Automatique: those with pictures, two minutes after the last picture received; the new version replaces the old one on the site), the events' **reports** as PDF, the **contacts** (ADIF) and the **journal's videos** (Sur clic by default).
+- **🌐 Publier sur le site** beside each item: in the SSTV picture viewer, on each line of the log (Contacts), on the Planche page (**🌐 Planche sur le site**, **🌐 Rapport sur le site**) and under a video made by the journal's editor.
+- Nothing is sent by the page itself: each item is copied into a **queue on disk** (the data's `site/` folder) and sent by SatMe-PC; when the site does not answer it tries again (30 s, 1 min, 2 min… an hour at most), even after a restart. The card shows what waits, the last try and the last answers; **Réessayer maintenant**, **Vider la file**. A refusal from the site (token, kind, size) is not tried again.
+- The same item sent twice is published once. Everything is removed **on the site** (its private `/admin` page: hide, show again, delete).
+- In the **demonstration**, SatMe-PC publishes only to a site on this machine (`http://127.0.0.1:…`, a test site).
 
 ### The USB volume knob (VFO)
 

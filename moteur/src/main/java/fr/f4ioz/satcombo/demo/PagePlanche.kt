@@ -224,6 +224,8 @@ object PagePlanche {
   <input type="file" id="fichier" accept="image/*,.satme-planche,.zip,application/zip" class="cache">
   <button class="discret" id="exporter"></button>
   <button class="discret" id="rapport"></button>
+  <button class="discret cache" id="sitePlanche" title="Publier cette planche sur le site web (SatMe-PC › Réglages › Site web)">🌐 Planche sur le site</button>
+  <button class="discret cache" id="siteRapport" title="Publier le rapport de son événement (PDF) sur le site web">🌐 Rapport sur le site</button>
   <button class="primaire" id="telecharger"></button>
   <span id="message"></span>
 </header>
@@ -1032,6 +1034,24 @@ g('rapportDl').onclick = async () => {
   } catch (e) { g('message').textContent = T.hors_ligne; }
 };
 g('rapportNon').onclick = () => g('dlgRapport').classList.add('cache');
+// SatMe-PC only: « Publier sur le site » (Réglages › Site web), the planche and its event's report, through the PC's queue.
+async function siteWeb() {
+  if (!window.SATME_PC) return;
+  let S = null; try { S = await (await fetch(base + '/api/site')).json(); } catch (e) {}
+  const on = k => !!(S && S.ok && S.configure && S.modes[k] !== 'jamais');
+  g('sitePlanche').classList.toggle('cache', !on('planche')); g('siteRapport').classList.toggle('cache', !on('rapport'));
+}
+async function sitePublie(type) {
+  if (!M) return;
+  await sauveMaintenant();
+  let j = null;
+  try { j = await (await fetch(base + '/api/site/publie', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'type=' + encodeURIComponent(type) + '&ref=' + encodeURIComponent(id) })).json(); } catch (e) {}
+  g('message').textContent = j ? (j.ok ? '🌐 ' + j.message : '✗ ' + (j.erreur || '')) : T.hors_ligne;
+}
+g('sitePlanche').onclick = () => sitePublie('planche');
+g('siteRapport').onclick = () => sitePublie('rapport');
+siteWeb();
 g('dlgRapport').addEventListener('pointerdown', ev => { if (ev.target.id === 'dlgRapport') g('dlgRapport').classList.add('cache'); });
 g('tour').onclick = () => nouveau('tour');
 g('importer').onclick = () => g('fichier').click();

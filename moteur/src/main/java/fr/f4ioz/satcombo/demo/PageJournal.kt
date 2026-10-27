@@ -1723,9 +1723,25 @@ async function suitTravail(j, zone, barre, mot) {
       el('a', { href: lien, download: e.nom }, [el('button', { class: 'primaire', text: '⤓ ' + T.telecharger })])]));
     if (/\.(png|gif)$/.test(e.nom)) zone.appendChild(el('img', { src: url('/fichier', { n: j.travail, voir: '1' }), style: 'max-width:100%;max-height:50vh;margin-top:6px;border-radius:6px' }));
     else if (/\.mp4$/.test(e.nom)) zone.appendChild(el('video', { src: url('/fichier', { n: j.travail, voir: '1' }), controls: '', style: 'max-width:100%;max-height:50vh;margin-top:6px' }));
+    if (/\.mp4$/.test(e.nom)) siteVideo(zone, e.nom);
     else if (/\.wav$/.test(e.nom)) zone.appendChild(el('audio', { src: url('/fichier', { n: j.travail, voir: '1' }), controls: '', style: 'width:100%;margin-top:6px' }));
     return;
   }
+}
+/** SatMe-PC only: « Publier sur le site » (Réglages › Site web) under a video made, when its kind is not « Jamais ». */
+async function siteVideo(zone, nom) {
+  if (!window.SATME_PC) return;
+  let S = null; try { S = await (await fetch(base + '/api/site')).json(); } catch (x) {}
+  if (!S || !S.ok || !S.configure || S.modes['journal-video'] === 'jamais') return;
+  const dit = el('span', { class: 'aide' });
+  const b = el('button', { text: '🌐 Publier sur le site' });
+  b.onclick = async () => {
+    let j = null;
+    try { j = await (await fetch(base + '/api/site/publie', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'type=journal-video&ref=' + encodeURIComponent(nom) })).json(); } catch (x) {}
+    dit.textContent = j ? (j.ok ? '🌐 ' + j.message : '✗ ' + (j.erreur || '')) : '✗';
+  };
+  zone.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [b, dit]));
 }
 ${PageJournalFt.JS}
 g('tPorte').textContent = T.titre; g('tCode').textContent = T.code; g('entrer').textContent = T.entrer;

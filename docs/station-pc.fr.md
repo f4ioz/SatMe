@@ -977,7 +977,7 @@ L'onglet **Montage** (espace **Station**) dessine la station : l'antenne à gauc
 
 ## Réglages
 
-Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon), **Modules** (ce qui t'intéresse, les profils), **Poste et rotor** (CAT par USB ou par le réseau, TH-D72, rotor, polarisation d'antenne, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Annonces** (annonces vocales), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700 : réseau autorisé, minuterie, puissance au plus, carte son ; correction I/Q des émetteurs), **Démarrage** (réseau, port, dossier des données, mises à jour, configuration rapide), **Accès à distance** (mot de passe, HTTPS, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant ; le déploiement sur un autre PC).
+Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon), **Modules** (ce qui t'intéresse, les profils), **Poste et rotor** (CAT par USB ou par le réseau, TH-D72, rotor, polarisation d'antenne, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Annonces** (annonces vocales), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at, site web), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (IC-9700 : réseau autorisé, minuterie, puissance au plus, carte son ; correction I/Q des émetteurs), **Démarrage** (réseau, port, dossier des données, mises à jour, configuration rapide), **Accès à distance** (mot de passe, HTTPS, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant ; le déploiement sur un autre PC).
 
 ### Le poste et le rotor
 
@@ -1084,6 +1084,17 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - `\dump_state`, `\chk_vfo`, `\get_powerstat`, `\dump_caps`, les formes longues, et les réponses étendues (`+`, `;`).
 
 `T` (PTT) et tout réglage d'émission sont toujours refusés (`RPRT -11`). `F` et `M` aussi, sauf si « Autoriser le changement de fréquence » est coché : ils n'accordent alors que le récepteur SDR — jamais le poste, ni quand QO-100 est au poste.
+
+### Site web : publier sur votre site
+
+**Réglages › Services en ligne › Site web** relie SatMe-PC à votre site radioamateur — le module `site` de SatMe, celui de f4ioz.fr (voir `site/README.md`) :
+
+- **Adresse** du site (`https://f4ioz.fr`) et **jeton de publication**, créé sur le serveur du site (`f4ioz-site jeton`, qui donne aussi la ligne à mettre dans `site.conf`). Le jeton reste sur ce PC, comme la clé Wavelog : il n'est jamais réaffiché ni écrit dans un journal. **Tester la connexion** demande au site s'il répond et s'il accepte le jeton, sans rien publier.
+- **Pour chaque genre, Automatique / Sur clic / Jamais** : les **images SSTV** (d'origine Automatique : chaque image reçue en direct, pas les essais ni les relectures), les **planches** (Automatique : celles qui ont des images, deux minutes après la dernière image reçue ; la nouvelle version remplace l'ancienne sur le site), les **rapports** d'événement en PDF, les **contacts** (ADIF) et les **vidéos du journal** (d'origine Sur clic).
+- **🌐 Publier sur le site** à côté de chaque élément : dans la visionneuse des images SSTV, sur chaque ligne du carnet (Contacts), sur la page Planche (**🌐 Planche sur le site**, **🌐 Rapport sur le site**) et sous une vidéo faite par l'éditeur du journal.
+- Rien ne part de la page elle-même : chaque élément est copié dans une **file sur le disque** (dossier `site/` des données) et envoyé par SatMe-PC ; si le site ne répond pas, il réessaie (30 s, 1 min, 2 min… une heure au plus), même après un redémarrage. La carte montre ce qui attend, le dernier essai, les dernières réponses ; **Réessayer maintenant**, **Vider la file**. Un refus du site (jeton, genre, taille) n'est pas réessayé.
+- Le même élément envoyé deux fois n'est publié qu'une fois. Tout se retire **sur le site** (sa page privée `/admin` : cacher, remontrer, supprimer).
+- En **démonstration**, SatMe-PC ne publie que vers un site de cette machine (`http://127.0.0.1:…`, un site d'essai).
 
 ### La molette USB (VFO)
 

@@ -580,6 +580,17 @@ fun main(args: Array<String>) {
     val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin })
     son.sstv.imageGardee = { d, s -> redecodageAuto.demande(d, s) }
     serveur.optionsSstv = optionsSstv
+    // « Réglages › Site web »: the SSTV pictures, planches, reports, contacts and videos published on the operator's site,
+    // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
+    val site = SitePc(station.stockage, dossier)
+    val sourcesSite = SourcesSitePc(son.sstv, planche, carnet, station, File(dossier, "exports"))
+    site.sources = { g, ref -> sourcesSite.contenu(g, ref) }
+    site.planchesRemplies = { planche.planches().filter { it.images.isNotEmpty() }.map { it.id } }
+    son.sstv.nouvelleImage = { nom, _ -> site.nouvelleImage(nom) }
+    carnet.ecouteurs += { c -> site.nouveauContact(c.timeMs) }
+    journalWeb.videoFaite = { f -> site.nouvelleVideo(f.name) }
+    serveur.site = site
+    site.demarre()
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
     val diplomes = DiplomesPc(station, dossier,
         images = {

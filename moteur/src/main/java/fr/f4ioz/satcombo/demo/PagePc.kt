@@ -4766,6 +4766,7 @@ ${DemarragePagePc.CARTES}
       <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('api/reglages?carnetDelai=' + this.value)"></select>
         <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
     </div>
+${SiteWebJs.CARTE}
     <div class="carte" id="dop-carte">
       <div class="t">Journal Doppler / CAT</div>
       <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
@@ -5029,6 +5030,7 @@ ${DemarragePagePc.DIALOGUES}
     <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
     <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur : une image de plus dans la galerie (une copie de plus de la même diapo). Pour une version corrigée à côté de la reçue : « Version corrigée depuis l’enregistrement »">⟳ Redécoder en nouvelle image</button>
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
+    <button class="site-b" data-site="sstv-image" hidden onclick="sitePublie('sstv-image', viNom, this)" title="Publier cette image sur le site web (Réglages › Site web)">🌐 Publier sur le site</button>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
@@ -5653,7 +5655,7 @@ const CATS_REG = [
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
-  { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
+  { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, votre site web', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Site web'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
@@ -7076,7 +7078,7 @@ function dessineCarnet() {
     '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + drC(e) + '<b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) +
     '</td><td class="act">' + envoiCarnet(e) + (e.sat ? '<button title="Son passage et le chemin du rotor (journal des passages)" onclick="cheminContact(this, ' + e.t + ', ' + JSON.stringify(String(e.sat)).replace(/"/g, '&quot;') + ')">⌖</button> ' : '') +
-    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||
+    siteBouton('qso', e.t) + '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||
     '<tr><td colspan="8" class="petit">aucun contact</td></tr>';
   majSelection();
 }
@@ -10637,6 +10639,7 @@ ${OngletSked.JS}
 ${VideoSkedJs.JS}
 majVueSked();
 
+${SiteWebJs.JS}
 // ------------------------------------------------------------------ the followed satellite's map
 let ecranStation = 'ciel';
 try { const q = localStorage.getItem('ecran-station'); ecranStation = q === 'carte' || (q === 'globe' && !window.SATME_TELEPHONE) ? q : 'ciel'; } catch (x) {}

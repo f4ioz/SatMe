@@ -143,4 +143,16 @@ class ManuelTest {
         assertEquals(Manuel.PAR_DEFAUT, j.getJSONObject("onglets").getString("*"))
         assertTrue(Manuel.cherche("rigctld").isNotEmpty())
     }
+
+    @Test
+    fun les_images_et_les_liens_du_site_seulement_s_ils_sont_surs() {
+        // The F4IOZ site's articles: a picture of the site or https, a link to another page of the site.
+        assertEquals("<p><img src=\"/images/antenne.jpg\" alt=\"Mon antenne\" loading=\"lazy\"></p>", Markdown.html("![Mon **antenne**](/images/antenne.jpg)"))
+        assertEquals("<p><a href=\"/articles/2026/essai\">un essai</a></p>", Markdown.html("[un essai](/articles/2026/essai)"))
+        // Anything else is left as text: no script, no other scheme, no quote breaking out.
+        assertEquals("<p>!x</p>", Markdown.html("![x](javascript:alert(1))"))
+        assertFalse(Markdown.html("![x](/a\" onerror=\"alert(1))").contains("onerror=\""))
+        assertEquals("<p>x</p>", Markdown.html("[x](//autre.example/page)"))
+        assertEquals("<p>x</p>", Markdown.html("[x](data:text/html,abc)"))
+    }
 }
