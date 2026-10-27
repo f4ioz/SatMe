@@ -74,7 +74,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | **Suivi** | les passages des 24 h, le satellite suivi sur le ciel ou la carte, l'encart AMSAT, les fréquences corrigées du Doppler, le poste et le rotor par leur nom avec une coche verte |
 | **Carnet** | la saisie avec l'indicatif prédit et QRZ, la station en direct à côté, la fenêtre du décodeur CW, phonie → texte |
 | **Agenda** · **Frise** · **Carrés** | les rendez-vous et le **mode automatique** ; les passages sur une frise ; les carrés contactés sur une carte |
-| **Sked** | les fenêtres où une autre station et vous voyez tous deux un satellite, rejouées sur la carte, faites en vidéo |
+| **Sked** | les fenêtres où une autre station et vous voyez tous deux un satellite, rejouées sur la carte ou sur le **globe** (les rendus et réglages de l'onglet Orbites : rendu, caméra, détails, villes, monuments ; les deux stations, la fenêtre commune en vert), faites en vidéo |
 | **QO-100** | le cockpit de la bande étroite : la réception en un clic, les signaux nommés, un clic pour s'accorder avec le bon décodeur |
 | **DATV** | la bande large de QO-100 : réception (MiniTiouner, node, Pluto ou bladeRF), qualité, sous-titres, émission |
 | **Montage** | le schéma de la station, ce que tient chaque fonction de SatMe, les profils de réception |

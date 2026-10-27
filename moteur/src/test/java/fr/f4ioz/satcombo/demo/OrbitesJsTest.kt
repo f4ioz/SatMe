@@ -32,6 +32,20 @@ class OrbitesJsTest {
     }
 
     @Test
+    fun le_sked_se_rejoue_aussi_sur_le_globe() {
+        // The Sked tab: a map / globe switch, the globe's settings (the Orbites tab's), its canvas beside the map.
+        assertTrue(PagePc.HTML.contains("id=\"k-globe\""))
+        assertTrue(PagePc.HTML.contains("onclick=\"vueSked('globe')\""))
+        assertTrue(PagePc.HTML.contains("id=\"k-reglages\""))
+        assertTrue(PagePc.HTML.contains("Orbites.sked(g('k-globe'), donneesGlobeSked())"))
+        assertTrue(PagePc.HTML.contains("localStorage.setItem('sked-vue', q)"))
+        // The globes' module: a 'sked' scene, driven by the page's clock, both stations.
+        assertTrue(OrbitesJs.JS.contains("sked: async function (canvas, d)"))
+        assertTrue(OrbitesJs.JS.contains("sc.mode === 'sked' ? sc.sk.donnees.horloge()"))
+        assertTrue(OrbitesJs.JS.contains("sc.skedPrepare = () =>"))
+    }
+
+    @Test
     fun les_bibliotheques_sont_dans_le_jar() {
         val three = PagePc.bibliotheque("three.js")
         assertNotNull(three)

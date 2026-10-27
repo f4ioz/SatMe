@@ -928,7 +928,14 @@ ${STYLE_JETONS}
   #k-grille { grid-template-columns:minmax(380px,1fr) minmax(420px,1.7fr); }
   .k-fenetres { max-height:360px; overflow:auto; }
   .k-corps { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-  #k-carte { flex:3; min-width:320px; height:460px; border-radius:8px; cursor:grab; touch-action:none; }
+  #k-carte, #k-globe { flex:3; min-width:320px; height:460px; border-radius:8px; cursor:grab; touch-action:none; }
+  .k-reglages { margin-top:8px; font-size:var(--fs-s); }
+  .k-reglages summary { cursor:pointer; color:var(--texte2, #9AA7B4); }
+  #k-reglages-c { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin-top:6px; }
+  #k-reglages-c label { display:flex; align-items:center; gap:4px; }
+  #k-reglages-c .k-montypes { flex-basis:100%; display:flex; flex-wrap:wrap; gap:2px 12px; }
+  @media (max-width:900px) { #k-grille { grid-template-columns:minmax(0,1fr); } }
+  @media (max-width:760px) { #k-carte, #k-globe { min-width:0; flex-basis:100%; height:360px; } .k-ciels { max-width:none; flex-direction:row; } .k-ciels > div { flex:1; min-width:0; } }
   .k-ciels { flex:1; min-width:180px; max-width:240px; display:flex; flex-direction:column; gap:6px; }
   .k-ciels svg { width:100%; display:block; }
   .o-freq { font-family:ui-monospace,Consolas,monospace; font-size:34px; font-weight:800; color:var(--cyan); cursor:ns-resize; user-select:none; }
@@ -1127,7 +1134,7 @@ ${STYLE_JETONS}
     .k-droite { min-height:0; }
     #k-anim { height:100%; display:flex; flex-direction:column; margin:0; }
     .k-corps { flex:1; min-height:0; flex-wrap:nowrap; }
-    #k-carte { height:auto; }
+    #k-carte, #k-globe { height:auto; }
     .k-ciels { justify-content:flex-start; }
     .k-ciels svg { max-height:calc((100vh - 230px) / 2); }
   }
@@ -3190,11 +3197,15 @@ ${rail()}
         <input type="range" id="k-curseur" min="0" max="1000" value="0" style="flex:1;min-width:160px">
         <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
         <span id="k-ensemble" class="petit"></span>
+        <span class="bascule-c" role="group" aria-label="Rejouer sur"><button id="k-b-carte" onclick="vueSked('carte')" title="Le sked rejoué sur la carte">Carte</button><button id="k-b-globe" onclick="vueSked('globe')" title="Le sked rejoué sur le globe de l’onglet Orbites, avec ses rendus et ses réglages">Globe</button></span>
         <button id="k-video" onclick="videoSked()" title="Le sked rejoué en vidéo (MP4), à envoyer à l'autre station">Vidéo</button>
         <span class="petit" id="k-video-etat"></span>
       </div>
+      <details class="k-reglages" id="k-reglages" hidden><summary>Réglages du globe</summary><div id="k-reglages-c"></div></details>
+      <div class="petit" id="k-globe-etat"></div>
       <div class="k-corps">
         <canvas id="k-carte" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer"></canvas>
+        <canvas id="k-globe" hidden title="Glisser pour tourner, molette pour zoomer, double-clic pour recadrer" aria-label="Le sked rejoué sur le globe"></canvas>
         <div class="k-ciels">
           <div><div class="petit" id="k-lmoi">Moi</div><svg id="k-cmoi" viewBox="-112 -112 224 224"></svg></div>
           <div><div class="petit" id="k-llui">Lui</div><svg id="k-clui" viewBox="-112 -112 224 224"></svg></div>
@@ -7679,7 +7690,7 @@ function vue(n) {
   if (n === 'tlm' || n === 'qo100') tlmTic(true);
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
-  if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
+  if (n === 'sked') { prepareSked(); setTimeout(() => { dessineSked(); if (kVue === 'globe' && KT) majVueSked(); }); }
   if (n === 'orbites') Orbites.montre();
   if (n === 'station' && ecranStation === 'globe') Orbites.suivi(g('st-globe'));
   if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); bxLit(); }
@@ -11257,7 +11268,7 @@ async function calculeSked() {
   if (K.length) rejoueSked(0); else { g('k-anim').hidden = true; g('k-vide').hidden = false; KT = null; }
 }
 // The sked replayed: both skies and the map, as on the phone.
-let KT = null, kF = 0, kJoue = false, kAvant = 0;
+let KT = null, kF = 0, kJoue = false, kAvant = 0, kId = 0;
 const K_DUREE = 15000;   // one full replay, ms
 async function rejoueSked(i) {
   const w = K[i];
@@ -11268,14 +11279,14 @@ async function rejoueSked(i) {
   let ref = j.moi.lon;
   j.points.forEach(p => { while (p[6] - ref > 180) p[6] -= 360; while (p[6] - ref < -180) p[6] += 360; ref = p[6]; });
   while (j.autre.lon - j.moi.lon > 180) j.autre.lon -= 360; while (j.autre.lon - j.moi.lon < -180) j.autre.lon += 360;
-  KT = j; KT.w = w; KT.loc = v('k-loc').toUpperCase(); KT.nom = g('k-sat').selectedOptions[0].textContent;
+  KT = j; KT.w = w; KT.loc = v('k-loc').toUpperCase(); KT.nom = g('k-sat').selectedOptions[0].textContent; KT.id = ++kId;
   [...g('k-liste').rows].forEach((r, k) => r.classList.toggle('choisi', k === i));
   txt('k-titre', KT.nom + ' · ' + jourHeure(w.de) + ' → ' + hm(w.a));
   txt('k-lmoi', 'Moi' + (E && E.locator ? ' (' + E.locator + ')' : '') + ' · max ' + w.elMoi + '°');
   txt('k-llui', KT.loc + ' · max ' + w.elAutre + '°');
   g('k-anim').hidden = false; g('k-vide').hidden = true;
   kF = 0; kJoue = true; kAvant = 0; txt('k-joue', '⏸');
-  cadreSked(); dessineSked();
+  majVueSked();
   requestAnimationFrame(boucleSked);
 }
 async function videoSked() {
@@ -11414,6 +11425,7 @@ function dessineSked() {
   const moi = cour[2] >= 0, lui = cour[4] >= 0;
   g('k-ensemble').innerHTML = moi && lui ? '<b style="color:#5BD68A">vous le voyez tous deux</b>' : moi ? 'vous seul le voyez' : lui ? KT.loc + ' seul le voit' : 'personne ne le voit';
   cielSked('k-cmoi', 1, 2, cour); cielSked('k-clui', 3, 4, cour);
+  if (kVue === 'globe') return;   // the globe draws itself, at the replay's time
   // The map.
   const m = fondCarte(g('k-carte'), KV), x = m.x;
   empreinte(m, cour[5], cour[6], cour[7]);
@@ -11432,6 +11444,58 @@ function dessineSked() {
   pointCarte(m, cour[5], cour[6], moi && lui ? '#5BD68A' : '#3FE0C8', 7, KT.nom);
 }
 attacheCarte(g('k-carte'), KV, dessineSked, cadreSked, 1);
+// The replay on the map or on the globe (the Orbites tab's: its looks and settings, kept with it), as last chosen.
+let kVue = 'carte';
+try { if (localStorage.getItem('sked-vue') === 'globe' && !window.SATME_TELEPHONE) kVue = 'globe'; } catch (x) {}
+if (window.SATME_TELEPHONE) g('k-b-globe').hidden = true;
+function vueSked(q) {
+  kVue = q;
+  try { localStorage.setItem('sked-vue', q); } catch (x) {}
+  majVueSked();
+}
+async function majVueSked() {
+  const globe = kVue === 'globe';
+  g('k-b-carte').classList.toggle('actif', !globe); g('k-b-globe').classList.toggle('actif', globe);
+  g('k-carte').hidden = globe; g('k-globe').hidden = !globe; g('k-reglages').hidden = !globe;
+  txt('k-globe-etat', '');
+  if (!globe) { cadreSked(); dessineSked(); return; }
+  if (!KT) return;
+  reglagesGlobeSked();
+  txt('k-globe-etat', 'Chargement du globe…');
+  const ok = await Orbites.sked(g('k-globe'), donneesGlobeSked());
+  if (kVue !== 'globe') return;
+  if (!ok) { kVue = 'carte'; majVueSked(); txt('k-globe-etat', 'Le globe n’a pas pu se charger : le sked est rejoué sur la carte.'); return; }
+  txt('k-globe-etat', '');
+  dessineSked();
+}
+/** The window as the globe takes it: the track [t, lat, lon, alt], both stations, the replay's clock. */
+function donneesGlobeSked() {
+  return { id: 'sked:' + KT.id, sat: KT.nom, points: KT.points.map(p => [p[0], p[5], p[6], p[7]]), de: KT.w.de, a: KT.w.a,
+    moi: { lat: KT.moi.lat, lon: KT.moi.lon, indicatif: E && E.indicatif ? E.indicatif : 'Moi', locator: E && E.locator ? E.locator : '' },
+    autre: { lat: KT.autre.lat, lon: KT.autre.lon, locator: KT.loc }, horloge: () => KT ? instantSked(kF)[0] : Date.now() };
+}
+/** The globe's settings, the Orbites tab's own (shared with it): look, camera, details, cities, names, landmarks. */
+function reglagesGlobeSked() {
+  const box = g('k-reglages-c'); box.innerHTML = '';
+  const choix = (lib, cls, l, val, change, titre) => {
+    const lab = document.createElement('label'), s = document.createElement('select');
+    if (cls) s.className = cls; if (titre) lab.title = titre;
+    l.forEach(c => { const o = document.createElement('option'); o.value = c[0]; o.textContent = c[1]; s.appendChild(o); });
+    s.value = String(val); s.onchange = () => change(s.value);
+    lab.append(document.createTextNode(lib + ' '), s); box.appendChild(lab);
+  };
+  choix('Rendu', 'ob-style-choix', Orbites.styles(), Orbites.styleActif(), q => Orbites.style(q));
+  choix('Caméra', 'ob-cam-choix', [['espace', 'les deux stations'], ['poursuite', 'poursuite du satellite'], ['sol', 'depuis ma station']], Orbites.cameraActive(),
+    q => { Orbites.camera(q); Orbites.skedRecadre(); }, 'Glisser le globe le libère ; double-clic : le recadrer');
+  choix('Détails', '', [['0', 'simples'], ['1', 'normaux'], ['2', 'riches']], Orbites.detailActif(), q => Orbites.detail(+q), 'Villes, montagnes, monuments et décor du dessin animé');
+  choix('Villes', '', [['toutes', 'toutes'], ['capitales', 'capitales'], ['aucune', 'aucune']], Orbites.villesActives(), q => Orbites.villes(q));
+  choix('Noms', '', [['nom', 'nom'], ['drapeau', 'drapeau'], ['nomdrapeau', 'nom et drapeau']], Orbites.etiquettesActives(), q => Orbites.etiquettes(q));
+  choix('Monuments', 'ob-mon-choix', [['aucun', 'aucun'], ['principaux', 'principaux'], ['tous', 'tous']], Orbites.monumentsActifs(), q => Orbites.monuments(q));
+  choix('Taille', 'ob-montaille-choix', [['0.7', 'petite'], ['1', 'normale'], ['1.6', 'grande'], ['2.4', 'très grande']], Orbites.monumentsTailleActive(), q => Orbites.monumentsTaille(+q),
+    'La taille des monuments (plus grands : lisibles de loin)');
+  const ty = document.createElement('div'); ty.className = 'k-montypes'; box.appendChild(ty); Orbites.typesMonuments(ty);
+}
+majVueSked();
 
 // ------------------------------------------------------------------ the followed satellite's map
 let ecranStation = 'ciel';

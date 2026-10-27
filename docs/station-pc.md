@@ -74,7 +74,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 | **Suivi** | the next 24 h passes, the satellite followed on the sky or the map, the AMSAT box, Doppler-corrected frequencies, the rig and rotator by name with a green tick |
 | **Carnet** | the log: entry with callsign prediction and QRZ, the station live beside it, the CW decoder window, voice to text |
 | **Agenda** · **Frise** · **Carrés** | appointments and the **automatic mode**; the passes on a timeline; worked squares on a map |
-| **Sked** | the windows when you and another station both see a satellite, replayed on the map, made into a video |
+| **Sked** | the windows when you and another station both see a satellite, replayed on the map or on the **globe** (the Orbites tab's looks and settings: rendering, camera, details, cities, landmarks; both stations, the common window in green), made into a video |
 | **QO-100** | the narrow band cockpit: one-click reception, named signals, click-to-tune with the right decoder |
 | **DATV** | QO-100's wide band: reception (MiniTiouner, node, Pluto or bladeRF), quality, subtitles, transmission |
 | **Montage** | the station diagram, what each SatMe function holds, the receive profiles |

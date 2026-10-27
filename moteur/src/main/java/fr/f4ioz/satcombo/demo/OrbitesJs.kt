@@ -192,7 +192,7 @@ const Orbites = (function () {
     villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null,
     monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)) };
   try { OB.monOff = JSON.parse(lit('ob-montypes-off', '[]')) || []; } catch (x) {}
-  let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null;
+  let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null, sked = null;
 
   /* Libraries and the coastline: fetched once, when a globe is first shown; the station's elements for the tab and the Suivi. */
   function script(src) { return new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); }
@@ -275,7 +275,7 @@ const Orbites = (function () {
     OB.sats.forEach((s, i) => { if (!s.couleur) s.couleur = PALETTE[i % PALETTE.length]; });
     if (!OB.choisi || !OB.sats.includes(OB.choisi)) OB.choisi = OB.sats.find(s => s.suivi) || OB.sats.find(s => s.on) || OB.sats[0] || null;
     if (OB.choisi) OB.choisi.on = true;
-    scenes.forEach(sc => { if (sc.mode !== 'rejeu') sc.synchro(); });
+    scenes.forEach(sc => { if (sc.mode !== 'rejeu' && sc.mode !== 'sked') sc.synchro(); });
   }
   async function rafraichit() { try { prend(await (await fetch(api('api/orbites'))).json()); if (tab) listeSats(); } catch (x) {} }
   /* The log's contacts, for their dots, callsigns or squares: read when asked for, again every five minutes. */
@@ -635,10 +635,13 @@ const Orbites = (function () {
   /**
    * One globe on [canvas]. [mode]: 'tab' (the Orbites tab: the satellites ticked, the camera dragged or flying a pass),
    * 'suivi' (the Suivi tab: the satellite followed with its orbit and footprint, the favourites as small lights, real time),
-   * 'rejeu' (the journal: one pass replayed from its recorded track, with its contacts and pictures at their time).
+   * 'rejeu' (the journal: one pass replayed from its recorded track, with its contacts and pictures at their time),
+   * 'sked' (the Sked tab: a common window replayed, both stations, the track and where both see the satellite).
    */
   function Scene(canvas, mode) {
-    const sc = { canvas: canvas, mode: mode, objets: new Map(), style: null, rj: null };
+    const sc = { canvas: canvas, mode: mode, objets: new Map(), style: null, rj: null, sk: null };
+    // The journal's and the Sked's: their own station and satellite, their own clock.
+    const rejoue = mode === 'rejeu' || mode === 'sked';
     const rendu = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, logarithmicDepthBuffer: true });
     rendu.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(42, 1, .0002, 200);
@@ -659,17 +662,29 @@ const Orbites = (function () {
     const pin = new THREE.Mesh(new THREE.ConeGeometry(.008, .03, 16), new THREE.MeshBasicMaterial({ color: 0xffb454 }));
     const anneau = new THREE.Mesh(new THREE.RingGeometry(.012, .016, 40), new THREE.MeshBasicMaterial({ color: 0xffb454, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
     station.add(pin, anneau); terre.add(station); scene.add(nomStation);
+    // The Sked's other station: its own pin, pink as on its map.
+    const autre = new THREE.Group(), posAutre = new THREE.Vector3();
+    let nomAutre = etiquette('Lui', '#E86FA8');
+    const pin2 = new THREE.Mesh(new THREE.ConeGeometry(.008, .03, 16), new THREE.MeshBasicMaterial({ color: 0xe86fa8 }));
+    const anneau2 = new THREE.Mesh(new THREE.RingGeometry(.012, .016, 40), new THREE.MeshBasicMaterial({ color: 0xe86fa8, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+    const rayon2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xe86fa8, transparent: true, opacity: .9 }));
+    autre.add(pin2, anneau2); terre.add(autre); scene.add(nomAutre, rayon2); autre.visible = nomAutre.visible = rayon2.visible = false;
     const cardinaux = [['N', 0], ['E', 90], ['S', 180], ['O', 270]].map(c => { const s = etiquette(c[0], '#FFB454'); s.userData.az = c[1]; s.visible = false; scene.add(s); return s; });
     // The satellite chosen: a ring turning round it.
     const cible = new THREE.Sprite(new THREE.SpriteMaterial({ map: rond('#FFFFFF', true), depthTest: false, transparent: true, sizeAttenuation: false })); cible.renderOrder = 9; scene.add(cible);
-    sc.lieu = () => mode === 'rejeu' ? (sc.rj && sc.rj.station) : (OB.donnees && OB.donnees.obs ? { lat: OB.donnees.obs.lat, lon: OB.donnees.obs.lon, indicatif: OB.donnees.indicatif, locator: OB.donnees.locator } : null);
-    sc.obs = () => { if (mode !== 'rejeu') return OB.obs; const l = sc.lieu(); return l ? { latitude: l.lat * D2R, longitude: l.lon * D2R, height: 0 } : null; };
-    sc.placeStation = () => {
-      const d = sc.lieu(); if (!d) { station.visible = nomStation.visible = false; return; }
+    sc.lieu = () => mode === 'rejeu' ? (sc.rj && sc.rj.station) : mode === 'sked' ? (sc.sk && sc.sk.moi) : (OB.donnees && OB.donnees.obs ? { lat: OB.donnees.obs.lat, lon: OB.donnees.obs.lon, indicatif: OB.donnees.indicatif, locator: OB.donnees.locator } : null);
+    sc.obs = () => { if (!rejoue) return OB.obs; const l = sc.lieu(); return l ? { latitude: l.lat * D2R, longitude: l.lon * D2R, height: 0 } : null; };
+    const epingle = (d, pos, pi, an) => {
       const p = local(d.lat, d.lon, 1);
-      posStation.copy(local(d.lat, d.lon, 1.0003));
-      pin.position.copy(p.clone().multiplyScalar(1.015)); pin.lookAt(0, 0, 0); pin.rotateX(-Math.PI / 2);
-      anneau.position.copy(p.clone().multiplyScalar(1.003)); anneau.lookAt(p.clone().multiplyScalar(2));
+      pos.copy(local(d.lat, d.lon, 1.0003));
+      pi.position.copy(p.clone().multiplyScalar(1.015)); pi.lookAt(0, 0, 0); pi.rotateX(-Math.PI / 2);
+      an.position.copy(p.clone().multiplyScalar(1.003)); an.lookAt(p.clone().multiplyScalar(2));
+    };
+    sc.placeStation = () => {
+      const a = mode === 'sked' && sc.sk && sc.sk.autre;
+      if (a) { epingle(a, posAutre, pin2, anneau2); scene.remove(nomAutre); nomAutre = etiquette(a.indicatif || a.locator || 'Lui', '#E86FA8', sc.style); scene.add(nomAutre); }
+      const d = sc.lieu(); if (!d) { station.visible = nomStation.visible = false; return; }
+      epingle(d, posStation, pin, anneau);
       scene.remove(nomStation); nomStation = etiquette((d.indicatif || 'Station') + (d.locator ? ' · ' + d.locator : ''), '#FFB454', sc.style); scene.add(nomStation);
     };
 
@@ -711,7 +726,7 @@ const Orbites = (function () {
     /* The log's contacts: dots, dots and callsigns, or the squares worked. */
     sc.contacts = () => {
       while (contactsGp.children.length) contactsGp.remove(contactsGp.children[0]);
-      if (mode === 'rejeu' || OB.contacts === 'aucun' || !OB.carnet) return;
+      if (rejoue || OB.contacts === 'aucun' || !OB.carnet) return;
       const C = '#FF4FA3';
       if (OB.contacts === 'locators') {
         const carres = new Map();
@@ -755,7 +770,7 @@ const Orbites = (function () {
       scene.background = new THREE.Color(STYLES[k].fond);
       etoiles.material.color.set(STYLES[k].etoiles);
       sc.objets.forEach(o => o.restyle());
-      sc.placeStation(); sc.monde(); sc.contacts(); if (mode === 'rejeu') sc.rejeuPrepare();
+      sc.placeStation(); sc.monde(); sc.contacts(); if (mode === 'rejeu') sc.rejeuPrepare(); if (mode === 'sked') sc.skedPrepare();
     };
 
     function objet(s) {
@@ -809,8 +824,8 @@ const Orbites = (function () {
       o.trace = trace; o.tOrbite = t; o.tubeLui = lui;
     }
     sc.orbite = orbite;
-    sc.choisi = () => mode === 'suivi' ? OB.sats.find(s => s.suivi) : mode === 'rejeu' ? (sc.rj && sc.rj.sat) : OB.choisi;
-    sc.montres = () => mode === 'rejeu' ? (sc.rj ? [sc.rj.sat].concat(sc.rj.autres || []) : []) : mode === 'suivi' ? OB.sats.filter(s => s.suivi || s.fav) : OB.sats.filter(s => s.on);
+    sc.choisi = () => mode === 'suivi' ? OB.sats.find(s => s.suivi) : mode === 'rejeu' ? (sc.rj && sc.rj.sat) : mode === 'sked' ? (sc.sk && sc.sk.sat) : OB.choisi;
+    sc.montres = () => mode === 'rejeu' ? (sc.rj ? [sc.rj.sat].concat(sc.rj.autres || []) : []) : mode === 'sked' ? (sc.sk ? [sc.sk.sat] : []) : mode === 'suivi' ? OB.sats.filter(s => s.suivi || s.fav) : OB.sats.filter(s => s.on);
     sc.synchro = () => {
       const l = sc.montres(), ids = new Set(l.map(s => s.catnum));
       sc.objets.forEach((o, n) => { if (!ids.has(n) || !l.includes(o.s)) { o.retire(); sc.objets.delete(n); } });
@@ -845,6 +860,36 @@ const Orbites = (function () {
         rj.marques.push(o);
       });
     };
+    /* The Sked: the ground track (faint), the common window on it and on the orbit (green, as on its map). */
+    sc.skedPrepare = () => {
+      if (mode !== 'sked') return;
+      while (rejeuGp.children.length) rejeuGp.remove(rejeuGp.children[0]);
+      if (sc.sk && sc.sk.tube) { scene.remove(sc.sk.tube); sc.sk.tube.geometry.dispose(); sc.sk.tube = null; }
+      if (!sc.sk) return;
+      const d = sc.sk.donnees, l = sc.sk.sat.piste, carton = !!STYLES[sc.style].carton;
+      const sol = l.map(p => local(p[1], p[2], 1.002)), com = l.filter(p => p[0] >= d.de && p[0] <= d.a);
+      rejeuGp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(sol), new THREE.LineBasicMaterial({ color: STYLES[sc.style].encre || '#3FE0C8', transparent: true, opacity: .55 })));
+      if (com.length > 1) {
+        const vert = new THREE.MeshBasicMaterial({ color: 0x5bd68a, transparent: true, opacity: .95 });
+        rejeuGp.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(com.map(p => local(p[1], p[2], 1.003))), com.length, carton ? .004 : .0028, 6, false), vert));
+        const pts = []; com.forEach(p => { const e = etat(sc.sk.sat, p[0], null); if (e) pts.push(eciVers3(e.eci)); });
+        if (pts.length > 1) { sc.sk.tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length, carton ? .0065 : .0048, 6, false), vert); scene.add(sc.sk.tube); }
+      }
+    };
+    /* The Sked: the other station's name, its ring, its line to the satellite while it sees it. */
+    function skedImage(t, satP, now) {
+      const a = sc.sk && sc.sk.autre, vu = !!a && !(passageSol());
+      autre.visible = nomAutre.visible = vu; rayon2.visible = false;
+      if (!vu) return;
+      const aW = terre.localToWorld(posAutre.clone());
+      nomAutre.position.copy(aW.clone().multiplyScalar(1.02)); nomAutre.scale.set(.026 * nomAutre.userData.ratio, .026, 1); nomAutre.center.set(-.08, .5);
+      const pulse = ((now + 700) / 1400) % 1; anneau2.scale.setScalar(1 + pulse * 2.5); anneau2.material.opacity = 1 - pulse;
+      if (!a.obs) a.obs = { latitude: a.lat * D2R, longitude: a.lon * D2R, height: 0 };
+      const e = satP && etat(sc.sk.sat, t, a.obs);
+      rayon2.visible = !!e && e.el > 0;
+      if (rayon2.visible) { const g = rayon2.geometry.attributes.position; g.setXYZ(0, aW.x, aW.y, aW.z); g.setXYZ(1, satP.x, satP.y, satP.z); g.needsUpdate = true; rayon2.material.opacity = .55 + .4 * Math.sin(now / 160 + 1); }
+    }
+    const passageSol = () => !!sc.enPassage && !sc.libre && OB.cam === 'sol';
     function rejeuImage(t, stW, satP, now) {
       const rj = sc.rj; if (!rj || !rj.marques) return;
       let rang = 0;
@@ -879,7 +924,17 @@ const Orbites = (function () {
     sc.decal = { x: 0, y: 0 };
     if (mode === 'rejeu') { try { const d = JSON.parse(lit('ob-decal', 'null')); if (d) sc.decal = d; } catch (x) {} }
     canvas.addEventListener('dblclick', () => { if (mode === 'rejeu') { sc.decal = { x: 0, y: 0 }; garde('ob-decal', JSON.stringify(sc.decal)); } });
-    canvas.addEventListener('pointerdown', e => { tir = { x: e.clientX, y: e.clientY }; sc.geste = performance.now(); canvas.setPointerCapture(e.pointerId); });
+    // The Sked's globe: framed by itself until dragged, then free (a double click frames it again).
+    sc.skH = 3.5; sc.libre = false;
+    canvas.addEventListener('dblclick', () => { if (mode === 'sked') sc.libre = false; });
+    canvas.addEventListener('pointerdown', e => {
+      tir = { x: e.clientX, y: e.clientY }; sc.geste = performance.now(); canvas.setPointerCapture(e.pointerId);
+      if (mode === 'sked' && !sc.libre) {
+        // From where the camera is: its angles without the Earth's turn.
+        const q = cam.pos.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -(sc.gm || 0)), n = Math.max(1.3, q.length());
+        cam.az = Math.atan2(-q.z, q.x); cam.pol = Math.acos(Math.max(-1, Math.min(1, q.y / n))); cam.dist = Math.min(14, n); cam.cale = true; sc.libre = true;
+      }
+    });
     canvas.addEventListener('pointermove', e => {
       if (!tir) return;
       if (mode === 'rejeu') {
@@ -896,7 +951,8 @@ const Orbites = (function () {
       e.preventDefault(); sc.geste = performance.now();
       // A session: its own zooms, the wheel changing the one shown.
       if (mode === 'rejeu' && sc.rj && sc.rj.donnees.molette) sc.rj.donnees.molette(Math.sign(e.deltaY));
-      else if (sc.enPassage) { OB.hauteur = Math.max(.6, Math.min(8, OB.hauteur * (1 + Math.sign(e.deltaY) * .1))); garde('ob-hauteur', OB.hauteur.toFixed(2)); document.querySelectorAll('.ob-hauteur-r').forEach(h => { h.value = OB.hauteur; }); }
+      else if (mode === 'sked' && !sc.libre) sc.skH = Math.max(.6, Math.min(12, sc.skH * (1 + Math.sign(e.deltaY) * .1)));
+      else if (sc.enPassage && mode !== 'sked') { OB.hauteur = Math.max(.6, Math.min(8, OB.hauteur * (1 + Math.sign(e.deltaY) * .1))); garde('ob-hauteur', OB.hauteur.toFixed(2)); document.querySelectorAll('.ob-hauteur-r').forEach(h => { h.value = OB.hauteur; }); }
       else cam.dist = Math.max(1.3, Math.min(14, cam.dist * (1 + Math.sign(e.deltaY) * .1)));
     }, { passive: false });
     function glisse(de, vers, k) {
@@ -913,7 +969,7 @@ const Orbites = (function () {
       if (sc.decal.x || sc.decal.y) camera.setViewOffset(r.width, r.height, -sc.decal.x * r.width, -sc.decal.y * r.height, r.width, r.height);
       else if (camera.view && camera.view.enabled) camera.clearViewOffset();
       const dt = Math.min(.1, (now - derniere) / 1000); derniere = now;
-      const gm = satellite.gstime(new Date(t));
+      const gm = satellite.gstime(new Date(t)); sc.gm = gm;
       terre.rotation.y = gm;
       soleil.position.copy(eciVers3(obSoleil(t, gm).eci, 10));
       extras.forEach(e => { if (e.userData.tourne && !reduit) e.rotation.y += e.userData.tourne * dt; });
@@ -922,7 +978,7 @@ const Orbites = (function () {
       terre.updateMatrixWorld(true);
       monumentsImage(monGp, terre, cam.pos, sc.style, mode !== 'rejeu');
       const stW = terre.localToWorld(posStation.clone()), obs = sc.obs();
-      const passage = !!sc.enPassage, auSol = passage && OB.cam === 'sol', lieu = !!sc.lieu();
+      const passage = !!sc.enPassage && !sc.libre, auSol = passage && OB.cam === 'sol', lieu = !!sc.lieu();
       const choisi = sc.choisi();
       extras.forEach(e => { e.visible = !auSol || !!e.isPoints; });
       mondeGp.visible = !auSol;
@@ -961,6 +1017,7 @@ const Orbites = (function () {
         if (lui && plusieurs && !auSol) { cible.visible = true; cible.position.copy(p); const q = .075 + .012 * Math.sin(now / 250); cible.scale.set(q, q, 1); cible.material.rotation = now / 1200; cible.material.color.set(STYLES[sc.style].encre || s.couleur); }
       });
       if (mode === 'rejeu') rejeuImage(t, stW, satP, now);
+      if (mode === 'sked') skedImage(t, satP, now);
       // The journal's « mon indicatif et mon locator » unticked: the station's pin without its name, as in its videos.
       nomStation.visible = station.visible && !(mode === 'rejeu' && sc.rj && sc.rj.donnees.nomStation && !sc.rj.donnees.nomStation()); nomStation.position.copy(stW.clone().multiplyScalar(1.02)); nomStation.scale.set(.026 * nomStation.userData.ratio, .026, 1); nomStation.center.set(1.08, .5);
       const pulse = (now / 1400) % 1; anneau.scale.setScalar(1 + pulse * 2.5); anneau.material.opacity = 1 - pulse;
@@ -974,7 +1031,7 @@ const Orbites = (function () {
       const oc = choisi && sc.objets.get(choisi.catnum);
       const lisse = 1 - Math.pow(.02, dt);
       if (passage && oc && oc.p) {
-        const e = oc.e, p = oc.p, up = p.clone().normalize(), H = mode === 'rejeu' && sc.rj && sc.rj.donnees.hauteur ? sc.rj.donnees.hauteur() : OB.hauteur;
+        const e = oc.e, p = oc.p, up = p.clone().normalize(), H = mode === 'sked' ? sc.skH : mode === 'rejeu' && sc.rj && sc.rj.donnees.hauteur ? sc.rj.donnees.hauteur() : OB.hauteur;
         let pos, vise;
         if (OB.cam === 'poursuite') {
           const v = eciVers3(e.vel).normalize();
@@ -986,6 +1043,12 @@ const Orbites = (function () {
           // A little under the satellite, so the horizon stays in view.
           vise = stW.clone().add(e.el > -3 ? dirCiel(stW, e.az, Math.max(10, e.el * .5)) : dirCiel(stW, sc.azAos != null ? sc.azAos : 180, 10));
           camera.up.copy(z);
+        } else if (mode === 'sked' && sc.sk && sc.sk.autre) {
+          // The Sked: between both stations and the satellite, far enough to hold them all.
+          const aW = terre.localToWorld(posAutre.clone()).normalize(), sN = stW.clone().normalize(), z = sN.clone().add(aW).add(up.clone().multiplyScalar(.5)).normalize();
+          const ang = Math.max(z.angleTo(sN), z.angleTo(aW), z.angleTo(up)), h = H * Math.max(1, ang / .42);
+          pos = z.clone().multiplyScalar(1 + .64 * h).add(new THREE.Vector3(0, .12 * h, 0));
+          vise = z.clone().multiplyScalar(.6); camera.up.set(0, 1, 0);
         } else {
           const z = (lieu ? stW.clone().lerp(p.clone().normalize(), .35) : p.clone()).normalize();
           pos = z.clone().multiplyScalar(1 + .64 * H).add(new THREE.Vector3(0, .24 * H, 0));
@@ -1014,7 +1077,7 @@ const Orbites = (function () {
       // Where the satellite chosen shows (the journal's SSTV frame keeps away from it).
       if (satP) { const v = satP.clone().project(camera); sc.satX = (v.x + 1) / 2 * r.width; } else sc.satX = null;
     };
-    sc.retire = () => { sc.objets.forEach(o => o.retire()); sc.objets.clear(); if (sc.rj && sc.rj.marques) sc.rj.marques.forEach(o => o.retire && o.retire()); rendu.dispose(); };
+    sc.retire = () => { sc.objets.forEach(o => o.retire()); sc.objets.clear(); if (sc.rj && sc.rj.marques) sc.rj.marques.forEach(o => o.retire && o.retire()); if (sc.sk && sc.sk.tube) scene.remove(sc.sk.tube); rendu.dispose(); };
     sc.appliqueStyle(OB.style);
     sc.synchro();
     return sc;
@@ -1038,7 +1101,7 @@ const Orbites = (function () {
       if (OB.anim) OB.anim.dernier = now;
       // The Suivi tab's satellite, as the page last heard it.
       if (suivi && vus.includes(suivi) && typeof E !== 'undefined' && E && E.suivi) changeSuivi(E.suivi.catnum);
-      vus.forEach(sc => sc.image(sc.mode === 'suivi' ? Date.now() : sc.mode === 'rejeu' ? sc.rj.donnees.horloge() : maintenant(), now));
+      vus.forEach(sc => sc.image(sc.mode === 'suivi' ? Date.now() : sc.mode === 'rejeu' ? sc.rj.donnees.horloge() : sc.mode === 'sked' ? sc.sk.donnees.horloge() : maintenant(), now));
       if (!tab || tab.v.hidden) return;
       const t = maintenant();
       tab.horloge.textContent = new Date(t).toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
@@ -1054,7 +1117,7 @@ const Orbites = (function () {
   function changeSuivi(catnum) {
     if (!OB.donnees || OB.donnees.suivi === catnum) return;
     OB.donnees.suivi = catnum; OB.sats.forEach(s => { s.suivi = s.catnum === catnum; });
-    scenes.forEach(sc => { if (sc.mode !== 'rejeu') sc.synchro(); });
+    scenes.forEach(sc => { if (sc.mode !== 'rejeu' && sc.mode !== 'sked') sc.synchro(); });
   }
 
 """
@@ -1328,9 +1391,11 @@ const Orbites = (function () {
     OB.style = k; garde('ob-style2', k);
     scenes.forEach(sc => sc.appliqueStyle(k)); marqueStyle();
   }
-  function prendDetail(n) { OB.detail = n; garde('ob-detail', String(n)); scenes.forEach(sc => sc.monde()); }
-  function prendVilles(v) { OB.villes = v; garde('ob-villes', v); scenes.forEach(sc => sc.monde()); }
-  function prendEtiq(v) { OB.etiq = v; garde('ob-etiq', v); scenes.forEach(sc => sc.monde()); }
+  // Chosen elsewhere (the Sked's settings): the tab's own box shows it too.
+  function montreChoix(id, v) { const s = el(id); if (s && s.value !== v) s.value = v; }
+  function prendDetail(n) { OB.detail = n; garde('ob-detail', String(n)); montreChoix('ob-detail', String(n)); scenes.forEach(sc => sc.monde()); }
+  function prendVilles(v) { OB.villes = v; garde('ob-villes', v); montreChoix('ob-villes', v); scenes.forEach(sc => sc.monde()); }
+  function prendEtiq(v) { OB.etiq = v; garde('ob-etiq', v); montreChoix('ob-etiq', v); scenes.forEach(sc => sc.monde()); }
   function prendMonTaille(n) {
     OB.monTaille = Math.max(.5, Math.min(3, n || 1)); garde('ob-montaille', String(OB.monTaille));
     document.querySelectorAll('.ob-montaille-choix').forEach(s => { s.value = String(OB.monTaille); });
@@ -1352,7 +1417,7 @@ const Orbites = (function () {
   }
   function prendContacts(v) { OB.contacts = v; garde('ob-contacts', v); if (v !== 'aucun' && !OB.carnet) { OB.carnetLu = 0; chargeCarnet(); } scenes.forEach(sc => sc.contacts()); }
   function marqueStyle() { document.querySelectorAll('#ob-styles button, .ob-style-choix option').forEach(b => { if (b.tagName === 'OPTION') b.selected = b.value === OB.style; else b.setAttribute('aria-pressed', b.dataset.style === OB.style); }); }
-  function marqueCam() { document.querySelectorAll('[data-ob-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.obCam === OB.cam)); }
+  function marqueCam() { document.querySelectorAll('[data-ob-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.obCam === OB.cam)); document.querySelectorAll('.ob-cam-choix').forEach(s => { s.value = OB.cam; }); }
   function temps1() {
     OB.anim = null; OB.temps = { base: Date.now(), reel: performance.now(), vitesse: 1, pause: false };
     if (tab) { el('ob-vitesse').value = '1'; el('ob-pause').textContent = '⏸'; el('ob-pause').title = 'Pause'; boutonJouer(); }
@@ -1690,6 +1755,27 @@ const Orbites = (function () {
     /** The station's favourites (then the others), with their elements: [{nom, catnum, fav, l1, l2}]. */
     favoris: async () => { try { const d = await (await fetch(api('api/orbites'))).json(); const f = d.favoris || [];
       return (d.sats || []).map(s => ({ nom: s.nom, catnum: s.catnum, fav: f.includes(s.catnum), l1: s.l1, l2: s.l2 })).sort((a, b) => (b.fav - a.fav) || a.nom.localeCompare(b.nom)); } catch (x) { return []; } },
+    /**
+     * The Sked tab's globe in [canvas]: the window [d] = {id, sat, points: [[t, lat, lon, altKm]…] (the track, both passes),
+     * de, a (the common window, ms), moi: {lat, lon, indicatif, locator}, autre: {lat, lon, locator}, horloge: () => the replay's time}.
+     * Its look and settings are the Orbites tab's; its camera the passes' (poursuite, from my station, or both stations framed).
+     */
+    sked: async function (canvas, d) {
+      try { await chargeLibs(); } catch (x) { return false; }
+      if (!sked || sked.canvas !== canvas) {
+        if (sked) { sked.retire(); scenes.splice(scenes.indexOf(sked), 1); }
+        sked = Scene(canvas, 'sked'); scenes.push(sked); sked.enPassage = true;
+      }
+      if (!sked.sk || sked.sk.donnees.id !== d.id) {
+        const l = (d.points || []).slice().sort((a, b) => a[0] - b[0]);
+        sked.sk = { donnees: d, moi: d.moi, autre: d.autre, sat: { nom: d.sat, catnum: 'sked', piste: l, couleur: '#3FE0C8', periode: 5400000, mm: 15 } };
+        sked.libre = false; sked.synchro(); sked.skedPrepare();
+      }
+      sked.sk.donnees = d;
+      tourne(); return true;
+    },
+    /** The Sked's globe framed by itself again (after a drag). */
+    skedRecadre: () => { if (sked) sked.libre = false; },
     /** The journal's globe: where its satellite shows (px from the canvas's left), null when unknown. */
     satEcranX: () => rejeu ? rejeu.satX : null,
     /**
