@@ -486,6 +486,28 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
             )
         }
 
+        /**
+         * The demonstration's made-up awards at [t]: a club's certificate for
+         * the made-up series (its pictures are in the gallery: obtainable, its
+         * deadline near), and an event to come. Stable through a day.
+         */
+        fun diplomes(t: Long): List<fr.f4ioz.satcombo.domain.Diplomes.Diplome> {
+            val jour = t - Math.floorMod(t, JOUR_MS)
+            val h = 3_600_000L
+            val g = fr.f4ioz.satcombo.domain.Diplomes.Genre.IMAGE
+            return listOf(
+                fr.f4ioz.satcombo.domain.Diplomes.Diplome(id = "demo:club", nom = "Diplôme de participation (fictif) — série SSTV de démonstration",
+                    emetteur = "Radio-club de démonstration (fictif)", genre = g, satNom = ISS_NOM, catnum = ISS, debutMs = jour - 4 * JOUR_MS, finMs = jour + 2 * JOUR_MS,
+                    limiteMs = jour + 2 * JOUR_MS + 20 * h, conditions = "Recevoir une image de la série de démonstration, la demander avec le formulaire du club (fictif : rien n'existe).",
+                    champs = listOf("indicatif", "nom", "courriel", "image", "date", "heure"), source = "Démonstration", freqHz = 145_800_000L, mode = "PD 120",
+                    unParParticipant = true, notes = "Diplôme inventé pour la démonstration.", fictif = true),
+                fr.f4ioz.satcombo.domain.Diplomes.Diplome(id = "demo:demosat", nom = "Certificat DEMOSAT-2 (fictif)", emetteur = "Club spatial de démonstration (fictif)",
+                    genre = g, satNom = "DEMOSAT-2", debutMs = jour + 2 * JOUR_MS + 8 * h, finMs = jour + 2 * JOUR_MS + 20 * h, limiteMs = jour + 6 * JOUR_MS,
+                    conditions = "Recevoir une image SSTV de DEMOSAT-2 pendant la journée annoncée (satellite fictif).", source = "Démonstration",
+                    freqHz = 145_800_000L, mode = "Robot 36", fictif = true),
+            )
+        }
+
         fun distanceKm(la1: Double, lo1: Double, la2: Double, lo2: Double): Double {
             val r = 6371.0
             val p1 = Math.toRadians(la1); val p2 = Math.toRadians(la2)

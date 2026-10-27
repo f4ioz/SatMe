@@ -576,7 +576,7 @@ class AutoPiloteSstvPc(
             return premier
         }
 
-        private fun agrandit(img: BufferedImage, k: Int): BufferedImage {
+        internal fun agrandit(img: BufferedImage, k: Int): BufferedImage {
             val g = BufferedImage(img.width * k, img.height * k, BufferedImage.TYPE_INT_RGB)
             g.createGraphics().apply {
                 setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
@@ -585,7 +585,7 @@ class AutoPiloteSstvPc(
             return g
         }
 
-        private fun inverse(img: BufferedImage): BufferedImage {
+        internal fun inverse(img: BufferedImage): BufferedImage {
             val o = BufferedImage(img.width, img.height, BufferedImage.TYPE_BYTE_GRAY)
             for (y in 0 until img.height) for (x in 0 until img.width) {
                 val p = img.getRGB(x, y)

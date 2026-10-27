@@ -48,7 +48,12 @@ object AfficheSstv {
         "september" to 8, "sep" to 8, "sept" to 8, "septembre" to 8,
         "october" to 9, "oct" to 9, "octobre" to 9,
         "november" to 10, "nov" to 10, "novembre" to 10,
-        "december" to 11, "dec" to 11, "décembre" to 11, "decembre" to 11, "déc" to 11)
+        "december" to 11, "dec" to 11, "décembre" to 11, "decembre" to 11, "déc" to 11,
+        // Spanish and Portuguese (club flyers: « 22-25 Octubre », LABRE's « 6 de fevereiro »).
+        "enero" to 0, "janeiro" to 0, "febrero" to 1, "fevereiro" to 1, "marzo" to 2, "março" to 2, "abril" to 3,
+        "mayo" to 4, "maio" to 4, "junio" to 5, "junho" to 5, "julio" to 6, "julho" to 6, "agosto" to 7,
+        "septiembre" to 8, "setiembre" to 8, "setembro" to 8, "octubre" to 9, "outubro" to 9,
+        "noviembre" to 10, "novembro" to 10, "diciembre" to 11, "dezembro" to 11)
 
     private val JOURS: Map<String, Int> = mapOf(
         "sunday" to Calendar.SUNDAY, "dimanche" to Calendar.SUNDAY, "monday" to Calendar.MONDAY, "lundi" to Calendar.MONDAY,
@@ -56,7 +61,8 @@ object AfficheSstv {
         "thursday" to Calendar.THURSDAY, "jeudi" to Calendar.THURSDAY, "friday" to Calendar.FRIDAY, "vendredi" to Calendar.FRIDAY,
         "saturday" to Calendar.SATURDAY, "samedi" to Calendar.SATURDAY)
 
-    private val NOMS_MOIS = MOIS.keys.sortedByDescending { it.length }.joinToString("|")
+    /** The month names a date may use (longest first), for the readers built on this one. */
+    internal val NOMS_MOIS = MOIS.keys.sortedByDescending { it.length }.joinToString("|")
     private val NOMS_JOURS = JOURS.keys.joinToString("|")
 
     /** « Thursday, October 22 », « October 22, 2026 », « jeudi 22 octobre 2026 », « 22 Oct » — with a time when there is one. */

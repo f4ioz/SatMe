@@ -848,7 +848,7 @@ ${STYLE_JETONS}
   .ac-pass span { font-family:var(--mono); }
   #ac-liste { max-height:calc(100vh - 200px); overflow:auto; }
   .st-nav button .ac-n { background:var(--ambre); color:#111; border-radius:9px; padding:0 6px; font-size:10px; display:inline !important; }
-  .st-nav button .ac-n[hidden] { display:none !important; }
+${DiplomesJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
   #ap-ocr { max-height:160px; overflow:auto; white-space:pre-wrap; font-size:11px; margin:4px 0 0; color:var(--texte-2); }
   #h-ap { align-items:center; } #h-ap.on { border-color:var(--rx); color:var(--rx); } #h-ap.encours { border-color:var(--ambre); color:var(--ambre); }
   .ap-bandeau { position:fixed; top:48px; left:calc(50% + var(--rail) / 2); transform:translateX(-50%); z-index:45; display:flex; align-items:center; gap:10px;
@@ -3064,7 +3064,7 @@ ${rail()}
 </div>
 <div class="vue" id="v-agenda" hidden>
 <div class="st ag-st" data-st="agenda">
-  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button></div>
+  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button><button data-p="ag-p-dip" title="Les diplômes à obtenir : ceux des événements SSTV (images reçues) et du carnet (carrés, entités, États) ; la demande préparée, rien n'est envoyé">${IconesPc.svg("medaille", "st-ico")}<span>Diplômes</span><span class="ac-n" id="dp-nb" hidden></span></button></div>
   <div class="st-pan" id="ag-p-rdv">
 <div class="grille2">
   <div>
@@ -3195,7 +3195,7 @@ ${rail()}
   </div>
 </div>
   </div>
-</div>
+${DiplomesJs.HTML}</div>
 </div>
 <div class="vue" id="v-carres" hidden>
 <div class="grille2" style="grid-template-columns:minmax(300px,1fr) minmax(500px,2.2fr)">
@@ -5289,6 +5289,7 @@ ${ConversionPagePc.DIALOGUES}
   <div class="ligne"><button id="ac-ap-ok" class="primaire" onclick="acApConfirme()">Activer l'auto-pilote</button><button onclick="acApModifie()" title="Agenda › SSTV : le formulaire rempli, à vérifier puis enregistrer">Modifier avant…</button><button onclick="g('ac-ap-dlg').close()">Annuler</button>
     <span class="petit" id="ac-ap-msg" aria-live="polite"></span></div>
 </dialog>
+${DiplomesJs.DIALOGUE}
 <dialog id="nx-pi-dlg" class="dlg-mt" style="width:min(540px,94vw)" aria-labelledby="nx-pi-t">
   <div class="dlg-tete"><b id="nx-pi-t">Redémarrer le Pi</b><button class="discret" onclick="g('nx-pi-dlg').close()" aria-label="Fermer">✕</button></div>
   <ul class="petit" id="nx-pi-cons" style="margin:0 0 8px;padding-left:18px;line-height:1.6"></ul>
@@ -7910,6 +7911,7 @@ document.querySelectorAll('.st').forEach(st => {
     stOuvre(st, b.dataset.p);
     // « Activités à venir » opened: its count of new notices read.
     if (b.dataset.p === 'ag-p-act') acLues();
+    if (b.dataset.p === 'ag-p-dip') { dpLues(); dpVu = ''; dpCharge(); }
     try { localStorage.setItem('st-' + st.dataset.st, b.dataset.p); } catch (x) {}
   });
 });
@@ -16245,6 +16247,7 @@ async function acApVoir(cid) { apOuvre(); await apCharge(); apEdite(cid); }
 acCharge();
 setInterval(acCharge, 60000);
 
+${DiplomesJs.JS}
 // ------------------------------------------------------------------ Montage: the station's chain, drawn and lit
 // Display and setup only: nothing here starts a transmission, opens a port or touches the LNB supply.
 var MT = { cat: null, d: null, cle: '', simple: false, edition: false, sel: null, essai: '', telephone: false, pop: null, popCle: '' };
@@ -19172,6 +19175,7 @@ function palSources() {
     if (AP.enCours) A('■ Arrêter le passage de l’auto-pilote', AP.enCours.nom, apStop, 'arret');
   }
   if (modOn('activites')) A('Agenda › Activités à venir', 'SSTV, contacts ARISS, SSDV, METEOR annoncés en ligne', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-act"]'); if (b) b.click(); acVu = ''; acCharge(); });
+  A('Agenda › Diplômes', 'Diplômes à obtenir : images d’événements SSTV, carrés et entités du carnet', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-dip"]'); if (b) b.click(); });
   if (modOn('sdr')) A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (modOn('sdr')) A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);
