@@ -28,9 +28,10 @@ import kotlin.math.sin
 /**
  * A sked replayed as a video to send the other station: the map (ground
  * track, the common window in green, the earth that sees the satellite, both
- * stations and their line to it while they see it) and both skies, the
- * whole pass in [DUREE_S] seconds then the window held [FIN_S] seconds.
- * 1280×720, through ffmpeg, as the journal's videos.
+ * stations and their line to it while they see it) or the globe in the
+ * page's look ([GlobeRenduPc]), and both skies, the whole pass in [DUREE_S]
+ * seconds then the window held [FIN_S] seconds. 1280×720 (16:9) or 720×1280
+ * (a phone's 9:16), through ffmpeg, as the journal's videos.
  */
 class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) -> BufferedImage?) {
 
@@ -39,16 +40,36 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
 
     @Volatile var etat = Etat(); private set
 
-    /** The sked to draw: the trace, the window, who. */
-    class Sked(val trace: fr.f4ioz.satcombo.domain.TraceSked, val deMs: Long, val aMs: Long, val satellite: String, val moi: String, val autre: String)
+    /** The sked to draw: the trace, the window, who (my callsign and locator, the other's locator). */
+    class Sked(val trace: fr.f4ioz.satcombo.domain.TraceSked, val deMs: Long, val aMs: Long, val satellite: String, val moi: String, val autre: String,
+               val locMoi: String = "") {
+        /** My label: callsign · locator. */
+        val etiquetteMoi get() = listOf(moi, locMoi.uppercase()).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+        /** The highest each side sees it during the common window (degrees). */
+        val elMax: Pair<Double, Double> get() {
+            val l = trace.points.filter { it.t in deMs..aMs }.ifEmpty { trace.points }
+            return (l.maxOfOrNull { it.elMoi } ?: 0.0) to (l.maxOfOrNull { it.elAutre } ?: 0.0)
+        }
+    }
+
+    /**
+     * How it is drawn: the map or the globe — its look, the page's « Réglages du globe »
+     * (cities, names, details, landmarks), its camera, the « Traces » — the screen's 16:9
+     * or a phone's 9:16 ([vertical]).
+     */
+    data class Rendu(val globe: Boolean = false, val vertical: Boolean = false, val style: String = GlobeRenduPc.DEFAUT,
+                     val options: GlobeRenduPc.Options = GlobeRenduPc.Options(), val camera: String = "espace", val traces: Int = 50) {
+        val largeur get() = if (vertical) H else L
+        val hauteur get() = if (vertical) L else H
+    }
 
     /** Starts making it on a thread of its own; false when one is already being made or ffmpeg is missing. */
-    fun lance(s: Sked): Boolean {
+    fun lance(s: Sked, r: Rendu = Rendu()): Boolean {
         if (etat.enCours) return false
         if (RenduPc.ffmpeg() == null) { etat = Etat(erreur = "ffmpeg n'est pas installé : " + OutilsPc.conseil("ffmpeg")); return false }
         etat = Etat(enCours = true)
         thread(isDaemon = true, name = "satme-sked-video") {
-            etat = runCatching { fabrique(s) { p -> etat = etat.copy(progression = p) } }
+            etat = runCatching { fabrique(s, r) { p -> etat = etat.copy(progression = p) } }
                 .fold({ f -> if (f != null) Etat(nom = f.name, progression = 1f) else Etat(erreur = "ffmpeg n'a pas pu faire la vidéo") },
                     { e -> Etat(erreur = e.message ?: "échec") })
         }
@@ -57,63 +78,57 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
 
     fun fichier(nom: String): File? = File(dossier, nom).takeIf { nom.matches(Regex("[A-Za-z0-9._-]+")) && it.isFile && nom.endsWith(".mp4") }
 
-    private fun fabrique(s: Sked, progres: (Float) -> Unit): File? {
+    private fun fabrique(s: Sked, r: Rendu, progres: (Float) -> Unit): File? {
         val ff = RenduPc.ffmpeg() ?: return null
         dossier.mkdirs()
-        val utc = TimeZone.getTimeZone("UTC")
-        val nom = "SatMe_Sked_" + s.satellite.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-') + "_" + s.autre.replace(Regex("[^A-Za-z0-9]"), "") + "_" +
-            SimpleDateFormat("yyyyMMdd_HHmm'Z'", Locale.US).apply { timeZone = utc }.format(s.deMs) + ".mp4"
-        val sortie = File(dossier, nom)
+        val sortie = File(dossier, nomFichier(s, r))
         val pts = s.trace.points
         if (pts.size < 2) return null
         val nb = DUREE_S * FPS
         val fin = FIN_S * FPS
-        val dessin = Dessin(s, tuile)
-        val cmd = listOf(ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${L}x$H", "-r", "$FPS", "-i", "-",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "24", "-movflags", "+faststart", sortie.path)
-        val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-        val dit = StringBuilder()
-        val journal = Thread { runCatching { dit.append(String(p.inputStream.readBytes())) } }.apply { isDaemon = true; start() }
-        val rgb = ByteArray(L * H * 3)
-        fun ecris(img: BufferedImage) {
-            val px = img.getRGB(0, 0, L, H, null, 0, L)
-            for (i in px.indices) { val v = px[i]; rgb[3 * i] = (v shr 16).toByte(); rgb[3 * i + 1] = (v shr 8).toByte(); rgb[3 * i + 2] = v.toByte() }
-            p.outputStream.write(rgb)
-        }
-        try {
-            val t0 = pts.first().t; val t1 = pts.last().t
+        val dessin = Dessin(s, r, tuile)
+        val cmd = RenduPc.commandeEncode(ff, r.largeur, r.hauteur, FPS, nb + fin, null, sortie, crf = 24, faststart = true)
+        return RenduPc.encode(cmd, r.largeur, r.hauteur) { ecris ->
             for (k in 0 until nb) {
-                ecris(dessin.image(t0 + (t1 - t0) * k / (nb - 1)))
+                ecris(dessin.image(instant(s, k, nb)))
                 progres((k + 1f) / (nb + fin))
             }
             // The window held at its middle: the frame to remember.
             val milieu = dessin.image((s.deMs + s.aMs) / 2)
             repeat(fin) { k -> ecris(milieu); progres((nb + k + 1f) / (nb + fin)) }
-            p.outputStream.close()
-        } catch (e: Exception) {
-            p.destroy(); throw e
         }
-        val ok = p.waitFor() == 0
-        journal.join(1000)
-        if (!ok) System.err.println("ffmpeg : " + dit.toString().trim().take(800))
-        return if (ok && sortie.length() > 0) sortie else null
     }
 
-    /** The drawing of one instant; the map's background made once. */
-    private class Dessin(val s: Sked, tuile: (Int, Int, Int) -> BufferedImage?) {
+    /** The drawing of one instant; the map's background made once, the globe's Earth once in a while when its view stays put. */
+    internal class Dessin(val s: Sked, val r: Rendu, tuile: (Int, Int, Int) -> BufferedImage?) {
         val pts = s.trace.points
         val lons = s.trace.lons
         val lonAutre = s.trace.lonAutre
+        val vertical = r.vertical
+        /** The view (map or globe): its width and height, from the frame's top left; the band over its top. */
+        val vw = if (vertical) VW_V else CW
+        val vh = if (vertical) VH_V else H
+        /** The globe's scale (its labels, its lines). */
+        val dp = if (vertical) 1.6f else 1.5f
+        /** What either station sees, (lat, lon): the view is framed on it and both stations. */
+        val vus = pts.indices.filter { pts[it].elMoi >= 0 || pts[it].elAutre >= 0 }.map { pts[it].lat to lons[it] }
         val vue: JournalPassage.VueCarte = run {
-            // Framed on what either station sees, and both stations.
-            val l = pts.indices.filter { pts[it].elMoi >= 0 || pts[it].elAutre >= 0 }.map { pts[it].lat to lons[it] } +
-                listOf(s.trace.moi.latDeg to s.trace.moi.lonDeg, s.trace.autre.latDeg to lonAutre)
-            JournalPassage.cadreCarte(l, CW.toDouble(), H.toDouble(), part = 0.8, zoomMax = 8.0)
+            val l = vus + listOf(s.trace.moi.latDeg to s.trace.moi.lonDeg, s.trace.autre.latDeg to lonAutre)
+            JournalPassage.cadreCarte(l, vw.toDouble(), vh.toDouble(), part = 0.8, zoomMax = 8.0)
         }
-        val fond: BufferedImage = RenduPc.fondCarte(CW, H, vue, tuile)
+        val fond: BufferedImage? = if (r.globe) null else RenduPc.fondCarte(vw, vh, vue, tuile)
+        val globe: GlobeRenduPc.Sked? = if (!r.globe) null else GlobeRenduPc.Sked(
+            pts.map { JournalPassage.Sol(it.t, it.lat, it.lon, it.altKm) }, s.deMs, s.aMs, s.satellite,
+            GlobeRenduPc.StationSked(s.trace.moi.latDeg, s.trace.moi.lonDeg, s.etiquetteMoi, AMBRE),
+            GlobeRenduPc.StationSked(s.trace.autre.latDeg, s.trace.autre.lonDeg, s.autre, ROSE),
+            r.style, r.options, r.camera, r.traces, cadre = vus,
+            voient = { t -> s.trace.instant(t).let { (it.elMoi >= 0) to (it.elAutre >= 0) } })
+        /** The globe's Earth kept, and for when (its view still; the Sun barely moves in a couple of minutes). */
+        private var terre: BufferedImage? = null
+        private var terreT = Long.MIN_VALUE
         val monde = 256.0 * Math.pow(2.0, vue.zoom)
-        fun x(lon: Double) = ((JournalPassage.mercX(lon) - vue.cx) * monde + CW / 2).toFloat()
-        fun y(lat: Double) = ((JournalPassage.mercY(lat) - vue.cy) * monde + H / 2).toFloat()
+        fun x(lon: Double) = ((JournalPassage.mercX(lon) - vue.cx) * monde + vw / 2).toFloat()
+        fun y(lat: Double) = ((JournalPassage.mercY(lat) - vue.cy) * monde + vh / 2).toFloat()
         val heure = SimpleDateFormat("HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val date = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
@@ -121,14 +136,41 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         fun instant(t: Long): DoubleArray = s.trace.instant(t).let { p ->
             doubleArrayOf(p.azMoi, p.elMoi, p.azAutre, p.elAutre, p.lat, p.lon, p.altKm) }
 
+        /** The globe's camera at [t]: in the view under the band. */
+        fun camera(t: Long): GlobeRenduPc.Camera = GlobeRenduPc.cameraSked(globe!!, t, 0f, BANDE.toFloat(), vw.toFloat(), (vh - BANDE).toFloat())
+
         fun image(t: Long): BufferedImage {
-            val img = BufferedImage(L, H, BufferedImage.TYPE_INT_RGB)
+            val img = BufferedImage(r.largeur, r.hauteur, BufferedImage.TYPE_INT_RGB)
             val g = img.createGraphics()
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-            g.drawImage(fond, 0, 0, null)
             val c = instant(t)
             val moi = c[1] >= 0; val lui = c[3] >= 0
+            val gl = globe
+            if (gl != null) {
+                val cam = camera(t)
+                val clip = g.clip
+                g.clipRect(0, 0, vw, vh)
+                if (gl.immobile) {
+                    if (terre == null || Math.abs(t - terreT) > TERRE_MS) {
+                        terre = BufferedImage(vw, vh, BufferedImage.TYPE_INT_RGB).also { b ->
+                            b.createGraphics().apply { GlobeRenduPc.fondSked(this, vw.toFloat(), vh.toFloat(), gl, cam, t, dp); dispose() } }
+                        terreT = t
+                    }
+                    g.drawImage(terre, 0, 0, null)
+                } else GlobeRenduPc.fondSked(g, vw.toFloat(), vh.toFloat(), gl, cam, t, dp)
+                GlobeRenduPc.dessusSked(g, cam, gl, t, dp)
+                g.clip = clip
+            } else carte(g, c, t, moi, lui)
+            bande(g)
+            panneau(g, c, t, moi, lui)
+            g.dispose()
+            return img
+        }
+
+        /** The map at [t]: the footprint, the track, both stations, the satellite. */
+        private fun carte(g: Graphics2D, c: DoubleArray, t: Long, moi: Boolean, lui: Boolean) {
+            g.drawImage(fond, 0, 0, null)
             // The footprint, a turn each side too (around a pole it spans the map).
             val cercle = fr.f4ioz.satcombo.domain.TraceSked.empreinte(c[4], c[5], c[6])
             for (d in listOf(-360.0, 0.0, 360.0)) {
@@ -155,30 +197,43 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
                 if (vu) { g.color = couleur; g.stroke = BasicStroke(2.5f); g.drawLine(x(lon).toInt(), y(lat).toInt(), x(c[5]).toInt(), y(c[4]).toInt()) }
                 point(g, x(lon), y(lat), 9f, couleur, nom)
             }
-            station(s.trace.moi.latDeg, s.trace.moi.lonDeg, moi, AMBRE, s.moi)
+            station(s.trace.moi.latDeg, s.trace.moi.lonDeg, moi, AMBRE, s.etiquetteMoi)
             station(s.trace.autre.latDeg, lonAutre, lui, ROSE, s.autre)
             point(g, x(c[5]), y(c[4]), 11f, if (moi && lui) VERT else CYAN, s.satellite)
-            // The band on top of the map: the sked, the time, who sees it.
-            g.color = Color(11, 16, 22, 215); g.fillRect(0, 0, CW, 64)
+        }
+
+        /** The band on top of the view: the sked, its window, the highest each sees it, the app's mark. */
+        private fun bande(g: Graphics2D) {
+            g.color = Color(11, 16, 22, 215); g.fillRect(0, 0, vw, BANDE)
             g.font = Font(Font.SANS_SERIF, Font.BOLD, 24); g.color = Color.WHITE
             g.drawString(s.satellite + " · sked " + s.moi + " ↔ " + s.autre, 20, 30)
             g.font = Font(Font.SANS_SERIF, Font.PLAIN, 17); g.color = Color(154, 167, 180)
             g.drawString("fenêtre commune " + date.format(s.deMs) + " → " + heure.format(s.aMs).substring(0, 5) + " UTC · " +
                 ((s.aMs - s.deMs) / 60_000) + " min " + ((s.aMs - s.deMs) / 1000 % 60) + " s", 20, 54)
+            val (eMoi, eLui) = s.elMax
+            g.font = Font(Font.SANS_SERIF, Font.PLAIN, 15)
+            g.drawString("él. max " + s.moi + " " + Math.round(eMoi) + "° · " + s.autre + " " + Math.round(eLui) + "°", 20, 76)
             // The app's mark, in the band's right end, as on every picture SatMe exports.
-            MarquePc.dessine(g, CW - 16f, 42f, 5f)
-            // The right column: the time, both skies.
-            g.color = Color(11, 16, 22); g.fillRect(CW, 0, L - CW, H)
+            MarquePc.dessine(g, vw - 16f, 42f, 5f)
+        }
+
+        /** The clock, who sees it, both skies: the right column (16:9) or under the view (9:16). */
+        private fun panneau(g: Graphics2D, c: DoubleArray, t: Long, moi: Boolean, lui: Boolean) {
+            val x0 = if (vertical) 0 else vw; val y0 = if (vertical) vh else 0
+            g.color = Color(11, 16, 22); g.fillRect(x0, y0, r.largeur - x0, r.hauteur - y0)
             g.font = Font(Font.MONOSPACED, Font.BOLD, 40); g.color = Color.WHITE
-            g.drawString(heure.format(t), CW + 30, 56)
-            g.font = Font(Font.SANS_SERIF, Font.PLAIN, 14); g.color = Color(154, 167, 180); g.drawString("UTC", CW + 230, 56)
+            g.drawString(heure.format(t), x0 + 30, y0 + 56)
+            g.font = Font(Font.SANS_SERIF, Font.PLAIN, 14); g.color = Color(154, 167, 180); g.drawString("UTC", x0 + 230, y0 + 56)
             g.font = Font(Font.SANS_SERIF, Font.BOLD, 19)
             val etat = when { moi && lui -> "vous le voyez tous deux"; moi -> s.moi + " seul le voit"; lui -> s.autre + " seul le voit"; else -> "personne ne le voit" }
-            g.color = if (moi && lui) VERT else Color(154, 167, 180); g.drawString(etat, CW + 30, 90)
-            ciel(g, CW + 60f, 125f, 260f, s.moi, 0, 1, c, t)
-            ciel(g, CW + 60f, 425f, 260f, s.autre, 2, 3, c, t)
-            g.dispose()
-            return img
+            g.color = if (moi && lui) VERT else Color(154, 167, 180); g.drawString(etat, x0 + 30, y0 + 90)
+            if (vertical) {
+                ciel(g, 40f, y0 + 125f, 300f, s.moi, 0, 1, c, t)
+                ciel(g, 380f, y0 + 125f, 300f, s.autre, 2, 3, c, t)
+            } else {
+                ciel(g, x0 + 60f, 125f, 260f, s.moi, 0, 1, c, t)
+                ciel(g, x0 + 60f, 425f, 260f, s.autre, 2, 3, c, t)
+            }
         }
 
         /** A sky: the visible arc, the common window green, the satellite now. */
@@ -229,6 +284,13 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         const val H = 720
         /** The map's width; the skies on the right. */
         const val CW = 880
+        /** A phone's 9:16 (720×1280): the view's height, the clock and the skies under it. */
+        const val VW_V = 720
+        const val VH_V = 780
+        /** The band over the view's top. */
+        const val BANDE = 86
+        /** The globe's Earth drawn again every so much of the sked (its view still): the Sun's light, the night. */
+        const val TERRE_MS = 120_000L
         const val FPS = 10
         const val DUREE_S = 24
         const val FIN_S = 3
@@ -236,5 +298,23 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         val CYAN = Color(63, 224, 200)
         val AMBRE = Color(255, 180, 84)
         val ROSE = Color(232, 111, 168)
+
+        /** The frame [k] of [nb]: from the trace's first instant to its last. */
+        fun instant(s: Sked, k: Int, nb: Int): Long { val t0 = s.trace.points.first().t; val t1 = s.trace.points.last().t; return t0 + (t1 - t0) * k / (nb - 1) }
+
+        /** The file's name: the satellite, the other station, the window's start, the globe and the phone's format said. */
+        fun nomFichier(s: Sked, r: Rendu): String =
+            "SatMe_Sked_" + s.satellite.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-') + "_" + s.autre.replace(Regex("[^A-Za-z0-9]"), "") + "_" +
+                SimpleDateFormat("yyyyMMdd_HHmm'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(s.deMs) +
+                (if (r.globe) "_globe" else "") + (if (r.vertical) "_9x16" else "") + ".mp4"
+
+        /**
+         * The drawing asked by a request: `vue=globe` (else the map), `format=telephone` (9:16, else 16:9),
+         * the globe's `style`, `camera`, `traces` and the choices [GlobeRenduPc.options] reads; a missing or wrong one keeps its default.
+         */
+        fun rendu(p: (String) -> String): Rendu = Rendu(
+            globe = p("vue").trim() == "globe", vertical = p("format").trim() == "telephone",
+            style = GlobeRenduPc.styleDemande("globe", p("style")) ?: GlobeRenduPc.DEFAUT, options = GlobeRenduPc.options(p),
+            camera = GlobeRenduPc.cameraDemandee(p("camera")), traces = p("traces").trim().toIntOrNull()?.coerceIn(0, 100) ?: 50)
     }
 }
