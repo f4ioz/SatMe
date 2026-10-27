@@ -125,8 +125,15 @@ object ApiSon {
         .put("enregistrements", JSONArray(e.enregistrements.take(50).map {
             JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
         }))
-        .put("images", JSONArray(e.images.take(200).map {
+        .put("images", JSONArray(e.images.take(200).let { l ->
+            // « Réunir »: each partial picture's other half, when the two are one picture.
+            val paires = fr.f4ioz.satcombo.sstv.ReunionSstv.paires(l.filter { it.source != "essai" })
+            l.map { it to paires.firstNotNullOfOrNull { (a, b) -> if (a.fileName == it.fileName) b.fileName else if (b.fileName == it.fileName) a.fileName else null } }
+        }.map { (it, avec) ->
             val o = JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            if (it.trous.isNotEmpty()) o.put("trous", fr.f4ioz.satcombo.sstv.SstvMeta.trousTexte(it.trous))
+            if (it.reunion.isNotEmpty()) o.put("reunion", JSONArray(it.reunion))
+            if (avec != null) o.put("reunirAvec", avec)
             e.dossierImages?.let { d ->
                 val png = File(d, it.fileName)
                 o.put("son", SstvSon.fichier(png).isFile).put("gif", SstvSon.gif(png).isFile)

@@ -65,6 +65,28 @@ class SstvDecoder(
      */
     @Volatile var debutTrame: Long = 0L
         private set
+
+    /**
+     * Where the picture handed over by [Listener.onImage] ends, in samples
+     * fed: now, or — for a picture held while its sync was lost and never
+     * found again ([Suspendu]) — where it was given up. Read in onImage.
+     */
+    @Volatile var finTrame: Long = 0L
+        private set
+
+    /** Where the current picture's row 0 begins, in samples fed (its first block, as placed). */
+    @Volatile var debutImage: Long = 0L
+        private set
+
+    /**
+     * Rows of the picture handed over by [Listener.onImage] lost to a fade
+     * or a jump of the sound and not received again (noise, or grey where
+     * nothing was decoded): the picture went on after them at the row its
+     * timing gives. Read in onImage; empty when none.
+     */
+    @Volatile var trous: List<IntRange> = emptyList()
+        private set
+    private var trousCadre = ArrayList<IntRange>()
     private var scratch = FloatArray(4096)
 
     // The narrow reading (see [Demodulator]), stored aligned with [freq]: its
@@ -341,6 +363,7 @@ class SstvDecoder(
         entetePrevue = null
         pulseCount = 0; pulseScan = 0L; wasIdle = true
         sansNette = 0; enLigneSansNette = 0; derniereNette = -1; nettes = 0; correctionDepart = 0f; idleDepuis = 0L
+        suspendu = null; ancreA = 0.0; ancreP = 0.0; trousCadre = ArrayList()
     }
 
     // A header read by the automatic tuning, beyond this decoder's reach: mode, end (samples fed), offset.
@@ -359,6 +382,7 @@ class SstvDecoder(
         if (forcedAnchor && state != State.IDLE) return
         if (fin < freqBase + (60 * spms).toLong() || fin > total) return
         if (state != State.IDLE) emitPartial()
+        emitSuspendu()
         val m = forcedMode ?: m0
         val avant = correction
         // The sound from the header's end on, corrected as the header says.
@@ -387,6 +411,8 @@ class SstvDecoder(
         // moved on, and an FM tone never moves at all. Left, it hid the next weak header (22/10).
         if (state == State.IDLE && correction != 0f && total - idleDepuis > OUBLI_ACCORD_S * sampleRate) retune(-correction.toDouble(), freqBase)
         wasIdle = state == State.IDLE
+        // A picture held past its end: handed over as it was.
+        suspendu?.let { if (state == State.IDLE && total > it.finPrevue + sampleRate) emitSuspendu() }
         when (state) {
             State.IDLE -> if (!huntVis()) huntTrain()
             State.SYNC_HUNT -> huntFirstSync()
@@ -406,6 +432,7 @@ class SstvDecoder(
         // look-ahead margin would leave it undecoded. Drain it first.
         if (state == State.IMAGE) { flushing = true; decodeBlocks() }
         if (state != State.IDLE) emitPartial()
+        emitSuspendu()
         state = State.IDLE
         mode = null
         flushing = false
@@ -424,8 +451,104 @@ class SstvDecoder(
         if (hy != null && hc != null) writeYuv(
             m, heldRow, hy, if (heldIsCr) hc else null, if (heldIsCr) null else hc)
         heldY = null; heldC = null; heldRow = -1
+        finTrame = total; trous = trousCadre.toList()
         if (blockIndex > 0) listener?.onImage(
             m, pixels, (blockIndex * m.linesPerBlock).coerceAtMost(m.height), false)
+        trous = emptyList()
+    }
+
+    // ------------------------------------------------------- a picture held
+
+    /**
+     * **A picture whose sync was lost, held instead of handed over.** A fade
+     * (or a jump of the sound out of reach) used to end the picture after
+     * [ABORT_MS] of missed pulses, and when the signal came back the pulses
+     * started a second picture from its top: one picture sent, two halves in
+     * the gallery (UmKA-1, 27/10). Held, it goes on when its mode's pulses
+     * (or a header of its mode, read before the picture's end — noise, or a
+     * fade) come back before its expected end, at the row their time gives
+     * on its line grid ([a0] the sync of block 0, [p] the line period):
+     * the rows in between are lost, marked ([trous]). Handed over as it was
+     * when its end passes, another mode or a header after its end comes, or
+     * the sound ends.
+     */
+    private class Suspendu(
+        val mode: SstvMode, val pixels: IntArray,
+        /** Rows to hand over if it never goes on (as before: up to the last clean pulse on noise). */
+        val lignes: Int,
+        /** Blocks decoded (noise included). */
+        val decodes: Int,
+        /** First block lost: after the last clean pulse. */
+        val perdu: Int,
+        val a0: Double, val p: Double,
+        val debut: Long, val fin: Long, val debutImage: Long,
+        val nettes: Int, val trous: List<IntRange>,
+    ) {
+        /** Where the picture would end, samples fed. */
+        val finPrevue: Double get() = a0 + mode.blocks * p
+    }
+
+    private var suspendu: Suspendu? = null
+
+    /** The line grid of the last fit on a clean pulse: sync of block 0, and period (0: none yet). */
+    private var ancreA = 0.0
+    private var ancreP = 0.0
+
+    /** The frame under way held ([Suspendu]); false when it cannot be (no grid, no picture). */
+    private fun suspend(m: SstvMode, decodes: Int): Boolean {
+        if (ancreP <= 0.0 || nettes < NETTES_MIN || derniereNette < 0) return false
+        // A Robot 36 line waiting for its partner is drawn now.
+        val hy = heldY; val hc = heldC
+        if (hy != null && hc != null) writeYuv(m, heldRow, hy, if (heldIsCr) hc else null, if (heldIsCr) null else hc)
+        heldY = null; heldC = null; heldRow = -1
+        val s = Suspendu(m, pixels.copyOf(), (blockIndex * m.linesPerBlock).coerceAtMost(m.height), decodes,
+            derniereNette + 1, ancreA, ancreP, debutTrame, total, debutImage, nettes, trousCadre.toList())
+        if (s.finPrevue - s.p <= total) return false
+        suspendu = s
+        return true
+    }
+
+    /** The picture held handed over as it was (see [Suspendu]). */
+    private fun emitSuspendu() {
+        val s = suspendu ?: return
+        suspendu = null
+        val d = debutTrame; val di = debutImage
+        debutTrame = s.debut; finTrame = s.fin; trous = s.trous; debutImage = s.debutImage
+        try { if (s.lignes > 0) listener?.onImage(s.mode, s.pixels, s.lignes, false) }
+        finally { debutTrame = d; debutImage = di; trous = emptyList() }
+    }
+
+    /**
+     * The picture held goes on at block [k] (its sync at [syncK], samples
+     * fed): the rows from its last clean pulse to [k] marked lost, those
+     * never decoded grey. Its sound, its tuning grid and its count of clean
+     * pulses come back; the frame then runs as any other.
+     */
+    private fun reprend(s: Suspendu, k: Int, syncK: Double) {
+        suspendu = null
+        val m = s.mode
+        prepare(m)
+        System.arraycopy(s.pixels, 0, pixels, 0, minOf(pixels.size, s.pixels.size))
+        val l = m.linesPerBlock
+        for (row in s.decodes * l until minOf(m.height, k * l)) java.util.Arrays.fill(pixels, row * m.width, (row + 1) * m.width, GRIS_PERDU)
+        trousCadre = ArrayList(s.trous)
+        if (k > s.perdu) trousCadre += (s.perdu * l)..minOf(m.height - 1, k * l - 1)
+        debutTrame = s.debut; debutImage = s.debutImage
+        periodeLongue = s.p; blockPeriod = s.p
+        ancreA = s.a0; ancreP = s.p
+        nettes = s.nettes; derniereNette = s.perdu - 1
+        blockIndex = k
+        blockStart = syncK - m.syncAtMs * spms
+        lastSync = -1.0
+        forcedAnchor = false
+        state = State.IMAGE
+        listener?.onProgress(m, pixels, (k * l).coerceAtMost(m.height))
+    }
+
+    /** The block of the held picture whose sync falls at [pos] (samples fed), or -1 when it is past its end. */
+    private fun blocSuspendu(s: Suspendu, pos: Double, marge: Int): Int {
+        val k = Math.round((pos - s.a0) / s.p).toInt()
+        return if (k < s.decodes || k >= s.mode.blocks - marge) -1 else k
     }
 
     /**
@@ -436,6 +559,7 @@ class SstvDecoder(
     @Synchronized
     fun forceStart(m: SstvMode) {
         if (state != State.IDLE) emitPartial()
+        emitSuspendu()
         prepare(m)
         forcedAnchor = true
         debutTrame = (total - (300 * spms).toLong()).coerceAtLeast(0L)
@@ -448,6 +572,7 @@ class SstvDecoder(
     /** Drops the current frame and goes back to listening. */
     @Synchronized
     fun abort() {
+        emitSuspendu()
         if (state == State.IDLE) return
         emitPartial()
         state = State.IDLE
@@ -495,7 +620,7 @@ class SstvDecoder(
         // settled line offset looks that far back.
         val imgNeed = if (state == State.IMAGE || state == State.SYNC_HUNT)
             (blockStart - 0.55 * blockPeriod - 40 * spms).toLong() else msNeed
-        val pulseNeed = if (continuous && state == State.IDLE)
+        val pulseNeed = if ((continuous || suspendu != null) && state == State.IDLE)
             pulseScan - voteHalf - (40 * spms).toLong() else msNeed
         return minOf(msNeed, imgNeed, pulseNeed).coerceAtLeast(0L)
     }
@@ -613,6 +738,24 @@ class SstvDecoder(
             // picture. The forced frame runs to its end first.
             if (forcedAnchor && state != State.IDLE) return false
 
+            // **A header of the same mode before the picture's end, its sync lost:**
+            // noise taken for one, or the picture's own — not a new one (the
+            // owner's rule). The picture goes on at the row the time gives.
+            val finVis = ((s + VIS_MS) * spms)
+            if (state == State.IMAGE && m == mode && missedRun >= WIDE_AFTER && ancreP > 0 &&
+                finVis < ancreA + (m.blocks - 2) * ancreP) { nextTest = s + VIS_MS + 60; continue }
+            val sp = suspendu
+            if (state == State.IDLE && sp != null && m == sp.mode) {
+                val k = blocSuspendu(sp, finVis + 0.5 * sp.p, 2)
+                if (k >= 0) {
+                    nextTest = s + VIS_MS + 60
+                    reprend(sp, k, sp.a0 + k * sp.p)
+                    missedRun = WIDE_AFTER_FITTED    // its pulses searched for over a whole line
+                    decodeBlocks()
+                    return true
+                }
+            }
+
             if (state != State.IDLE) emitPartial()
             // Do not re-read the header just consumed.
             nextTest = s + VIS_MS + 60
@@ -729,7 +872,8 @@ class SstvDecoder(
      * whose line length a regular train of them matches.
      */
     private fun huntTrain() {
-        if (!continuous) return
+        // Off, pulses only bring a held picture back.
+        if (!continuous && suspendu == null) return
         var lo = maxOf(pulseScan, freqBase + voteHalf)
         val hi = total - (30 * spms).toLong()      // leave the filter and vote room
         if (hi - lo < 64) return
@@ -781,12 +925,38 @@ class SstvDecoder(
             if (ok && span < bestSpan) { best = m; bestSpan = span }
         }
         val m = best ?: return false
+        suspendu?.let { s ->
+            val lastStart = pulseEnd[PULSES - 1] - m.syncMs * spms
+            // Its mode's pulses back before its end: the picture held goes on, on the block after them.
+            val k = if (m == s.mode) blocSuspendu(s, lastStart, 1) else -1
+            if (k >= 0) { reprendSurTrain(s, m, k); return true }
+            emitSuspendu()
+            if (!continuous) { pulseCount = 0; return false }
+        }
         startFromTrain(m)
         return true
     }
 
+    /** [reprend] on a train of pulses, the last one block [k]: the line fitted on them, as [startFromTrain]. */
+    private fun reprendSurTrain(s: Suspendu, m: SstvMode, k: Int) {
+        val period = m.blockMs * spms
+        val syncLen = m.syncMs * spms
+        val lastStart = pulseEnd[PULSES - 1] - syncLen
+        reprend(s, k + 1, lastStart + s.p)
+        var j = k
+        remember(j, lastStart)
+        for (i in PULSES - 2 downTo PULSES - TRAIN) {
+            j -= Math.round((pulseEnd[i + 1] - pulseEnd[i]) / period).toInt()
+            remember(j, pulseEnd[i] - syncLen)
+        }
+        lastSync = lastStart
+        pulseCount = 0
+        decodeBlocks()
+    }
+
     /** Starts [m] on the block after the train, the line already fitted on it. */
     private fun startFromTrain(m: SstvMode) {
+        emitSuspendu()
         prepare(m)
         forcedAnchor = false
         val period = m.blockMs * spms
@@ -802,6 +972,7 @@ class SstvDecoder(
         // Block 0 is the one after the last pulse, which is block -1.
         for (i in 0 until histLen) histK[i] -= 1.0
         blockStart = lastStart + period - m.syncAtMs * spms
+        debutImage = blockStart.toLong()
         lastSync = lastStart
         pulseCount = 0
         state = State.IMAGE
@@ -825,10 +996,12 @@ class SstvDecoder(
         heldY = null; heldC = null; heldRow = -1
         histLen = 0; histNext = 0
         residual = 0.0; pendingStep = Double.NaN
+        trousCadre = ArrayList(); ancreA = 0.0; ancreP = 0.0
         ensureCapacity(m)
     }
 
     private fun startImage(m: SstvMode, visEndAbs: Long) {
+        emitSuspendu()
         prepare(m)
         forcedAnchor = false
         // Leader, break, leader and VIS: 910 ms before its end; and a margin.
@@ -975,6 +1148,7 @@ class SstvDecoder(
                 lastRunEnd - m.syncMs * spms + m.firstBlockOffsetMs * spms
             else visEnd + m.firstBlockOffsetMs * spms
         }
+        debutImage = blockStart.toLong()
         lastSync = -1.0
         state = State.IMAGE
         decodeBlocks()
@@ -1018,17 +1192,25 @@ class SstvDecoder(
             // With a fitted line the prediction holds through a few missed
             // pulses; a wide search then mostly finds noise and throws the
             // fit away. It waits longer — a real jump is still caught.
-            val wide = missedRun >= (if (histLen >= 4) WIDE_AFTER_FITTED else WIDE_AFTER)
+            // **A clean signal relocks at once.** Its pulses do not go missing to
+            // noise: two missed in a row after clean ones are a jump of the
+            // sound (88 ms lost mid-line on UmKA-1, 27/10), not a fade.
+            val propre = syncSpread in 0.0..CENTRE_SYNC_HZ && derniereNette >= 0 && blockIndex - derniereNette <= missedRun + 1
+            val wide = missedRun >= (if (propre) WIDE_AFTER_PROPRE else if (histLen >= 4) WIDE_AFTER_FITTED else WIDE_AFTER)
             // ±20 ms while locked: wide enough to see a pulse moved by an audio
             // glitch (16 ms lost on a live capture), which the step
             // detection below then adopts.
-            val win = if (wide) blockPeriod * 0.45 else 20.0 * spms
+            // **Wide: a whole block, the pulse whole in it.** ±0.45 block with
+            // the pulse required inside left jumps of 58–92 ms (Robot 36) out of
+            // reach for good: the UmKA-1 picture of 27/10 lost its sync on one,
+            // was given up 8 s later and its end came out a second picture.
+            val win = if (wide) blockPeriod * 0.5 else 20.0 * spms
             val minRun = (m.syncMs * 0.55 * spms).toInt().coerceAtLeast(2)
             // The window must reach the end of the pulse, not just its start:
             // ±10 ms around the start could not hold a 20 ms PD pulse, every
             // locked search failed, and PD frames (the ISS ones) ran on a wide
             // relock every fourth block, lines jumping by a pixel.
-            val reach = if (wide) 0.0 else m.syncMs * spms
+            val reach = m.syncMs * spms
             var hit = if (blockIndex == 0) -1L
                       else matchSync((expected - win).toLong(), (expected + win + reach).toLong(), m.syncMs * spms)
             if (hit >= 0) {
@@ -1114,6 +1296,7 @@ class SstvDecoder(
             if (!wide) fitLine()?.let { (a, b) ->
                 blockPeriod = bornee(b)
                 blockStart = a + blockPeriod * blockIndex - m.syncAtMs * spms
+                if (netteBloc) { ancreA = a; ancreP = blockPeriod }
             }
 
             decodeOneBlock(m)
@@ -1133,13 +1316,15 @@ class SstvDecoder(
             // Only noise for seconds: no clean pulse, hardly one in line.
             val bruit = sansNette >= missLimit && enLigneSansNette * 4 < sansNette
             if ((missedRun >= missLimit || bruit) && !forcedAnchor) {
+                val decodes = blockIndex
                 // The picture ends at its last clean pulse, not after the noise.
                 if (bruit && missedRun < missLimit) {
                     blockIndex = derniereNette + 1
                     // Hardly a clean pulse: no picture at all, and its header's tuning was no tuning.
                     if (nettes < NETTES_MIN) correction = correctionDepart
                 }
-                emitPartial()
+                // Held, in case its pulses come back before its end ([Suspendu]).
+                if (!suspend(m, decodes)) emitPartial()
                 state = State.IDLE
                 mode = null
                 forcedAnchor = false
@@ -1147,7 +1332,9 @@ class SstvDecoder(
             }
         }
         if (blockIndex >= m.blocks) {
+            finTrame = total; trous = trousCadre.toList()
             listener?.onImage(m, pixels, m.height, true)
+            trous = emptyList()
             state = State.IDLE
             mode = null
             forcedAnchor = false
@@ -1373,12 +1560,16 @@ class SstvDecoder(
         private const val SYNC_MAX = 1350f
         /** Missed syncs before widening the search. */
         private const val WIDE_AFTER = 3
+        /** Missed syncs before widening the search, after clean pulses on a clean signal. */
+        private const val WIDE_AFTER_PROPRE = 2
         /** Tolerated sync loss, ms, before abandoning the frame. */
         private const val ABORT_MS = 8000.0
         /** A sync pulse is a clean one when its reading spreads less than this and sits this close to 1200 Hz (noise: 90 to 300 Hz of spread), Hz. */
         private const val PULSE_NETTE_HZ = 100.0
         /** Clean pulses a frame needs for its header's tuning to be kept. */
         private const val NETTES_MIN = 8
+        /** Rows lost and never decoded, in a picture that went on after them. */
+        private const val GRIS_PERDU = 0xFF7F7F7F.toInt()
         /** Idle this long, the tuning correction is forgotten, s. */
         private const val OUBLI_ACCORD_S = 60L
     }

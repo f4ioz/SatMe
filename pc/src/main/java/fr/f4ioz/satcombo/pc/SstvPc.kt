@@ -12,6 +12,7 @@ import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sstv.CibleAfc
 import fr.f4ioz.satcombo.sstv.SstvAccord
 import fr.f4ioz.satcombo.sstv.QualiteSstv
+import fr.f4ioz.satcombo.sstv.ReunionSstv
 import fr.f4ioz.satcombo.sstv.SstvAfc
 import fr.f4ioz.satcombo.sstv.SstvDecoder
 import fr.f4ioz.satcombo.sstv.SstvMeta
@@ -241,10 +242,16 @@ class SstvPc(
             if (h?.genre == ESSAI) { _etat.update { it.copy(mode = "", lignes = 0, essais = it.essais + 1, version = it.version + 1) }; return }
             // The satellite of the sound that made it; the campaign's note only on the campaign's satellite.
             val sat = runCatching { satelliteDe(sourceActive) }.getOrNull() ?: c.satellite
+            // A picture held while its sync was lost ends where it was given up, not now.
+            val d = decodeur
+            val avantMs = if (d != null && rateActif > 0) (d.echantillons - d.finTrame).coerceAtLeast(0L) * 1000L / rateActif else 0L
+            val finMs = (h?.momentMs ?: horloge()) - avantMs
+            val ligne0 = if (d != null && rateActif > 0) finMs - (d.finTrame - d.debutImage).coerceAtLeast(0L) * 1000L / rateActif else 0L
             // A recording played back: kept, marked, at the time it was received; no « new picture » for it.
-            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, sat, h?.momentMs ?: horloge(),
+            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, sat, finMs,
                 if (h != null) RELECTURE else "live", if (h != null) h.fichier else if (sat == c.satellite) c.enregistrement else "", c.locator, c.indicatif,
-                sonDe(decodeur, memoire), note = if (h == null && sat == c.satellite) c.note else "", entree = sourceActive) else null
+                sonDe(decodeur, memoire), note = if (h == null && sat == c.satellite) c.note else "", entree = sourceActive,
+                trous = d?.trous.orEmpty(), ligne0Ms = ligne0) else null
             if (nom != null) runCatching {
                 val s = SstvMeta.decode(nom, File(dossier, SstvMeta.sidecarName(nom)).readText(Charsets.UTF_8))
                 if (SstvSon.fichier(File(dossier, nom)).isFile) imageGardee(dossier, s)
@@ -341,7 +348,7 @@ class SstvPc(
     private fun sonDe(d: SstvDecoder?, m: SstvSon.Memoire?): Pair<ShortArray, Int>? {
         if (d == null || m == null) return null
         val rateEntree = m.rate * m.facteur
-        return runCatching { m.extrait(d.debutTrame, d.echantillons + rateEntree / 2) to m.rate }.getOrNull()
+        return runCatching { m.extrait(d.debutTrame, d.finTrame + rateEntree / 2) to m.rate }.getOrNull()
     }
 
     private val verrouFichiers = Any()
@@ -349,9 +356,10 @@ class SstvPc(
     /** A picture received: PNG, sidecar and its own sound, named as on the phone; a second decoding never overwrites the first. */
     private fun garde(mode: SstvMode, pixels: IntArray, lignes: Int, complete: Boolean, sat: String, quandMs: Long,
                       origine: String, enregistrement: String, locator: String, indicatif: String,
-                      son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = "", entree: String = ""): String? = synchronized(verrouFichiers) {
+                      son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = "", entree: String = "",
+                      trous: List<IntRange> = emptyList(), ligne0Ms: Long = 0L, reunion: List<String> = emptyList(), nettoie: Boolean = nettoyage): String? = synchronized(verrouFichiers) {
         dossier.mkdirs()
-        val px = if (nettoyage) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, lignes) }.getOrDefault(pixels) else pixels
+        val px = if (nettoie) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, lignes) }.getOrDefault(pixels) else pixels
         var nom = SstvMeta.fileName(sat.ifBlank { "SAT" }, quandMs, mode.name, complete)
         var v = 0
         while (File(dossier, nom).exists() && v < 99) nom = SstvMeta.fileName(sat.ifBlank { "SAT" }, quandMs, mode.name, complete, variante = ++v + 1)
@@ -362,7 +370,8 @@ class SstvPc(
         if (runCatching { ImageIO.write(img, "png", png) }.isFailure) return null
         val meta = SstvMeta.SstvShot(fileName = nom, satName = sat, timeMs = quandMs, mode = mode.name, complete = complete,
             redecodeMs = if (origine == "file") horloge() else 0L, recale = recale,
-            locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note, entree = entree)
+            locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note, entree = entree,
+            trous = trous, ligne0Ms = ligne0Ms, reunion = reunion)
         runCatching { File(dossier, SstvMeta.sidecarName(nom)).writeText(SstvMeta.encode(meta), Charsets.UTF_8) }
         son?.let { (pcm, rate) -> if (pcm.isNotEmpty()) runCatching { SstvSon.ecritWav(SstvSon.fichier(png), pcm, rate) } }
         nom
@@ -387,8 +396,18 @@ class SstvPc(
         return o.toByteArray()
     }
 
-    /** The pictures kept, newest first, with what their sidecars say. */
-    fun images(): List<SstvMeta.SstvShot> =
+    /**
+     * The pictures kept, newest first, with what their sidecars say — the
+     * partial ones put together in another ([reunit]) left out while it is
+     * there (see [imagesToutes]).
+     */
+    fun images(): List<SstvMeta.SstvShot> = imagesToutes().let { l ->
+        val noms = l.mapTo(HashSet()) { it.fileName }
+        l.filter { it.reunieDans.isEmpty() || it.reunieDans !in noms }
+    }
+
+    /** Every picture kept, the partial ones put together in another too. */
+    fun imagesToutes(): List<SstvMeta.SstvShot> =
         (dossier.listFiles { f -> f.name.endsWith(".png") } ?: emptyArray())
             .map { f ->
                 val s = SstvMeta.decode(f.name, runCatching { File(dossier, SstvMeta.sidecarName(f.name)).readText() }.getOrNull())
@@ -412,6 +431,8 @@ class SstvPc(
 
     fun supprime(nom: String): Boolean {
         val png = fichier(nom)?.takeIf { it.name.endsWith(".png") } ?: return false
+        // A picture put together: its partial ones back in the gallery.
+        runCatching { libereMorceaux(png.name) }
         runCatching { File(dossier, SstvMeta.sidecarName(png.name)).delete() }
         runCatching { SstvSon.fichier(png).delete() }
         runCatching { SstvSon.gif(png).delete() }
@@ -419,6 +440,83 @@ class SstvPc(
         runCatching { fr.f4ioz.satcombo.sstv.CorrectionsGalerie.dossier(dossier).let { d -> val c = File(d, fr.f4ioz.satcombo.sstv.CorrectionsGalerie.nomCorrigee(png.name)); File(d, c.name.removeSuffix(".png") + ".meta").delete(); c.delete() } }
         return png.delete()
     }
+
+    // ------------------------------------------------------------------ put together
+
+    /** The pass recording named in a picture's sidecar, when still kept (set by whoever keeps them). */
+    @Volatile var enregistrementDe: (String) -> File? = { null }
+
+    /** The partial pictures put together in [nom] marked so no longer (their sidecars). */
+    private fun libereMorceaux(nom: String) = synchronized(verrouFichiers) {
+        val s = SstvMeta.decode(nom, runCatching { File(dossier, SstvMeta.sidecarName(nom)).readText() }.getOrNull())
+        for (m in s.reunion) File(dossier, File(m).name).takeIf { it.isFile }?.let { f -> SstvMeta.change(f) { if (it.reunieDans == nom) it.copy(reunieDans = "") else it } }
+    }
+
+    /** The other half of partial picture [nom], when it has one ([ReunionSstv.paires]). */
+    fun partenaire(nom: String): SstvMeta.SstvShot? = ReunionSstv.partenaire(images().filter { it.source != ESSAI }, nom)
+
+    /** Picture [s]'s pixels at its mode's full height (rows not received grey), or null. */
+    private fun morceau(s: SstvMeta.SstvShot, m: SstvMode): ReunionSstv.Morceau? {
+        val img = runCatching { ImageIO.read(File(dossier, s.fileName)) }.getOrNull() ?: return null
+        if (img.width != m.width) return null
+        val h = minOf(img.height, m.height)
+        val px = IntArray(m.width * m.height) { ReunionSstv.GRIS }
+        img.getRGB(0, 0, m.width, h, px, 0, m.width)
+        return ReunionSstv.Morceau(px, h, s.trous)
+    }
+
+    /** Both pictures' sound as one: their own `.wav`s, else the pass recording around them; null when none. */
+    private fun sonReuni(a: SstvMeta.SstvShot, b: SstvMeta.SstvShot, m: SstvMode): ReunionSstv.Son? {
+        fun propre(s: SstvMeta.SstvShot) = SstvSon.litWav(SstvSon.fichier(File(dossier, s.fileName)))?.let { (pcm, r) -> ReunionSstv.sonDe(s, pcm, r) }
+        val sa = propre(a); val sb = propre(b)
+        if (sa != null && sb != null && sa.rate == sb.rate) return ReunionSstv.colle(sa, sb)
+        // The pass recording: from a picture's length before the first one's end to the second one's end.
+        val f = a.recording.ifBlank { b.recording }.takeIf { it.isNotBlank() }?.let { runCatching { enregistrementDe(it) }.getOrNull() } ?: return sa ?: sb
+        val debutEnr = SstvMeta.debutEnregistrement(f.name).takeIf { it > 0L } ?: return sa ?: sb
+        val (pcm, r) = SstvSon.litWav(f) ?: return sa ?: sb
+        val de = ((a.ligne0Ms.takeIf { it > 0L } ?: (a.timeMs - (m.frameSeconds * 1000).toLong())) - 3_000L - debutEnr) * r / 1000L
+        val a1 = ((b.timeMs + 1_500L - debutEnr) * r / 1000L)
+        val i0 = de.coerceIn(0L, pcm.size.toLong()).toInt(); val i1 = a1.coerceIn(0L, pcm.size.toLong()).toInt()
+        if (i1 - i0 < r) return sa ?: sb
+        return ReunionSstv.Son(pcm.copyOfRange(i0, i1), r, debutEnr + i0 * 1000L / r)
+    }
+
+    /**
+     * Partial pictures [nomA] and [nomB] put together in one ([ReunionSstv]):
+     * kept as a picture of its own (its sound too), the two marked
+     * « put together » and hidden while it is there. Its name, else why not.
+     */
+    fun reunit(nomA: String, nomB: String): Result<String> = runCatching {
+        val tout = imagesToutes()
+        val (a, b) = listOf(tout.firstOrNull { it.fileName == nomA } ?: error("introuvable"), tout.firstOrNull { it.fileName == nomB } ?: error("introuvable"))
+            .sortedBy { it.timeMs }.let { it[0] to it[1] }
+        if (!ReunionSstv.peutReunir(a, b)) error("pas_reunissables")
+        val m = SstvMode.byName(a.mode) ?: error("mode")
+        val pa = morceau(a, m) ?: error("illisible"); val pb = morceau(b, m) ?: error("illisible")
+        val son = sonReuni(a, b, m)
+        val r = ReunionSstv.reunit(m, pa, pb, son, ReunionSstv.decalageTemps(m, a, b)) ?: error("non_placee")
+        val pcm = son?.let { it.pcm to it.rate }
+        val nom = garde(m, r.px, r.lignes, r.complete, a.satName, b.timeMs, a.source, a.recording.ifBlank { b.recording }, a.locator.ifBlank { b.locator },
+            a.callsign.ifBlank { b.callsign }, pcm, note = a.note.ifBlank { b.note }, entree = a.entree, trous = r.trous,
+            ligne0Ms = a.ligne0Ms, reunion = listOf(a.fileName, b.fileName), nettoie = false) ?: error("ecriture")
+        synchronized(verrouFichiers) { for (s in listOf(a, b)) SstvMeta.change(File(dossier, s.fileName)) { it.copy(reunieDans = nom) } }
+        _etat.update { it.copy(version = it.version + 1) }
+        nom
+    }
+
+    /** Picture [nom] put together undone: it is deleted, its partial ones come back. */
+    fun separe(nom: String): Boolean {
+        val s = imagesToutes().firstOrNull { it.fileName == nom }?.takeIf { it.reunion.isNotEmpty() } ?: return false
+        return supprime(s.fileName).also { _etat.update { it.copy(version = it.version + 1) } }
+    }
+
+    /**
+     * At a pass's end: every pair of partial pictures received from [deMs]
+     * to [aMs] that are one picture, put together ([reunit]). The names made.
+     */
+    fun reunitPartielles(deMs: Long, aMs: Long): List<String> =
+        ReunionSstv.paires(images().filter { it.timeMs in deMs..aMs && !horsAntenne(it) })
+            .mapNotNull { (a, b) -> reunit(a.fileName, b.fileName).getOrNull() }
 
     // ------------------------------------------------------------------ decoded again
 
@@ -464,13 +562,14 @@ class SstvPc(
         val ecoute = object : SstvDecoder.Listener {
             override fun onImage(mode: SstvMode, pixels: IntArray, linesDone: Int, complete: Boolean) {
                 if (linesDone < minLignes(mode)) return
-                var recu = debut?.let { it + d.echantillons * 1000 / rate }
+                var recu = debut?.let { it + d.finTrame * 1000 / rate }
                 val direct = recu?.let { r -> directs.filter { it.mode == mode.name && it.timeMs in (r - 30_000L)..(r + 10_000L) }.minByOrNull { kotlin.math.abs(it.timeMs - r) } }
                 if (direct != null) recu = direct.timeMs
                 val lieu = origine?.locator ?: direct?.locator ?: ""
                 val nom = garde(mode, pixels, linesDone, complete, origine?.satName?.ifBlank { null } ?: direct?.satName ?: sat,
                     recu ?: horloge(), "file", origine?.recording?.ifBlank { null } ?: f.name, lieu,
-                    origine?.callsign?.ifBlank { null } ?: direct?.callsign ?: "", sonDe(d, memoire), recale = recu != null)
+                    origine?.callsign?.ifBlank { null } ?: direct?.callsign ?: "", sonDe(d, memoire), recale = recu != null,
+                    trous = d.trous, ligne0Ms = recu?.let { it - (d.finTrame - d.debutImage).coerceAtLeast(0L) * 1000 / rate } ?: 0L)
                 if (nom != null) { trouvees++; _etat.update { it.copy(derniere = nom, redecodeImages = trouvees, version = it.version + 1) } }
             }
         }

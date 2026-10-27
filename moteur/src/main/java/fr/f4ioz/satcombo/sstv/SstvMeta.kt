@@ -62,6 +62,14 @@ object SstvMeta {
         val diapos: Int = 0,
         /** Group set by hand ([ClassementSstv]), "" sorted by itself. */
         val groupe: String = "",
+        /** Rows lost to a fade or a jump of the sound, the picture going on after them ([SstvDecoder.trous]). */
+        val trous: List<IntRange> = emptyList(),
+        /** When its row 0 began, UTC ms (0: not known — pictures before 27/10/2026): for [ReunionSstv]. */
+        val ligne0Ms: Long = 0L,
+        /** A picture put together from these partial ones ([ReunionSstv]), their PNG names. */
+        val reunion: List<String> = emptyList(),
+        /** A partial picture put together with another in this one ([ReunionSstv]): hidden while it is there. */
+        val reunieDans: String = "",
         /**
          * What was done to the picture shown in its place (a sheet's processed
          * version, [CorrectionsGalerie]: « corrigée », « fusion de 4 copies »);
@@ -227,7 +235,19 @@ object SstvMeta {
         // Older versions ignore these lines (and drop them when they write the sidecar again).
         if (shot.diapo > 0) put("slide", shot.diapo.toString() + if (shot.diapos > 0) "/" + shot.diapos else "")
         put("group", shot.groupe)
+        if (shot.trous.isNotEmpty()) put("gaps", trousTexte(shot.trous))
+        if (shot.ligne0Ms > 0L) put("row0", shot.ligne0Ms.toString())
+        if (shot.reunion.isNotEmpty()) put("merged", shot.reunion.joinToString(";"))
+        put("mergedinto", shot.reunieDans)
         return sb.toString()
+    }
+
+    /** Rows lost, as written in the sidecar: « 98-157;164-165 ». */
+    fun trousTexte(t: List<IntRange>): String = t.joinToString(";") { it.first.toString() + "-" + it.last }
+
+    fun trousDe(v: String): List<IntRange> = v.split(';').mapNotNull { p ->
+        val a = p.substringBefore('-').trim().toIntOrNull(); val b = p.substringAfter('-', "").trim().toIntOrNull()
+        if (a != null && b != null && a in 0..b) a..b else null
     }
 
     /**
@@ -263,6 +283,10 @@ object SstvMeta {
                     if (n > 0) shot.copy(diapo = n, diapos = t) else shot
                 }
                 "group" -> shot.copy(groupe = v.trim().take(120))
+                "gaps" -> shot.copy(trous = trousDe(v))
+                "row0" -> v.toLongOrNull()?.let { shot.copy(ligne0Ms = it) } ?: shot
+                "merged" -> shot.copy(reunion = v.split(';').map { it.trim() }.filter { it.isNotEmpty() })
+                "mergedinto" -> shot.copy(reunieDans = v.trim())
                 else -> shot
             }
         }

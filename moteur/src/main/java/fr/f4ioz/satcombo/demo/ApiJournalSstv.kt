@@ -37,7 +37,7 @@ import java.io.File
  *
  * Routes under `/journal`: `/sstv?id=` (where the pass stands),
  * `POST /sstv/choix?id=&quoi=` (`defaut`, `image&f=`, `marque`, `plan`,
- * `element&k=&incruste=&carte=&cadre=`; `v` the value), `POST /sstv/fusionner?id=&f=`,
+ * `element&k=&incruste=&carte=&cadre=`; `v` the value), `POST /sstv/fusionner?id=&f=`, `POST /sstv/reunir?id=&f=`,
  * `/sstv/element.svg?id=&k=` (a panel's preview), `/sstv/version?f=` (a
  * processed picture, small or whole).
  *
@@ -58,6 +58,10 @@ class ApiJournalSstv(private val p: Plateforme) {
         /** The pass's SSTV pictures as the journal links them (those set aside left out). */
         fun images(e: JournalPassage.Entree): List<Pair<File, SstvMeta.SstvShot>>
         fun maintenant(): Long = System.currentTimeMillis()
+        /** « Réunir »: the other half of partial picture [nom], when the two are one picture ([fr.f4ioz.satcombo.sstv.ReunionSstv]); null none, or not here. */
+        fun reunirAvec(nom: String): String? = null
+        /** The two put together: the new picture's name, else why not; null when not done here. */
+        fun reunit(nom: String): Result<String>? = null
     }
 
     private fun src() = runCatching { p.source() }.getOrNull()
@@ -194,6 +198,7 @@ class ApiJournalSstv(private val p: Plateforme) {
             images.put(JSONObject().put("f", s.fileName).put("t", s.timeMs).put("mode", s.mode)
                 .put("choix", o.versions[s.fileName]?.code ?: "").put("versions", versions)
                 .put("fusionPossible", c != null && g != null && g.images.size > 1 && fusion == null).put("copies", g?.images?.size ?: 1)
+                .put("reunirAvec", runCatching { p.reunirAvec(s.fileName) }.getOrNull() ?: JSONObject.NULL)
                 .put("montre", when (m.fiche?.methode) { null -> Planche.Version.RECUE; CorrectionsGalerie.Methode.FUSION -> Planche.Version.FUSION; else -> Planche.Version.CORRIGEE }.code)
                 .put("montreNote", m.fiche?.noteApres ?: note).put("montreFichier", m.fiche?.fichier ?: "").put("repli", m.repli)
                 .put("etiquette", m.etiquette))
@@ -259,6 +264,14 @@ class ApiJournalSstv(private val p: Plateforme) {
             val f = q("f").takeIf { nom -> e != null && p.images(e).any { it.first.name == nom } }
             if (methode != "POST" || c == null || f == null) json(JSONObject().put("ok", false).put("erreur", "introuvable"))
             else json(c.action("/api/sstv/fusionner") { k -> if (k == "nom") f else "" } ?: JSONObject().put("ok", false))
+        }
+        // « Réunir » a partial picture of the pass with its other half.
+        "/sstv/reunir" -> {
+            val e = p.passage(q("id"))
+            val f = q("f").takeIf { nom -> e != null && p.images(e).any { it.first.name == nom } }
+            val r = if (methode == "POST" && f != null) runCatching { p.reunit(f) }.getOrNull() else null
+            json(r?.fold({ JSONObject().put("ok", true).put("nom", it) }, { JSONObject().put("ok", false).put("erreur", it.message ?: "") })
+                ?: JSONObject().put("ok", false).put("erreur", "introuvable"))
         }
         "/sstv/element.svg" -> {
             val e = p.passage(q("id")); val k = Element.de(q("k"))

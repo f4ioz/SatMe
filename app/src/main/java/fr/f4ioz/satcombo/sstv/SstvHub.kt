@@ -429,7 +429,7 @@ object SstvHub {
             ) {
                 if (linesDone < mode.height / 8) return
                 val bmp = toBitmap(mode, finale(mode, pixels, linesDone))
-                var recu = debutMs()?.let { d -> d + (decoder?.echantillons ?: 0L) * 1000 / rateFichier.coerceAtLeast(1) }
+                var recu = debutMs()?.let { d -> d + (decoder?.finTrame ?: 0L) * 1000 / rateFichier.coerceAtLeast(1) }
                 val direct = recu?.let { memeImage(mode, it) }
                 if (direct != null) recu = direct.timeMs
                 // Where it was received: never where the phone happens to be today.
@@ -471,7 +471,7 @@ object SstvHub {
     private fun sonDe(d: SstvDecoder?, m: SstvSon.Memoire?): Pair<ShortArray, Int>? {
         if (d == null || m == null) return null
         val rateEntree = m.rate * m.facteur
-        return runCatching { m.extrait(d.debutTrame, d.echantillons + rateEntree / 2) to m.rate }.getOrNull()
+        return runCatching { m.extrait(d.debutTrame, d.finTrame + rateEntree / 2) to m.rate }.getOrNull()
     }
 
     private fun toBitmap(mode: SstvMode, pixels: IntArray): Bitmap =

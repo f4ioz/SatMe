@@ -364,7 +364,11 @@ class AutoPiloteSstvPc(
                     .put("enregistrement", s?.etat?.value?.enregistrement.orEmpty())
                     .put("images", runCatching { s?.images()?.count { it.timeMs >= e.passage.aosEpochMs - 60_000L } ?: 0 }.getOrDefault(0))
             } ?: JSONObject.NULL)
-            .put("historique", JSONArray(donnees.historique.takeLast(30).reversed().map { it.json() }))
+            .put("historique", JSONArray(donnees.historique.takeLast(30).reversed().let { hs ->
+                // « Réunir »: a pass's partial pictures that are one picture cut in two (left after the pass, or from before).
+                val paires = if (hs.isEmpty()) emptyList() else runCatching { fr.f4ioz.satcombo.sstv.ReunionSstv.paires(s?.sstv?.images().orEmpty().filter { !SstvPc.horsAntenne(it) }) }.getOrDefault(emptyList())
+                hs.map { tr -> tr.json().put("reunir", JSONArray(paires.filter { (a, b) -> a.fileName in tr.images && b.fileName in tr.images }.map { it.first.fileName })) }
+            }))
             .put("profils", JSONArray(montage?.profilsGardes().orEmpty().map { JSONObject().put("id", it.id).put("nom", it.nom) }))
             .put("cartes", JSONArray(cartes)).put("sdr", sdr != null)
             .put("modes", JSONArray(CampagneSstv.MODES))
@@ -517,6 +521,8 @@ class AutoPiloteSstvPc(
 
         override fun images(deMs: Long, aMs: Long): List<String> =
             son?.images()?.filter { it.timeMs in deMs..aMs && !SstvPc.horsAntenne(it) }?.map { it.fileName }.orEmpty()
+
+        override fun reunitPartielles(deMs: Long, aMs: Long): List<String> = son?.sstv?.reunitPartielles(deMs, aMs).orEmpty()
 
         override fun parque(): String? {
             val r = station.stationRotor

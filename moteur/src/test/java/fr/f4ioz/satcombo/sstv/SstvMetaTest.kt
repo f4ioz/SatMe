@@ -136,4 +136,17 @@ class SstvMetaTest {
         val n = SstvMeta.fileName("ISS", 1_700_000_000_000L, "PD120", true, kind = "RTTY")
         assertTrue(n, n.startsWith("SatMe_SSTV_"))
     }
+
+    @Test
+    fun `les lignes perdues et la reunion survivent au fichier compagnon`() {
+        val s = SstvMeta.SstvShot(fileName = "x.png", satName = "UmKA 1", timeMs = 5L, mode = "Robot 36", complete = true,
+            trous = listOf(98..157, 164..165), ligne0Ms = 1_793_136_081_000L, reunion = listOf("a.png", "b.png"))
+        val d = SstvMeta.decode("x.png", SstvMeta.encode(s))
+        assertEquals(listOf(98..157, 164..165), d.trous)
+        assertEquals(1_793_136_081_000L, d.ligne0Ms)
+        assertEquals(listOf("a.png", "b.png"), d.reunion)
+        val p = SstvMeta.decode("a.png", SstvMeta.encode(SstvMeta.SstvShot(fileName = "a.png", reunieDans = "x.png")))
+        assertEquals("x.png", p.reunieDans)
+        assertEquals(emptyList<IntRange>(), SstvMeta.trousDe("n'importe;5-2;x"))
+    }
 }

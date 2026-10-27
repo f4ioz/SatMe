@@ -253,4 +253,54 @@ class SstvPcTest {
         // Ends 1 + 36 s into a recording begun at 13:49:09 UTC: named at its end, as on the phone.
         assertTrue(i.fileName, i.fileName.contains("20261003_13494"))
     }
+
+    @Test fun `deux images partielles d-une meme image se reunissent et se separent`() {
+        // One Robot 36 picture whose sync was lost at row 110 and found again (before 27/10/2026: two partial pictures,
+        // each with its own sound, overlapping by a second).
+        val rate = 12_000
+        val m = robot36
+        val img = IntArray(m.width * m.height) { i -> val v = 30 + ((i / m.width / 10) * 67) % 200; (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        val son = ShortArray(rate / 2) + SstvTestSignal.encode(m, img, rate) + ShortArray(rate)
+        val coupe = rate / 2 + ((120.0 + 910.0 + 110 * m.blockMs) * rate / 1000).toInt()
+        val sa = son.copyOfRange(0, coupe + rate / 2); val sb = son.copyOfRange(coupe - rate / 2, son.size)
+        fun decode(x: ShortArray): Pair<IntArray, Int> {
+            var r: Pair<IntArray, Int>? = null
+            val d = fr.f4ioz.satcombo.sstv.SstvDecoder(rate, object : fr.f4ioz.satcombo.sstv.SstvDecoder.Listener {
+                override fun onImage(mode: SstvMode, pixels: IntArray, linesDone: Int, complete: Boolean) { if (r == null) r = pixels.copyOf() to linesDone }
+            }).also { it.continuous = true }
+            d.feed(x, x.size); d.finish()
+            return r!!
+        }
+        val g = File(dossier, "sstv").apply { mkdirs() }
+        val t0 = 1_793_136_080_000L
+        fun ecrit(nom: String, px: Pair<IntArray, Int>, pcm: ShortArray, fin: Long) {
+            val b = java.awt.image.BufferedImage(m.width, px.second, java.awt.image.BufferedImage.TYPE_INT_RGB)
+            b.setRGB(0, 0, m.width, px.second, px.first, 0, m.width)
+            javax.imageio.ImageIO.write(b, "png", File(g, nom))
+            File(g, fr.f4ioz.satcombo.sstv.SstvMeta.sidecarName(nom)).writeText(fr.f4ioz.satcombo.sstv.SstvMeta.encode(fr.f4ioz.satcombo.sstv.SstvMeta.SstvShot(
+                fileName = nom, satName = "UmKA 1 (RS40S)", timeMs = fin, mode = m.name, complete = false, source = "live", locator = "JN18FS")))
+            SstvSon.ecritWav(SstvSon.fichier(File(g, nom)), pcm, rate)
+        }
+        val na = "SatMe_SSTV_UmKA-1--RS40S_20261027_212143Z_Robot36_partiel.png"
+        val nb = "SatMe_SSTV_UmKA-1--RS40S_20261027_212204Z_Robot36_partiel.png"
+        ecrit(na, decode(sa), sa, t0 + (sa.size - rate / 2) * 1000L / rate)
+        ecrit(nb, decode(sb), sb, t0 + (coupe - rate / 2 + sb.size - rate / 2) * 1000L / rate + 700)
+        val s = sstv()
+        assertEquals(nb, s.partenaire(na)?.fileName)
+        val nom = s.reunit(na, nb).getOrThrow()
+        val vues = s.images().map { it.fileName }
+        assertEquals(listOf(nom), vues)
+        assertEquals(3, s.imagesToutes().size)
+        val r = s.imagesToutes().first { it.fileName == nom }
+        assertTrue(r.complete); assertEquals(listOf(na, nb), r.reunion); assertEquals("JN18FS", r.locator)
+        assertEquals(m.height, javax.imageio.ImageIO.read(File(g, nom)).height)
+        assertTrue("son gardé", SstvSon.fichier(File(g, nom)).isFile)
+        // Undone: the partial ones back, and they can be put together again.
+        assertTrue(s.separe(nom))
+        assertEquals(setOf(na, nb), s.images().map { it.fileName }.toSet())
+        assertEquals(nb, s.partenaire(na)?.fileName)
+        // At a pass's end, on their own.
+        assertEquals(1, s.reunitPartielles(t0 - 60_000L, t0 + 120_000L).size)
+        assertEquals(1, s.images().size)
+    }
 }

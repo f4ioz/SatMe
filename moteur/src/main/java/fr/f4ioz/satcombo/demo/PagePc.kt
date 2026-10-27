@@ -5032,6 +5032,8 @@ ${DemarragePagePc.DIALOGUES}
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
     <button class="site-b" data-site="sstv-image" hidden onclick="sitePublie('sstv-image', viNom, this)" title="Publier cette image sur le site web (Réglages › Site web)">🌐 Publier sur le site</button>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
+    <button id="vi-reunir" hidden onclick="viReunit()" title="Cette image partielle et la suivante sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble, re-décodées de leur son à la bonne ligne. Les deux partielles sont gardées (cachées tant que l’image réunie existe).">⧉ Réunir</button>
+    <button id="vi-separer" hidden onclick="viSepare()" title="Défaire la réunion : l’image réunie est supprimée, les deux images partielles reviennent dans la galerie">↶ Séparer</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="ligne" id="vi-classe" style="margin-top:6px" hidden><span class="petit" id="vi-note"></span>
     <label class="petit">Diapo <select id="vi-diapo" onchange="viDiapo(this.value)" title="Le numéro de la diapo (« SLIDE n/12 », sur le nombre de diapos de sa série) : vaut pour toutes les copies du groupe"></select></label>
@@ -10261,7 +10263,8 @@ function voisImage(n) {
   viN = (n + l.length) % l.length; const i = l[viN];
   g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
   txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle',
-    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
+    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '',
+    i.reunion ? 'réunie de ' + i.reunion.length + ' images partielles' : '', i.trous ? 'lignes perdues ' + i.trous.replace(/;/g, ', ').replace(/-/g, '–') : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
   VC = null; viCorrCharge();
@@ -10278,6 +10281,8 @@ function voisOutils() {
   if (!i || !D) return;
   const wav = viNom.replace(/\.png$/, '.wav'), gif = viNom.replace(/\.png$/, '.gif');
   g('vi-son').hidden = g('vi-redec').hidden = !i.son;
+  g('vi-reunir').hidden = !i.reunirAvec; g('vi-separer').hidden = !i.reunion;
+  if (i.reunirAvec) g('vi-reunir').title = 'Avec ' + i.reunirAvec + ' : une seule image coupée en deux (synchro perdue au milieu), remise ensemble depuis leur son à la bonne ligne. Les deux partielles restent gardées (cachées tant que l’image réunie existe).';
   if (i.son && viSonVu !== wav) { viSonVu = wav; g('vi-son').src = 'sstv/' + enc(wav); }
   g('vi-redec').disabled = D.redecodeProgres >= 0 || !D.peutRedecoder;
   g('vi-gif').hidden = !D.peutGif; g('vi-gif').disabled = !!D.gif;
@@ -10389,6 +10394,29 @@ async function viSatellite() {
   if (v == null || !v.trim() || v.trim() === i.sat) return;
   const j = await post('api/sstv/satellite?nom=' + enc(viNom) + '&sat=' + enc(v.trim()));
   if (j && j.ok !== false) { i.sat = v.trim(); imagesVus = ''; voisImage(viN); }
+}
+// « Réunir »: two partial pictures that are one, put back together (the partial ones kept, hidden); « Séparer » undoes it.
+async function viReunit() {
+  if (!viNom) return;
+  const b = g('vi-reunir'); b.disabled = true; txt('vi-reunir', '⧉ Réunion…');
+  const j = await post('api/sstv/reunir?nom=' + enc(viNom));
+  b.disabled = false; txt('vi-reunir', '⧉ Réunir');
+  if (j && j.ok && j.nom) { imagesVus = ''; await viOuvreNom(j.nom); }
+  else alert('Réunion impossible : ' + ((j && j.erreur) || 'pas de réponse'));
+}
+async function viSepare() {
+  if (!viNom || !confirm('Séparer ' + viNom + ' ? L’image réunie est supprimée, les deux images partielles reviennent.')) return;
+  const j = await post('api/sstv/separer?nom=' + enc(viNom));
+  if (j && j.ok !== false) { g('visionneuse').close(); imagesVus = ''; }
+}
+// Opens picture [nom] once the gallery has it (after a change).
+async function viOuvreNom(nom) {
+  for (let k = 0; k < 10; k++) {
+    try { S = await (await fetch('api/son')).json(); } catch (x) {}
+    const n = ((S && S.images) || []).findIndex(x => x.nom === nom);
+    if (n >= 0) { imagesMontrees = []; voisImage(n); return; }
+    await new Promise(r => setTimeout(r, 400));
+  }
 }
 async function viSupprime() {
   if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son, son GIF, sa version corrigée et sa marque « à garder ») ?')) return;
@@ -14841,11 +14869,19 @@ function apDessine() {
     '</td><td><span class="ap-bot" title="Auto-pilote">🤖</span> ' + esc(p.nom) + '<div class="petit">' + esc(p.sat) + (p.raison ? ' · ' + esc(p.raison) : '') + '</div></td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + AP_STATUTS[p.statut] + '</span></td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">' + (AP.campagnes.length ? 'aucun passage dans les campagnes actives' : 'les passages des campagnes viendront ici') + '</td></tr>';
   g('ap-histo').innerHTML = AP.historique.map(t => '<tr><td>' + jourHeure(t.aos) + '<div class="petit">' + t.el.toFixed(0) + '°</div></td><td>' + esc(t.nom) +
-    (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
+    (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') +
+    (t.reunir || []).map(n => '<button class="petit" onclick="apReunit(\'' + escA(n) + '\', this)" title="Deux images partielles de ce passage sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble depuis leur son, à la bonne ligne. Les partielles restent gardées.">⧉ Réunir ' + esc(n.replace(/^SatMe_SSTV_/, '').replace(/\.png$/, '')) + '</button>').join('') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
     '</td><td><span class="pastille ap-st-' + t.statut + '">' + AP_STATUTS[t.statut] + '</span>' + (t.raison ? '<div class="petit">' + esc(t.raison) + '</div>' : '') +
     (t.faits.length ? '<div class="petit" title="' + esc(t.faits.join('\n')).replace(/"/g, '&quot;') + '">' + t.faits.length + ' étape' + (t.faits.length > 1 ? 's' : '') + '</div>' : '') + '</td></tr>').join('') ||
     '<tr><td colspan="3" class="petit">rien encore</td></tr>';
   dessineAgendaAp();
+}
+// « Réunir » from the auto-pilot's history: the gallery's action, then the list read again.
+async function apReunit(nom, bouton) {
+  bouton.disabled = true;
+  const j = await post('api/sstv/reunir?nom=' + enc(nom));
+  if (!(j && j.ok)) { bouton.disabled = false; alert('Réunion impossible : ' + ((j && j.erreur) || 'pas de réponse')); }
+  apVu = ''; imagesVus = '';
 }
 /** The campaigns' passes in the appointments' list too, with their 🤖. */
 function dessineAgendaAp() {
