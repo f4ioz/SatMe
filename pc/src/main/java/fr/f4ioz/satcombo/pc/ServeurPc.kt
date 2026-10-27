@@ -141,6 +141,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var espace: MeteoSpatialePc? = null
     /** The satellites' cards: a photo and a summary (Wikipedia, Commons, kept on disk), SatMe's facts. */
     @Volatile var fiches: FichesSatPc? = null
+    /** The ISS's live video: NASA's live of the moment (Orbites › ISS en direct). */
+    @Volatile var issDirect: IssDirectPc? = null
     /** « Journal détaillé » (spectra and decodes per pass, for the report). */
     @Volatile var spectreJournal: SpectreJournalPc? = null
     @Volatile var carte: CartePc? = null
@@ -829,6 +831,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         if ((chemin == "/api/satfiche" || chemin == "/api/satfiche/photo") && r.methode != "POST") {
             val rep = fiches?.sert(chemin) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if (chemin == "/api/iss-direct/source" && r.methode != "POST") {
+            val rep = issDirect?.sert()
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }

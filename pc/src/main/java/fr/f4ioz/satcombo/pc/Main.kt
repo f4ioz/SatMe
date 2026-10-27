@@ -403,6 +403,8 @@ fun main(args: Array<String>) {
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
     // The satellites' cards (Orbites): their photo and summary asked from Wikipedia when first shown, then kept.
     serveur.fiches = FichesSatPc(File(dossier, "fiches-sat"), emetteurs = { station.emetteursDe(it) })
+    // The ISS's live video: which one NASA streams today, asked only when the window opens (at most hourly).
+    serveur.issDirect = IssDirectPc()
     // The pass report (Journal › Rapport): read from the data folder, the levels and the space weather kept.
     journalWeb.rapport = RapportPc(journal, station, dossier,
         niveaux = { niveaux.series.getValue(NiveauxPc.CANAL).points(86_400_000L, System.currentTimeMillis()).map { it.t to it.moy } },

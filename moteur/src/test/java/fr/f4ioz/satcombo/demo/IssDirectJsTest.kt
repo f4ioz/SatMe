@@ -24,8 +24,9 @@ class IssDirectJsTest {
         assertTrue(PagePc.HTML.contains("const IssDirect = (function ()"))
         assertTrue(PagePc.HTML.contains(".iss-f.iss-tuile"))
         assertTrue(PagePc.HTML.contains("IssDirect.menu(titre, coche)"))
-        // The default source, NASA's public stream, from the no-cookie player, muted; the credit.
-        assertTrue(IssDirectJs.JS.contains("const ISS_NASA = 'awQzjn72bI0'"))
+        // The default source, NASA's public stream (found by SatMe-PC, else the channel's live), from the no-cookie player, muted; the credit.
+        assertTrue(IssDirectJs.JS.contains("const ISS_CHAINE = 'UCLA_DiR1FfKNvjuUpBHmylQ'"))
+        assertTrue(IssDirectJs.JS.contains("'api/iss-direct/source'"))
         assertTrue(IssDirectJs.JS.contains("https://www.youtube-nocookie.com/embed/"))
         assertTrue(IssDirectJs.JS.contains("autoplay=1&mute=1&playsinline=1"))
         assertTrue(IssDirectJs.JS.contains("Images : NASA (domaine public), via YouTube"))
@@ -43,7 +44,7 @@ class IssDirectJsTest {
         assumeTrue("node absent", node != null)
         val d = File(System.getProperty("java.io.tmpdir"), "satme-iss-" + System.nanoTime()).apply { mkdirs() }
         try {
-            val js = File(d, "iss.js").apply { writeText(IssDirectJs.PUR + "\nmodule.exports = { issSource, issMer, issKm, ISS_NASA };\n") }
+            val js = File(d, "iss.js").apply { writeText(IssDirectJs.PUR + "\nmodule.exports = { issSource, issMer, issKm, issAutos, ISS_CHAINE, ISS_DERNIER };\n") }
             val essai = File(d, "essai.js").apply { writeText(IssDirectJsTest::class.java.getResource("/iss-direct-test.js")!!.readText()) }
             val p = ProcessBuilder(node, essai.path, js.path).redirectErrorStream(true).start()
             val sortie = p.inputStream.bufferedReader().readText()

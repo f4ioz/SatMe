@@ -81,7 +81,9 @@ object IssDirectJs {
      * between two. Top-level functions, so node can run them.
      */
     const val PUR = """
-const ISS_NASA = 'awQzjn72bI0';
+/** NASA's channel (its live of the moment) and the last ID known, should SatMe-PC not find today's (IssDirectPc). */
+const ISS_CHAINE = 'UCLA_DiR1FfKNvjuUpBHmylQ';
+const ISS_DERNIER = 'ROboUHfPUrU';
 const ISS_EMBED = 'https://www.youtube-nocookie.com/embed/';
 const ISS_PARAMS = 'autoplay=1&mute=1&playsinline=1&rel=0';
 /**
@@ -112,6 +114,14 @@ function issSource(s) {
   }
   if (/\.(mp4|webm|ogv|m3u8)$/i.test(u.pathname)) return { type: 'video', url: u.href, hls: /\.m3u8$/i.test(u.pathname), page: u.href };
   return null;
+}
+/** The automatic NASA source's choices, in order: today's live [id] (when SatMe-PC found it), the channel's live, the last ID known. */
+function issAutos(id) {
+  const l = [];
+  if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) l.push(id);
+  l.push('https://www.youtube.com/embed/live_stream?channel=' + ISS_CHAINE);
+  if (id !== ISS_DERNIER) l.push(ISS_DERNIER);
+  return l;
 }
 /** The sea under [lat], [lon] (a point known to be off land), roughly: boxes good enough for the ISS's band (±52°). */
 function issMer(lat, lon) {
@@ -156,7 +166,15 @@ const IssDirect = (function () {
   const theme = () => typeof obTh !== 'undefined' ? obTh : '';
   const tuile = () => tableau() && !!etat.tuiles[theme()];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const source = () => issSource(etat.source) || issSource(ISS_NASA);
+  // The automatic source: asked from SatMe-PC (null: not yet, 'attente': asked), then its choices one after the other (↻).
+  let auto = null, autoN = 0, autoT = 0;
+  const autos = () => issAutos(auto && auto.id);
+  const source = () => issSource(etat.source) || issSource(autos()[autoN % autos().length]);
+  function demandeAuto() {
+    auto = 'attente'; autoT = Date.now();
+    fetch((window.SATME_RACINE || '') + 'api/iss-direct/source', { cache: 'no-store' }).then(r => r.json())
+      .then(j => { auto = j && j.ok ? j : { id: null }; }).catch(() => { auto = { id: null }; }).finally(() => maj(true));
+  }
   const pays = (() => { let d = null; try { d = new Intl.DisplayNames(['fr'], { type: 'region' }); } catch (x) {} return iso => { try { return d && iso ? d.of(iso) : iso; } catch (x) { return iso; } }; })();
 
   function construit() {
@@ -178,10 +196,10 @@ const IssDirect = (function () {
       '<div class="iss-r" hidden><label class="petit" for="iss-src">Source : un lien YouTube (watch, live, youtu.be, embed, ou le direct d’une chaîne …/channel/UC…/live), son identifiant, ou une vidéo directe (.mp4, .webm ; .m3u8 seulement dans Safari)</label>' +
       '<input type="url" id="iss-src" placeholder="https://www.youtube.com/watch?v=…" spellcheck="false">' +
       '<div class="iss-rb"><button type="button" class="primaire iss-ok">Appliquer</button><button type="button" class="iss-nasa">Rétablir la source NASA</button></div>' +
-      '<div class="petit iss-rm">Les directs YouTube changent parfois d’identifiant : si la vidéo dit « indisponible », colle le lien du direct du moment.</div></div>' +
+      '<div class="petit iss-sa"></div><div class="petit iss-rm">D’origine, la source NASA est automatique : SatMe-PC cherche le direct du jour (son identifiant change parfois), sinon le direct de la chaîne NASA.</div></div>' +
       '<div class="iss-v"><div class="iss-hors" hidden></div></div>' +
       '<div class="iss-i" aria-live="off"></div>' +
-      '<div class="iss-act"><button type="button" class="iss-voir" title="Choisit l’ISS, ouvre la vue Passage avec la caméra « Vue du satellite » : la Terre calculée par SatMe à côté de la vraie">🌍 Voir sur le globe</button><a class="iss-yt" target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube ↗</a><span class="petit">« Vidéo non disponible » : ⚙, le lien du direct du moment</span></div>' +
+      '<div class="iss-act"><button type="button" class="iss-autre" title="Si la vidéo est indisponible : la source NASA suivante (le direct du jour trouvé par SatMe-PC, le direct de la chaîne NASA, le dernier identifiant connu)">↻ Autre source NASA</button><button type="button" class="iss-voir" title="Choisit l’ISS, ouvre la vue Passage avec la caméra « Vue du satellite » : la Terre calculée par SatMe à côté de la vraie">🌍 Voir sur le globe</button><a class="iss-yt" target="_blank" rel="noopener noreferrer">Ouvrir sur YouTube ↗</a></div>' +
       '<div class="iss-cr">Images : NASA (domaine public), via YouTube</div>' +
       '<div class="iss-poignee" title="Redimensionner"></div>';
     v.appendChild(f);
@@ -192,13 +210,15 @@ const IssDirect = (function () {
     const applique = s => {
       const r = issSource(s), m = q('.iss-rm');
       if (s && !r) { m.className = 'petit iss-rm iss-err'; m.textContent = 'Lien non reconnu : un lien YouTube (watch, live, youtu.be, embed, chaîne …/channel/UC…) ou une vidéo .mp4 / .webm / .m3u8.'; return; }
-      etat.source = s; garde(); m.className = 'petit iss-rm'; m.textContent = s ? 'Source enregistrée dans ce navigateur.' : 'Source NASA rétablie.';
+      etat.source = s; garde(); m.className = 'petit iss-rm'; m.textContent = s ? 'Source enregistrée dans ce navigateur.' : 'Source NASA automatique rétablie.';
+      if (!s) { auto = null; autoN = 0; }
       net = null; maj(true);
     };
     q('.iss-ok').onclick = () => applique(q('#iss-src').value.trim());
     q('#iss-src').onkeydown = e => { if (e.key === 'Enter') applique(q('#iss-src').value.trim()); };
     q('.iss-nasa').onclick = () => { q('#iss-src').value = ''; applique(''); };
     q('.iss-voir').onclick = voir;
+    q('.iss-autre').onclick = () => { autoN++; maj(true); };
     deplace(q('.iss-barre'), false); deplace(q('.iss-poignee'), true);
     window.addEventListener('resize', () => { if (f && !f.hidden) place(); });
     return true;
@@ -244,14 +264,16 @@ const IssDirect = (function () {
   }
   function hors(texte, reessai) {
     const h = q('.iss-hors');
-    h.hidden = !texte; if (!texte) return;
+    h.hidden = !texte; q('.iss-t i').hidden = !!texte; if (!texte) return;
     h.innerHTML = '<div>' + texte + '</div>' + (reessai ? '<button type="button">Réessayer</button>' : '');
     const b = h.querySelector('button'); if (b) b.onclick = () => { net = null; sondeT = 0; maj(true); };
   }
   /** The video put in (or taken out: hidden, folded, another tab), as the source and the Internet allow. */
   function video(voulu) {
-    const z = q('.iss-v'), s = source();
-    q('.iss-yt').href = s.page;
+    const z = q('.iss-v'), s = source(), n = autoN % autos().length;
+    q('.iss-yt').href = s.page; q('.iss-autre').hidden = !!etat.source;
+    q('.iss-sa').textContent = etat.source ? 'Source : la tienne (' + etat.source + ').' : 'Source : NASA (automatique) — ' +
+      (s.id && auto && auto.id === s.id ? 'le direct du jour' + (auto.titre ? ' (' + auto.titre + ')' : '') : s.channel ? 'le direct de la chaîne NASA' : 'le dernier identifiant connu') + '.';
     if (!voulu) { if (charge) { z.querySelectorAll('iframe, video').forEach(e => e.remove()); charge = ''; } return; }
     sonde();
     if (net === false) {
@@ -260,6 +282,9 @@ const IssDirect = (function () {
       return;
     }
     if (net === 'attente' && !charge) { hors('Connexion à la vidéo…', false); return; }
+    // The automatic source: today's live asked once the window shows, again each hour.
+    if (!etat.source && (auto === null || (auto !== 'attente' && Date.now() - autoT > 3600000))) demandeAuto();
+    if (!etat.source && auto === 'attente') { if (!charge) hors('Recherche du direct NASA du jour…', false); return; }
     if (charge === s.url) return;
     z.querySelectorAll('iframe, video').forEach(e => e.remove()); hors('', false);
     let e;

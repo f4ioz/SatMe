@@ -1,11 +1,11 @@
 // The ISS window's pure part (IssDirectJs.PUR), run under node (IssDirectJsTest).
 // By hand: node iss-direct-test.js iss.js (iss.js: IssDirectJs.PUR + module.exports).
 const assert = require('assert');
-const { issSource, issMer, issKm, ISS_NASA } = require(require('path').resolve(process.argv[2]));
+const { issSource, issMer, issKm, issAutos, ISS_CHAINE, ISS_DERNIER } = require(require('path').resolve(process.argv[2]));
 
 const EMBED = 'https://www.youtube-nocookie.com/embed/awQzjn72bI0?autoplay=1&mute=1&playsinline=1&rel=0';
 // NASA's stream, however it is pasted: muted, autoplaying, inline, from the no-cookie player.
-[ISS_NASA, ' awQzjn72bI0 ', 'https://www.youtube.com/watch?v=awQzjn72bI0', 'www.youtube.com/watch?v=awQzjn72bI0&t=42s', 'https://m.youtube.com/watch?feature=share&v=awQzjn72bI0',
+['awQzjn72bI0', ' awQzjn72bI0 ', 'https://www.youtube.com/watch?v=awQzjn72bI0', 'www.youtube.com/watch?v=awQzjn72bI0&t=42s', 'https://m.youtube.com/watch?feature=share&v=awQzjn72bI0',
   'https://youtu.be/awQzjn72bI0?si=abc', 'https://www.youtube.com/live/awQzjn72bI0?feature=shared', 'https://www.youtube.com/embed/awQzjn72bI0',
   'https://www.youtube-nocookie.com/embed/awQzjn72bI0?autoplay=1', 'http://youtube.com/shorts/awQzjn72bI0'].forEach(s => {
   const r = issSource(s);
@@ -30,6 +30,16 @@ assert.strictEqual(issSource('https://example.org/hls/index.m3u8').hls, true);
   'https://www.youtube.com/watch?v=<script>', 'https://evil.example/embed/awQzjn72bI0', 'ftp://example.org/a.mp4', 'https://www.youtube.com/channel/UCbad/live'].forEach(s =>
   assert.strictEqual(issSource(s), null, String(s)));
 
+// The automatic NASA source: today's live when found, then the channel's live, then the last ID known; each one understood.
+{
+  const ch = 'https://www.youtube.com/embed/live_stream?channel=' + ISS_CHAINE;
+  assert.deepStrictEqual(issAutos('abcDEF_12-x'), ['abcDEF_12-x', ch, ISS_DERNIER]);
+  assert.deepStrictEqual(issAutos(null), [ch, ISS_DERNIER]);
+  assert.deepStrictEqual(issAutos(ISS_DERNIER), [ISS_DERNIER, ch]);
+  assert.deepStrictEqual(issAutos('<x>'), [ch, ISS_DERNIER]);
+  issAutos('abcDEF_12-x').forEach(s => assert(issSource(s), s));
+  assert.strictEqual(issSource(ch).channel, ISS_CHAINE);
+}
 // The seas under the ISS's band.
 const mers = [[45, -30, 'l’océan Atlantique'], [-20, -20, 'l’océan Atlantique'], [-20, 80, 'l’océan Indien'], [0, -140, 'l’océan Pacifique'], [30, 160, 'l’océan Pacifique'],
   [-40, -100, 'l’océan Pacifique'], [35, 18, 'la Méditerranée'], [43, 34, 'la mer Noire'], [20, 38, 'la mer Rouge'], [25, -90, 'le golfe du Mexique'],
