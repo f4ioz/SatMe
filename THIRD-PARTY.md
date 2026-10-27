@@ -58,6 +58,7 @@ position; it is also the tradition of amateur radio software.
 | `com.google.android.play:app-update-ktx` | Google proprietary | Update detection |
 | JUnit, Robolectric (tests only) | EPL-1.0, Apache-2.0 | Test harness |
 | `ft8_lib` by Kārlis Goba (error-correcting code tables, copied) | MIT | FT8 and FT4 decoding |
+| Twemoji Country Flags font (`drapeaux.woff2`, from country-flag-emoji-polyfill 0.1.10; flag art by Twemoji, Twitter, Inc. and contributors; `drapeaux-LICENCE.txt` beside it) and its flags drawn as images (`pc/src/main/resources/…/pc/drapeaux/drapeaux.png`, made by `tools/drapeaux/genere-atlas.mjs`, `LICENCE.txt` beside it) | CC BY 4.0 | The countries' flags in the pages; the same flags in SatMe-PC's videos and pictures (journal: FT4/FT8 panel, globe capitals) |
 
 **On LAME and the LGPL.** The native library is bundled as a separate `.so`,
 not merged into the rest of the app. That is what lets a user replace it with

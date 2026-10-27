@@ -1,3 +1,9 @@
 drapeaux.woff2 is the "Twemoji Country Flags" font of country-flag-emoji-polyfill 0.1.10 (TalkJS).
 The flag art comes from Twemoji (https://github.com/twitter/twemoji), Copyright Twitter, Inc. and
 other contributors, used and redistributed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+pc/src/main/resources/fr/f4ioz/satcombo/pc/drapeaux/drapeaux.png (with its index drapeaux.json) is
+derived from this font: each of its flags drawn once by a browser, 48 px high, reduced to 256 colours,
+packed in one image (tools/drapeaux/genere-atlas.mjs), for SatMe-PC's videos and pictures. The same
+flag art, by Twemoji (Copyright Twitter, Inc. and other contributors), under the same CC BY 4.0 licence:
+https://creativecommons.org/licenses/by/4.0/ ; changes: rasterised, recoloured to a 256-colour palette.

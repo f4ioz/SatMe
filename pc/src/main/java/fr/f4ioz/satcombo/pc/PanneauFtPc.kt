@@ -25,8 +25,9 @@ import java.util.TimeZone
  * view), its font following its width ([JournalFt.mise], the page's numbers),
  * as visible as asked (the whole panel at [JournalFt.Affichage.opacite]).
  * Each row: the slot's time (UTC), the report, the message, the country's
- * code (the page shows its flag); a CQ green, my callsign red, a station of
- * the pass's contacts in the contacts' pink.
+ * flag ([DrapeauxPc], the page's; its code when there is none); a CQ
+ * green, my callsign red, a station of the pass's contacts in the
+ * contacts' pink.
  */
 object PanneauFtPc {
 
@@ -77,7 +78,11 @@ object PanneauFtPc {
             val base = y + (m.ligne + fm.ascent - fm.descent) / 2
             val droite = pl.x + pl.l - m.marge
             var finTexte = droite
-            if (code.isNotEmpty()) {
+            if (DrapeauxPc.connu(code)) {
+                // The page's flag, right-aligned, half an em after the message.
+                val fw = DrapeauxPc.largeur(code, DrapeauxPc.em.h * m.police)
+                DrapeauxPc.dessineDansTexte(g, code, droite - fw, base, m.police); finTexte = droite - fw - m.police * 0.5f
+            } else if (code.isNotEmpty()) {
                 val cw = fm.stringWidth(code)
                 g.color = GRIS; g.drawString(code, droite - cw, base); finTexte = droite - cw - m.police * 0.6f
             }
