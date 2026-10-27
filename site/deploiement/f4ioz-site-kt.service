@@ -1,0 +1,34 @@
+# F4IOZ site (Kotlin, module « site » de SatMe) — installé par installe-site.sh.
+# Écoute 127.0.0.1:8001 par défaut (aperçu à côté de l'ancien site) ; voir /etc/f4ioz-site-kt/site.conf.
+[Unit]
+Description=Site F4IOZ (Kotlin) — f4ioz.fr
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=f4ioz
+Group=f4ioz
+Environment=F4IOZ_SITE_CONF=/etc/f4ioz-site-kt/site.conf
+ExecStart=/opt/f4ioz-site-kt/f4ioz-site/bin/f4ioz-site --config /etc/f4ioz-site-kt/site.conf
+Restart=on-failure
+RestartSec=5
+# Durcissement : le site ne lit que son programme et sa configuration, n'écrit que ses données.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/var/lib/f4ioz-site-kt
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

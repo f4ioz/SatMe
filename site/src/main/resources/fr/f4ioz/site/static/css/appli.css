@@ -1,0 +1,60 @@
+/* F4IOZ — SatMe-PC's tabs on the site (Orbites, Sked): the few general
+   classes of SatMe-PC's page their markup uses (.carte, .t, .petit, .ligne,
+   buttons and fields…), on SatMe-PC's own tokens (PagePc.STYLE_JETONS, in
+   satme-onglets.css). The Orbites tab stays dark, as in SatMe-PC; the Sked
+   tab follows the site's theme. */
+
+.satme-onglet { font-size: 13px; line-height: 1.4; color: var(--texte); font-family: Drapeaux, var(--font-sans); }
+.satme-onglet .vue { display: block; }
+.satme-onglet .carte { background: var(--s2); border: 1px solid var(--ligne); border-radius: var(--r3); padding: 10px 12px; margin-bottom: 10px; box-shadow: var(--ombre); }
+.satme-onglet .t { color: var(--texte-2); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: var(--sp2); }
+.satme-onglet .petit { font-size: var(--fs-s); color: var(--texte-2); }
+.satme-onglet .aide { margin-top: 6px; color: var(--texte-3); line-height: 1.45; }
+.satme-onglet .etat { margin-top: 6px; font-size: 13px; min-height: 18px; color: var(--texte-2); }
+.satme-onglet .ligne { display: flex; gap: 6px 8px; margin-top: var(--sp2); flex-wrap: wrap; align-items: center; }
+.satme-onglet .ligne > select, .satme-onglet .ligne > input { flex: 1; min-width: 80px; }
+.satme-onglet .grille2 { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.6fr); gap: 12px; padding: 12px 16px; }
+@media (max-width: 900px) { .satme-onglet .grille2 { grid-template-columns: minmax(0, 1fr); padding: 10px; } }
+.satme-onglet input, .satme-onglet select, .satme-onglet textarea { font-size: var(--fs-m); font-family: inherit; border-radius: var(--r1); border: 1px solid var(--ligne);
+  background: var(--creux); color: var(--texte); padding: 5px 8px; min-height: 0; box-shadow: none; }
+.satme-onglet input:focus, .satme-onglet select:focus { outline: none; border-color: var(--rx); box-shadow: 0 0 0 2px rgba(63,224,200,.22); }
+.satme-onglet input[type=checkbox], .satme-onglet input[type=radio] { accent-color: var(--rx); padding: 0; vertical-align: -2px; }
+.satme-onglet input[type=range] { accent-color: var(--rx); padding: 0; border: none; background: transparent; }
+.satme-onglet label { display: inline; gap: 0; color: inherit; font-weight: inherit; font-size: inherit; }
+.satme-onglet :where(button) { font-size: var(--fs-m); font-family: inherit; border-radius: var(--r1); border: 1px solid var(--ligne); color: var(--texte);
+  padding: 5px 9px; background: var(--s3); cursor: pointer; font-weight: 600; transition: border-color var(--anim), background-color var(--anim); }
+.satme-onglet :where(button:hover:not(:disabled)) { border-color: var(--ligne-forte); background: #21303C; }
+.satme-onglet button:disabled { opacity: .45; cursor: default; }
+.satme-onglet .primaire { background: var(--rx); color: #06131A; border: 1px solid var(--rx); }
+.satme-onglet .discret { background: transparent; border: none; }
+.satme-onglet .bascule-c { display: flex; gap: 4px; }
+.satme-onglet .bascule-c button { padding: 4px 10px; font-size: 12px; }
+.satme-onglet .bascule-c button.actif { background: var(--cyan); color: #06131A; border-color: var(--cyan); }
+.satme-onglet table { width: 100%; border-collapse: collapse; font-size: var(--fs-m); }
+.satme-onglet th { text-align: left; color: var(--texte-2); font-weight: 600; font-size: var(--fs-xs); letter-spacing: .3px; padding: 4px; border-bottom: 1px solid var(--ligne-forte); background: none; text-transform: none; }
+.satme-onglet td { padding: 4px; border-bottom: 1px solid var(--ligne); }
+.satme-onglet tbody tr:hover > td { background: rgba(255,255,255,.018); }
+.satme-onglet tr.choisi td:first-child { box-shadow: inset 3px 0 0 var(--cyan); }
+.satme-onglet a { color: var(--rx); }
+
+/* Orbites: SatMe-PC's dark stage, the height of the window under the site's bar. */
+.onglet-orbites { background: var(--s0); color-scheme: dark; }
+.onglet-orbites #v-orbites { position: relative; height: calc(100vh - 34px); min-height: 560px; }
+@media (max-width: 719px) { .onglet-orbites #v-orbites { height: auto; } }
+/* Nothing of SatMe-PC's station here: no « Suivre ». */
+.onglet-orbites #ob-suivre { display: none; }
+/* The dashboard over the whole window: above the site's rail. */
+.onglet-orbites #v-orbites.ob-tableau { z-index: 1200; }
+
+/* Sked: the site's theme. */
+:root[data-theme="light"] .onglet-sked {
+  --s0: #F3F6F9; --s1: #E9EEF3; --s2: #FFFFFF; --s3: #EEF3F7; --creux: #F6F9FB; --ligne: #D5DEE6; --ligne-forte: #A9B8C6;
+  --texte: #0E1720; --texte-2: #33475A; --texte-3: #4D6072; --rx: #0A7C6D; --cyan: #0A7C6D; --vert: #137A3A; --ok: #137A3A;
+  --ombre: 0 1px 2px rgba(14,23,32,.06), 0 4px 14px rgba(14,23,32,.06);
+}
+:root[data-theme="light"] .onglet-sked :where(button:hover:not(:disabled)) { background: #E3EAF0; }
+:root[data-theme="light"] .onglet-sked .primaire, :root[data-theme="light"] .onglet-sked .bascule-c button.actif { color: #fff; }
+.onglet-sked #k-grille { padding-top: 4px; }
+/* The video is SatMe-PC's: not on the site. */
+.onglet-sked #k-video, .onglet-sked #k-video-format, .onglet-sked #k-anime-l, .onglet-sked #k-video-etat { display: none !important; }
+.onglet-sked .k-ciels svg text { fill: var(--texte-2); }
