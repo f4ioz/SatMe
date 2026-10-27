@@ -137,9 +137,27 @@ class Catalogue(
             telecharge("https://db.satnogs.org/api/transmitters/?satellite__norad_cat_id=$catnum&format=json")
         }.getOrNull()?.also { runCatching { f.writeText(it) } } ?: runCatching { f.readText() }.getOrNull()
         val l = texte?.let { lisEmetteurs(it) }.orEmpty()
-        if (texte != null) emetteurs[catnum] = l
+        if (texte != null) { if (emetteurs.put(catnum, l) != l) connus = null }
         return l
     }
+
+    /**
+     * Every satellite's transmitters already known (asked this run, or kept on
+     * disk), nothing downloaded: what the SDR scale may mark. Read again at
+     * most once a minute.
+     */
+    fun emetteursConnus(maintenant: Long = System.currentTimeMillis()): Map<Int, List<Transmitter>> {
+        connus?.let { (t, m) -> if (maintenant - t in 0 until 60_000L) return m }
+        val m = HashMap<Int, List<Transmitter>>()
+        dossierEmetteurs.listFiles { f -> f.name.endsWith(".json") }?.forEach { f ->
+            val n = f.name.removeSuffix(".json").toIntOrNull() ?: return@forEach
+            runCatching { lisEmetteurs(f.readText()) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { m[n] = it }
+        }
+        m.putAll(emetteurs)
+        connus = maintenant to m
+        return m
+    }
+    @Volatile private var connus: Pair<Long, Map<Int, List<Transmitter>>>? = null
 
     private fun telecharge(url: String): String {
         require(!interdit(url)) { "source interdite : $url" }

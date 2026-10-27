@@ -170,6 +170,44 @@ object ModeDemo {
         if (sdr.recepteur != SdrPc.FICHIER) sdr.recepteur = SdrPc.GENERATEUR
         runCatching { adsb.essai() }
         runCatching { ais.essai() }
+        // The generator's signals put on the satellites up in its view, where their Doppler puts them.
+        kotlin.concurrent.thread(isDaemon = true, name = "satme-demo-sdr") {
+            while (actif) {
+                runCatching {
+                    val g = sdr.generateur
+                    val c = sdr.etat.value.cielHz
+                    if (g != null && c > 0) {
+                        val n = surSatellites(g.reglages, sdr.echelle(), c)
+                        if (n != g.reglages) g.reglages = n
+                    }
+                }
+                Thread.sleep(1_000L)
+            }
+        }
+    }
+
+    /**
+     * The test generator's signals moved onto the satellites up within its
+     * view ([centre]: its centre, sky Hz), so that the demonstration's
+     * waterfall shows them where the scale marks them: its FM tone on an FM
+     * downlink, its SSTV on an SSTV one, its CW on a beacon, its « voice »
+     * in a linear transponder. Those with no satellite up stay where they are.
+     */
+    fun surSatellites(r: fr.f4ioz.satcombo.sdr.GenerateurIq.Reglages, marques: List<fr.f4ioz.satcombo.domain.EchelleSdr.Marque>,
+                      centre: Long): fr.f4ioz.satcombo.sdr.GenerateurIq.Reglages {
+        val up = marques.filter { it.etat == fr.f4ioz.satcombo.domain.EchelleSdr.Etat.VISIBLE }
+        fun ecart(hz: Long) = (hz - centre).takeIf { it in -85_000L..85_000L }?.toInt()
+        fun place(s: fr.f4ioz.satcombo.sdr.GenerateurIq.Signal, hz: Long?): fr.f4ioz.satcombo.sdr.GenerateurIq.Signal {
+            val d = hz?.let { ecart(it) } ?: return s
+            return if (Math.abs(d - s.decalageHz) < 20) s else s.copy(decalageHz = d)
+        }
+        val simples = up.filter { !it.bande }
+        val sstv = simples.firstOrNull { it.emetteur.contains("SSTV", true) }
+        val fm = simples.firstOrNull { it !== sstv && it.mode.contains("FM", true) }
+        val cw = simples.firstOrNull { it.mode.contains("CW", true) }
+        val bande = up.firstOrNull { it.bande }
+        return r.copy(sstv = place(r.sstv, sstv?.basHz), fm = place(r.fm, fm?.basHz), cw = place(r.cw, cw?.basHz),
+            blu = place(r.blu, bande?.let { it.basHz + (it.hautHz - it.basHz) * 2 / 5 }))
     }
 
     // ---------------------------------------------------------------- the band

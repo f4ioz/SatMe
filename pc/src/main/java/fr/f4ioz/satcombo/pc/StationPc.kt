@@ -838,7 +838,7 @@ class StationPc(
      * (the list it may add to, and the one chosen) — the SSTV auto-pilot's
      * frequency of its own; null: the one chosen last for it.
      */
-    fun suis(sat: TleEntry, emetteurVoulu: ((List<Transmitter>) -> Pair<List<Transmitter>, Int>)? = null) {
+    fun suis(sat: TleEntry, reposVoulu: Long? = null, emetteurVoulu: ((List<Transmitter>) -> Pair<List<Transmitter>, Int>)? = null) {
         stockage.edit().putInt(CLE_SATELLITE, sat.catalogNumber).apply()
         stationCat.nouveauSatellite()
         // The SSTV tuning's share belonged to the old satellite.
@@ -855,8 +855,64 @@ class StationPc(
             // The transmitter chosen last time for this satellite, as on the phone.
             val i = c.txDescription?.let { d -> l.indexOfFirst { it.description == d } }?.takeIf { it >= 0 } ?: 0
             val (liste, choisi) = emetteurVoulu?.let { f -> runCatching { f(l) }.getOrNull() } ?: (l to i)
-            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = liste, emetteur = choisi.coerceIn(0, (liste.size - 1).coerceAtLeast(0))) else this }
+            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = liste, emetteur = choisi.coerceIn(0, (liste.size - 1).coerceAtLeast(0)), repos = reposVoulu) else this }
         }
+    }
+
+    /**
+     * [catnum]'s transmitter [description] followed (from the SDR scale), with
+     * [repos] its rest frequency in a transponder (null: its middle). False
+     * when the satellite or the transmitter is not known.
+     */
+    fun suisEmetteur(catnum: Int, description: String, repos: Long? = null): Boolean {
+        val e = _etat.value
+        if (e.suivi?.catalogNumber == catnum && e.emetteurs.isNotEmpty()) {
+            val i = e.emetteurs.indexOfFirst { it.description == description }.takeIf { it >= 0 } ?: return false
+            if (i != e.emetteur) choisitEmetteur(i)
+            change { copy(repos = repos) }
+            return true
+        }
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return false
+        satConfig.saveTransmitter(catnum, description)
+        suis(sat, reposVoulu = repos)
+        return true
+    }
+
+    /**
+     * [catnum]'s « correction manuelle » (RX calibration, Hz, kept for it as
+     * the satellite panel keeps it): moved by [dHz] or set to [hz]. Returns it.
+     */
+    fun correctionSat(catnum: Int, dHz: Long? = null, hz: Long? = null): Long {
+        val avant = satConfig.load(catnum).calibShiftHz
+        val v = (hz ?: (avant + (dHz ?: 0L))).coerceIn(-CORRECTION_MAX_HZ, CORRECTION_MAX_HZ)
+        if (v != avant) satConfig.saveShift(catnum, v)
+        if (_etat.value.suivi?.catalogNumber == catnum) change { copy(calibHz = v) }
+        return v
+    }
+
+    /**
+     * The SDR scale: every downlink already known falling in [deHz]..[aHz]
+     * (Doppler and correction applied) for the satellites of the catalogue;
+     * [suivi]: what the receiver follows (catnum, transmitter), if anything.
+     */
+    fun echelleSdr(deHz: Long, aHz: Long, suivi: Pair<Int, String>?): List<fr.f4ioz.satcombo.domain.EchelleSdr.Marque> {
+        val e = _etat.value
+        val obs = e.observateur ?: return emptyList()
+        val t = horloge()
+        val connus = runCatching { catalogue.emetteursConnus(t) }.getOrDefault(emptyMap())
+        val marge = fr.f4ioz.satcombo.domain.EchelleSdr.margeDoppler(aHz) + CORRECTION_MAX_HZ
+        val l = ArrayList<Pair<fr.f4ioz.satcombo.domain.EchelleSdr.Sat, List<Transmitter>>>()
+        for (sat in e.satellites) {
+            val tx = connus[sat.catalogNumber]?.filter { x -> x.alive && x.downlinkLowHz?.let { lo -> (x.downlinkHighHz ?: lo) >= deHz - marge && lo <= aHz + marge } == true }
+            if (tx.isNullOrEmpty()) continue
+            val p = runCatching { predicteur.positionAt(sat, obs, t) }.getOrNull() ?: continue
+            val p1 = runCatching { predicteur.positionAt(sat, obs, t + 1_000) }.getOrNull()
+            val pas = e.passages.firstOrNull { it.catalogNumber == sat.catalogNumber && it.losEpochMs > t }
+            l += fr.f4ioz.satcombo.domain.EchelleSdr.Sat(sat.catalogNumber, sat.name, p.elevationDeg, p.azimuthDeg, p.rangeRateKmS,
+                p1?.rangeRateKmS ?: p.rangeRateKmS, pas?.geoAosEpochMs, pas?.geoLosEpochMs,
+                satConfig.load(sat.catalogNumber).calibShiftHz, sat.catalogNumber in e.favoris) to tx
+        }
+        return fr.f4ioz.satcombo.domain.EchelleSdr.marques(l, deHz, aHz, t, suivi)
     }
 
     /** [catnum]'s transmitter chosen last (else its first): a contact moved onto it takes its frequencies. */
@@ -1289,6 +1345,8 @@ class StationPc(
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
         const val CLE_FAVORIS = "pc_favoris"
+        /** The scale's « correction manuelle » stays within this (Hz). */
+        const val CORRECTION_MAX_HZ = 50_000L
         const val CLE_AGENDA_SUIVI = "pc_agenda_suivi"
         /** « Émission par le réseau autorisée »: this PC's alone, never taken from a phone's backup. */
         const val CLE_TX_RESEAU = "pc_tx_poste_reseau"
