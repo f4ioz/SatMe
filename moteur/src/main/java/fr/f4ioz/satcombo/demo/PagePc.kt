@@ -884,6 +884,16 @@ ${STYLE_JETONS}
   .e-charge { background:#5A0E0E; color:#FFD7D7; border:2px solid #E5484D; border-radius:8px; padding:8px 10px; font-weight:700; margin-top:8px; }
   .e-legal { background:#4A2A06; color:#FFE2B8; border:2px solid #F08C1A; border-radius:8px; padding:8px 10px; margin-top:8px; font-size:12px; line-height:1.5; }
   .e-direct { background:rgba(229,72,77,.18); border:1px solid #E5484D; border-radius:8px; padding:8px 10px; margin-top:8px; }
+  .e-cr { display:flex; flex-wrap:wrap; gap:3px; flex:1; }
+  .e-cr button { min-width:0; padding:3px 5px; font-size:11px; line-height:1.2; border-radius:5px; border:1px solid transparent; font-variant-numeric:tabular-nums; }
+  .e-cr button.libre { background:rgba(91,214,138,.18); color:#8FE8B0; border-color:rgba(91,214,138,.45); }
+  .e-cr button.occupe { background:rgba(229,72,77,.18); color:#FFB3B5; border-color:rgba(229,72,77,.5); }
+  .e-cr button.interdit { background:repeating-linear-gradient(135deg,rgba(111,125,138,.18) 0 4px,transparent 4px 8px); color:var(--gris); border-color:rgba(111,125,138,.35); cursor:not-allowed; }
+  .e-cr button.nous { background:rgba(63,224,200,.2); color:#9FF5E6; border-color:#3FE0C8; font-weight:700; }
+  .e-cr button.inconnu { background:transparent; color:var(--gris); border-color:rgba(111,125,138,.45); }
+  .e-cr button.choisi { outline:2px solid #E8F0F7; outline-offset:1px; }
+  .e-resume { background:rgba(63,224,200,.06); border:1px solid rgba(63,224,200,.25); border-radius:8px; padding:6px 10px; margin-top:8px; line-height:1.6; }
+  .e-resume b { color:var(--texte, #E8F0F7); }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
   .discret { background:transparent; border:none; }
   .grille2 { display:grid; grid-template-columns:minmax(320px,1fr) minmax(420px,1.6fr); gap:12px; padding:12px 16px; }
@@ -3446,11 +3456,13 @@ ${rail()}
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><select id="e-sr" onchange="eRegle()" style="max-width:90px"></select>
         <span class="petit">roll-off</span><select id="e-ro" onchange="eRegle()" style="max-width:80px"></select></div>
       <div class="ligne" id="e-canal-l"><span class="petit" style="min-width:86px">Canal</span><select id="e-canal" onchange="if (this.value) { g('e-mhz').value = this.value; eRegle(); }"></select></div>
+      <div class="ligne" id="e-cr-l" style="align-items:flex-start"><span class="petit" style="min-width:86px" title="Les canaux du plan de bande à ce débit de symboles, libres (vert) ou occupés (rouge) d’après le spectre de la station sol ; hachurés : trop près de la balise ou hors du transpondeur. Un clic sur un créneau libre y règle la fréquence d’émission (rien n’est émis).">Créneaux ↓</span><div id="e-cr" class="e-cr"></div></div>
+      <div class="petit" id="e-cr-info" style="margin:-2px 0 4px 92px"></div>
       <div class="ligne" id="e-mhz-l"><span class="petit" style="min-width:86px">Montée (MHz)</span><input id="e-mhz" style="max-width:120px" onchange="eRegle()">
         <span class="petit" id="e-descente"></span></div>
       <div class="avert" id="e-bande"></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Source</span><select id="e-source" onchange="eRegle()" style="max-width:190px">
-        <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="camera">Caméra</option></select>
+        <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="horloge">Horloge en direct + indicatif (bip chaque seconde)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="camera">Caméra</option></select>
         <select id="e-hevc" onchange="eRegle()" style="max-width:90px"><option value="0">H.264</option><option value="1">H.265</option></select>
         <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
       <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"><button id="e-image-par" onclick="fdOuvre('image')" title="Choisir une image sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
@@ -3472,10 +3484,16 @@ ${rail()}
       <div class="ligne"><button id="e-apercu-go" onclick="eApercu()" title="Une image de ce qui serait émis (source et incrustation), faite par ffmpeg : rien n’est émis">Prévisualiser</button>
         <span class="petit" id="e-apercu-msg" style="flex:1"></span></div>
       <img id="e-apercu" alt="Aperçu de l’image émise" hidden style="max-width:100%;border-radius:6px;border:1px solid var(--bord);display:block;margin-bottom:6px">
+      <div class="ligne" style="align-items:flex-start"><button id="e-banc-go" onclick="eBanc()" title="Quelques secondes d’une image de test codées par ffmpeg vers nulle part, à la taille et au débit de ce débit de symboles et de ce MODCOD : H.264, H.265 et les encodeurs matériels présents. Rien n’est émis, aucune caméra n’est ouverte.">Tester l’encodeur</button>
+        <span class="petit" id="e-banc" style="flex:1;line-height:1.5"></span></div>
       <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="20" style="max-width:80px" onchange="eRegle()">
         <span class="petit">0 à 20 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
       <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
         <button onclick="eGain(-1)" title="1 dB de moins">−1</button><button onclick="eGain(1)" title="1 dB de plus">+1</button><span class="petit" id="e-gainmax"></span></div>
+      <div class="ligne" id="e-rampe-l" style="flex-wrap:wrap;gap:4px 6px"><span class="petit" style="min-width:86px" title="Pendant une émission : le gain déplacé pas à pas plutôt que d’un coup. Descendre : 3 dB par seconde jusqu’à −60 dB. Monter : 1 dB toutes les 2 s jusqu’au gain calibré pour ce débit (sinon le gain réglé), arrêté net si la boucle dit trop fort. Les plafonds (Réglages, charge, intérieur) s’appliquent à chaque pas.">Rampe</span>
+        <button id="e-rampe-bas" onclick="eRampe('bas')">▼ Descendre</button><button id="e-rampe-stop" onclick="eRampe('stop')">■ Stop</button><button id="e-rampe-haut" onclick="eRampe('haut')">▲ Monter</button>
+        <span class="petit" id="e-rampe" style="flex:1"></span></div>
+      <div class="petit" id="e-cal" style="margin:-2px 0 4px 92px"></div>
       <div class="ligne" id="e-duree-l"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-duree" type="number" min="1" max="30" style="max-width:80px" onchange="eRegle()">
         <span class="petit">puis arrêt automatique (30 min au plus)</span></div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="e-charge" onchange="eMode('e-charge')"> <b>Test sur charge</b> — toute fréquence, <span id="e-charge-gain">gain bridé à −40 dB</span></label>
@@ -3491,6 +3509,7 @@ ${rail()}
         <div class="avert" id="e-int-avert"></div>
       </div>
       <div class="petit" id="e-rx" style="margin-top:6px;line-height:1.6" hidden></div>
+      <div class="petit e-resume" id="e-resume"></div>
       <div class="petit" id="e-calc" style="margin-top:6px"></div>
       <div class="ligne e-boutons"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
         <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
@@ -9424,7 +9443,16 @@ function wbSpectre(id) {
     x.fillText(lib, Math.min(w - x.measureText(lib).width - 2, x1 + 3), 10); x.textAlign = 'center'; x.font = '10px sans-serif';
   };
   const rx = wbRx(), tx = wbTx();
-  if (tx) marque(tx, 'rgba(229,72,77,.13)', '#E5484D', 'TX');
+  if (tx) marque(tx, 'rgba(229,72,77,.13)', '#E5484D', 'TX' + (EM.indicatif ? ' · ' + EM.indicatif : ''));
+  // The transmission's channels under the trace (DATV › Émission shown): free green, busy red, forbidden grey, ours cyan.
+  if (EM && EM.creneaux && !g('d-p-tx').hidden && (id || 'wb-spectre') !== 'tq-wb-spectre') {
+    EM.creneaux.forEach(c => {
+      const dm = (EM.occupeKhz || EM.sr * 1.25) * 0.4, x0 = wbX(c.descente - dm, w), x1 = wbX(c.descente + dm, w);
+      x.fillStyle = c.etat === 'libre' ? '#5BD68A' : c.etat === 'occupe' ? '#E5484D' : c.etat === 'nous' ? '#3FE0C8' : '#4A5A68';
+      x.fillRect(x0, bas - 9, Math.max(2, x1 - x0), 3);
+      if (c.montee === (EM.emet ? EM.khzEnCours : EM.khz)) { x.strokeStyle = '#E8F0F7'; x.lineWidth = 1; x.strokeRect(x0 - 1.5, bas - 10.5, Math.max(2, x1 - x0) + 3, 6); }
+    });
+  }
   if (!wbVals) { x.fillStyle = '#6F7D8A'; x.font = '11px sans-serif'; x.fillText('en attente du spectre…', w / 2, h / 2); c._b = []; return; }
   const n = wbVals.length;
   x.beginPath(); x.moveTo(0, bas);
@@ -10143,7 +10171,98 @@ async function ticEmission() {
     (j.emet && !j.charge && !j.interieur ? '<br><span style="color:' + (b.tropFort ? 'var(--rose);font-weight:700' : 'var(--vert)') + '">' + esc(b.message || 'en attente de mesures') + '</span>' : '') +
     (j.charge ? '<br>Sur charge : pas de comparaison à la balise.' : '');
   eAdapt(j);
+  eCreneaux(j); eResume(j); eBancMontre(j); ePuissance(j);
   eMontre();
+}
+// « Créneaux »: the band plan's channels at this rate, free or busy on the ground station's spectrum; a click picks a free one.
+const E_CR = { libre: 'libre', occupe: 'occupé', interdit: 'interdit', nous: 'notre signal', inconnu: 'état inconnu' };
+function eCrCourt(c) { return (c.descente / 1000 - 10000).toFixed(2).replace('.', ','); }
+function eCrTitre(c) {
+  return mhz3(c.descente) + ' MHz ↓ · ' + mhz3(c.montee) + ' MHz ↑ · jusqu’à ' + c.srMax + ' kS/s\n' +
+    (c.etat === 'occupe' ? 'occupé : ' + c.occupant : c.etat === 'interdit' ? c.raison : c.etat === 'nous' ? 'notre signal' + (c.occupant ? ' (' + c.occupant + ')' : '') :
+     c.etat === 'inconnu' ? 'état inconnu : spectre de la station sol coupé' : 'libre d’après la station sol — un clic : y émettre');
+}
+function eCreneaux(j) {
+  const l = j.creneaux || [];
+  const ici = j.emet ? j.khzEnCours : j.khz;
+  const html = l.map((c, i) => '<button class="' + c.etat + (c.montee === ici ? ' choisi' : '') + '" title="' + escA(eCrTitre(c)) + '"' +
+    (j.emet || c.etat === 'interdit' ? ' disabled' : '') + ' onclick="eCreneau(' + i + ')">' + (c.etat === 'nous' && c.occupant ? esc(c.occupant) : eCrCourt(c)) + '</button>').join('');
+  if (g('e-cr').dataset.h !== html) { g('e-cr').dataset.h = html; g('e-cr').innerHTML = html; }
+  const n = k => l.filter(c => c.etat === k).length, sur = l.find(c => c.montee === ici);
+  txt('e-cr-info', !l.length ? 'Aucun canal du plan de bande à ' + j.sr + ' kS/s.' :
+    (!j.creneauxSpectre ? 'Spectre de la station sol coupé (le cocher plus haut) : occupation inconnue.' : n('libre') + ' libre' + (n('libre') > 1 ? 's' : '') + ' · ' + n('occupe') + ' occupé' + (n('occupe') > 1 ? 's' : '') + ' (spectre de la station sol, maintenant).') +
+    (sur ? ' Choisi : ' + eCrCourt(sur) + ' — ' + (sur.etat === 'occupe' ? '⚠ occupé (' + sur.occupant + ')' : E_CR[sur.etat]) + '.' : ' Fréquence réglée hors des créneaux.'));
+  g('e-cr-info').style.color = sur && sur.etat === 'occupe' && !j.emet ? 'var(--rose)' : '';
+}
+function eCreneau(i) {
+  const c = EM && EM.creneaux ? EM.creneaux[i] : null;
+  if (!c || EM.emet) return;
+  if (c.etat === 'interdit') { txt('e-msg', 'Refusé : ' + c.raison); return; }
+  if (c.etat === 'occupe') { txt('e-msg', 'Créneau ' + eCrCourt(c) + ' occupé (' + c.occupant + ') : en choisir un libre.'); return; }
+  g('e-mhz').value = mhz3(c.montee); txt('e-msg', 'fréquence d’émission : ' + mhz3(c.montee) + ' MHz ↑ (' + mhz3(c.descente) + ' MHz ↓) — rien n’est émis');
+  eRegle();
+}
+// « Résumé du signal »: what a start would send, and the MER a receiving station needs for it.
+function eResume(j) {
+  const r = j.resume; if (!r) return;
+  const k = x => Math.round(x / 1000);
+  const html = '<b>' + esc(r.norme) + ' · ' + esc(r.modcod) + (r.courtes ? ' (trames courtes)' : '') + ' · ' + mhz3(r.descenteKhz) + ' MHz ↓ · ' + r.sr + ' kS/s</b>' +
+    (r.merMin != null ? ' · les récepteurs doivent avoir un <b>MER ≥ ' + fr1(r.merMin) + ' dB</b>' : '') + '<br>' +
+    esc(r.codec) + ' ' + r.w + '×' + r.h + ' · ' + r.ips + ' i/s · ' + (r.audio ? 'AAC ' + k(r.audio) + ' kbit/s · ' : 'sans son · ') +
+    'vidéo ' + k(r.video) + ' sur ' + k(r.ts) + ' kbit/s de flux';
+  if (g('e-resume').dataset.h !== html) { g('e-resume').dataset.h = html; g('e-resume').innerHTML = html; }
+  g('e-resume').title = 'Seuil de MER : EN 302 307-1 (DVB-S2, trames normales) ou EN 300 421 (DVB-S), récepteur idéal — compter 1 à 2 dB de plus pour un récepteur réel. Le reste du flux : tables, multiplexage et marge.';
+}
+// « Tester l'encodeur »: kept per symbol rate and MODCOD.
+function eBancMontre(j) {
+  const b = j.banc; if (!b) return;
+  g('e-banc-go').disabled = j.emet || !!b.enCours;
+  const r = b.resultat;
+  let h;
+  if (b.enCours) h = 'Test en cours (' + esc(b.enCours) + ')… quelques secondes par encodeur.';
+  else if (!r) h = '<span style="color:var(--ambre)">●</span> Encodeur pas encore testé pour ' + esc(b.cle) + '.' + (b.message ? ' ' + esc(b.message) : '');
+  else {
+    const x = e => e.vitesse != null ? '×' + e.vitesse.toFixed(1).replace('.', ',') : (e.erreur ? 'échec' : '—');
+    h = '<span style="color:' + (r.tient ? 'var(--vert)' : 'var(--rose)') + '">●</span> ' + esc(r.texte) + '<br>' +
+      r.essais.map(e => esc(e.codec) + ' ' + x(e)).join(' · ') + ' — ' + esc(b.cle) + ', ' + new Date(r.t).toLocaleString('fr-FR') +
+      (r.hevc != null && r.hevc !== j.hevc && !j.emet ? ' <button onclick="eBancApplique(' + (r.hevc ? 1 : 0) + ')">Passer en ' + (r.hevc ? 'H.265' : 'H.264') + '</button>' : '') +
+      (b.message ? '<br>' + esc(b.message) : '');
+  }
+  if (g('e-banc').dataset.h !== h) { g('e-banc').dataset.h = h; g('e-banc').innerHTML = h; }
+}
+async function eBanc() {
+  await eRegle();
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/banc', { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('e-banc', j.erreur || 'refusé');
+  setTimeout(ticEmission, 300);
+}
+async function eBancApplique(h) { g('e-hevc').value = String(h); await eRegle(); }
+// The gain stepped while transmitting, and the gain found right per symbol rate.
+function ePuissance(j) {
+  const hk = j.emetteur === 'hackrf', ra = j.rampe || {};
+  g('e-rampe-l').hidden = hk; g('e-cal').hidden = hk;
+  ['e-rampe-bas', 'e-rampe-haut'].forEach(i => g(i).disabled = !j.emet);
+  g('e-rampe-stop').disabled = !ra.sens;
+  txt('e-rampe', ra.sens ? (ra.sens === 'haut' ? '▲ ' : '▼ ') + ra.message + (j.gainApplique != null ? ' · maintenant ' + j.gainApplique + ' dB' : '') :
+    (ra.message || (j.emet ? '' : 'pendant une émission seulement')));
+  const c = j.calibration;
+  const h = c ? 'Puissance calibrée pour ' + j.sr + ' kS/s : <b>' + String(c.gain).replace('.', ',') + ' dB</b>' + (c.ecart != null ? ' (' + fr1(-c.ecart) + ' dB sous la balise)' : '') +
+      ', le ' + new Date(c.t).toLocaleString('fr-FR') + ' <button onclick="eCalibration(0)">' + (j.emet ? 'Y monter' : 'Reprendre') + '</button> <button onclick="eCalibration(1)" title="Oublier ce gain pour ce débit">Oublier</button>'
+    : '<span style="color:var(--ambre)">Puissance non calibrée pour ' + j.sr + ' kS/s</span> : notée d’elle-même quand la boucle MiniTiouner voit notre signal 1 à 6 dB sous la balise pendant 10 s.';
+  if (g('e-cal').dataset.h !== h) { g('e-cal').dataset.h = h; g('e-cal').innerHTML = h; }
+}
+async function eRampe(sens) {
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/rampe?sens=' + sens, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('e-msg', j.erreur || 'refusé');
+  setTimeout(ticEmission, 200);
+}
+async function eCalibration(oublie) {
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/calibration?oublie=' + oublie, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('e-msg', j.erreur || 'refusé');
+  ePremier = true; setTimeout(ticEmission, 200);
 }
 // The MODCOD fitted to our reception: what is sent, what the MER allows, the next decision, the changes made.
 function eAdapt(j) {
@@ -10235,7 +10354,7 @@ async function eEmettre() {
   const q = inter ? 'ESSAI EN INTÉRIEUR avec le ' + EM.emetteurNom + ' à ' + v('e-int-mhz') + ' MHz, ' + v('e-sr') + ' kS/s, ' + gainTxt + ', ' + v('e-int-duree') + ' min au plus.\n\n' +
       'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
     : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : EM.emetteur === 'bladerf' ? 'bladeRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
-    : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-norme') + ' ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
+    : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-norme') + ' ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\n' + eCrConfirme() + 'Canal libre vérifié ? Indicatif ' + EM.indicatif + '.';
   if (!confirm(q + (EM.parNoeud ? '\n\nPar l’émetteur du SatMe-Node.' : ''))) return;
   if (!(await txPeutDemarrer())) return;
   txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : EM.emetteur === 'bladerf' ? 'bladeRF-cli…' : 'l’ADALM-PLUTO…'));
@@ -10244,6 +10363,12 @@ async function eEmettre() {
   txt('e-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : (j ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
   if (j && j.ok !== false) eVie(true);
   setTimeout(ticEmission, 300);
+}
+// What the ground station's spectrum says of the channel chosen, for the confirmation.
+function eCrConfirme() {
+  const c = (EM.creneaux || []).find(x => x.montee === EM.khz);
+  if (!c || !EM.creneauxSpectre) return 'Occupation du canal inconnue (spectre de la station sol coupé). ';
+  return c.etat === 'occupe' ? '⚠ CANAL OCCUPÉ d’après la station sol : ' + c.occupant + ' !\n\n' : c.etat === 'libre' ? 'Canal libre d’après la station sol. ' : '';
 }
 async function eArrete() {
   try { await fetch('api/datv/emission/arrete', { method: 'POST' }); } catch (x) {}

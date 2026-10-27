@@ -10,6 +10,9 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.AdaptationModcod
 import fr.f4ioz.satcombo.datv.BoucleNiveau
+import fr.f4ioz.satcombo.datv.CalibrationGain
+import fr.f4ioz.satcombo.datv.QualiteDatv
+import fr.f4ioz.satcombo.datv.RampeGain
 import fr.f4ioz.satcombo.datv.CarteStation
 import fr.f4ioz.satcombo.datv.InserteurCarte
 import fr.f4ioz.satcombo.datv.LigneChat
@@ -129,7 +132,12 @@ class EmissionDatvPc(
         val son: Boolean,
         /** Text and the mark over the picture (see [IncrustationDatvPc]); null: none, the command unchanged. */
         val incrustation: IncrustationDatvPc.IncrustationTs? = null,
+        /** The live clock card ([HorlogeDatvPc]) written into ffmpeg's input; null: [image] looped instead. */
+        val horloge: IncrustationDatvPc.IncrustationTs? = null,
     )
+
+    /** How a transport stream of [tsBps] is shared: the picture's size and rate, the video's and the sound's bit rates. */
+    data class Budget(val tsBps: Long, val videoBps: Long, val audioBps: Long, val largeur: Int, val hauteur: Int, val ips: Int)
 
     // ------------------------------------------------------------ settings (parameters only)
 
@@ -173,7 +181,11 @@ class EmissionDatvPc(
     var dureeS: Int
         get() = ReglesEmission.dureeS(stockage.getInt("datv_tx_duree", ReglesEmission.DUREE_DEFAUT_S))
         set(v) { stockage.edit().putInt("datv_tx_duree", ReglesEmission.dureeS(v)).apply() }
-    /** "mire", "animee" (the test card with a moving picture and a beep), "image", "video" (a file, looped) or "camera". */
+    /**
+     * "mire", "animee" (the test card with a moving picture and a beep),
+     * "horloge" (the live clock card, a beep each second), "image", "video"
+     * (a file, looped) or "camera".
+     */
     var source: String
         get() = stockage.getString("datv_tx_source", "mire").takeIf { it in SOURCES } ?: "mire"
         set(v) { if (v in SOURCES) stockage.edit().putString("datv_tx_source", v).apply() }
@@ -437,6 +449,12 @@ class EmissionDatvPc(
     @Volatile private var derniereVie = 0L
     @Volatile private var generation = 0
     val boucle = BoucleNiveau()
+    /** The gain that was right on QO-100, per symbol rate (kept; offered, never applied by itself). */
+    val calibration = CalibrationGain().also { c -> runCatching { c.reprends(stockage.getString(CLE_CALIBRATION, null)) } }
+    /** The gain moved step by step while transmitting (« Monter » / « Descendre »). */
+    val rampe = RampeGain()
+    /** « Tester l'encodeur »: ffmpeg alone, nothing transmitted. */
+    val banc = BancEncodeurDatvPc(stockage)
     /** The beacon's MER, the last time the MiniTiouner held it (and when). */
     @Volatile var merBalise: Double? = null; private set
     @Volatile var merBaliseMs = 0L; private set
@@ -484,6 +502,7 @@ class EmissionDatvPc(
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
             "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
             "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
+            "horloge" -> horlogePng(debitTs)
             else -> mire()
         }
         val gen = ++generation
@@ -493,7 +512,8 @@ class EmissionDatvPc(
         } else null
         val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
         val inc = runCatching { incrustation?.pour(debitTs, source, d.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull()
-        val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son, inc)
+        val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son, inc,
+            if (source == "horloge") horlogeTs(debitTs, img!!) else null)
         val p = runCatching { fabrique.demarre(pts) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
@@ -580,7 +600,9 @@ class EmissionDatvPc(
             val avant = parametresEnCours ?: return "paramètres inconnus"
             // The overlay drawn again: the picture's size follows the new stream rate.
             val inc = avant.incrustation?.let { runCatching { incrustation?.pour(debitTs, avant.source, avant.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull() }
-            pts = avant.copy(debitTs = debitTs, incrustation = inc)
+            // The clock card too: drawn at the new size.
+            val hor = avant.horloge?.let { horlogeTs(debitTs, horlogePng(debitTs)) }
+            pts = avant.copy(debitTs = debitTs, incrustation = inc, horloge = hor)
             f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), inserteur)
             p = runCatching { fabrique.demarre(pts) }.getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
             commutation = true
@@ -625,6 +647,7 @@ class EmissionDatvPc(
         tx = null
         inserteur = null
         adaptation?.arrete()
+        rampe.arrete("émission arrêtée")
         val pe = px?.etatCommun()
         if (etat.emet) etat = etat.copy(emet = false, raison = pe?.raison ?: raison, erreur = pe?.erreur.orEmpty())
         vue.emission(false)
@@ -651,6 +674,9 @@ class EmissionDatvPc(
             synchronized(this) { arrete(pe.raison) }
             etat = etat.copy(raison = pe.raison, erreur = pe.erreur)
         }
+        // The ramp: one step at a time, through the same clamps as a gain typed in.
+        if (etat.emet && px != null && rampe.active) rampe.tic(px.etatCommun().gainDb, boucle.etat.tropFort, horloge())?.let { regleGain(it) }
+        else if (!etat.emet && rampe.active) rampe.arrete("émission arrêtée")
         val r0 = reception()
         adapte(r0)
         val r = r0 ?: return
@@ -662,8 +688,66 @@ class EmissionDatvPc(
         if (!etat.emet || etat.chargeFictive || etat.interieur || !(px is PlutoEmission || px is BladerfEmission || px is EmetteurNoeud)) return
         val nous = r.verrouille && (r.service.equals(indicatif().trim(), true) ||
             kotlin.math.abs(r.cielKhz - (etat.frequenceKhz + PlanQo100.DECALAGE_KHZ)) < srKs / 2)
-        val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etatCommun().gainDb, t) ?: return
+        val gainAvant = px.etatCommun().gainDb
+        val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, gainAvant, t)
+        // The gain the loop found right, remembered for this symbol rate (not while a ramp moves it).
+        if (!rampe.active && calibration.mesure(srEnCours, gainAvant, boucle.etat.ecartDb, boucle.etat.tropFort, t))
+            stockage.edit().putString(CLE_CALIBRATION, calibration.texte()).apply()
+        if (g == null) return
+        rampe.arrete("rampe arrêtée : la boucle baisse le gain")
         px.regleGain(g)
+    }
+
+    /**
+     * A ramp of the gain while transmitting: [sens] « haut » towards [cibleDb]
+     * (else the calibrated gain for this rate, else the gain set), « bas »
+     * down to [GAIN_RAMPE_BAS_DB], « stop ». Null once done, else why not.
+     */
+    fun lanceRampe(sens: String, cibleDb: Double? = null): String? {
+        if (sens == "stop") { rampe.arrete(); return null }
+        val px = tx
+        if (!etat.emet || px == null) return "aucune émission en cours"
+        if (px is HackrfEmission) return "le HackRF prend son gain au démarrage seulement"
+        val s = RampeGain.Sens.entries.firstOrNull { it.cle == sens } ?: return "sens inconnu : $sens"
+        val plafond = ReglesEmission.gain(0.0, gainMaxDb, etat.chargeFictive, etat.interieur)
+        if (s == RampeGain.Sens.HAUT) {
+            val c = cibleDb ?: calibration.de(srEnCours)?.gainDb ?: if (emetteur == Emetteur.BLADERF) gainBladerf else gainDb
+            if (c.isNaN()) return "gain visé invalide"
+            rampe.demarre(s, c, plafond)
+        } else rampe.demarre(s, GAIN_RAMPE_BAS_DB, plafond)
+        return null
+    }
+
+    /** « Reprendre le gain calibré »: the setting only when stopped; while transmitting, a ramp up to it. */
+    fun appliqueCalibration(): String? {
+        val c = calibration.de(srKs) ?: return "pas de gain calibré pour $srKs kS/s"
+        if (etat.emet) return if (srEnCours == srKs) lanceRampe("haut", c.gainDb) else "émission à un autre débit"
+        if (emetteur == Emetteur.BLADERF) gainBladerf = c.gainDb else gainDb = c.gainDb
+        return null
+    }
+
+    fun oublieCalibration() { calibration.oublie(srKs); stockage.edit().putString(CLE_CALIBRATION, calibration.texte()).apply() }
+
+    /** The MODCOD as named in the summary and the encoder test (DVB-S: its code rate). */
+    fun libelleModcod(): String = if (norme == Norme.DVBS) tauxDvbsTexte else modcodTexte
+
+    /** The encoder test's key: what changes the picture and its rate. */
+    fun cleBanc(): String = budget(debitTs(), son, source).let { b ->
+        "$srKs kS/s · " + (if (norme == Norme.DVBS) "DVB-S " else "") + libelleModcod() + (if (courtes && norme != Norme.DVBS) " courtes" else "") + " · " + b.ips + " i/s"
+    }
+
+    fun lanceBanc(attend: Boolean = false): String? = banc.lance(cleBanc(), budget(debitTs(), son, source), etat.emet, attend)
+
+    /** The minimum MER a receiver needs for the MODCOD set (ideal threshold, dB), or null. */
+    fun merMinimum(): Double? = QualiteDatv.seuilDb(libelleModcod(), if (norme == Norme.DVBS) 3 else 4, courtes && norme != Norme.DVBS)
+
+    /** « Résumé du signal »: what a start would send. */
+    fun resume(): JSONObject {
+        val b = budget(debitTs(), son, source)
+        return JSONObject().put("norme", norme.libelle).put("modcod", libelleModcod()).put("sr", srKs).put("khz", frequenceKhz)
+            .put("descenteKhz", frequenceKhz + PlanQo100.DECALAGE_KHZ).put("merMin", merMinimum() ?: JSONObject.NULL)
+            .put("codec", if (hevc) "H.265" else "H.264").put("w", b.largeur).put("h", b.hauteur).put("ips", b.ips)
+            .put("video", b.videoBps).put("audio", b.audioBps).put("ts", b.tsBps).put("courtes", courtes && norme != Norme.DVBS)
     }
 
     /** Our own signal in what the receiver holds: locked, and our callsign as the service or on a recent station card. */
@@ -704,6 +788,21 @@ class EmissionDatvPc(
         return f
     }
 
+    /** The clock card now, at the picture's size for [debitTs], as a PNG (the preview's, the first frame). */
+    private fun horlogePng(debitTs: Long): File {
+        dossierImages.mkdirs()
+        val (w, h) = taille(debitTs)
+        val f = File(dossierImages, "horloge-datv.png")
+        javax.imageio.ImageIO.write(HorlogeDatvPc.rendu(w, h, indicatif(), locator(), horloge()), "png", f)
+        return f
+    }
+
+    /** The clock card drawn each second into ffmpeg's input. */
+    private fun horlogeTs(debitTs: Long, png: File): IncrustationDatvPc.IncrustationTs {
+        val (w, h) = taille(debitTs)
+        return IncrustationDatvPc.IncrustationTs(png, true, { ms -> IncrustationDatvPc.octets(HorlogeDatvPc.rendu(w, h, indicatif(), locator(), ms)) }, horloge)
+    }
+
     // ------------------------------------------------------------ overlay and preview (nothing transmitted)
 
     /** Text and the mark over the picture (set before the first start). */
@@ -724,6 +823,7 @@ class EmissionDatvPc(
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
             "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
             "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
+            "horloge" -> horlogePng(debitTs())
             else -> mire()
         }
         val ts = debitTs()
@@ -825,6 +925,11 @@ class EmissionDatvPc(
             .put("historique", JSONArray((a?.historique() ?: emptyList()).map { c ->
                 JSONObject().put("t", c.ms).put("de", c.de).put("vers", c.vers).put("raison", c.raison) })))
         o.put("cpu", cpu())
+        o.put("resume", resume())
+        o.put("banc", banc.json(cleBanc()))
+        o.put("calibration", calibration.de(srKs)?.let { c -> JSONObject().put("gain", c.gainDb).put("ecart", if (c.ecartDb.isNaN()) JSONObject.NULL else c.ecartDb).put("t", c.ms) } ?: JSONObject.NULL)
+        o.put("rampe", JSONObject().put("sens", rampe.etat.sens?.cle ?: "").put("cible", rampe.etat.cibleDb).put("message", rampe.etat.message))
+            .put("gainRampeBas", GAIN_RAMPE_BAS_DB)
         o.put("carteOn", carteOn).put("qth", qth).put("puissance", puissance).put("antenne", antenne).put("message", message)
             .put("retourHz", retourHz).put("retourMode", retourMode).put("retourDonne", retourDonne)
             .put("carteEnvoyee", inserteur?.remplaces ?: 0L)
@@ -833,10 +938,13 @@ class EmissionDatvPc(
     }
 
     companion object {
-        val SOURCES = setOf("mire", "animee", "image", "video", "camera")
+        val SOURCES = setOf("mire", "animee", "horloge", "image", "video", "camera")
 
         /** The bladeRF's attenuation when none was set: low (66 − 50 = 16 dB of libbladeRF's overall gain). */
         const val GAIN_BLADERF_DEFAUT_DB = -50.0
+        /** « Descendre »: the gain the ramp down goes to (dB). */
+        const val GAIN_RAMPE_BAS_DB = -60.0
+        private const val CLE_CALIBRATION = "datv_tx_calibration"
 
         /** One chat line every 2 s at most. */
         const val CHAT_INTERVALLE_MS = 2000L
@@ -886,29 +994,43 @@ class EmissionDatvPc(
             else -> 1280 to 720
         }
 
-        fun commande(ff: String, p: ParametresTs): List<String> {
-            val ts = p.debitTs
-            val audio = if (p.son) 32_000L else 0L
+        /** The sound's rate (AAC, mono). */
+        const val AUDIO_BPS = 32_000L
+
+        fun budget(ts: Long, son: Boolean, source: String): Budget {
+            val audio = if (son) AUDIO_BPS else 0L
             // What the video may take: the stream less the audio, the tables and a margin for the multiplexer.
             val video = ((ts - audio) * 0.78 - 8_000).toLong().coerceAtLeast(20_000L)
             val (w, h) = taille(ts)
-            val fixe = p.source == "mire" || p.source == "image"
+            val fixe = source == "mire" || source == "image" || source == "horloge"
+            return Budget(ts, video, audio, w, h, if (fixe) 10 else 25)
+        }
+
+        fun commande(ff: String, p: ParametresTs): List<String> {
+            val ts = p.debitTs
+            val bu = budget(ts, p.son, p.source)
+            val video = bu.videoBps
+            val w = bu.largeur
+            val h = bu.hauteur
             val anime = p.source == "animee"
-            val ips = if (fixe) 10 else 25
+            val ips = bu.ips
             val cadre = "scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2"
             val l = ArrayList<String>()
             l += listOf(ff, "-hide_banner", "-loglevel", "error", "-nostdin")
             when (p.source) {
                 "camera" -> l += listOf("-f", "v4l2", "-framerate", "25", "-i", p.camera)
                 "video" -> l += listOf("-re", "-stream_loop", "-1", "-i", p.image!!.path)
+                // The clock card: a fresh picture each half second through the input (the preview: its PNG looped).
+                "horloge" -> l += if (p.horloge != null) listOf("-f", "image2pipe", "-framerate", "2", "-i", "pipe:0")
+                    else listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
                 else -> l += listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
             }
             // The animated card: a moving test picture (its own counter turning) over the card's colour bars, the callsign left in sight.
             if (anime) l += listOf("-re", "-f", "lavfi", "-i", "testsrc2=size=" + (w / 3 / 2 * 2) + "x" + (h / 3 / 2 * 2) + ":rate=25")
-            // The sound: the file's own, a beep each second with the animated card, else silence.
+            // The sound: the file's own, a beep each second with the animated card and the clock (time ticks), else silence.
             val entreeSon = if (anime) 2 else 1
             if (p.son && p.source != "video") l += listOf("-re", "-f", "lavfi", "-i",
-                if (anime) "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
+                if (anime || p.source == "horloge") "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
             // The overlay: the last input, laid over the picture last.
             val inc = p.incrustation
             val entreeInc = 1 + (if (anime) 1 else 0) + (if (p.son && p.source != "video") 1 else 0)
@@ -924,7 +1046,7 @@ class EmissionDatvPc(
             l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=$ips:repeat-headers=1")
                 else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", ips.toString())
             l += listOf("-b:v", video.toString(), "-maxrate", video.toString(), "-bufsize", (video / 2).toString())
-            if (p.son) l += listOf("-c:a", "aac", "-b:a", "32k", "-ac", "1")
+            if (p.son) l += listOf("-c:a", "aac", "-b:a", (bu.audioBps / 1000).toString() + "k", "-ac", "1")
             l += listOf("-f", "mpegts", "-muxrate", ts.toString(), "-mpegts_original_network_id", "1", "-mpegts_transport_stream_id", "1",
                 "-mpegts_service_id", "1", "-mpegts_pmt_start_pid", "4095", "-mpegts_start_pid", "256", "-pcr_period", "40",
                 "-metadata", "service_provider=" + p.indicatif, "-metadata", "service_name=" + p.indicatif, "pipe:1")
@@ -939,7 +1061,8 @@ class EmissionDatvPc(
             val journal = File(System.getProperty("java.io.tmpdir"), "satme-datv-tx-ffmpeg.log")
             val pr = ProcessBuilder(commande(ff, p)).redirectError(journal).start()
             // The time over the picture: a fresh overlay into ffmpeg's input, until it stops.
-            p.incrustation?.takeIf { it.direct }?.let { inc -> thread(isDaemon = true, name = "satme-datv-incrustation") { inc.alimente(pr.outputStream) { pr.isAlive } } }
+            // The clock card the same way (it takes ffmpeg's input: the overlay is then a still one).
+            (p.horloge ?: p.incrustation?.takeIf { it.direct })?.let { inc -> thread(isDaemon = true, name = "satme-datv-incrustation") { inc.alimente(pr.outputStream) { pr.isAlive } } }
             return object : Processus {
                 override val sortie: InputStream = pr.inputStream
                 override val vivant: Boolean get() = pr.isAlive
