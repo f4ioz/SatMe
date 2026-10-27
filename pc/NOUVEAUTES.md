@@ -9,15 +9,14 @@ Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
 Une section par version, la plus récente en haut, une partie « ### fr » et une
-- **Orbites en plein écran** : le logo et « SatMe » en haut à gauche (en bas à gauche en Classique radioamateur).
 partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.
-- **Orbites full screen**: the logo and "SatMe" top left (bottom left in Classique radioamateur).
 Markdown simple (gras, italique, `code`, listes, liens https).
 -->
 
 ## Prochaine version
 
 ### fr
+- **Orbites en plein écran** : le logo et « SatMe » en haut à gauche (en bas à gauche en Classique radioamateur).
 - **DATV › Pointage** (bouton en haut de l'onglet, ou `pc?pointage=1` sur le téléphone) : le **MER en très gros**, la marge D, la **tendance** (▲ mieux / ▼ moins bien qu'il y a 5 s), le **maximum** (remise à zéro), le niveau, 2 minutes de courbe et un **son dont la hauteur suit le MER** ; « DÉCROCHÉ depuis… » en rouge s'il lâche. Rappel : balise seule = référence, une retouche à la fois.
 - **DATV › Qualité › Historique** : MER, marge D et niveau sur 10 min à 24 h, le temps décroché en rouge, des marques (station changée, arrêt, OL calé, **Marquer une retouche**).
 - **Niveau du signal** estimé depuis les AGC du MiniTiouner (≈ dBm, échelle MiniTioune / Portsdown d'après les mesures du BATC) : bon de −70 à −35, trop faible ou trop fort dit en clair.
@@ -40,6 +39,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Activer l'auto-pilote** (Agenda › Activités à venir) : la campagne part de l'**élévation la plus basse du rotor** (Réglages › Poste et rotor) ou de l'élévation minimale de la station si elle est plus haute ; **Élévation minimale** modifiable dans la confirmation, la liste des passages suit.
 
 ### en
+- **Orbites full screen**: the logo and "SatMe" top left (bottom left in Classique radioamateur).
 - **DATV › Pointage** (button at the top of the tab, or `pc?pointage=1` on the phone): the **MER very large**, the D margin, the **trend** (▲ better / ▼ worse than 5 s ago), the **best** (reset), the level, a 2-minute curve and a **tone whose pitch follows the MER**; « DÉCROCHÉ depuis… » in red if the lock goes. Reminder: the beacon alone is the reference, one touch-up at a time.
 - **DATV › Quality › History**: MER, D margin and level over 10 min to 24 h, the time unlocked in red, marks (station changed, stop, LO calibrated, **Marquer une retouche**).
 - **Signal level** estimated from the MiniTiouner's AGCs (≈ dBm, MiniTioune / Portsdown scale after BATC's measurements): good from −70 to −35, too weak or too strong said plainly.
