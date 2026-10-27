@@ -76,6 +76,56 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         return true
     }
 
+    /** What the page says of a video it recorded itself (« Globe animé »): the sked, its format, its frames. */
+    data class Navigateur(val satellite: String, val autre: String, val deMs: Long, val vertical: Boolean, val fps: Int, val images: Int)
+
+    /** The state taken for a new video: false when one is already being made. */
+    @Synchronized private fun prends(): Boolean { if (etat.enCours) return false; etat = Etat(enCours = true); return true }
+
+    /**
+     * A video the page recorded itself (« Globe animé »: the real globe, WebM or MP4 from the
+     * browser's MediaRecorder), [ecris] laying the request's body into the file it is given:
+     * made an MP4 like ours on a thread of its own (H.264, yuv420p, playable before it is all
+     * downloaded), its frames [Navigateur.fps] a second whatever pace the browser kept.
+     * Null when it is under way (the page follows [etat]), else why not.
+     */
+    fun recoitNavigateur(type: String?, longueur: Long, n: Navigateur, ecris: (File) -> Boolean): String? {
+        val ext = extensionNavigateur(type) ?: return "type de vidéo refusé (WebM ou MP4 attendu)"
+        if (longueur <= 0 || longueur > MAX_NAVIGATEUR) return "vidéo vide ou trop grosse (" + MAX_NAVIGATEUR / 1_048_576 + " Mo au plus)"
+        val ff = RenduPc.ffmpeg() ?: return "ffmpeg n'est pas installé : " + OutilsPc.conseil("ffmpeg")
+        if (!prends()) return "une vidéo est déjà en cours"
+        dossier.mkdirs()
+        val brut = File(dossier, ".navigateur-" + System.nanoTime() + "." + ext)
+        val refus = when {
+            !ecris(brut) -> "vidéo coupée en route"
+            !enteteAdmise(ext, brut) -> "ce n'est pas une vidéo " + ext.uppercase()
+            else -> null
+        }
+        if (refus != null) { brut.delete(); etat = Etat(erreur = refus); return refus }
+        val sortie = File(dossier, nomFichierNavigateur(n))
+        val part = File(dossier, sortie.name + ".part")
+        thread(isDaemon = true, name = "satme-sked-video-navigateur") {
+            etat = runCatching {
+                val ok = convertit(commandeConversion(ff, brut, part, n.fps), n.images.toDouble() / n.fps.coerceAtLeast(1)) { p -> etat = etat.copy(progression = p) }
+                if (ok && part.length() > 0 && (!sortie.exists() || sortie.delete()) && part.renameTo(sortie)) Etat(nom = sortie.name, progression = 1f)
+                else Etat(erreur = "ffmpeg n'a pas pu convertir la vidéo")
+            }.getOrElse { e -> Etat(erreur = e.message ?: "échec") }
+            brut.delete(); part.delete()
+        }
+        return null
+    }
+
+    /** ffmpeg's [cmd] run, its progress (out_time against [duree] seconds) handed to [progres]: true when it ended well. */
+    private fun convertit(cmd: List<String>, duree: Double, progres: (Float) -> Unit): Boolean {
+        val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+        p.inputStream.bufferedReader().forEachLine { l ->
+            // « out_time_ms » is in microseconds too (ffmpeg's own slip): either read as such.
+            val us = if (l.startsWith("out_time_us=") || l.startsWith("out_time_ms=")) l.substringAfter('=').trim().toLongOrNull() else null
+            if (us != null && duree > 0) progres((us / 1e6 / duree).toFloat().coerceIn(0f, 0.99f))
+        }
+        return p.waitFor() == 0
+    }
+
     fun fichier(nom: String): File? = File(dossier, nom).takeIf { nom.matches(Regex("[A-Za-z0-9._-]+")) && it.isFile && nom.endsWith(".mp4") }
 
     private fun fabrique(s: Sked, r: Rendu, progres: (Float) -> Unit): File? {
@@ -303,10 +353,52 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         fun instant(s: Sked, k: Int, nb: Int): Long { val t0 = s.trace.points.first().t; val t1 = s.trace.points.last().t; return t0 + (t1 - t0) * k / (nb - 1) }
 
         /** The file's name: the satellite, the other station, the window's start, the globe and the phone's format said. */
-        fun nomFichier(s: Sked, r: Rendu): String =
-            "SatMe_Sked_" + s.satellite.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-') + "_" + s.autre.replace(Regex("[^A-Za-z0-9]"), "") + "_" +
-                SimpleDateFormat("yyyyMMdd_HHmm'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(s.deMs) +
-                (if (r.globe) "_globe" else "") + (if (r.vertical) "_9x16" else "") + ".mp4"
+        fun nomFichier(s: Sked, r: Rendu): String = nom(s.satellite, s.autre, s.deMs, if (r.globe) "_globe" else "", r.vertical)
+
+        /** The name of one the page recorded (« Globe animé »): as ours, said so. */
+        fun nomFichierNavigateur(n: Navigateur): String = nom(n.satellite, n.autre, n.deMs, "_globe-anime", n.vertical)
+
+        private fun nom(satellite: String, autre: String, deMs: Long, vue: String, vertical: Boolean): String =
+            "SatMe_Sked_" + satellite.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-').take(40) + "_" + autre.replace(Regex("[^A-Za-z0-9]"), "").take(12) + "_" +
+                SimpleDateFormat("yyyyMMdd_HHmm'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(deMs) +
+                vue + (if (vertical) "_9x16" else "") + ".mp4"
+
+        /** The largest video the page may send (« Globe animé »: 27 s at 12 Mb/s is some 40 MB). */
+        const val MAX_NAVIGATEUR = 300L * 1024 * 1024
+
+        /** The file's kind from the request's Content-Type: « webm » or « mp4 », null for anything else. */
+        fun extensionNavigateur(type: String?): String? = when (type.orEmpty().substringBefore(';').trim().lowercase()) {
+            "video/webm" -> "webm"
+            "video/mp4" -> "mp4"
+            else -> null
+        }
+
+        /** Its first bytes as its kind's: WebM's EBML mark, MP4's « ftyp » box. */
+        fun enteteAdmise(ext: String, f: File): Boolean {
+            val b = ByteArray(12)
+            val n = runCatching { f.inputStream().use { it.readNBytes(b, 0, 12) } }.getOrDefault(0)
+            return when (ext) {
+                "webm" -> n >= 4 && b[0] == 0x1A.toByte() && b[1] == 0x45.toByte() && b[2] == 0xDF.toByte() && b[3] == 0xA3.toByte()
+                "mp4" -> n >= 8 && String(b, 4, 4, Charsets.ISO_8859_1) == "ftyp"
+                else -> false
+            }
+        }
+
+        /**
+         * ffmpeg's command for one the page recorded: its frames timed again one [fps]th of a second
+         * each (a slow browser's pace kept no trace), even sizes, H.264 yuv420p, +faststart, no sound.
+         */
+        fun commandeConversion(ff: String, entree: File, sortie: File, fps: Int): List<String> = listOf(
+            ff, "-y", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-i", entree.path, "-an",
+            "-vf", "setpts=N/($fps*TB),scale=trunc(iw/2)*2:trunc(ih/2)*2", "-r", "$fps",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "20",
+            "-movflags", "+faststart", "-f", "mp4", sortie.path)
+
+        /** What a request says of the video the page recorded: `sat`, `autre`, `de`, `format`, `fps`, `images`. */
+        fun navigateur(p: (String) -> String): Navigateur = Navigateur(
+            satellite = p("sat").trim().ifBlank { "sat" }, autre = p("autre").trim(), deMs = p("de").trim().toLongOrNull() ?: 0L,
+            vertical = p("format").trim() == "telephone", fps = p("fps").trim().toIntOrNull()?.coerceIn(10, 60) ?: 30,
+            images = p("images").trim().toIntOrNull()?.coerceIn(1, 20_000) ?: 810)
 
         /**
          * The drawing asked by a request: `vue=globe` (else the map), `format=telephone` (9:16, else 16:9),

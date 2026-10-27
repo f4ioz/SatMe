@@ -626,6 +626,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .put("relais", rl?.json()).toString().toByteArray())
             return
         }
+        if (r.methode == "POST" && chemin == "/api/sked/video/navigateur") {
+            // The sked's video the page recorded itself (« Globe animé »): from this page's own origin, laid on disk as it comes, made an MP4 here.
+            val v = videoSked
+            val err = when {
+                v == null -> "absent"
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> "origine refusée"
+                else -> v.recoitNavigateur(r.entetes["content-type"], r.longueur, VideoSked.navigateur { q[it].orEmpty() }) { f ->
+                    RequeteHttp.versFichier(c.getInputStream(), r, VideoSked.MAX_NAVIGATEUR, f) }
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (if (err == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", err)).toString().toByteArray())
+            return
+        }
         if (r.methode == "POST" && chemin == "/api/import/adif") {
             val corps = RequeteHttp.corps(c.getInputStream(), r, 50L * 1024 * 1024)
             val b = if (corps == null || importPc == null) null else importPc.depuisAdif(String(corps, Charsets.UTF_8), q["enLigne"] == "1")
