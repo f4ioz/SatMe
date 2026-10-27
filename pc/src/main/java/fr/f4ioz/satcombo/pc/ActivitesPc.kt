@@ -74,6 +74,10 @@ class ActivitesPc(
 
     private fun elMin() = reglages.minElevDeg.toDouble()
 
+    /** A one-click campaign's elevation: the one asked ([p], the dialog's), else the station's but at least 10°. */
+    private fun elMinAp(p: String) = p.replace(',', '.').trim().toDoubleOrNull()?.takeIf { !it.isNaN() }?.coerceIn(0.0, 90.0)
+        ?: CampagneSstv.elMinActivite(elMin())
+
     /** The activities as the sources say them (and the demonstration's). */
     fun listeBrute(): List<Activite> {
         val r = sources()
@@ -161,8 +165,8 @@ class ActivitesPc(
 
     /**
      * `/api/activites`: GET the list, the sources' state, the notices; GET
-     * `/campagne?id=` an SSTV campaign's draft, `/autopilote?id=&catnum=`
-     * what « Activer l'auto-pilote » would do; POST `/autopilote?id=&catnum=`
+     * `/campagne?id=` an SSTV campaign's draft, `/autopilote?id=&catnum=&el=`
+     * what « Activer l'auto-pilote » would do; POST `/autopilote?id=&catnum=&el=`
      * does it, `/reglage?k=&on=` (or `&avant=`), `/rafraichit`.
      */
     fun sert(chemin: String, methode: String, p: (String) -> String): ReponseWeb {
@@ -170,11 +174,11 @@ class ActivitesPc(
         if (methode != "POST") return when (route) {
             "", "/" -> json(json())
             "/campagne" -> campagne(p("id"), p("catnum").toIntOrNull() ?: 0)
-            "/autopilote" -> apercu(p("id"), p("catnum").toIntOrNull() ?: 0)
+            "/autopilote" -> apercu(p("id"), p("catnum").toIntOrNull() ?: 0, elMinAp(p("el")))
             else -> refus("inconnu")
         }
         return when (route) {
-            "/autopilote" -> activeAutopilote(p("id"), p("catnum").toIntOrNull() ?: 0)
+            "/autopilote" -> activeAutopilote(p("id"), p("catnum").toIntOrNull() ?: 0, elMinAp(p("el")))
             "/reglage" -> {
                 val on = p("on") == "1"
                 val s = reglages
@@ -218,7 +222,7 @@ class ActivitesPc(
     }
 
     /** What « Activer l'auto-pilote » on activity [id] would make (satellite [catnum] when the owner chose one): shown before. */
-    private fun apercu(id: String, catnum: Int): ReponseWeb {
+    private fun apercu(id: String, catnum: Int, el: Double): ReponseWeb {
         val ap = autopilote ?: return refus("auto-pilote absent")
         val a0 = liste().firstOrNull { it.id == id } ?: return refus("activité introuvable")
         if (a0.type != ActivitesAVenir.Type.SSTV) return refus("seules les activités SSTV ont un auto-pilote")
@@ -230,10 +234,10 @@ class ActivitesPc(
             .put("trouve", a0.catnum > 0 && catnum <= 0)
             .put("candidats", JSONArray(NomsSatellites.candidats(a.satNom, a.titre, cat).map { JSONObject().put("nom", it.first).put("catnum", it.second) }))
             .put("precision", a.precision.name).put("datesInconnues", a.precision == ActivitesAVenir.Precision.INCONNUE)
-            .put("freqInconnue", a.freqHz <= 0).put("maitre", ap.maitre)
+            .put("freqInconnue", a.freqHz <= 0).put("maitre", ap.maitre).put("elMin", el).put("elMinDefaut", CampagneSstv.elMinActivite(elMin()))
         if (n <= 0) return json(o.put("campagne", JSONObject.NULL).put("erreur", "satellite à choisir"))
         o.put("existante", lien(a, ap) ?: JSONObject.NULL)
-        ap.depuisActivite(a, n).fold({ c ->
+        ap.depuisActivite(a, n, el).fold({ c ->
             // The passes the campaign will receive: in its period, at least its elevation.
             o.put("passages", JSONArray(passages(a).filter { it.maxElevationDeg >= c.elMin && it.losEpochMs > c.debutMs && it.aosEpochMs < c.finMs }.take(12)
                 .map { p -> JSONObject().put("aos", p.aosEpochMs).put("los", p.losEpochMs).put("el", Math.round(p.maxElevationDeg)) }))
@@ -244,13 +248,13 @@ class ActivitesPc(
     }
 
     /** « Activer l'auto-pilote »: the campaign made (or found), kept, switched on, the master switch on. */
-    private fun activeAutopilote(id: String, catnum: Int): ReponseWeb {
+    private fun activeAutopilote(id: String, catnum: Int, el: Double): ReponseWeb {
         val ap = autopilote ?: return refus("auto-pilote absent")
         val a0 = liste().firstOrNull { it.id == id } ?: return refus("activité introuvable")
         if (a0.type != ActivitesAVenir.Type.SSTV) return refus("seules les activités SSTV ont un auto-pilote")
         val n = satDe(a0, catnum)
         if (n <= 0 || catalogue().none { it.second == n }) return refus("choisir le satellite")
-        val r = ap.activeActivite(a0.copy(catnum = n), n).getOrElse { return refus(it.message ?: "refusé") }
+        val r = ap.activeActivite(a0.copy(catnum = n), n, el).getOrElse { return refus(it.message ?: "refusé") }
         if (n != a0.catnum) retiensChoix(a0, n)
         return json(JSONObject().put("ok", true).put("campagne", CampagneSstv.json(r.campagne)).put("nouvelle", r.nouvelle)
             .put("maitreAllume", r.maitreAllume).put("lien", lien(a0.copy(catnum = n), ap) ?: JSONObject.NULL))

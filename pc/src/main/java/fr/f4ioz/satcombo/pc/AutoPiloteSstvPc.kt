@@ -185,9 +185,10 @@ class AutoPiloteSstvPc(
      * form's defaults (chain: no profile, the rig's sound, rig and mast
      * followed, recorded, decoded, said): on satellite [catnum]; a period
      * known by whole days taken from 00:00 to 23:59 here (as the form does);
-     * without a frequency, the satellite's SSTV transmitter (else its FM one).
+     * without a frequency, the satellite's SSTV transmitter (else its FM one);
+     * passes from [elMin] up (never the station's 0°: 1–2° passes give nothing).
      */
-    fun depuisActivite(a: ActivitesAVenir.Activite, catnum: Int): Result<Campagne> {
+    fun depuisActivite(a: ActivitesAVenir.Activite, catnum: Int, elMin: Double = CampagneSstv.EL_MIN_ACTIVITE): Result<Campagne> {
         if (catnum <= 0) return Result.failure(IllegalArgumentException("choisir le satellite"))
         val t = horloge()
         val b = ActivitesAVenir.campagne(a.copy(catnum = catnum), t)
@@ -208,20 +209,22 @@ class AutoPiloteSstvPc(
                     (sat?.name ?: a.satNom.ifBlank { "ce satellite" }) + " : « Modifier avant… » pour la donner"))
         }
         return CampagneSstv.valide(b.copy(satNom = sat?.name ?: a.satNom.ifBlank { "#$catnum" }, emetteur = emetteur,
-            debutMs = de, finMs = fin, activite = a.id, activiteSuit = true, chaine = CampagneSstv.Chaine())).map { it.copy(id = "") }
+            debutMs = de, finMs = fin, elMin = elMin, activite = a.id, activiteSuit = true, chaine = CampagneSstv.Chaine())).map { it.copy(id = "") }
     }
 
     /**
      * « Activer l'auto-pilote » on [a] (satellite [catnum]): its campaign
-     * made and kept, or the one already made switched on again; the master
-     * switch turned on when it was off. Receive only, as always.
+     * made and kept, or the one already made switched on again (with the
+     * elevation [elMin] confirmed); the master switch turned on when it was
+     * off. Receive only, as always.
      */
-    fun activeActivite(a: ActivitesAVenir.Activite, catnum: Int): Result<Activation> = synchronized(this) {
+    fun activeActivite(a: ActivitesAVenir.Activite, catnum: Int, elMin: Double = CampagneSstv.EL_MIN_ACTIVITE): Result<Activation> = synchronized(this) {
         val deja = campagneDe(a.copy(catnum = catnum))
         val c = if (deja != null) {
             if (!deja.active) active(deja.id, true)
-            donnees.campagnes.first { it.id == deja.id }
-        } else garde(depuisActivite(a, catnum).getOrElse { return Result.failure(it) }).getOrElse { return Result.failure(it) }
+            val k = donnees.campagnes.first { it.id == deja.id }
+            if (k.elMin == elMin) k else garde(k.copy(elMin = elMin)).getOrElse { return Result.failure(it) }
+        } else garde(depuisActivite(a, catnum, elMin).getOrElse { return Result.failure(it) }).getOrElse { return Result.failure(it) }
         val allume = !donnees.maitre
         if (allume) regleMaitre(true)
         Result.success(Activation(c, deja == null, allume))
