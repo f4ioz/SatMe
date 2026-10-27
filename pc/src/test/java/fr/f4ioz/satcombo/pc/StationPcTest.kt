@@ -129,14 +129,20 @@ class StationPcTest {
         // A 437 MHz downlink through a 400 MHz converter (as a 10 GHz LNB on QO-100): 37 MHz on the rig.
         st.poseConvertisseurs(400_000_000L, false, null, null)
         // Its band: by default 10.4–10.8 GHz (an LNB), never a 437 MHz satellite by mistake.
-        assertEquals(437_800_000L, st.convRx().versPoste(437_800_000L))
-        st.settings.convRxBasHz = 430_000_000L; st.settings.convRxHautHz = 440_000_000L
+        assertEquals(437_800_000L, st.posteRxCat(437_800_000L))
+        // The QO-100 chain's line is in the table, on top.
+        assertEquals(fr.f4ioz.satcombo.domain.TableConversion.CHAINE_RX, st.bandes().first().chaine)
+        // A line of the table for 430–440 MHz in front of the rig's RX: its IF, though no rig band holds 37 MHz.
+        st.poseBandes(listOf(fr.f4ioz.satcombo.domain.BandeConversion("essai", 430_000_000L, 440_000_000L, 400_000_000L, catRx = true)) + st.bandes())
+        assertTrue(st.atteignableCat(37_800_000L))
+        assertFalse(st.atteignableCat(10_489_750_000L))
+        assertTrue(st.fiCat(2_400_100_000L, fr.f4ioz.satcombo.domain.UsageConversion.CAT_TX).refus != null)
         st.connecteCat("SIM", 0, 0)
         attends { st.stationCat.etat.value.descenteHz.let { it != null && it != 435_000_000L } }
         val (dl, _) = st.frequencesDuCiel()
         // What is shown is the sky; what the rig got was the IF, read back into the sky.
         assertEquals(dl!!.toDouble(), st.stationCat.etat.value.descenteHz!!.toDouble(), 500.0)
-        assertEquals(dl - 400_000_000L, st.convRx().versPoste(dl))
+        assertEquals(dl - 400_000_000L, st.posteRxCat(dl))
     }
 
     @Test
@@ -291,10 +297,12 @@ class StationPcTest {
         // On the beacon: nothing sent, said so.
         assertTrue(st.qo100.etat.value.statut.isNotEmpty())
         st.qo100.descente(10_489_700_000L)
-        attends { st.stationCat.etat.value.descenteHz == 144_727_000L }
+        // The rig set to 144.727 MHz, read back through the table's line into the sky (QO-100's, not the ISS's).
+        attends { st.stationCat.etat.value.descenteHz == 10_489_700_000L }
+        assertEquals(144_727_000L, st.posteRxCat(10_489_700_000L))
         // The ISS's Doppler loop keeps quiet: the rig stays where QO-100 put it.
         Thread.sleep(800)
-        assertEquals(144_727_000L, st.stationCat.etat.value.descenteHz)
+        assertEquals(10_489_700_000L, st.stationCat.etat.value.descenteHz)
         // Given back: the followed satellite takes the rig again.
         st.qo100AuPoste(false)
         attends { st.stationCat.etat.value.descenteHz.let { it != null && it > 437_000_000L } }

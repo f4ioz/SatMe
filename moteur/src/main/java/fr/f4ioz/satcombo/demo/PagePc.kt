@@ -383,6 +383,9 @@ object PagePc {
     if (i && E) i.textContent = [E.indicatif, E.locator].filter(x => x).join(' · ') + (E.nbSatellites ? ' · ' + E.nbSatellites + ' satellites' : '');
     const c = E && E.cat, ro = E && E.rotor;
     sb('sb-cat', c && c.connecte ? 'ok' : '', c ? (c.connecte ? c.modele + (c.simule ? ' (simulé)' : '') : 'non connecté') : '—');
+    // No converter line for what the rig should get: nothing sent, said in yellow.
+    const av = E && E.conversion && E.conversion.avert, sc = g('sb-cat');
+    if (av && sc) { sc.className = 'sb-i warn'; sc.title = 'Le poste : ' + av; }
     sb('sb-rot', ro && ro.connecte ? 'ok' : '', ro ? (ro.connecte ? (ro.az != null ? Math.round(ro.az) + '° / ' + Math.round(ro.el) + '°' : 'connecté') : 'non connecté') : '—');
   }
   async function radio() {
@@ -2007,6 +2010,7 @@ ${STYLE_JETONS}
   .dlg-mt { width:min(980px,96vw); padding:14px 16px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   #mt-ph-img { display:block; max-width:min(90vw,1100px); max-height:78vh; border-radius:var(--r1); margin:auto; }
 ${STYLE_CADRE}
+${ConversionPagePc.CSS}
   /* ---------------------------------------------------------------- the SatMe-Node's page */
   .nx { padding:12px 16px 0; box-sizing:border-box; }
   .nx-sans, .nx-assoc { max-width:820px; }
@@ -2451,7 +2455,8 @@ ${rail()}
         <span class="val" id="r-tx" style="min-width:80px;text-align:center">0</span>
         <div class="bouton-gr"><button onclick="regle('tx',10)">+10</button><button onclick="regle('tx',50)">+50</button></div></div>
       <div class="ligne"><button onclick="post('api/sat/reglage?memorise=1')" title="Garder ces deux valeurs comme celles qui marchent pour ce satellite">Mémoriser</button>
-        <button id="r-retour" onclick="post('api/sat/reglage?retour=1')">Revenir à la référence</button><span class="petit" id="r-ref"></span></div>
+        <button id="r-retour" onclick="post('api/sat/reglage?retour=1')">Revenir à la référence</button>
+        <button onclick="alOuvre()" title="Aligner pas à pas : la descente sur la balise, puis la montée avec des points (tu émets toi-même)">Aligner…</button><span class="petit" id="r-ref"></span></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="maintien" onchange="post('api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label></div>
       <div class="ligne" id="repos-ligne" style="display:none">
         <span class="petit">Dans le transpondeur</span>
@@ -4159,7 +4164,8 @@ ${rail()}
       <div id="r-materiel">
       <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
-      <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button>
+        <button onclick="calOuvre()" title="Mesurer l'erreur de la clé sur une fréquence connue (balise QO-100, GSM, balise locale)">Calibrer…</button></div>
       <details style="margin-top:6px" id="r-liaison"><summary class="petit" style="cursor:pointer">Liaison rtl_tcp</summary>
         <div class="ligne"><input id="r-hote" placeholder="127.0.0.1" style="max-width:160px"><input id="r-port" placeholder="1234" style="max-width:80px">
           <button onclick="rRegle('hote=' + enc(v('r-hote')) + '&port=' + enc(v('r-port')))">Enregistrer</button></div>
@@ -5084,11 +5090,7 @@ ${DemarragePagePc.CARTES}
       <pre class="petit" id="iq-journal" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap"></pre>
       <div class="petit aide" style="margin-top:4px">La calibration émet une porteuse 200 kHz au-dessus de l'oscillateur ; un autre SDR de la station (le bladeRF, ou le Pluto pour le bladeRF) l'écoute, mesure la fuite et l'image, et SatMe cherche les réglages qui les éteignent. L'écart de fréquence est relevé par rapport au quartz du récepteur. Le récepteur de l'onglet SDR est prêté pendant la mesure, puis rendu.</div>
     </div>
-    <div class="carte">
-      <div class="t">Convertisseurs</div>
-      <div class="petit" id="conv-lu">—</div>
-      <div class="petit aide" style="margin-top:6px">Ils se règlent dans l'onglet <a href="#qo100" onclick="vue('qo100')" style="color:var(--cyan)">QO-100</a>, par la chaîne de station : un seul endroit pour chaque oscillateur, comme sur le téléphone.</div>
-    </div>
+${ConversionPagePc.CARTE}
   </div>
 </div>
 </div>
@@ -5113,6 +5115,7 @@ ${DemarragePagePc.CARTES}
     <div class="mt-vide" id="mt-pop-vide" hidden>Aucun montage : compose-le dans Station › Montage.</div></div>
   <div class="mt-pop-etat" id="mt-pop-etat"></div>
 </div>
+${ConversionPagePc.DIALOGUES}
 <dialog id="mt-sg-dlg" class="dlg-mt" aria-labelledby="mt-sg-titre">
   <div class="dlg-tete"><b id="mt-sg-titre">Montage proposé d'après SatMe</b><button class="discret" onclick="g('mt-sg-dlg').close()" aria-label="Fermer">✕</button></div>
   <div class="petit">D'après ce que SatMe sait de la station (poste, récepteurs, chaîne QO-100, services réglés) et les appareils USB que le système liste. <b style="color:var(--ok)">détecté</b> : vu ; <b style="color:var(--warn)">supposé</b> : déduit, à vérifier. Coche ce que tu gardes : rien n'est enregistré avant.</div>
@@ -5886,6 +5889,7 @@ async function xsArrete() {
   try { await fetch('api/sstv/emission/arrete', { method: 'POST' }); } catch (x) {}
   xsVie(false); xsCharge();
 }
+${ConversionPagePc.JS}
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
@@ -5962,7 +5966,7 @@ function montreReglages(id) {
   if (id === 'emission') { chargeIq(); pxLit(); pxCartes(); }
   if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); majHttps(); }
   if (id === 'demarrage' || id === 'sauvegarde') demCharge();
-  if (id === 'materiel') { polPorts(); polCharge(); polStats(); }
+  if (id === 'materiel') { polPorts(); polCharge(); polStats(); cvCharge(); }
 }
 // Réglages › Accès à distance: the password other machines are asked, set from this PC or a session.
 var AD = null;
@@ -6931,6 +6935,7 @@ function dessine() {
   // No satellite's frequencies: the rig's dial as the CAT reads it (terrestrial SSB, the wheel tunes it).
   const cadran = E.ciel.dl == null && E.cat && E.cat.connecte && E.cat.dl ? E.cat.dl : null;
   txt('dl', cadran != null ? (cadran / 1e6).toFixed(5) : mhz(E.ciel.dl)); txt('ul', mhz(E.ciel.ul));
+  cvTitres();
   const rs = E.reglageSat;
   if (rs) {
     txt('r-calib', hz(rs.calib)); txt('r-tx', hz(rs.tx));
@@ -6987,10 +6992,6 @@ function dessine() {
   // With a software correction, the controller's own numbers beside SatMe's.
   const corr = r.reglages && (r.reglages.corrAz || r.reglages.corrEl);
   txt('rot-corr', !corr ? '' : 'correction logicielle active' + (r.brutAz != null ? ' · contrôleur : ' + Math.round(r.brutAz) + '° / ' + Math.round(r.brutEl || 0) + '°' : ''));
-  if (E.convertisseurs) {
-    const k = E.convertisseurs, ol = x => x ? (x / 1e6).toFixed(3) + ' MHz' : 'aucun';
-    txt('conv-lu', 'Réception : ' + ol(k.rxOl) + (k.rxInv ? ' (inverseur)' : '') + ' · émission : ' + ol(k.txOl) + (k.txInv ? ' (inverseur)' : ''));
-  }
   // The rig's model and port as last used, until the operator picks others.
   if (!catTouche) {
     g('cat-modele').value = c.simule ? (c.modele === 'TS2000' ? 'TS2000SIM' : 'SIM') : c.modele;
@@ -13307,6 +13308,7 @@ function rendSdr() {
   // The frequency heard: the sky's, the click's offset in.
   const ecoute = r.ciel + r.decalage;
   txt('r-freq', r.actif || r.ciel ? qFmt(ecoute) : '—');
+  g('r-freq').title = r.actif && r.pll ? 'FI envoyée à la clé : ' + (r.pll / 1e6).toLocaleString('fr-FR', { minimumFractionDigits: 6 }) + ' MHz (oscillateur de la clé)' : '';
   txt('r-detail', r.actif ? 'Doppler ' + ((r.ciel - r.repos) >= 0 ? '+' : '') + (r.ciel - r.repos) + ' Hz' + (r.decalage ? ' · décalage ' + (r.decalage > 0 ? '+' : '') + r.decalage + ' Hz' : '') : '');
   const pc = Math.max(0, Math.min(100, (r.niveau + 100) * 1.25));
   g('r-niveau').style.width = pc + '%'; txt('r-db', r.actif ? r.niveau.toFixed(0) + ' dB' : '');
@@ -18430,6 +18432,7 @@ function rendTete() {
   const d = HX.datv;
   sb('sb-datv', d && d.actif ? (d.verrouille ? 'ok' : 'info') : '', d && d.ok !== false ? (d.actif ? d.libelle + (d.verrouille && d.mer != null ? ' · MER ' + fr1(d.mer) + ' dB' : '') : 'arrêtée') : '—');
   sb('sb-cat', c && c.connecte ? 'ok' : '', c ? (c.connecte ? c.modele + (c.simule ? ' (simulé)' : '') : 'non connecté') : '—');
+  cvBarre();
   const ro = E && E.rotor;
   sb('sb-rot', ro && ro.connecte ? 'ok' : '', ro ? (ro.connecte ? (ro.az != null ? Math.round(ro.az) + '° / ' + Math.round(ro.el) + '°' : 'connecté') : 'non connecté') : '—');
   const rec = g('rec').style.display !== 'none';

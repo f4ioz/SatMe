@@ -20,7 +20,10 @@ import fr.f4ioz.satcombo.data.SatPosition
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.TleEntry
 import fr.f4ioz.satcombo.data.Transmitter
+import fr.f4ioz.satcombo.domain.BandeConversion
 import fr.f4ioz.satcombo.domain.Convertisseur
+import fr.f4ioz.satcombo.domain.TableConversion
+import fr.f4ioz.satcombo.domain.UsageConversion
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.PassPredictor
 import fr.f4ioz.satcombo.location.Maidenhead
@@ -165,7 +168,9 @@ class StationPc(
 
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
-        override fun poste(): PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
+        // Behind the converter table's guard: a frequency no rig band and no line's IF holds is not sent.
+        override fun poste(): PosteCat = fr.f4ioz.satcombo.cat.PosteCatFiltre(if (_etat.value.catModele in PAIRES) postePaire else posteCiv, ::atteignableCat)
+        override fun atteignable(posteHz: Long) = atteignableCat(posteHz)
         // A pair with only its TX rig: nothing to read back.
         override fun emetSeul() = _etat.value.catModele in PAIRES && !paire.rx.isOpen && paire.tx.isOpen
         override fun aprsEnEmission() = false
@@ -190,38 +195,122 @@ class StationPc(
         override fun ctcssAuto() = true
         override fun repos() = _etat.value.repos
         override fun poseRepos(hz: Long) = change { copy(repos = hz) }
-        // The converters (LNB, transverter) as on the phone, from the same settings.
-        override fun posteRx(satHz: Long) = if (settings.convRxPoste) convRx().versPoste(satHz) else satHz
-        override fun satDepuisPoste(posteHz: Long) = if (convRxDansLaChaine()) convRx().versSatellite(posteHz) else posteHz
-        override fun posteTx(satHz: Long) = convTx().versPoste(satHz)
-        override fun satDepuisPosteTx(posteHz: Long) = if (convTxDansLaChaine()) convTx().versSatellite(posteHz) else posteHz
+        // The converters (LNB, transverter): the table's first line for the rig's RX or TX side.
+        override fun posteRx(satHz: Long) = posteRxCat(satHz)
+        override fun satDepuisPoste(posteHz: Long): Long {
+            val attendu = cielAttendu(descente = true) ?: return posteHz
+            return TableConversion.depuisAppareil(bandes(), posteHz, UsageConversion.CAT_RX, rfAttendu = attendu)
+        }
+        override fun posteTx(satHz: Long) = posteTxCat(satHz)
+        override fun satDepuisPosteTx(posteHz: Long): Long {
+            val attendu = cielAttendu(descente = false) ?: return posteHz
+            return TableConversion.depuisAppareil(bandes(), posteHz, UsageConversion.CAT_TX, rfAttendu = attendu)
+        }
     }, horloge)
 
-    fun convRx() = Convertisseur(actif = settings.convRxActif, olHz = settings.convRxOlHz,
+    // ---------------------------------------------------------------- the converter table
+
+    /** The two converters as they were set before the table (and still are by the QO-100 chain). */
+    private fun convRxAncien() = Convertisseur(actif = settings.convRxActif, olHz = settings.convRxOlHz,
         inverseur = settings.convRxInverseur, basHz = settings.convRxBasHz, hautHz = settings.convRxHautHz)
-    fun convTx() = Convertisseur(actif = settings.convTxActif, olHz = settings.convTxOlHz,
+    private fun convTxAncien() = Convertisseur(actif = settings.convTxActif, olHz = settings.convTxOlHz,
         inverseur = settings.convTxInverseur, basHz = settings.convTxBasHz, hautHz = settings.convTxHautHz)
 
-    /** Is the RX converter in the rig's chain? The satellite decides: its downlink in the converter's band. */
-    private fun convRxDansLaChaine(): Boolean {
-        val c = convRx()
-        if (!settings.convRxPoste || !c.configure) return false
-        return emetteurChoisi()?.downlinkLowHz?.let { c.couvre(it) } == true
+    @Volatile private var tableLue: Pair<String?, List<BandeConversion>>? = null
+
+    /**
+     * The converter table (Réglages › Poste et rotor). Made the first time
+     * from the two older converters, which come first: nothing set before is
+     * lost, nothing changes by itself.
+     */
+    fun bandes(): List<BandeConversion> {
+        val texte = settings.convBandes
+        tableLue?.let { (k, t) -> if (k == texte) return t }
+        val t = TableConversion.lit(texte)
+            ?: TableConversion.migre(convRxAncien(), settings.convRxCle, settings.convRxPoste, convTxAncien()).also { settings.convBandes = TableConversion.ecrit(it) }
+        tableLue = settings.convBandes to t
+        return t
     }
 
-    private fun convTxDansLaChaine(): Boolean {
-        val c = convTx()
-        if (!c.configure) return false
-        return emetteurChoisi()?.uplinkLowHz?.let { c.couvre(it) } == true
+    /**
+     * A new table from the page. The QO-100 chain's lines are written back to
+     * its two converters, so its screen shows what is used.
+     */
+    fun poseBandes(t: List<BandeConversion>) {
+        val table = t.take(TableConversion.MAX_LIGNES)
+        settings.convBandes = TableConversion.ecrit(table)
+        val rx = table.firstOrNull { it.chaine == TableConversion.CHAINE_RX }
+        settings.convRxActif = rx?.actif == true
+        rx?.let { settings.convRxOlHz = it.olHz; settings.convRxInverseur = it.inverse; settings.convRxBasHz = it.basHz
+            settings.convRxHautHz = it.hautHz; settings.convRxCle = it.sdr; settings.convRxPoste = it.catRx }
+        val tx = table.firstOrNull { it.chaine == TableConversion.CHAINE_TX }
+        settings.convTxActif = tx?.actif == true
+        tx?.let { settings.convTxOlHz = it.olHz; settings.convTxInverseur = it.inverse; settings.convTxBasHz = it.basHz; settings.convTxHautHz = it.hautHz }
+        stationCat.oublieArmement()
     }
 
-    /** The converters, set on the page (Hz; an LO of 0 turns one off). */
+    /** The presets back, the QO-100 chain's lines kept on top. */
+    fun retablitBandes() = poseBandes(TableConversion.migre(convRxAncien(), settings.convRxCle, settings.convRxPoste, convTxAncien()))
+
+    /** The QO-100 chain was set elsewhere (its screen, the single LO fields): its lines follow. */
+    private fun synchroniseChaine() {
+        val t = TableConversion.avecChaine(bandes(), convRxAncien(), settings.convRxCle, settings.convRxPoste, convTxAncien())
+        settings.convBandes = TableConversion.ecrit(t)
+        stationCat.oublieArmement()
+    }
+
+    /** What the rig's RX is set to for the sky's [satHz]: the IF of its line, else [satHz]. */
+    fun posteRxCat(satHz: Long): Long = TableConversion.versAppareil(bandes(), satHz, UsageConversion.CAT_RX)
+
+    /** What the rig's TX is set to for the sky's [satHz]. */
+    fun posteTxCat(satHz: Long): Long = TableConversion.versAppareil(bandes(), satHz, UsageConversion.CAT_TX)
+
+    /** The dongle's line for the sky's [cielHz] as a converter ([Convertisseur.AUCUN] when none). */
+    fun convSdr(cielHz: Long): Convertisseur =
+        TableConversion.bande(bandes(), cielHz, UsageConversion.SDR)?.convertisseur() ?: Convertisseur.AUCUN
+
+    /** The dongle's line producing [cleHz] as a converter ([Convertisseur.AUCUN] when none). */
+    fun convSdrDeFi(cleHz: Long): Convertisseur =
+        bandes().firstOrNull { it.sdr && it.accepteFi(cleHz) }?.convertisseur() ?: Convertisseur.AUCUN
+
+    /**
+     * May the rig be sent [posteHz]? One of its bands, or the IF of a line in
+     * front of it (a 28 MHz transverter's, which no satellite rig band holds).
+     */
+    fun atteignableCat(posteHz: Long): Boolean =
+        fr.f4ioz.satcombo.cat.BandPlan.band(posteHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE ||
+            TableConversion.fiConnue(bandes(), posteHz, UsageConversion.CAT_RX) || TableConversion.fiConnue(bandes(), posteHz, UsageConversion.CAT_TX)
+
+    /** The sky frequency the rig should be near: QO-100's when its tab holds the rig, else the transmitter followed. */
+    private fun cielAttendu(descente: Boolean): Long? {
+        val q = qo100.etat.value
+        if (q.auPoste) return if (descente) q.descenteHz else q.monteeHz
+        val t = emetteurChoisi() ?: return null
+        return if (descente) t.downlinkLowHz else t.uplinkLowHz
+    }
+
+    /** What the rig is sent for one side: the sky, the IF, the line used, or why nothing is sent. */
+    class FiCat(val cielHz: Long, val fiHz: Long, val bande: String?, val refus: String?)
+
+    /** [cielHz] through the table for the rig's [usage] (CAT_RX or CAT_TX). */
+    fun fiCat(cielHz: Long, usage: UsageConversion): FiCat {
+        val b = TableConversion.bande(bandes(), cielHz, usage)
+        val fi = b?.fi(cielHz) ?: cielHz
+        val cote = if (usage == UsageConversion.CAT_TX) "émission" else "réception"
+        val refus = if (b == null && !atteignableCat(cielHz)) String.format(java.util.Locale.FRANCE,
+            "%.3f MHz (%s) : aucune ligne de conversion pour le poste, commande non envoyée (Réglages › Poste et rotor › Convertisseurs)", cielHz / 1e6, cote)
+            else null
+        return FiCat(cielHz, fi, b?.nom, refus)
+    }
+
+    /** The converters, set on the page (Hz; an LO of 0 turns one off): the QO-100 chain's lines. */
     fun poseConvertisseurs(rxOl: Long?, rxInverseur: Boolean?, txOl: Long?, txInverseur: Boolean?) {
+        bandes()
         rxOl?.let { settings.convRxOlHz = it; settings.convRxActif = it > 0; settings.convRxPoste = it > 0 }
         rxInverseur?.let { settings.convRxInverseur = it }
         txOl?.let { settings.convTxOlHz = it; settings.convTxActif = it > 0 }
         txInverseur?.let { settings.convTxInverseur = it }
-        stationCat.oublieArmement()
+        synchroniseChaine()
     }
 
     /** The QRZ card in the log (photo, distance, map): the operator's choice, on by default. */
@@ -281,11 +370,11 @@ class StationPc(
         }.minByOrNull { it.second.aosEpochMs }
     }
 
-    /** A sky frequency as the dongle receives it: through the LNB when it covers it. */
-    fun versCle(satHz: Long): Long = convRx().let { if (it.configure && it.couvre(satHz)) it.versPoste(satHz) else satHz }
+    /** A sky frequency as the dongle receives it: through the table's first line for it. */
+    fun versCle(satHz: Long): Long = TableConversion.versAppareil(bandes(), satHz, UsageConversion.SDR)
 
     /** The dongle's frequency back to the sky. */
-    fun depuisCle(cleHz: Long): Long = convRx().let { if (it.configure && it.accepteEnEntree(cleHz)) it.versSatellite(cleHz) else cleHz }
+    fun depuisCle(cleHz: Long): Long = TableConversion.depuisAppareil(bandes(), cleHz, UsageConversion.SDR)
 
     // ---------------------------------------------------------------- QO-100
 
@@ -361,8 +450,8 @@ class StationPc(
     /** QO-100 as the phone's screen drives it: written when moved, never by a loop. */
     val qo100: PiloteQo100 by lazy {
         PiloteQo100(settings, satConfig, object : PiloteQo100.Materiel {
-            override fun posteRx(satHz: Long) = if (settings.convRxPoste) convRx().versPoste(satHz) else satHz
-            override fun posteTx(satHz: Long) = convTx().versPoste(satHz)
+            override fun posteRx(satHz: Long) = posteRxCat(satHz)
+            override fun posteTx(satHz: Long) = posteTxCat(satHz)
             override fun atteignable(posteHz: Long) = stationCat.atteignableParLePoste(posteHz)
             override fun ecris(dlSat: Long, ulSat: Long) {
                 if (!_etat.value.catConnecte) { qo100.erreur("Poste non connecté (onglet Station)."); return }
@@ -371,7 +460,7 @@ class StationPc(
                         .onFailure { qo100.erreur(it.message ?: "CAT ?") }
                 }
             }
-            override fun convertisseursChanges() = stationCat.oublieArmement()
+            override fun convertisseursChanges() = synchroniseChaine()
         }).apply { ouvre() }
     }
 

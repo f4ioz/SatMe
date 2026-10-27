@@ -455,8 +455,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun axeQo100(pll: Long): Pair<Double, Double> {
         val q = station.qo100.etat.value
         val centre = (if (cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) pll else station.depuisCle(pll)).toDouble() - q.calageHz
-        val conv = station.convRx()
-        val inverse = conv.configure && conv.inverseur && conv.couvre(q.descenteHz + q.calageHz)
+        val conv = station.convSdr(q.descenteHz + q.calageHz)
+        val inverse = conv.configure && conv.inverseur
         return centre to (if (inverse) -Dsp.RTL_RATE.toDouble() else Dsp.RTL_RATE.toDouble())
     }
 
@@ -498,8 +498,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** −1 when an inverting converter turns the spectrum over at [cielHz] (sky above, bins below). */
     fun sensSpectre(cielHz: Long): Int {
         if (fictif || cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) return 1
-        val c = station.convRx()
-        return if (c.configure && c.inverseur && c.couvre(cielHz)) -1 else 1
+        val c = station.convSdr(cielHz)
+        return if (c.configure && c.inverseur) -1 else 1
     }
 
     /** QO-100's tab holds the receiver (its frequency, its mode). */
