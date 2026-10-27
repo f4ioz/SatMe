@@ -59,6 +59,8 @@ class ApiSat(private val s: Site) : ModuleSite {
             r.get("$base/qr") { q -> q.param("t")?.trim()?.take(300)?.takeIf { it.isNotEmpty() }?.let { Reponse.texte(QrSvg.svg(it), type = "image/svg+xml").cache("public, max-age=86400") } ?: s.pageErreur(q, 404) }
         }
         for (base in listOf("/journal", "/sat/journal")) r.get("$base/tuile") { q -> tuile(q) }
+        // The dashboard's « SatMe » mark (the tab asks for SatMe-PC's icon beside the page).
+        r.get("/sat/icone-192.png") { q -> s.statique.sert(q.also { it.variables["reste"] = "img/satme/icon.png" }) ?: s.pageErreur(q, 404) }
     }
 
     /** The globes' data: the station (the site's), the home page's satellites as favourites, every satellite's elements. */

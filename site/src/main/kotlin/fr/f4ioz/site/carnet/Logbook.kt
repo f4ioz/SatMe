@@ -136,13 +136,18 @@ class Logbook(
     }
 
     /** Every contact, the newest first: Wavelog's and SatMe's (the same one within two minutes counted once). */
+    /** The contacts read from SatMe's publications, kept while the same ones are published. */
+    @Volatile private var lusPublies: Pair<String, List<Qso>> = "" to emptyList()
+
     fun tous(): List<Qso> {
-        val publies = publications.visibles(TypePublication.QSO).flatMap { p ->
+        val visibles = publications.visibles(TypePublication.QSO)
+        val cle = visibles.joinToString(",") { it.id }
+        val publies = if (lusPublies.first == cle) lusPublies.second else visibles.flatMap { p ->
             runCatching {
                 val t = publications.fichierDe(p).readText()
                 if (p.fichier.endsWith(".json")) Qso.json(t) else Qso.adif(t, "satme").map { it.copy(source = "satme") }
             }.getOrDefault(emptyList())
-        }
+        }.also { lusPublies = cle to it }
         val w = wavelog
         val ajout = publies.filter { q -> w.none { it.indicatif == q.indicatif && kotlin.math.abs(it.quandMs - q.quandMs) < 120_000L } }
         return (w + ajout).sortedByDescending { it.quandMs }

@@ -27,8 +27,11 @@ object Securite {
             "img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; manifest-src 'self'"
         return when (r.csp) {
             Reponse.Csp.CONTENU -> "$base; script-src 'self' 'nonce-$nonce'; frame-src 'none'"
-            Reponse.Csp.APPLI -> "$base; script-src 'self' 'unsafe-inline'; " +
-                if (r.youtube) "frame-src https://www.youtube-nocookie.com https://www.youtube.com" else "frame-src 'none'"
+            // Orbites' ISS live: YouTube's player framed, its probe of the Internet, a direct video the visitor chooses.
+            Reponse.Csp.APPLI -> if (r.youtube) base.replace("connect-src 'self'", "connect-src 'self' https://www.youtube-nocookie.com")
+                .replace("media-src 'self' blob:", "media-src 'self' blob: https:") +
+                "; script-src 'self' 'unsafe-inline'; frame-src https://www.youtube-nocookie.com https://www.youtube.com"
+                else "$base; script-src 'self' 'unsafe-inline'; frame-src 'none'"
             // A report published by SatMe: shown, never run; its own styles and pictures only.
             Reponse.Csp.AUCUN -> "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; font-src data:; frame-ancestors 'self'"
         }
