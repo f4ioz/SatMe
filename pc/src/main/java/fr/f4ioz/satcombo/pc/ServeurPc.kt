@@ -159,7 +159,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var optionsSstv: OptionsSstvPc? = null
     /** « Agenda › Diplômes »: the awards, matched with the gallery and the log. */
     @Volatile var diplomes: DiplomesPc? = null
-    /** « Réglages › Mon site web »: what is published on the operator's web site (set before [demarre]). */
+    /** « Réglages › Envoyer vers un site web »: what is sent to the owner's web site (or a folder) (set before [demarre]). */
     @Volatile var site: SitePc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
@@ -911,7 +911,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
-        // « Réglages › Mon site web »: its settings and its queue; a POST from this page's own origin only, its fields in the body
+        // « Réglages › Envoyer vers un site web »: its settings and its queue; a POST from this page's own origin only, its fields in the body
         // (the token never in an address).
         if (chemin == "/api/site" || chemin.startsWith("/api/site/")) {
             val rep = site?.let { st ->
@@ -1523,7 +1523,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/datv/demarre", "/api/datv/emission/demarre" -> "datv"
         // Its settings stay open (to tick it again is elsewhere); every gesture on the box is refused.
         "/api/polar/pol", "/api/polar/test", "/api/polar/sim", "/api/polar/sonde" -> "polar"
-        // The owner's own web site: nothing set, tested, published or sent while it is off.
+        // « Publication web »: nothing set, tested, published or sent while it is off.
         else -> if (chemin.startsWith("/api/site/")) ModulesStation.SITE else null
     }?.takeIf { !ModulesStation.actif(station.stockage, it) }
 

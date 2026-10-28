@@ -170,7 +170,7 @@ class SstvPc(
      */
     @Volatile var imageGardee: (File, SstvMeta.SstvShot) -> Unit = { _, _ -> }
 
-    /** Told of each picture received on the air and kept (not a test, not a recording played back): « Réglages › Mon site web ». */
+    /** Told of each picture received on the air and kept (not a test, not a recording played back): « Réglages › Envoyer vers un site web ». */
     @Volatile var nouvelleImage: (String, SstvMeta.SstvShot) -> Unit = { _, _ -> }
 
     /** The sound card's blocks (the dongle's too when it is the card's source). */

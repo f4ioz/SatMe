@@ -1049,12 +1049,12 @@ The **Polarisation** module drives a **WiMo** remote polarisation switch (UHF 18
 
 ### Modules
 
-**Réglages › Modules**: the parts of SatMe-PC you care about, one box each — SDR, QO-100, DATV, FT8 / FT4, CW, Phonie → texte, spoken announcements, APRS / KISS, telemetry, SSTV (with the Planche and the Agenda's auto-pilot), Orbites, space weather, upcoming activities, METEOR, radiosondes, planes, ships, Montage, SatMe-Node, phone, polarisation, and **Mon site web** (off by default, see below). The core is always there: tracking and passes (Suivi, Agenda, Frise, Carrés, Sked, Carte), rig, rotator and Doppler, the log, the Journal, Son, Réglages, remote access, updates.
+**Réglages › Modules**: the parts of SatMe-PC you care about, one box each — SDR, QO-100, DATV, FT8 / FT4, CW, Phonie → texte, spoken announcements, APRS / KISS, telemetry, SSTV (with the Planche and the Agenda's auto-pilot), Orbites, space weather, upcoming activities, METEOR, radiosondes, planes, ships, Montage, SatMe-Node, phone, polarisation, and **Publication web** (off by default, see below). The core is always there: tracking and passes (Suivi, Agenda, Frise, Carrés, Sked, Carte), rig, rotator and Doppler, the log, the Journal, Son, Réglages, remote access, updates.
 
-- **Profiles**, in one click: **Satellites FM/SSB** (FT8, CW, voice to text, APRS, telemetry, orbits, space weather, activities, polarisation), **SSTV ARISS** (SSTV, SDR, orbits, activities, polarisation), **Parabole QO-100 / DATV** (SDR, QO-100, DATV, FT8, CW, SatMe-Node, Montage), **Météo et non-sat** (SDR, METEOR, radiosondes, planes, ships, space weather), **Tout** (everything). Announcements and the phone are in all of them. No profile ticks **Mon site web**, nor unticks it when it is ticked. Then tick or untick module by module.
+- **Profiles**, in one click: **Satellites FM/SSB** (FT8, CW, voice to text, APRS, telemetry, orbits, space weather, activities, polarisation), **SSTV ARISS** (SSTV, SDR, orbits, activities, polarisation), **Parabole QO-100 / DATV** (SDR, QO-100, DATV, FT8, CW, SatMe-Node, Montage), **Météo et non-sat** (SDR, METEOR, radiosondes, planes, ships, space weather), **Tout** (everything). Announcements and the phone are in all of them. No profile ticks **Publication web**, nor unticks it when it is ticked. Then tick or untick module by module.
 - **Unticked**: its tabs leave the rail (an empty workspace too), the palette (Ctrl+K) and the map's layers; so do its settings cards, sub-tabs and status-bar items (SDR, DATV, Node…); its address shows « Ce module est désactivé · Réglages › Modules ». What receives or transmits no longer starts (planes, ships, radiosondes, METEOR, DATV); unticked while receiving or transmitting, it stops after confirmation and gives its receiver back.
 - **Beside each box**, what it needs: METEOR, radiosondes, planes and ships go through the SDR (or a SatMe-Node) — flagged when the SDR is unticked.
-- The choice is kept by SatMe-PC: the same page in every browser. On updating nothing changes: everything stays ticked, except Avions, Navires and Sondes if they were unticked (at the first start, those the station already used stay). A module added later comes ticked, except **Mon site web**: unticked, unless the station's site was already set (address and token). The **quick setup** offers the profiles (« Tout » by default).
+- The choice is kept by SatMe-PC: the same page in every browser. On updating nothing changes: everything stays ticked, except Avions, Navires and Sondes if they were unticked (at the first start, those the station already used stay). A module added later comes ticked, except **Publication web**: unticked, unless the station's site was already set (address and token). The **quick setup** offers the profiles (« Tout » by default).
 
 ### Orbital elements
 
@@ -1087,23 +1087,20 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 
 `T` (PTT) and every transmit setting are always refused (`RPRT -11`). `F` and `M` are refused too unless « Autoriser le changement de fréquence » is ticked, and then retune the SDR receiver only — never the rig, nor while QO-100 is on the rig.
 
-### My web site: publishing on your site (optional module)
+### Web publishing: sending to your site (optional module)
 
-SatMe-PC sends nothing to any site by itself. **Mon site web** is a module **off by default** (Réglages › Modules) that no profile switches on: while it is unticked there is no card, no 🌐 button and no connection to any site (no queue, no test, no live data). It publishes to **your** amateur radio web site, the one you host with SatMe's `site` module (see `site/README.md`; f4ioz.fr is one example).
+SatMe-PC sends nothing to any site by itself. **Publication web** is a module **off by default** (Réglages › Modules) that no profile switches on: while it is unticked there is no card, no 🌐 button and no connection to any site (no queue, no test, no live data).
 
-Ticked, **Réglages › Services en ligne › Mon site web** opens as an assistant:
+Ticked, **Réglages › Services en ligne › Envoyer vers un site web**: SatMe-PC sends over HTTPS what you choose — SSTV pictures, planches, reports, contacts, the journal's videos, and as an option live data — to **an address of your site**, which receives them as it likes (PHP, WordPress, a small Python server…), or writes them **into a folder** (static site, Nextcloud, Syncthing). The wire format is a documented, versioned API, with ready-to-use receivers: **[Web publishing](publication-web.md)**.
 
-1. **Your site's address** (for instance `https://mon-site-radioamateur.fr`).
-2. **Publication token**: a secret key made on your site's server with `f4ioz-site jeton` (which also gives the line for `site.conf`). The token stays on this PC, like the Wavelog key: never shown again nor written to a log.
-3. **Tester la connexion**: SatMe-PC asks the site whether it answers and takes the token, publishing nothing. The site is **ready** only after a test that passes; another address or token is tested again.
-4. **What to send**: each kind **Sur clic / Automatique / Jamais**, all **Sur clic** by default (nothing goes by itself until you choose « Automatique ») — the **SSTV pictures** (in Automatique: each picture received live, not the tests nor the recordings played back), the **planches** (in Automatique: those with pictures, two minutes after the last picture received; the new version replaces the old one on the site), the events' **reports** as PDF, the **contacts** (ADIF) and the **journal's videos**. « Direct sur le site » stays unticked.
+1. **Where to send**: the address (with `{type}`, or one address for everything) and an optional token, or a folder.
+2. **Tester**: a `ping`, or a write test; ready only after a test that passes.
+3. **What to send**: each kind **Sur clic / Automatique / Jamais**, all **Sur clic** by default — the **SSTV pictures** (in Automatique: each picture received live, not the tests nor the recordings played back), the **planches** (in Automatique: those with pictures, two minutes after the last picture received), the **reports** as PDF, the **contacts** (ADIF) and the **journal's videos**. Live data stays unticked.
 
-A station whose site was already set (address and token) before this module keeps it ticked on update; otherwise it is unticked. Unticking the module stops everything going out; what waited in the queue goes again once it is ticked.
-
-- **🌐 Publier sur le site** beside each item: in the SSTV picture viewer, on each line of the log (Contacts), on the Planche page (**🌐 Planche sur le site**, **🌐 Rapport sur le site**) and under a video made by the journal's editor.
-- Nothing is sent by the page itself: each item is copied into a **queue on disk** (the data's `site/` folder) and sent by SatMe-PC; when the site does not answer it tries again (30 s, 1 min, 2 min… an hour at most), even after a restart. The card shows what waits, the last try and the last answers; **Réessayer maintenant**, **Vider la file**. A refusal from the site (token, kind, size) is not tried again.
-- The same item sent twice is published once. Everything is removed **on the site** (its private `/admin` page: hide, show again, delete).
-- In the **demonstration**, SatMe-PC publishes only to a site on this machine (`http://127.0.0.1:…`, a test site).
+- **🌐 Envoyer vers le site** beside each item: SSTV viewer, log lines (Contacts), Planche page (**🌐 Planche vers le site**, **🌐 Rapport vers le site**), videos of the journal's editor.
+- Nothing goes from the page itself: a **queue on disk** (the data's `site/` folder), tried again (30 s, 1 min, 2 min… an hour at most) even after a restart; **Réessayer maintenant**, **Vider la file**. A refusal from the site is not tried again; a refused token stops everything until the next test.
+- A station whose former site address was set keeps the module ticked, and its address becomes `…/api/publication/{type}` (this repository's `site` module).
+- In the **demonstration**, only to a site on this machine (`http://127.0.0.1:…`), never to a folder.
 
 ### The USB volume knob (VFO)
 

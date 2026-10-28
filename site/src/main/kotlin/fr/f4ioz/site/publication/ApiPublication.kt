@@ -22,15 +22,22 @@ import java.io.File
 import java.util.Base64
 
 /**
- * The publication API, for SatMe-PC (« Réglages › Site web »): HTTPS through
- * nginx, `Authorization: Bearer <jeton>` checked against the hash in
+ * The publication API, a complete receiver of SatMe-PC's « Publication web »
+ * (its wire format v1 is documented in docs/publication-web.md): HTTPS
+ * through nginx, `Authorization: Bearer <jeton>` checked against the hash in
  * site.conf (in constant time; ten wrong tokens from an address and it waits
  * a quarter of an hour).
  *
- * - `GET  /api/publication/ping` — the token is right: the site's name, the types and their limits;
- * - `POST /api/publication/{type}` — the file as the body, its words in `X-SatMe-Meta` (JSON in
- *   base64url): satellite, utc, frequence, mode, passage, evenement, station, titre, cle…;
- *   `201` with its id, `200` when the same content was already there (idempotent);
+ * - `POST /api/publication/{type}` (SatMe-PC's address `…/api/publication/{type}`), or
+ *   `POST /api/publication` with the type in `X-SatMe-Type` (one address for everything):
+ *   - `ping` — the token is right: the site's name, the types and their limits;
+ *   - a kind (`sstv-image`, `planche`, `rapport`, `qso`, `journal-video`) — v1: `multipart/form-data`
+ *     with `meta` (JSON: satellite, utc, mode, evenement, station, titre, cle…) and `fichier`; before v1,
+ *     the file as the body and its words in `X-SatMe-Meta` (JSON in base64url), still taken;
+ *     `201` with its id, `200` when the same content was already there (idempotent);
+ *   - `retrait` — `{"typeRetire", "cle", "id"}`: withdrawn;
+ *   - the live types (`direct…`, [fr.f4ioz.site.direct.ApiDirect], through [recepteurs]);
+ * - `GET  /api/publication/ping` — the same as the `ping` above;
  * - `GET  /api/publication` — what is published (`?type=`);
  * - `DELETE /api/publication/{id}`, or `DELETE /api/publication?type=…&cle=…` — withdrawn.
  */
@@ -49,7 +56,8 @@ class ApiPublication(
     override fun installe(r: Routeur) {
         r.get("/api/publication/ping") { q -> autorise(q) { ping() } }
         r.get("/api/publication") { q -> autorise(q) { liste(q) } }
-        r.post("/api/publication/{type}") { q -> autorise(q) { publie(q) } }
+        r.post("/api/publication") { q -> autorise(q) { recoit(q, q.entete("x-satme-type").orEmpty().trim()) } }
+        r.post("/api/publication/{type}") { q -> autorise(q) { recoit(q, q.variable("type")) } }
         r.delete("/api/publication/{id}") { q -> autorise(q) { retire(q.variable("id")) } }
         r.delete("/api/publication") { q -> autorise(q) { retireCle(q) } }
     }
@@ -78,10 +86,35 @@ class ApiPublication(
         return Reponse.json(JSONObject().put("ok", true).put("publications", JSONArray(l.map { it.json().put("url", urlDe(it)) })))
     }
 
-    private fun publie(q: Requete): Reponse {
-        val type = TypePublication.de(q.variable("type")) ?: return Reponse.erreur(404, "type inconnu : " + q.variable("type").take(40))
+    /** The live types' receivers (`direct`, `direct-spectre`…), set by [fr.f4ioz.site.direct.ApiDirect]. */
+    val recepteurs = HashMap<String, (Requete) -> Reponse>()
+
+    /** One request of SatMe-PC, of type [t]. */
+    private fun recoit(q: Requete, t: String): Reponse = when {
+        t == "ping" -> ping()
+        t == "retrait" -> retrait(q)
+        recepteurs.containsKey(t) -> recepteurs.getValue(t)(q)
+        else -> publie(q, t)
+    }
+
+    private fun retrait(q: Requete): Reponse {
+        val o = runCatching { JSONObject(String(q.corps(8 * 1024L), Charsets.UTF_8)) }.getOrElse { return Reponse.erreur(400, "JSON illisible") }
+        val t = TypePublication.de(o.optString("typeRetire")) ?: return Reponse.erreur(400, "typeRetire manquant")
+        val p = o.optString("id").takeIf { it.isNotEmpty() }?.let { pubs.parId(it) }?.takeIf { it.type == t } ?: pubs.parCle(t, o.optString("cle"))
+            ?: return Reponse.erreur(404, "publication inconnue")
+        pubs.supprime(p.id)
+        return Reponse.json(JSONObject().put("ok", true).put("id", p.id))
+    }
+
+    private fun publie(q: Requete, nom: String): Reponse {
+        val type = TypePublication.de(nom) ?: return Reponse.erreur(404, "type inconnu : " + nom.take(40))
         if (!accepte(type)) return Reponse.json(JSONObject().put("ok", false).put("refuse", true)
             .put("erreur", "le site ne prend plus les « ${type.libelle} » (Admin › Paramètres)"), 403)
+        // v1: multipart, `meta` and `fichier`.
+        val parties = try { q.multipart(limite(type) + 256 * 1024L, tmp) }
+            catch (e: TropGros) { return Reponse.erreur(413, "trop gros pour ${type.nom} (max ${limite(type) shr 20} Mo)") }
+            catch (e: IllegalArgumentException) { return Reponse.erreur(400, e.message ?: "multipart illisible") }
+        if (parties != null) return try { publieV1(type, parties) } finally { parties.efface() }
         val meta = runCatching { meta(q.entete("x-satme-meta")) }.getOrElse { return Reponse.erreur(400, "X-SatMe-Meta illisible") }
         val annonce = q.entete("content-type").orEmpty().lowercase()
         return try {
@@ -96,6 +129,23 @@ class ApiPublication(
                 .put("remplace", res.remplacee ?: JSONObject.NULL), if (res.nouvelle) 201 else 200)
         } catch (e: TropGros) {
             Reponse.erreur(413, "trop gros pour ${type.nom} (max ${limite(type) shr 20} Mo)")
+        } catch (e: Publications.Refus) {
+            Reponse.erreur(e.statut, e.message ?: "refusé")
+        }
+    }
+
+    private fun publieV1(type: TypePublication, m: fr.f4ioz.site.http.Multipart): Reponse {
+        val meta = runCatching { JSONObject(m.champs["meta"] ?: "{}") }.getOrElse { return Reponse.erreur(400, "meta illisible (JSON attendu)") }
+        // The envelope's words are not the item's.
+        listOf("version", "type", "id", "fichier").forEach { meta.remove(it) }
+        val f = m.fichiers.firstOrNull { it.nom == "fichier" } ?: return Reponse.erreur(400, "partie « fichier » manquante")
+        if (f.taille > limite(type)) return Reponse.erreur(413, "trop gros pour ${type.nom} (max ${limite(type) shr 20} Mo)")
+        return try {
+            val res = if (type == TypePublication.VIDEO) pubs.publieFichier(type, f.f, f.sha256, f.taille, meta)
+                else pubs.publie(type, f.f.readBytes(), meta, f.type.lowercase())
+            if (res.nouvelle) runCatching { apresPublication(res.p) }
+            Reponse.json(JSONObject().put("ok", true).put("id", res.p.id).put("deja", !res.nouvelle).put("url", urlDe(res.p))
+                .put("remplace", res.remplacee ?: JSONObject.NULL), if (res.nouvelle) 201 else 200)
         } catch (e: Publications.Refus) {
             Reponse.erreur(e.statut, e.message ?: "refusé")
         }

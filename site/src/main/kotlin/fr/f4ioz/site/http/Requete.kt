@@ -101,6 +101,18 @@ class Requete(
         return md.digest().joinToString("") { "%02x".format(it) } to total
     }
 
+    /**
+     * A `multipart/form-data` body ([Multipart]), [max] bytes at most, its files written into [dossier]; null when the
+     * body is not multipart (then still unread).
+     */
+    fun multipart(max: Long, dossier: File): Multipart? {
+        val f = Multipart.frontiere(entete("content-type")) ?: return null
+        check(!lu) { "corps déjà lu" }
+        lu = true
+        if (longueur > max) throw TropGros(max)
+        return Multipart.lit(flux, f, max, dossier)
+    }
+
     /** A form's fields (`application/x-www-form-urlencoded`), [max] bytes and [champs] fields at most. */
     fun formulaire(max: Long = 16 * 1024, champs: Int = 64): Map<String, String> =
         analyse(String(corps(max), Charsets.UTF_8), champs).mapValues { it.value.firstOrNull().orEmpty() }

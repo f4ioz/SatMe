@@ -231,6 +231,8 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
+**🌐 Web publishing** (optional module, off by default) — SatMe-PC sends over HTTPS what you choose — SSTV pictures, planches, reports, contacts, the journal's videos, and as an option live data — to an address of **your** site, which receives them as it likes (PHP, WordPress, a small Python server…), or writes them into a folder (static site, Nextcloud, Syncthing). Each kind **at a click** (the default), **automatic** or **never**; a queue on disk, tried again; nothing opened on the station. The format is a [documented API](docs/publication-web.md), with ready-to-use receivers in PHP and Python.
+
 **🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. From afar, only the IC-9700's transmitting goes through (PTT and microphone over HTTPS), after a confirmation.
 
 **📶 FT8 / FT4** — the waterfall that writes each callsign at its frequency, the radar, "who to call now", a decoder that follows the Doppler; **transmitting through the IC-9700**, answer with a double-click or call CQ, automatic sequence, never unattended.
@@ -343,6 +345,7 @@ The phone has a single USB-C port. A powered hub behind it carries everything: r
 - [The demonstration](pc/demo/README.md): a made-up station to install on a VM or a Raspberry Pi
 - [Polarisation box](materiel/esp32-polarisation/README.md): the ESP32 firmware, its wiring and its USB dialogue
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients
+- [Web publishing](docs/publication-web.md): what SatMe-PC sends to your site (API v1) and ready-to-use receivers
 - [SatMe GP server](https://github.com/f4ioz/SatMe-serveur): relays orbital elements (OMM/GP) to SatMe, to install on a Raspberry Pi, a Linux server or Proxmox
 - [Third-party components](THIRD-PARTY.md)
 - [Privacy policy](docs/privacy-policy.html)

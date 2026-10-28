@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  SatMe-PC « Publication web » — a page that shows what was received (docs/publication-web.md).
+  SPDX-License-Identifier: GPL-2.0-or-later — a short example: copy it, adapt it.
+  Put it beside index.json (the folder SatMe-PC writes, or the one recevoir.php / recevoir.py fill).
+  Plain HTML and JavaScript, nothing fetched elsewhere.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reçu de la station</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 16px; background: #fff; color: #222; }
+  @media (prefers-color-scheme: dark) { body { background: #16181c; color: #ddd; } a { color: #8cf; } }
+  .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  figure { margin: 0; border: 1px solid #8884; border-radius: 8px; overflow: hidden; }
+  figure img, figure video { width: 100%; display: block; background: #000; }
+  figcaption { padding: 6px 8px; font-size: 13px; }
+  .dim { opacity: .7; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid #8883; }
+</style>
+</head>
+<body>
+<h1>Reçu de la station</h1>
+<p class="dim" id="maj">…</p>
+<h2>Images</h2><div class="grille" id="images"></div>
+<h2>Documents et vidéos</h2><div class="grille" id="autres"></div>
+<h2>Contacts</h2><table><thead><tr><th>UTC</th><th>Indicatif</th><th>Satellite</th><th>Mode</th></tr></thead><tbody id="qso"></tbody></table>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const legende = e => '<b>' + esc(e.titre || e.type) + '</b><br><span class="dim">' +
+  esc([e.satellite, e.mode, (e.utc || '').replace('T', ' ').slice(0, 16), e.evenement].filter(Boolean).join(' · ')) + '</span>';
+fetch('index.json', { cache: 'no-store' }).then(r => r.json()).then(index => {
+  document.getElementById('maj').textContent = 'Mis à jour : ' + (index.maj || '?') + ' · ' + index.elements.length + ' élément(s)';
+  for (const e of index.elements) {
+    const lien = encodeURI(e.chemin);
+    if (e.type === 'sstv-image' || e.type === 'planche') {
+      document.getElementById('images').insertAdjacentHTML('beforeend',
+        '<figure><a href="' + lien + '"><img loading="lazy" src="' + lien + '" alt="' + esc(e.titre) + '"></a><figcaption>' + legende(e) + '</figcaption></figure>');
+    } else if (e.type === 'journal-video') {
+      document.getElementById('autres').insertAdjacentHTML('beforeend',
+        '<figure><video controls preload="none" src="' + lien + '"></video><figcaption>' + legende(e) + '</figcaption></figure>');
+    } else if (e.type === 'qso') {
+      document.getElementById('qso').insertAdjacentHTML('beforeend', '<tr><td>' + esc((e.utc || '').replace('T', ' ').slice(0, 16)) +
+        '</td><td>' + esc(e.indicatif) + '</td><td>' + esc(e.satellite) + '</td><td>' + esc(e.mode) + '</td></tr>');
+    } else {
+      document.getElementById('autres').insertAdjacentHTML('beforeend',
+        '<figure><figcaption><a href="' + lien + '">' + legende(e) + '</a></figcaption></figure>');
+    }
+  }
+}).catch(() => { document.getElementById('maj').textContent = 'index.json introuvable : rien reçu pour le moment ?'; });
+</script>
+</body>
+</html>

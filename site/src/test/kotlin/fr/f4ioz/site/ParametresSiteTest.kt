@@ -18,6 +18,7 @@ import org.json.JSONObject
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.BeforeClass
@@ -233,5 +234,71 @@ class ParametresSiteTest {
         site.reglages.change { it.copy(direct = it.direct.copy(basculeSstv = false)) }
         assertEquals("qo100", JSONObject(get("/api/direct/etat").body()).getJSONObject("direct").getString("vue"))
         assertEquals(403, envoie("POST", "/api/publication/direct/sstv-image", img, auth).statusCode())
+    }
+
+    /** SatMe-PC's v1 multipart, as SitePc builds it: `type`, `meta`, `fichier`. */
+    private fun multipart(type: String, meta: JSONObject, nom: String, mime: String, b: ByteArray): Pair<String, ByteArray> {
+        val f = "SatMe-essai0123"
+        val avant = "--$f\r\nContent-Disposition: form-data; name=\"type\"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n$type\r\n" +
+            "--$f\r\nContent-Disposition: form-data; name=\"meta\"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n$meta\r\n" +
+            "--$f\r\nContent-Disposition: form-data; name=\"fichier\"; filename=\"$nom\"\r\nContent-Type: $mime\r\n\r\n"
+        return "multipart/form-data; boundary=$f" to (avant.toByteArray() + b + "\r\n--$f--\r\n".toByteArray())
+    }
+
+    private fun v1(type: String, id: String) = auth + mapOf("X-SatMe-Version" to "1", "X-SatMe-Type" to type, "X-SatMe-Id" to id, "User-Agent" to "SatMe-PC/essai")
+
+    @Test fun `the v1 format - multipart, the type in the path or in a header, ping, withdrawal, live types`() {
+        // ping, POST, at {type} and at the one address.
+        for (chemin in listOf("/api/publication/ping", "/api/publication")) {
+            val p = envoie("POST", chemin, JSONObject().put("type", "ping").put("version", 1).toString().toByteArray(), v1("ping", "p1") + ("Content-Type" to "application/json"))
+            assertEquals(chemin, 200, p.statusCode())
+            assertTrue(JSONObject(p.body()).has("indicatif"))
+        }
+        assertEquals(401, envoie("POST", "/api/publication/ping", "{}".toByteArray(), mapOf("X-SatMe-Type" to "ping")).statusCode())
+        // A picture as v1, a byte of it a CR LF and a dash or two to tease the parser.
+        val png = PublicationsTest.png(couleur = 0x0D0A2D)
+        val meta = JSONObject().put("version", 1).put("type", "sstv-image").put("id", "id-1").put("cle", "sstv:v1.png").put("satellite", "ISS")
+            .put("utc", "2026-10-03T13:51:19Z").put("mode", "PD120").put("titre", "ISS · PD120").put("fichier", JSONObject().put("nom", "v1.png").put("type", "image/png"))
+        val (ct, corps) = multipart("sstv-image", meta, "v1.png", "image/png", png)
+        val r1 = envoie("POST", "/api/publication/sstv-image", corps, v1("sstv-image", "id-1") + ("Content-Type" to ct))
+        assertEquals(r1.body(), 201, r1.statusCode())
+        val id = JSONObject(r1.body()).getString("id")
+        val p = site.publications.parId(id)!!
+        assertEquals("ISS", p.meta.getString("satellite"))
+        assertEquals("sstv:v1.png", p.cle)
+        assertFalse(p.meta.has("version")); assertFalse(p.meta.has("id"))
+        assertTrue(java.util.Arrays.equals(png, site.publications.fichierDe(p).readBytes()))
+        // The same delivery again, at the one address this time: the same publication.
+        val r2 = envoie("POST", "/api/publication", corps, v1("sstv-image", "id-1") + ("Content-Type" to ct))
+        assertEquals(200, r2.statusCode()); assertTrue(JSONObject(r2.body()).getBoolean("deja"))
+        // Broken or incomplete: 400; too large: 413.
+        assertEquals(400, envoie("POST", "/api/publication/sstv-image", corps.copyOf(corps.size - 30), v1("sstv-image", "id-2") + ("Content-Type" to ct)).statusCode())
+        val (ct2, sansFichier) = multipart("qso", JSONObject(), "x", "text/plain", ByteArray(0))
+        assertEquals(400, envoie("POST", "/api/publication/qso", String(sansFichier).replace("name=\"fichier\"", "name=\"autre\"").toByteArray(), v1("qso", "id-3") + ("Content-Type" to ct2)).statusCode())
+        val (ct3, gros) = multipart("qso", JSONObject(), "x.adi", "text/plain", ByteArray((1 shl 20) + 10) { 'a'.code.toByte() })
+        assertEquals(413, envoie("POST", "/api/publication/qso", gros, v1("qso", "id-4") + ("Content-Type" to ct3)).statusCode())
+        // A contact as ADIF.
+        val adif = "<CALL:6>EA4ABC <QSO_DATE:8>20261003 <TIME_ON:6>135100 <SAT_NAME:5>SO-50 <MODE:2>FM <GRIDSQUARE:6>IN80DD <EOR>\n"
+        val (ct4, qso) = multipart("qso", JSONObject().put("cle", "qso:1").put("indicatif", "EA4ABC"), "1.adi", "text/plain", adif.toByteArray())
+        assertEquals(201, envoie("POST", "/api/publication/qso", qso, v1("qso", "id-5") + ("Content-Type" to ct4)).statusCode())
+        // Withdrawn by its key.
+        val w = envoie("POST", "/api/publication/retrait", JSONObject().put("type", "retrait").put("typeRetire", "sstv-image").put("cle", "sstv:v1.png").toString().toByteArray(),
+            v1("retrait", "id-6") + ("Content-Type" to "application/json"))
+        assertEquals(200, w.statusCode())
+        assertNull(site.publications.parId(id))
+        // The live types, at the one address: the state, a DATV picture in multipart, all forgotten.
+        site.reglages.change { it.copy(bandeau = it.bandeau.copy(actif = true), direct = Direct(actif = true, source = "station")) }
+        val t = System.currentTimeMillis()
+        val etat = JSONObject().put("type", "direct").put("version", 1).put("t", t)
+            .put("pilote", JSONObject().put("prochain", JSONObject().put("sat", "ISS").put("aos", t + 60_000L).put("los", t + 600_000L)))
+        assertEquals(200, envoie("POST", "/api/publication", etat.toString().toByteArray(), v1("direct", "d1") + ("Content-Type" to "application/json")).statusCode())
+        assertEquals("ISS", JSONObject(get("/api/direct/etat").body()).getJSONObject("bandeau").getJSONObject("prochain").getString("sat"))
+        val img = java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(java.awt.image.BufferedImage(320, 256, 1), "jpg", it) }.toByteArray()
+        val (ct5, datv) = multipart("direct-datv-image", JSONObject().put("t", t), "image.jpg", "image/jpeg", img)
+        assertEquals(200, envoie("POST", "/api/publication/direct-datv-image", datv, v1("direct-datv-image", "d2") + ("Content-Type" to ct5)).statusCode())
+        assertEquals(200, envoie("POST", "/api/publication", "{}".toByteArray(), v1("direct-efface", "d3") + ("Content-Type" to "application/json")).statusCode())
+        assertFalse(JSONObject(get("/api/direct/etat").body()).getJSONObject("bandeau").has("prochain"))
+        // An unknown type: 404.
+        assertEquals(404, envoie("POST", "/api/publication", "{}".toByteArray(), v1("autre", "z") + ("Content-Type" to "application/json")).statusCode())
     }
 }

@@ -34,10 +34,12 @@ import org.json.JSONObject
  * connection held open), each address braked; nothing here reaches the
  * station, ever.
  *
- * - `POST /api/publication/direct` — `{"t", "pilote": {…}|null, "datv": {…}|null}` (8 KB);
- * - `POST /api/publication/direct/spectre` — one line `{centreHz, largeurHz, minDb, maxDb, bins}` (8 KB);
- * - `POST /api/publication/direct/datv-image` — a JPEG (200 KB);
- * - `DELETE /api/publication/direct` — all forgotten;
+ * - `direct` (`POST /api/publication/direct`) — `{"t", "pilote": {…}|null, "datv": {…}|null}` (8 KB);
+ * - `direct-spectre` — one line `{centreHz, largeurHz, minDb, maxDb, bins}` (8 KB);
+ * - `direct-datv-image`, `direct-sstv-image` — a JPEG (200 KB), v1's multipart (`fichier`) or the bare body;
+ * - `direct-efface` — all forgotten;
+ *   each a type of the publication API (`POST /api/publication/<type>`, or `POST /api/publication` with
+ *   `X-SatMe-Type`), and still at its route before v1 (`…/direct/spectre`, `DELETE /api/publication/direct`…);
  * - `GET /api/direct/etat`, `/api/direct/spectre?depuis=<seq>`, `/api/direct/datv.jpg` — for the pages.
  */
 class ApiDirect(private val s: Site) : ModuleSite {
@@ -56,6 +58,9 @@ class ApiDirect(private val s: Site) : ModuleSite {
     override fun plan() = if (r.direct.actif && r.direct.page) listOf("/direct" to 0.5) else emptyList()
 
     override fun installe(r: Routeur) {
+        // The publication API's live types (already behind its token).
+        s.apiPublication.recepteurs.putAll(mapOf("direct" to ::recoit, "direct-spectre" to ::spectre, "direct-datv-image" to ::image,
+            "direct-sstv-image" to ::imageSstv, "direct-efface" to { _ -> etat.efface(); Reponse.json(JSONObject().put("ok", true)) }))
         r.post("/api/publication/direct") { q -> s.apiPublication.autorise(q) { recoit(q) } }
         r.delete("/api/publication/direct") { q -> s.apiPublication.autorise(q) { etat.efface(); Reponse.json(JSONObject().put("ok", true)) } }
         r.post("/api/publication/direct/spectre") { q -> s.apiPublication.autorise(q) { spectre(q) } }
@@ -101,15 +106,26 @@ class ApiDirect(private val s: Site) : ModuleSite {
     private fun image(q: Requete): Reponse = try {
         val d = r.direct
         if (!d.station || !d.datv) throw EtatDirect.Refus(403, "le site n'affiche pas l'image DATV (Admin › Paramètres)")
-        etat.recoitImage(q.corps(EtatDirect.IMAGE_MAX.toLong()))
+        etat.recoitImage(jpeg(q))
         Reponse.json(JSONObject().put("ok", true).put("numero", etat.imageNumero))
     } catch (e: EtatDirect.Refus) { refus(e) } catch (e: TropGros) { Reponse.erreur(413, "image trop grosse (max ${EtatDirect.IMAGE_MAX / 1024} Ko)") }
 
     private fun imageSstv(q: Requete): Reponse = try {
         if (!r.direct.actif || !r.direct.basculeSstv) throw EtatDirect.Refus(403, "le site ne montre pas les passages SSTV en direct (Admin › Paramètres)")
-        etat.recoitImageSstv(q.corps(EtatDirect.IMAGE_MAX.toLong()))
+        etat.recoitImageSstv(jpeg(q))
         Reponse.json(JSONObject().put("ok", true).put("numero", etat.imageSstvNumero))
     } catch (e: EtatDirect.Refus) { refus(e) } catch (e: TropGros) { Reponse.erreur(413, "image trop grosse (max ${EtatDirect.IMAGE_MAX / 1024} Ko)") }
+
+    /** The picture: v1's multipart part `fichier`, or the bare body. */
+    private fun jpeg(q: Requete): ByteArray {
+        val m = try { q.multipart(EtatDirect.IMAGE_MAX + 64 * 1024L, java.io.File(s.config.donnees, "tmp")) }
+            catch (e: IllegalArgumentException) { throw EtatDirect.Refus(400, e.message ?: "multipart illisible") } ?: return q.corps(EtatDirect.IMAGE_MAX.toLong())
+        try {
+            val f = m.fichiers.firstOrNull { it.nom == "fichier" } ?: throw EtatDirect.Refus(400, "partie « fichier » manquante")
+            if (f.taille > EtatDirect.IMAGE_MAX) throw TropGros(EtatDirect.IMAGE_MAX.toLong())
+            return f.f.readBytes()
+        } finally { m.efface() }
+    }
 
     // ------------------------------------------------------------------ the visitors' side
 

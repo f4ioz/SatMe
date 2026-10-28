@@ -166,19 +166,24 @@ fenêtre basse, les cartes s'empilent et la page défile.
 
 ## Le côté SatMe-PC
 
-Dans SatMe-PC, la publication vers un site est un **module facultatif,
-désactivé d'origine** : **Mon site web** (Réglages › Modules), qu'aucun profil
-n'active. Tant qu'il est décoché, SatMe-PC n'envoie rien à aucun site (ni
-file, ni essai, ni direct) et n'affiche aucun bouton 🌐. Coché, Réglages ›
-Services en ligne › Mon site web s'ouvre en assistant :
+Dans SatMe-PC, l'envoi vers un site est un **module facultatif, désactivé
+d'origine** : **Publication web** (Réglages › Modules), qu'aucun profil
+n'active. Il est générique (son format, l'API v1, est décrit dans
+[`docs/publication-web.fr.md`](../docs/publication-web.fr.md)) ; ce module
+`site` en est un récepteur complet. Coché, Réglages › Services en ligne ›
+Envoyer vers un site web :
 
-1. l'adresse de **votre** site (celui que vous hébergez avec ce module) ;
-2. le jeton de publication, créé ici sur le serveur du site par
-   `f4ioz-site jeton` (voir « Réglages » plus bas) ;
-3. **Tester la connexion** (`GET /api/publication/ping`) : le site n'est
-   « prêt » qu'après un essai réussi ;
+1. **Adresse web**, `https://<ce site>/api/publication/{type}` (ou
+   `https://<ce site>/api/publication` seul : le type vient alors de
+   l'en-tête `X-SatMe-Type`) ;
+2. le jeton, créé ici sur le serveur du site par `f4ioz-site jeton` (voir
+   « Réglages » plus bas) ;
+3. **Tester** (un `ping`) : prêt seulement après un essai réussi ;
 4. quoi envoyer : chaque type d'abord **Sur clic**, « Automatique » seulement
    si l'opérateur le choisit ; le direct reste décoché.
+
+Une station qui avait réglé l'adresse racine du site avant le format
+générique voit son adresse devenir `…/api/publication/{type}` toute seule.
 
 ## Au-dessus de JN18FS (accueil)
 
@@ -232,18 +237,20 @@ les éléments du site (serveur GP), l'heure du navigateur, le moteur de SatMe.
 ## Le direct (SatMe-PC → site)
 
 Le site ne se connecte **jamais** à la station : SatMe-PC envoie (Réglages ›
-Services en ligne › Mon site web › « Direct sur le site », chaque partie cochée à
-part, rien par défaut), avec le jeton de publication. Le site garde tout en
+Services en ligne › Envoyer vers un site web › En direct, chaque partie cochée à
+part, rien par défaut), avec le jeton de publication. Chaque partie est un type
+de l'API (`POST /api/publication/<type>`, ou `POST /api/publication` avec
+`X-SatMe-Type`) ; les anciennes routes ci-dessous restent prises. Le site garde tout en
 mémoire seulement et l'oublie de lui-même ; lecture seule pour le public,
 aucune commande de matériel, jamais.
 
 | Requête (jeton) | Corps | Effet |
 |---|---|---|
-| `POST /api/publication/direct` | JSON ≤ 8 Ko : `{"t", "pilote": {…}\|null, "datv": {…}\|null}` | l'état de l'auto-pilote (oublié après 2 min), les mesures DATV |
-| `POST /api/publication/direct/spectre` | JSON ≤ 8 Ko : `{centreHz, largeurHz, minDb, maxDb, bins}` (64 à 2048 octets en base64) | une ligne ; 120 gardées pour la chute d'eau ; « arrêté » après 15 s |
-| `POST /api/publication/direct/datv-image` | JPEG ≤ 200 Ko, 1920 × 1080 au plus | « hors ligne » après 30 s, oubliée après 10 min |
-| `POST /api/publication/direct/sstv-image` | JPEG ≤ 200 Ko | l'image du passage SSTV en cours (409 si aucun passage n'est connu) |
-| `DELETE /api/publication/direct` | — | tout oublié |
+| `direct` (`POST /api/publication/direct`) | JSON ≤ 8 Ko : `{"t", "pilote": {…}\|null, "datv": {…}\|null}` | l'état de l'auto-pilote (oublié après 2 min), les mesures DATV |
+| `direct-spectre` (avant : `…/direct/spectre`) | JSON ≤ 8 Ko : `{centreHz, largeurHz, minDb, maxDb, bins}` (64 à 2048 octets en base64) | une ligne ; 120 gardées pour la chute d'eau ; « arrêté » après 15 s |
+| `direct-datv-image` (avant : `…/direct/datv-image`) | multipart (`fichier`) ou le corps seul : JPEG ≤ 200 Ko, 1920 × 1080 au plus | « hors ligne » après 30 s, oubliée après 10 min |
+| `direct-sstv-image` (avant : `…/direct/sstv-image`) | multipart (`fichier`) ou le corps seul : JPEG ≤ 200 Ko | l'image du passage SSTV en cours (409 si aucun passage n'est connu) |
+| `direct-efface` (avant : `DELETE /api/publication/direct`) | — | tout oublié |
 
 Ce qui arrive est relu champ par champ (noms connus, textes et nombres
 bornés) ; le reste est ignoré. Une partie que les paramètres n'affichent pas
@@ -318,8 +325,11 @@ HTTPS par nginx ; `Authorization: Bearer <jeton>`, comparé en temps constant
 
 | Requête | Effet |
 |---|---|
-| `GET /api/publication/ping` | le jeton est bon : le site, l'indicatif, les types et leurs limites |
-| `POST /api/publication/{type}` | (403 `refuse` si le type est refusé dans les paramètres) le fichier en corps ; ses mots dans `X-SatMe-Meta` (JSON en base64url) : `satellite`, `utc`, `frequence`, `mode`, `passage`, `evenement`, `station`, `titre`, `description`, `cle` |
+| `POST /api/publication/{type}`, ou `POST /api/publication` + `X-SatMe-Type` | l'API v1 de SatMe-PC ([`docs/publication-web.fr.md`](../docs/publication-web.fr.md)) ; selon le type : |
+| — `ping` (aussi `GET /api/publication/ping`) | le jeton est bon : le site, l'indicatif, les types et leurs limites, les types refusés |
+| — `sstv-image`, `planche`, `rapport`, `qso`, `journal-video` | (403 `refuse` si le type est refusé dans les paramètres) v1 : `multipart/form-data`, `meta` (JSON : `satellite`, `utc`, `frequence`, `mode`, `passage`, `evenement`, `station`, `titre`, `description`, `cle`) et `fichier` ; avant la v1, encore pris : le fichier en corps et ses mots dans `X-SatMe-Meta` (JSON en base64url) |
+| — `retrait` | JSON `{"typeRetire", "cle", "id"}` : retiré |
+| — `direct…` | le direct, plus haut |
 | `GET /api/publication[?type=]` | ce qui est publié |
 | `DELETE /api/publication/{id}` ou `?type=…&cle=…` | retiré |
 

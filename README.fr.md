@@ -231,6 +231,8 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
+**🌐 Publication web** (module facultatif, désactivé d'origine) — SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV, planches, rapports, contacts, vidéos du journal, et en option des données en direct — à une adresse de **votre** site, qui les reçoit comme il veut (PHP, WordPress, un petit serveur Python…), ou les écrit dans un dossier (site statique, Nextcloud, Syncthing). Chaque genre **Sur clic** (d'origine), **Automatique** ou **Jamais** ; une file sur le disque, réessayée ; rien d'ouvert sur la station. Le format est une [API documentée](docs/publication-web.fr.md), avec des récepteurs prêts à l'emploi en PHP et en Python.
+
 **🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. De loin, seule l'émission de l'IC-9700 passe (PTT et micro en HTTPS), après une confirmation.
 
 **📶 FT8 / FT4** — la cascade qui écrit chaque indicatif à sa fréquence, le radar, « qui appeler maintenant », un décodeur qui suit le Doppler ; **l'émission par l'IC-9700**, réponse d'un double-clic ou appel CQ, séquence automatique, jamais sans opérateur.
@@ -343,6 +345,7 @@ Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout
 - [La démonstration](pc/demo/README.md) : une station fictive à installer sur une VM ou un Raspberry Pi
 - [Boîtier de polarisation](materiel/esp32-polarisation/README.fr.md) : le firmware de l'ESP32, son câblage et son dialogue USB
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients
+- [Publication web](docs/publication-web.fr.md) : ce que SatMe-PC envoie à votre site (API v1) et des récepteurs prêts à l'emploi
 - [Serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) : relais d'éléments orbitaux (OMM/GP) pour SatMe, à installer sur un Raspberry Pi, un serveur Linux ou Proxmox
 - [Composants tiers](THIRD-PARTY.fr.md)
 - [Politique de confidentialité](docs/privacy-policy.html)

@@ -397,7 +397,7 @@ fun main(args: Array<String>) {
         }
     }
     // The modules (Réglages › Modules): decided once too, everything on but the functions above left unticked;
-    // « Mon site web » on only for a station whose site was already set (address and token), else off.
+    // « Publication web » on only for a station whose site was already set (address and token), else off.
     fr.f4ioz.satcombo.demo.ModulesStation.migre(station.stockage) { it == fr.f4ioz.satcombo.demo.ModulesStation.SITE && SitePc.regle(station.stockage) }
     // The demonstration's virtual hardware plugged in; its data kept recent; « Remettre à neuf » from its band.
     if (ModeDemo.actif) {
@@ -590,7 +590,7 @@ fun main(args: Array<String>) {
     // « Réunir »: two partial pictures put together from the pass recording when their own sounds are gone.
     son.sstv.enregistrementDe = { son.fichierEnregistrement(it) }
     serveur.optionsSstv = optionsSstv
-    // « Réglages › Mon site web »: the SSTV pictures, planches, reports, contacts and videos published on the operator's site,
+    // « Réglages › Envoyer vers un site web »: the SSTV pictures, planches, reports, contacts and videos sent to the owner's site (or a folder),
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
     val site = SitePc(station.stockage, dossier)
     val sourcesSite = SourcesSitePc(son.sstv, planche, carnet, station, File(dossier, "exports"))
@@ -601,7 +601,7 @@ fun main(args: Array<String>) {
     journalWeb.videoFaite = { f -> site.nouvelleVideo(f.name) }
     serveur.site = site
     site.demarre()
-    // « Direct sur le site »: the auto-pilot, QO-100's spectrum and the DATV picture pushed live (each off unless chosen).
+    // The live parts: the auto-pilot, QO-100's spectrum and the DATV picture pushed live (each off unless chosen).
     val directSite = DirectSitePc(station.stockage, site)
     directSite.pilote = { runCatching { autopilote.etatSite() }.getOrNull() }
     directSite.derniereImage = {

@@ -15,7 +15,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * What [SitePc] sends for each kind, read where SatMe-PC keeps it: an SSTV
+ * What [SitePc] sends for each kind (the API's `fichier` and `meta`, docs/publication-web.md), read where SatMe-PC keeps it: an SSTV
  * picture of the gallery (its PNG, its satellite, time and mode), a planche
  * drawn at 1600 px, its event's report as a PDF, a contact as an ADIF
  * record, a video of the journal's editor. The words that go with it are
@@ -53,7 +53,7 @@ class SourcesSitePc(
         SitePc.Genre.QSO -> ref.toLongOrNull()?.let { t -> carnet.contacts().firstOrNull { it.timeMs == t } }?.let { e ->
             val adif = Adif.enregistrement(e, station.settings.callsign)
             if (adif.isBlank()) null else SitePc.Contenu(adif.toByteArray(Charsets.UTF_8), null, "text/plain; charset=utf-8", JSONObject()
-                .put("titre", "QSO " + e.callsign + " · " + e.satName).put("satellite", e.satName).put("utc", iso(e.timeMs)).put("mode", e.mode).put("station", ici()))
+                .put("titre", "QSO " + e.callsign + " · " + e.satName).put("indicatif", e.callsign).put("locator", e.theirLocator).put("satellite", e.satName).put("utc", iso(e.timeMs)).put("mode", e.mode).put("station", ici()))
         }
         SitePc.Genre.VIDEO -> File(exports, ref).takeIf { File(ref).name == ref && ref.endsWith(".mp4") && it.isFile }?.let { f ->
             // « SatMe_ISS_20261003_135119Z_passage.mp4 »: its satellite and its time.

@@ -9,51 +9,60 @@
 package fr.f4ioz.satcombo.demo
 
 /**
- * « Mon site web » on SatMe-PC's page (the server's side is SitePc, and
- * DirectSitePc for « Direct sur le site »), an optional module off by
- * default (Réglages › Modules): while it is off the card and every « Publier
- * sur le site » button stay hidden. Switched on, the card is an assistant:
- * 1. the site's address, 2. the publication token (sent once, in a POST's
- * body, never shown again), 3. « Tester la connexion » (only a test that
- * passes makes it ready), 4. what to send, each kind Sur clic (the default) /
- * Automatique / Jamais; then the queue and its last answers, and the live
- * parts. The gallery, the log, the planche page and the journal put the
- * buttons beside their items (`sitePublie(type, ref)`) only once it is ready.
- * No `$` in the texts: they are Kotlin constants.
+ * « Publication web » on SatMe-PC's page (the server's side is SitePc, and
+ * DirectSitePc for the live parts), an optional module off by default
+ * (Réglages › Modules): while it is off the card « Envoyer vers un site web »
+ * and every 🌐 button stay hidden. Switched on, the card is an assistant:
+ * 1. where to send — a web address (HTTPS, `{type}` or one address; an
+ * optional token, sent once in a POST's body, never shown again) or a folder
+ * on this PC; 2. « Tester » (only a test that passes makes it ready); 3. what
+ * to send, each kind Sur clic (the default) / Automatique / Jamais; then the
+ * queue and its last answers, and the live parts. The gallery, the log, the
+ * planche page and the journal put the buttons beside their items
+ * (`sitePublie(type, ref)`) only once it is ready. The API is documented in
+ * docs/publication-web(.fr).md. No `$` in the texts: they are Kotlin constants.
  */
 object SiteWebJs {
 
-    /** Where the site module is explained (installing it, `f4ioz-site jeton`). */
-    const val NOTICE = "https://github.com/f4ioz/SatMe/blob/main/site/README.md"
+    /** The documentation: the setup, the API, the receivers' examples. */
+    const val DOC = "https://github.com/f4ioz/SatMe/blob/main/docs/publication-web.fr.md"
 
     /** The card, in « Services en ligne » (hidden while the module is off). */
     const val CARTE = """
     <div class="carte" id="site-carte" hidden>
-      <div class="t">Mon site web</div>
-      <div class="petit aide">Publier sur <b>votre</b> site radioamateur : le module « site » de SatMe, installé sur un serveur à vous. Rien n'est envoyé tant que la connexion n'a pas été testée, et rien ne part tout seul tant que vous ne choisissez pas « Automatique ». Pour ne plus rien envoyer : décochez « Mon site web » dans Réglages › Modules.</div>
+      <div class="t">Envoyer vers un site web</div>
+      <div class="petit aide">SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV, planches, rapports, contacts, vidéos du journal, et en option des données en direct — à une adresse de votre site. Votre site les reçoit comme il veut : voir <a href="""" + DOC + """" target="_blank" rel="noopener">la documentation de l'API</a> (avec des exemples prêts à l'emploi en PHP et en Python). Sans serveur, SatMe-PC peut aussi écrire dans un dossier (site statique, Nextcloud, Syncthing…). C'est toujours SatMe-PC qui envoie : rien n'est ouvert sur la station. Rien ne part tant que le test n'a pas réussi, ni tout seul tant que vous ne choisissez pas « Automatique ».</div>
       <div class="petit" id="site-pret" style="margin-top:6px"></div>
-      <div class="petit" style="margin-top:8px"><b>1. Adresse de votre site</b></div>
-      <div class="ligne"><input id="site-url" placeholder="https://mon-site-radioamateur.fr" spellcheck="false" autocomplete="off"></div>
-      <div class="petit" style="margin-top:6px"><b>2. Jeton de publication</b> — une clé secrète qui autorise ce PC à publier sur votre site. Il se crée sur le serveur du site, avec la commande <code>f4ioz-site jeton</code> (elle donne aussi la ligne à mettre dans <code>site.conf</code>) : voir <a href="""" + NOTICE + """" target="_blank" rel="noopener">la notice du module site</a>. Collez-le ici : il reste sur ce PC et n'est jamais réaffiché.</div>
-      <div class="ligne"><input id="site-jeton" type="password" placeholder="Jeton de publication" autocomplete="off"></div>
-      <div class="petit" style="margin-top:6px"><b>3. Tester la connexion</b> — SatMe-PC demande au site s'il répond et s'il accepte le jeton, sans rien publier. Le site n'est prêt qu'après un essai réussi.</div>
-      <div class="ligne"><button class="primaire" onclick="siteEssai()">Tester la connexion</button><button id="site-oublie" onclick="if (confirm('Oublier l’adresse et le jeton de ce site ?')) sitePost('reglages', 'efface=1')" hidden>Oublier ce site</button></div>
+      <div class="petit" style="margin-top:8px"><b>1. Où envoyer</b></div>
+      <div class="ligne"><label><input type="radio" name="site-cible" value="web" onchange="siteCible(this.value)"> Adresse web (HTTPS)</label><label><input type="radio" name="site-cible" value="dossier" onchange="siteCible(this.value)"> Dossier sur ce PC</label></div>
+      <div id="site-web">
+      <div class="petit" style="margin-top:6px">L'adresse qui reçoit. Avec <code>{type}</code>, remplacé par le genre de chaque envoi (<code>…/{type}</code> → <code>…/sstv-image</code>) ; sans, tout part à cette même adresse (le genre est dans l'en-tête <code>X-SatMe-Type</code>).</div>
+      <div class="ligne"><input id="site-url" placeholder="https://example.org/satme/recevoir.php" spellcheck="false" autocomplete="off"></div>
+      <div class="petit" style="margin-top:6px">Jeton (facultatif mais conseillé) : une clé secrète que votre site vérifie, envoyée en <code>Authorization: Bearer …</code>. Elle reste sur ce PC et n'est jamais réaffichée.</div>
+      <div class="ligne"><input id="site-jeton" type="password" placeholder="Jeton (facultatif)" autocomplete="off"><button id="site-sans-jeton" onclick="if (confirm('Ne plus envoyer de jeton ?')) sitePost('reglages', 'sansJeton=1')" hidden>Sans jeton</button></div>
+      </div>
+      <div id="site-dos" hidden>
+      <div class="petit" style="margin-top:6px">Un dossier où SatMe-PC écrit chaque élément (<code>type/année/id.ext</code> et sa fiche <code>.json</code>), un <code>index.json</code> et un flux <code>flux.xml</code> : pour un site statique ou un outil de synchronisation que vous avez déjà. SatMe-PC ne fait pas de FTP lui-même.</div>
+      <div class="ligne"><input id="site-dossier" placeholder="/home/moi/Nextcloud/satme" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="petit" style="margin-top:6px"><b>2. Tester</b> — une requête <code>ping</code> à l'adresse (rien n'est publié), ou un essai d'écriture dans le dossier. Prêt seulement après un essai réussi.</div>
+      <div class="ligne"><button class="primaire" onclick="siteEssai()">Tester</button><button id="site-oublie" onclick="if (confirm('Oublier l’adresse, le dossier et le jeton ?')) sitePost('reglages', 'efface=1')" hidden>Oublier ces réglages</button></div>
       <div class="petit" id="site-etat"></div>
       <div id="site-suite" hidden>
-      <div class="petit" style="margin-top:10px"><b>4. Quoi envoyer</b> — « Sur clic » : seulement avec le bouton 🌐 de chaque élément ; « Automatique » : dès qu'il arrive ; « Jamais ». Tout commence à « Sur clic ».</div>
+      <div class="petit" style="margin-top:10px"><b>3. Quoi envoyer</b> — « Sur clic » : seulement avec le bouton 🌐 de chaque élément ; « Automatique » : dès qu'il arrive ; « Jamais ». Tout commence à « Sur clic ».</div>
       <table style="margin-top:6px"><thead><tr><th>Quoi</th><th>Publication</th></tr></thead><tbody id="site-modes"></tbody></table>
       <div class="petit" id="site-file" style="margin-top:8px"></div>
       <div class="ligne" id="site-file-b" hidden><button onclick="sitePost('maintenant')" title="Réessayer tout de suite ce qui attend">Réessayer maintenant</button><button onclick="if (confirm('Oublier tout ce qui attend d’être publié ?')) sitePost('vide')">Vider la file</button></div>
       <div class="petit" id="site-histo" style="margin-top:6px"></div>
-      <div class="t" style="margin-top:12px">Direct sur le site</div>
-      <div class="petit aide">Envoyé en direct au site, chaque partie seulement si elle est cochée (rien par défaut) : le site ne se connecte jamais à la station, c'est SatMe-PC qui envoie, avec le même jeton. Seulement ce qui s'affiche : noms, heures, mesures, spectre, image — jamais une adresse, un code d'appairage, un mot de passe ou une clé. Ce que le site ne prend pas est perdu (pas de file) ; il faut aussi l'activer sur le site (Admin › Paramètres).</div>
+      <div class="t" style="margin-top:12px">En direct (facultatif)</div>
+      <div class="petit aide">Envoyé en direct, chaque partie seulement si elle est cochée (rien par défaut) : le site ne se connecte jamais à la station, c'est SatMe-PC qui envoie, avec le même jeton. Seulement ce qui s'affiche : noms, heures, mesures, spectre, image — jamais une adresse, un code d'appairage, un mot de passe ou une clé. Ce que le site ne prend pas est perdu (pas de file). Vers un dossier : <code>direct/direct.json</code> et les images seulement, pas le spectre.</div>
       <table style="margin-top:6px"><thead><tr><th>Quoi</th><th>Envoyer</th><th>Cadence</th><th>État</th></tr></thead><tbody id="site-direct"></tbody></table>
-      <div class="ligne"><button onclick="sitePost('direct', 'efface=1')" title="Demande au site d'oublier tout de suite ce qu'il montre en direct">Effacer le direct du site</button></div>
+      <div class="ligne"><button onclick="sitePost('direct', 'efface=1')" title="Demande au site (type direct-efface) d'oublier tout de suite ce qu'il montre en direct">Effacer le direct</button></div>
       </div>
     </div>"""
 
     const val JS = """
-// ------------------------------------------------------------------ « Mon site web » (SitePc): what is published on the operator's own site
+// ------------------------------------------------------------------ « Publication web » (SitePc): what is sent to the owner's site, or a folder
 let SITE = null;
 const SITE_MODES = [['clic', 'Sur clic'], ['auto', 'Automatique'], ['jamais', 'Jamais']];
 async function siteCharge() {
@@ -62,17 +71,23 @@ async function siteCharge() {
   const on = !!(SITE && SITE.ok && SITE.module);
   const c = g('site-carte'); if (c) c.hidden = !on;
   if (!on) { document.querySelectorAll('.site-b').forEach(b => { b.hidden = true; }); return; }
+  const dos = (SITE_CIBLE || SITE.cible) === 'dossier';
+  document.querySelectorAll('input[name="site-cible"]').forEach(r => { r.checked = r.value === (dos ? 'dossier' : 'web'); });
+  g('site-web').hidden = dos; g('site-dos').hidden = !dos;
   if (document.activeElement !== g('site-url')) g('site-url').value = SITE.url || '';
-  g('site-jeton').placeholder = SITE.jeton ? 'jeton enregistré (en coller un autre pour le changer)' : 'Jeton de publication';
+  if (document.activeElement !== g('site-dossier')) g('site-dossier').value = SITE.dossier || '';
+  g('site-jeton').placeholder = SITE.jeton ? 'jeton enregistré (en coller un autre pour le changer)' : 'Jeton (facultatif)';
+  g('site-sans-jeton').hidden = !SITE.jeton;
   g('site-suite').hidden = !SITE.configure;
-  g('site-oublie').hidden = !(SITE.url || SITE.jeton);
-  g('site-pret').innerHTML = SITE.configure ? '<span class="vert">✓ Prêt : ' + esc(SITE.url) + '</span>' :
-    SITE.url && SITE.jeton ? '<span class="ambre">Pas encore prêt : testez la connexion (étape 3).</span>' : 'À régler : suivez les étapes 1 à 3.';
+  g('site-oublie').hidden = !(SITE.url || SITE.jeton || SITE.dossier);
+  const ou = SITE.cible === 'dossier' ? SITE.dossier : SITE.url;
+  g('site-pret').innerHTML = SITE.configure ? '<span class="vert">✓ Prêt : ' + esc(ou) + (SITE.cible === 'web' && !SITE.jeton ? ' (sans jeton)' : '') + '</span>' :
+    ou ? '<span class="ambre">Pas encore prêt : testez (étape 2).</span>' : 'À régler : suivez les étapes 1 et 2.';
   const m = Object.keys(SITE.modes).map(k => '<tr><td>' + esc(SITE.libelles[k]) + '</td><td><select onchange="siteMode(\'' + k + '\', this.value)">' +
     SITE_MODES.map(o => '<option value="' + o[0] + '"' + (SITE.modes[k] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></td></tr>').join('');
   if (g('site-modes').dataset.vu !== m) { g('site-modes').dataset.vu = m; g('site-modes').innerHTML = m; }
   const f = SITE.file || [];
-  g('site-file').innerHTML = f.length ? f.length + ' en attente d’envoi' + (f[0].erreur ? ' — dernier essai : <span class="ambre">' + esc(f[0].erreur) + '</span>, prochain à ' + hm(f[0].prochain) : '') : (SITE.configure ? 'Rien en attente · ' + SITE.publies + ' publié(s) depuis ce PC' : '');
+  g('site-file').innerHTML = f.length ? f.length + ' en attente d’envoi' + (f[0].erreur ? ' — dernier essai : <span class="ambre">' + esc(f[0].erreur) + '</span>, prochain à ' + hm(f[0].prochain) : '') : (SITE.configure ? 'Rien en attente · ' + SITE.publies + ' envoyé(s) depuis ce PC' : '');
   g('site-file-b').hidden = !f.length;
   g('site-histo').innerHTML = (SITE.historique || []).slice(0, 5).map(h => hm(h.t) + ' · ' + esc(h.texte)).join('<br>');
   if (SITE.demo) txt('site-etat', 'Démonstration : publication seulement vers un site de cette machine (http://127.0.0.1:…).');
@@ -90,18 +105,22 @@ async function sitePost(route, corps) {
   await siteCharge();
   return j;
 }
-/** Step 3: the address and the token typed sent with the test; the site is ready only if it passes. */
+/** The target chosen on the page (web or folder), before it is tested. */
+let SITE_CIBLE = null;
+function siteCible(c) { SITE_CIBLE = c; g('site-web').hidden = c === 'dossier'; g('site-dos').hidden = c !== 'dossier'; }
+/** Step 2: the target typed (address and token, or folder) sent with the test; ready only if it passes. */
 async function siteEssai() {
-  if (!v('site-url')) { txt('site-etat', 'Étape 1 : l’adresse de votre site.'); return; }
-  if (!v('site-jeton') && !(SITE && SITE.jeton)) { txt('site-etat', 'Étape 2 : le jeton de publication.'); return; }
+  const dos = (SITE_CIBLE || (SITE && SITE.cible)) === 'dossier';
+  if (dos ? !v('site-dossier') : !v('site-url')) { txt('site-etat', dos ? 'Étape 1 : le dossier.' : 'Étape 1 : l’adresse de votre site.'); return; }
   txt('site-etat', 'Essai…');
-  const b = 'url=' + enc(v('site-url')) + (v('site-jeton') ? '&jeton=' + enc(v('site-jeton')) : '');
+  const b = 'cible=' + (dos ? 'dossier' : 'web') + (dos ? '&dossier=' + enc(v('site-dossier')) : '&url=' + enc(v('site-url')) + (v('site-jeton') ? '&jeton=' + enc(v('site-jeton')) : ''));
   g('site-jeton').value = '';
   const j = await sitePost('essai', b);
-  g('site-etat').innerHTML = j ? (j.ok ? '<span class="vert">✓ ' + esc(j.message) + ' — prêt. Choisissez maintenant quoi envoyer (étape 4).</span>' : '<span class="rose">✗ ' + esc(j.message || j.erreur) + '</span>') : 'pas de réponse';
+  SITE_CIBLE = null;
+  g('site-etat').innerHTML = j ? (j.ok ? '<span class="vert">✓ ' + esc(j.message) + ' — prêt. Choisissez maintenant quoi envoyer (étape 3).</span>' : '<span class="rose">✗ ' + esc(j.message || j.erreur) + '</span>') : 'pas de réponse';
 }
 async function siteMode(k, m) { await sitePost('reglages', 'mode_' + enc(k) + '=' + enc(m)); }
-/** « Publier sur le site » beside an item: [type] the site's kind, [ref] SatMe's name for it. */
+/** 🌐 « Envoyer vers le site » beside an item: [type] the site's kind, [ref] SatMe's name for it. */
 async function sitePublie(type, ref, bouton) {
   const j = await sitePost('publie', 'type=' + enc(type) + '&ref=' + enc(String(ref)));
   const dit = j ? (j.ok ? '🌐 ' + j.message : '✗ ' + (j.erreur || 'refusé')) : '✗ pas de réponse';
@@ -111,7 +130,7 @@ async function sitePublie(type, ref, bouton) {
 /** The button for a list's line (none while the module is off or the site not ready, or this kind never published). */
 function siteBouton(type, ref) {
   if (!SITE || !SITE.module || !SITE.configure || SITE.modes[type] === 'jamais') return '';
-  return '<button class="site-b" data-site="' + type + '" title="Publier sur le site web" onclick="event.stopPropagation(); sitePublie(\'' + type + '\', ' + JSON.stringify(String(ref)).replace(/"/g, '&quot;') + ', this)">🌐</button> ';
+  return '<button class="site-b" data-site="' + type + '" title="Envoyer vers le site web" onclick="event.stopPropagation(); sitePublie(\'' + type + '\', ' + JSON.stringify(String(ref)).replace(/"/g, '&quot;') + ', this)">🌐</button> ';
 }
 siteCharge();
 setInterval(() => { if (!g('v-reglages').hidden) siteCharge(); }, 5000);

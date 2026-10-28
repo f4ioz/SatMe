@@ -26,7 +26,7 @@ import fr.f4ioz.satcombo.plateforme.Stockage
  * ([migre]) so nothing ticked or unticked changes.
  *
  * Some modules are switched on by the owner only ([Module.surDemande]: the
- * owner's own web site, which sends things out of the station): off on a
+ * « Publication web », which sends things out of the station): off on a
  * new install, never on through a profile, and decided once for a station
  * that existed before them ([migre]: on only where already set up).
  */
@@ -83,7 +83,7 @@ object ModulesStation {
         Module("telephone", "Téléphone", "SatMe sur le téléphone : réglages et contacts", masques = listOf("#carteTelephone")),
         Module("polar", "Polarisation", "Le commutateur de polarisation d’antenne (V, H, circulaires) : boîtier ESP32 en USB", masques = listOf("#pol-carte", "#polr-carte"),
             avis = "Un boîtier ESP32 et un WiMo ; ne fait rien tant qu’aucun port n’est choisi (l’ESP32 virtuel pour essayer)"),
-        Module(SITE, "Mon site web", "Publier vos images, planches, rapports, contacts et vidéos sur VOTRE site radioamateur (module « site » de SatMe, hébergé par vous). Rien n’est envoyé tant que ce module n’est pas activé et configuré.",
+        Module(SITE, "Publication web", "Envoyer images SSTV, planches, rapports, contacts et vidéos (et en option des données en direct) vers votre site web, par HTTPS, ou dans un dossier. Votre site les reçoit comme il veut (API documentée). Rien n’est envoyé tant que ce module n’est pas activé et testé.",
             masques = listOf("#site-carte", ".site-b"), avis = "Désactivé par défaut ; aucun profil ne l’active", surDemande = true),
     )
 
@@ -101,7 +101,7 @@ object ModulesStation {
             setOf("sdr", "qo100", "datv", "ft8", "cw", "phonie", "annonces", "noeud", "montage", "telephone")),
         Profil("meteo", "Météo et non-sat", "Images METEOR, radiosondes, avions, navires, météo spatiale",
             setOf("sdr", "meteor", "sondes", "avions", "ais", "espace", "annonces", "telephone")),
-        Profil("tout", "Tout", "Tous les modules (sauf ceux à activer soi-même, comme Mon site web)", MODULES.filter { !it.surDemande }.map { it.id }.toSet()),
+        Profil("tout", "Tout", "Tous les modules (sauf ceux à activer soi-même, comme Publication web)", MODULES.filter { !it.surDemande }.map { it.id }.toSet()),
     )
 
     /** The modules switched off (a set of [MODULES]' ids); absent until [migre] or a first choice. */
@@ -110,7 +110,7 @@ object ModulesStation {
     /** The modules [surDemande] already decided (by [migre] or a choice): the others are off. */
     const val CLE_DECIDES = "pc_modules_decides"
 
-    /** The owner's own web site (SitePc): off until switched on. */
+    /** « Publication web », sending to the owner's web site (SitePc): off until switched on. Its id stays « site » (the stations' settings). */
     const val SITE = "site"
 
     fun module(id: String): Module? = PAR_ID[id]

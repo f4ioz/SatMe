@@ -40,10 +40,10 @@ class DirectSitePcTest {
     private fun direct(): Pair<SitePc, DirectSitePc> {
         val st = StockageFichier(tmp.newFile("r-" + System.nanoTime() + ".properties"))
         reglages = st
-        val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { m, u, e, c, _ -> val x = Envoi(m, u, e, c); envois += x; reponse(x) })
+        val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { m, u, e, c -> val x = Envoi(m, u, e, c?.octets()); envois += x; reponse(x) })
         // « Mon site web » switched on, the site set and tested.
         fr.f4ioz.satcombo.demo.ModulesStation.pose(st, emptySet())
-        site.sert("/api/site/essai", "POST") { k -> when (k) { "url" -> "https://f4ioz.example"; "jeton" -> "le-jeton"; else -> "" } }
+        site.sert("/api/site/essai", "POST") { k -> when (k) { "url" -> "https://example.org/api/publication/{type}"; "jeton" -> "le-jeton"; else -> "" } }
         envois.clear()
         val d = DirectSitePc(st, site, { t })
         site.direct = d
@@ -115,14 +115,15 @@ class DirectSitePcTest {
         assertEquals(0, demande)
         site.sert("/api/site/direct", "POST") { k -> when (k) { "on_pilote", "on_spectre" -> "1"; else -> "" } }
         d.tic()
-        assertEquals(listOf("https://f4ioz.example/api/publication/direct", "https://f4ioz.example/api/publication/direct/spectre"), envois.map { it.url })
-        assertTrue(envois.all { it.entetes["Authorization"] == "Bearer le-jeton" && it.methode == "POST" })
+        assertEquals(listOf("https://example.org/api/publication/direct", "https://example.org/api/publication/direct-spectre"), envois.map { it.url })
+        assertTrue(envois.all { it.entetes["Authorization"] == "Bearer le-jeton" && it.methode == "POST" && it.entetes["X-SatMe-Version"] == "1" })
+        assertEquals(listOf("direct", "direct-spectre"), envois.map { it.entetes["X-SatMe-Type"] })
         assertTrue(demande > 0)
         val corps = String(envois[0].corps!!)
         assertFalse(corps.contains("le-jeton")); assertFalse(corps.contains("hw:CARD"))
         // The same auto-pilot state again within a minute: not sent; the spectrum every second.
         envois.clear(); t += 10_000L; d.tic()
-        assertEquals(listOf("https://f4ioz.example/api/publication/direct/spectre"), envois.map { it.url })
+        assertEquals(listOf("https://example.org/api/publication/direct-spectre"), envois.map { it.url })
         // The token is never shown on SatMe-PC's page either.
         assertFalse(site.json().toString().contains("le-jeton"))
         assertTrue(site.json().getJSONObject("direct").getJSONArray("canaux").getJSONObject(0).getBoolean("on"))
@@ -139,7 +140,7 @@ class DirectSitePcTest {
         repeat(5) { t += 10_000L; d.tic() }
         assertTrue(envois.isEmpty())
         assertEquals(0, demande)
-        assertNull(site.envoieDirect("POST", "", null, null))
+        assertNull(site.envoieDirect("direct", JSONObject()))
         // The page cannot switch a part on or wipe the site's live block either.
         assertFalse(site.sert("/api/site/direct", "POST") { k -> if (k == "efface") "1" else "" }.corps.toString(Charsets.UTF_8).contains("\"ok\":true"))
         assertTrue(envois.isEmpty())
@@ -177,12 +178,12 @@ class DirectSitePcTest {
         d.datv = { DirectSitePc.Datv(e, ReglageDatv(), null, img) }
         site.sert("/api/site/direct", "POST") { k -> if (k == "on_datv") "1" else "" }
         d.tic()
-        assertEquals(listOf("https://f4ioz.example/api/publication/direct"), envois.map { it.url })
+        assertEquals(listOf("https://example.org/api/publication/direct"), envois.map { it.url })
         e = EtatDatv(actif = true, etat = 4, merDb = 6.0, service = "F4XYZ")
         t += 5_000L; d.tic()
-        assertEquals("https://f4ioz.example/api/publication/direct/datv-image", envois.last().url)
-        assertEquals("image/jpeg", envois.last().entetes["Content-Type"])
-        assertNotNull(ImageIO.read(envois.last().corps!!.inputStream()))
+        assertEquals("https://example.org/api/publication/direct-datv-image", envois.last().url)
+        assertTrue(envois.last().entetes["Content-Type"]!!.startsWith("multipart/form-data"))
+        assertNotNull(ImageIO.read(SitePcTest.parties(envois.last().entetes["Content-Type"]!!, envois.last().corps!!).getValue("fichier").second.inputStream()))
         val n = envois.size
         t += 5_000L; d.tic()
         assertEquals(n + 1, envois.size)
@@ -204,7 +205,7 @@ class DirectSitePcTest {
         assertTrue(envois.isEmpty())
         site.sert("/api/site/direct", "POST") { k -> if (k == "on_pilote") "1" else "" }
         d.tic()
-        assertEquals(listOf("https://f4ioz.example/api/publication/direct", "https://f4ioz.example/api/publication/direct/sstv-image"), envois.map { it.url })
+        assertEquals(listOf("https://example.org/api/publication/direct", "https://example.org/api/publication/direct-sstv-image"), envois.map { it.url })
         assertTrue(String(envois[0].corps!!).contains("\"elMaintenant\":31"))
         t += DirectSitePc.PERIODE_SSTV_MS; d.tic()
         assertEquals(2, envois.size)

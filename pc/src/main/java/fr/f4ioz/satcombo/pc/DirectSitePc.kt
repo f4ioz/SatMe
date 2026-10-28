@@ -22,9 +22,10 @@ import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 
 /**
- * « Réglages › Mon site web › Direct sur le site »: what SatMe-PC sends live to
- * the operator's site (its `/api/publication/direct…`, with the publication
- * token), each part switched on by itself and off by default —
+ * « Réglages › Envoyer vers un site web › Direct »: what SatMe-PC sends live to
+ * the owner's site (the types `direct`, `direct-spectre`, `direct-datv-image`,
+ * `direct-sstv-image`, `direct-efface` of the publication API, docs/publication-web.md;
+ * to a folder, `direct/direct.json` and the pictures), each part switched on by itself and off by default —
  * **Auto-pilote** (the next campaign pass, the one under way, its next
  * picture, the last picture received; during a pass, the picture arriving
  * every few seconds, which the site's live block shows instead of QO-100), **Spectre QO-100** (the narrow band
@@ -91,7 +92,7 @@ class DirectSitePc(
         fil = Thread({ while (true) { runCatching { tic() }; Thread.sleep(1000L) } }, "satme-site-direct").apply { isDaemon = true; start() }
     }
 
-    /** Once a second: each part on and due goes (nothing at all while « Mon site web » is switched off). */
+    /** Once a second: each part on and due goes (nothing at all while « Publication web » is switched off). */
     fun tic() {
         if (!site.actif) return
         val t = horloge()
@@ -111,7 +112,7 @@ class DirectSitePc(
                 val cle = java.util.Arrays.hashCode(b)
                 if (cle.toString() == suiviSstv.dernier) return
                 val j = jpegReduit(b) ?: return
-                val r = runCatching { site.envoieDirect("POST", "/sstv-image", "image/jpeg", j) }.getOrElse { echec(suiviSstv, t, 0, it.message ?: "erreur"); null } ?: return
+                val r = runCatching { site.envoieDirect("direct-sstv-image", null, j) }.getOrElse { echec(suiviSstv, t, 0, it.message ?: "erreur"); null } ?: return
                 if (r.first in 200..299) { suiviSstv.dernier = cle.toString(); suiviSstv.okMs = t } else echec(suiviSstv, t, r.first, raison(r.second))
             }
         }
@@ -126,34 +127,34 @@ class DirectSitePc(
                 val texte = p?.toString().orEmpty()
                 if (p == null && !s.envoye) return
                 if (texte == s.dernier && t - s.dernierMs < 60_000L) return
-                poste(c, s, t, "", JSONObject().put("t", t).put("pilote", p ?: JSONObject.NULL))?.let { if (it) { s.dernier = texte; s.dernierMs = t; s.envoye = p != null } }
+                poste(s, t, "direct", JSONObject().put("t", t).put("pilote", p ?: JSONObject.NULL))?.let { if (it) { s.dernier = texte; s.dernierMs = t; s.envoye = p != null } }
             }
             Canal.SPECTRE -> {
                 val pan = panorama() ?: return
                 val l = ligneSpectre(pan.db, pan.centreHz, pan.largeurHz) ?: return
-                poste(c, s, t, "/spectre", l)
+                poste(s, t, "direct-spectre", l)
             }
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
-                    if (s.envoye) poste(c, s, t, "", JSONObject().put("t", t).put("datv", JSONObject.NULL))?.let { if (it) s.envoye = false }
+                    if (s.envoye) poste(s, t, "direct", JSONObject().put("t", t).put("datv", JSONObject.NULL))?.let { if (it) s.envoye = false }
                     return
                 }
-                if (poste(c, s, t, "", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge))) != true) return
+                if (poste(s, t, "direct", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge))) != true) return
                 s.envoye = true
                 val img = d.image
                 if (d.etat.verrouille && img != null && img !== imageEnvoyee) {
                     val j = jpegReduit(img) ?: return
-                    val r = site.envoieDirect("POST", "/datv-image", "image/jpeg", j) ?: return
+                    val r = site.envoieDirect("direct-datv-image", null, j) ?: return
                     if (r.first in 200..299) imageEnvoyee = img else echec(s, t, r.first, raison(r.second))
                 }
             }
         }
     }
 
-    /** POSTs [o]: true when taken, false when not (the next try put off), null when the site is not set. */
-    private fun poste(c: Canal, s: Suivi, t: Long, route: String, o: JSONObject): Boolean? {
-        val r = site.envoieDirect("POST", route, "application/json", o.toString().toByteArray(Charsets.UTF_8)) ?: run { s.erreur = "site non réglé"; return null }
+    /** Sends [o] as [type]: true when taken, false when not (the next try put off), null when the target is not set. */
+    private fun poste(s: Suivi, t: Long, type: String, o: JSONObject): Boolean? {
+        val r = site.envoieDirect(type, o) ?: run { s.erreur = "site non réglé"; return null }
         if (r.first in 200..299) { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; return true }
         echec(s, t, r.first, raison(r.second))
         return false
@@ -190,7 +191,7 @@ class DirectSitePc(
         e.apply()
         // A change: try at once.
         suivis.values.forEach { it.prochainMs = 0L; it.delaiMs = 0L; it.erreur = "" }
-        if (p("efface") == "1") runCatching { site.envoieDirect("DELETE", "", null, null) }
+        if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
     }
 
     companion object {

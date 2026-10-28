@@ -1736,13 +1736,13 @@ async function suitTravail(j, zone, barre, mot) {
     return;
   }
 }
-/** SatMe-PC only: « Publier sur le site » (Réglages › Mon site web, a module off by default) under a video made, when its kind is not « Jamais ». */
+/** SatMe-PC only: « Publier sur le site » (Réglages › Envoyer vers un site web, the module « Publication web », off by default) under a video made, when its kind is not « Jamais ». */
 async function siteVideo(zone, nom) {
   if (!window.SATME_PC) return;
   let S = null; try { S = await (await fetch(base + '/api/site')).json(); } catch (x) {}
   if (!S || !S.ok || !S.configure || S.modes['journal-video'] === 'jamais') return;
   const dit = el('span', { class: 'aide' });
-  const b = el('button', { text: '🌐 Publier sur le site' });
+  const b = el('button', { text: '🌐 Envoyer vers le site' });
   b.onclick = async () => {
     let j = null;
     try { j = await (await fetch(base + '/api/site/publie', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
