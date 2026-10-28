@@ -86,6 +86,11 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
                 if (jpeg == null) 400 to "{\"ok\":false,\"erreur\":\"image manquante\"}"
                 else { d.mkdirs(); ecritAtomique(File(d, type.removePrefix("direct-").removeSuffix("-image") + ".jpg"), jpeg); 200 to "{\"ok\":true}" }
             }
+            "favoris" -> {
+                val f = JSONObject().put("version", SitePc.VERSION_API).put("type", "favoris")
+                o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
+                racine().mkdirs(); ecritAtomique(File(racine(), "favoris.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
+            }
             "direct-efface" -> { direct.keySet().toList().forEach { direct.remove(it) }; d.deleteRecursively(); 200 to "{\"ok\":true}" }
             else -> 415 to "{\"ok\":false,\"erreur\":\"pas de spectre vers un dossier\"}"
         }

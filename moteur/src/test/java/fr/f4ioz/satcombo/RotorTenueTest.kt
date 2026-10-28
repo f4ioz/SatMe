@@ -51,7 +51,7 @@ class RotorTenueTest {
         val juste = RotorTenue.montrer(null, pos, 10_000L, 10_000L + RotorTenue.DEFAUT_MS)
         assertEquals("la tenue doit couvrir toute sa durée", pos, juste)
         val apres = RotorTenue.montrer(null, pos, 10_000L, 10_001L + RotorTenue.DEFAUT_MS)
-        assertNull("le mât muet est resté affiché au-delà de la tenue", apres)
+        assertNull("le pylône muet est resté affiché au-delà de la tenue", apres)
     }
 
     @Test

@@ -84,7 +84,7 @@ class RotorMathTest {
         assertEquals(40.0, avecRecouvrement, 1e-6)
         // Without overlap, a full half-turn mid-pass, right when the satellite
         // is highest.
-        assertTrue("le mât bridé n'a pas fait son demi-tour : $sansRecouvrement",
+        assertTrue("le pylône bridé n'a pas fait son demi-tour : $sansRecouvrement",
             sansRecouvrement > 350.0)
         assertTrue("rapport insuffisant : $sansRecouvrement contre $avecRecouvrement",
             sansRecouvrement / avecRecouvrement > 9.0)

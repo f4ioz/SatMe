@@ -13,7 +13,7 @@ package fr.f4ioz.satcombo.rotor
  *
  * On an Arduino emulator driving two motors, the `C2` reply is sometimes late
  * or missing. A single missed reply used to wipe everything — mast position,
- * `AZ MÂT` / `ÉL MÂT` labels, the "aim: rotor" line — and the compass flipped
+ * `AZ PYLÔNE` / `ÉL PYLÔNE` labels, the "aim: rotor" line — and the compass flipped
  * to the satellite and back a second later. So the last reading is held for
  * [DEFAUT_MS]. Two rules:
  *

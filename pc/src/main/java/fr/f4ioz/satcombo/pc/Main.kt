@@ -617,6 +617,12 @@ fun main(args: Array<String>) {
         if (!sdr.surQo100) null else sdr.panorama?.let { p -> sdr.axeQo100()?.let { (c, w) -> DirectSitePc.Panorama(p, c, w) } }
     }
     directSite.demandePanorama = { if (sdr.surQo100) sdr.demandePanorama() }
+    // The satellites marked ★, with their names (null until the catalogue is read).
+    directSite.favoris = {
+        val e = station.etat.value
+        if (e.favoris.isNotEmpty() && e.satellites.isEmpty()) null
+        else e.favoris.map { n -> (e.satellites.firstOrNull { it.catalogNumber == n }?.name ?: "") to n }
+    }
     site.direct = directSite
     directSite.demarre()
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.

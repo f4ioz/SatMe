@@ -217,4 +217,72 @@ class DirectSitePcTest {
         t += 400_000L; d.tic()
         assertTrue(envois.none { it.url.endsWith("sstv-image") && envois.indexOf(it) > 2 })
     }
+
+    @Test fun `the favourites go only when chosen, on change, else once an hour`() {
+        val (site, d) = direct()
+        var fav = listOf("SO-50" to 27607, "ISS" to 25544)
+        d.favoris = { fav }
+        d.tic()
+        assertTrue(envois.isEmpty())
+        assertFalse(d.json().getJSONArray("canaux").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("nom") == "favoris" }.getBoolean("on"))
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_favoris") "1" else "" }
+        d.tic()
+        assertEquals(listOf("https://example.org/api/publication/favoris"), envois.map { it.url })
+        assertEquals("favoris", envois[0].entetes["X-SatMe-Type"])
+        val o = JSONObject(String(envois[0].corps!!))
+        assertEquals("favoris", o.getString("type")); assertEquals(1, o.getInt("version")); assertEquals(t, o.getLong("t"))
+        val sats = o.getJSONArray("satellites").let { a -> (0 until a.length()).map { a.getJSONObject(it).let { x -> x.getString("nom") to x.getInt("norad") } } }
+        assertEquals(listOf("ISS" to 25544, "SO-50" to 27607), sats)
+        // Unchanged: not again before an hour.
+        t += 600_000L; d.tic()
+        assertEquals(1, envois.size)
+        // Changed: at once.
+        fav = listOf("ISS" to 25544)
+        t += 1_000L; d.tic()
+        assertEquals(2, envois.size)
+        assertEquals(1, JSONObject(String(envois[1].corps!!)).getJSONArray("satellites").length())
+        t += DirectSitePc.PERIODE_FAVORIS_MS - 1_000L; d.tic()
+        assertEquals(2, envois.size)
+        t += 1_000L; d.tic()
+        assertEquals(3, envois.size)
+        // Nothing while the target is not ready.
+        fav = emptyList()
+        reglages.edit().putBoolean(SitePc.CLE_PRET, false).apply()
+        t += 1_000L; d.tic()
+        assertEquals(3, envois.size)
+    }
+
+    @Test fun `a site that does not know the favourites is left alone for the day, without an error`() {
+        val (site, d) = direct()
+        d.favoris = { listOf("ISS" to 25544) }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_favoris") "1" else "" }
+        reponse = { 404 to "{\"ok\":false,\"erreur\":\"type inconnu\"}" }
+        d.tic()
+        assertEquals(1, envois.size)
+        val c = d.json().getJSONArray("canaux").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("nom") == "favoris" }
+        assertTrue(c.getBoolean("nonPris")); assertEquals("", c.getString("erreur"))
+        repeat(5) { t += 3_600_000L; d.tic() }
+        assertEquals(1, envois.size)
+        reponse = { 200 to "{\"ok\":true}" }
+        t += DirectSitePc.NON_PRIS_MS; d.tic()
+        assertEquals(2, envois.size)
+        assertFalse(d.json().toString().contains("\"nonPris\":true"))
+    }
+
+    @Test fun `to a folder the favourites are favoris_json`() {
+        val st = StockageFichier(tmp.newFile("r-dossier.properties"))
+        val dos = tmp.newFolder("site-dossier")
+        val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { _, _, _, _ -> throw AssertionError("pas de web") })
+        fr.f4ioz.satcombo.demo.ModulesStation.pose(st, emptySet())
+        site.sert("/api/site/essai", "POST") { k -> when (k) { "cible" -> "dossier"; "dossier" -> dos.absolutePath; else -> "" } }
+        assertTrue(site.configure)
+        val d = DirectSitePc(st, site, { t })
+        site.direct = d
+        d.favoris = { listOf("ISS" to 25544) }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_favoris") "1" else "" }
+        d.tic()
+        val o = JSONObject(java.io.File(dos, "favoris.json").readText())
+        assertEquals("favoris", o.getString("type"))
+        assertEquals(25544, o.getJSONArray("satellites").getJSONObject(0).getInt("norad"))
+    }
 }

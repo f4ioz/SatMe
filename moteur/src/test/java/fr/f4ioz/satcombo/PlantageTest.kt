@@ -31,11 +31,11 @@ class PlantageTest {
 
     @Test
     fun le_rapport_nomme_la_panne_des_les_premieres_lignes() {
-        val r = rapport(IllegalStateException("le mât ne répond pas"))
+        val r = rapport(IllegalStateException("le pylône ne répond pas"))
         assertTrue("la version manque", r.contains("SatMe 18.28 (1928)"))
         assertTrue("l'appareil manque", r.contains("Xiaomi 22041219NY"))
         assertTrue("l'exception manque", r.contains("IllegalStateException"))
-        assertTrue("le message manque", r.contains("le mât ne répond pas"))
+        assertTrue("le message manque", r.contains("le pylône ne répond pas"))
     }
 
     @Test

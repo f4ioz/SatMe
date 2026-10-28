@@ -4,7 +4,7 @@
 
 SatMe-PC can **push items to an outside web site**: SSTV pictures, planches,
 event reports, contacts, the journal's videos, and as an option live data
-(auto-pilot, QO-100 spectrum, DATV picture). Your site receives them **as it
+(auto-pilot, QO-100 spectrum, DATV picture) and your favourite satellites. Your site receives them **as it
 likes** — a PHP file on shared hosting, a WordPress plugin, a small Python or
 Node server, anything that can answer an HTTP request. This page covers the
 setting in SatMe-PC and **the wire format (API v1)**, stable and versioned,
@@ -234,6 +234,7 @@ Content-Type: image/png
 | `journal-video` | multipart | MP4 | a video made by the journal's editor (can be hundreds of MB) |
 | `retrait` | JSON | — | withdraw an item (no button in SatMe-PC yet; part of the API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-efface` | JSON or multipart | JPEG | [live data](#live-data-optional), only when ticked |
+| `favoris` | JSON | — | the [favourite satellites](#favourite-satellites), only when ticked |
 
 **`ping`**: `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types`: those not set to « Jamais »). The receiver answers **any 2xx**. If
@@ -310,6 +311,25 @@ password or a key.
 A receiver that does not want live data answers `403` (or `404`) to these
 types.
 
+### Favourite satellites
+
+Under **En direct**, the **Satellites favoris** line (unticked by default)
+sends the list of the satellites marked ★ in SatMe-PC, for instance for a
+home page to feature them. It goes as soon as the list changes, otherwise at
+most once an hour, and only while the module is on and the target tested.
+
+```json
+{"type":"favoris","version":1,"satellites":[{"nom":"ISS","norad":25544},{"nom":"SO-50","norad":27607}],"t":1798000000000}
+```
+
+`satellites` is the whole list (sorted by name; empty when there is no
+favourite left): it replaces the previous one. `t`: when it was sent, UTC ms.
+To a folder: `favoris.json` at the root, same content.
+
+A receiver that does not know this type answers `400`, `404` or `415`:
+SatMe-PC shows « non pris en charge par le site », without an error, and
+tries again only the next day (or when the line is ticked again).
+
 ---
 
 ## Security
@@ -376,6 +396,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….png     the file
 ├── sstv-image/2026/0b6f7c1e-….json    its card: the meta JSON + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
+├── favoris.json                       the favourite satellites (when ticked)
 └── direct/direct.json, datv.jpg, sstv.jpg   (live data, rewritten in place)
 ```
 
@@ -417,7 +438,8 @@ as the API:
   replaces the old one, files included);
 - `flux.xml`: an Atom feed of the last 50 (links relative to the folder);
 - `direct/direct.json` (rewritten in place), `direct/datv.jpg`,
-  `direct/sstv.jpg` when live data is ticked — no spectrum to a folder.
+  `direct/sstv.jpg` when live data is ticked — no spectrum to a folder;
+- `favoris.json` when **Satellites favoris** is ticked.
 
 Each file is written beside its place then renamed (atomic where the system
 allows): a reader never sees half a file, and the index never names a file not

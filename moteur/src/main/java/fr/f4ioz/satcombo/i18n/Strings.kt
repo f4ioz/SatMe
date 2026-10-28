@@ -1326,8 +1326,8 @@ val FR: Map<String, String> = mapOf(
 
     // Batch 3 — remaining hardcoded French strings routed through i18n
     "el_label" to "ÉL",
-    "az_mast_label" to "AZ MÂT",
-    "el_mast_label" to "ÉL MÂT",
+    "az_mast_label" to "AZ PYLÔNE",
+    "el_mast_label" to "ÉL PYLÔNE",
     "az_el_big" to "AZ {0}°   ÉL {1}°",
     "az_el_line" to "az {0}°  ·  él {1}°",
     "az_el_short" to "az {0}° él {1}°",
@@ -3179,7 +3179,7 @@ val FR: Map<String, String> = mapOf(
     "rotor_plan_hint" to "Le tour des antennes est choisi une fois, à l'acquisition, pour couvrir le plus possible du passage — le haut du passage comptant davantage que l'horizon. Changer la butée ou l'écart toléré refait ce choix.",
     "rotor_max_el" to "Élévation maximale",
     "rotor_deadband" to "Écart avant de bouger",
-    "rotor_deadband_hint" to "En deçà de cet écart, aucune consigne ne part. Au-delà, le mât part un peu en avance du satellite, un seul axe à la fois, au plus une fois toutes les 6 s (sauf grand écart). Le lobe d'une antenne de satellite se compte en dizaines de degrés : 4 à 6° suffisent, et chaque départ fait claquer les relais.",
+    "rotor_deadband_hint" to "En deçà de cet écart, aucune consigne ne part. Au-delà, le pylône part un peu en avance du satellite, un seul axe à la fois, au plus une fois toutes les 6 s (sauf grand écart). Le lobe d'une antenne de satellite se compte en dizaines de degrés : 4 à 6° suffisent, et chaque départ fait claquer les relais.",
     "rotor_flip" to "Autoriser le retournement",
     "rotor_flip_hint" to "Demande un rotor d'élévation qui monte à 180°. Un passage au zénith se suit alors sans le demi-tour d'azimut, en visant par-dessus.",
     "rotor_park_az" to "Garage : azimut",
@@ -3208,7 +3208,7 @@ val FR: Map<String, String> = mapOf(
     "rotor_corr_droite" to "réel = {0} × lu {1}°",
     "rotor_corr_hors_portee" to "Avec la correction logicielle, cet angle demanderait au contrôleur plus que sa course : rien n'est envoyé.",
     "rotor_corr_refusee" to "Correction refusée : points non croissants, pente hors de ½ à 2, ou écart de plus de 90° entre lu et réel.",
-    "rotor_etal_ouvert" to "Calibration en cours : suivi automatique arrêté. Bougez le mât avec le boîtier ou les boutons de l'assistant.",
+    "rotor_etal_ouvert" to "Calibration en cours : suivi automatique arrêté. Bougez le pylône avec le boîtier ou les boutons de l'assistant.",
     "rotor_etal_suivi_attend" to "Assistant de calibration ouvert : le suivi reprendra à sa fermeture.",
     "rotor_etal_ferme_dabord" to "Ouvrez d'abord l'assistant de calibration (il arrête le suivi).",
     "rotor_etal_non_connecte" to "Rotor non connecté.",

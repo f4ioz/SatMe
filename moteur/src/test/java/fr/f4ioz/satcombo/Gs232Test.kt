@@ -148,7 +148,7 @@ class Gs232Test {
         val r = rotor(sim)
         assertTrue(r.moveTo(500.0, 0.0))      // the well-formed frame is sent
         sim.advance(60_000)
-        assertEquals("le mât a bougé sur une consigne refusée", 0.0, sim.azDeg, 1e-9)
+        assertEquals("le pylône a bougé sur une consigne refusée", 0.0, sim.azDeg, 1e-9)
         assertEquals(1, sim.refusals)
         // Non-GS-232 input is refused too.
         sim.write("Z\r".toByteArray(), 500)
@@ -169,7 +169,7 @@ class Gs232Test {
         assertEquals(30.0, sim.azDeg, 1e-9)
         assertTrue(r.stop())
         sim.advance(60_000)
-        assertEquals("le mât a continué après l'arrêt", 30.0, sim.azDeg, 1e-9)
+        assertEquals("le pylône a continué après l'arrêt", 30.0, sim.azDeg, 1e-9)
         assertTrue(!sim.isMoving)
     }
 

@@ -66,9 +66,9 @@ Plus tôt cet automne :
 
 ## Une station, trois SatMe
 
-<p align="center"><img src="docs/images/satme-ensemble-fr.svg" width="100%" alt="Les trois SatMe : SatMe sur le téléphone, SatMe-PC sur un PC ou un Raspberry Pi, SatMe-Node au pied du mât ; le téléphone rejoint le PC par un QR code ; le même moteur partout"></p>
+<p align="center"><img src="docs/images/satme-ensemble-fr.svg" width="100%" alt="Les trois SatMe : SatMe sur le téléphone, SatMe-PC sur un PC ou un Raspberry Pi, SatMe-Node au pied du pylône ; le téléphone rejoint le PC par un QR code ; le même moteur partout"></p>
 
-**SatMe** dans la poche pour trafiquer partout, **SatMe-PC** pour toute la station dans un navigateur, **SatMe-Node** sur un Raspberry Pi au pied du mât. Le même moteur partout : ce qui se fait sur le PC se fait aussi sur le téléphone. Gratuit, sans compte, sans publicité, logiciel libre.
+**SatMe** dans la poche pour trafiquer partout, **SatMe-PC** pour toute la station dans un navigateur, **SatMe-Node** sur un Raspberry Pi au pied du pylône. Le même moteur partout : ce qui se fait sur le PC se fait aussi sur le téléphone. Gratuit, sans compte, sans publicité, logiciel libre.
 
 **L'essayer en deux minutes, sans rien brancher** : poste et rotor simulés, les vrais passages du moment.
 [▶ Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo) · PC Linux ou Raspberry Pi : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [Windows, tout en un (.msi)](docs/installer-satme-pc-windows.fr.md) · ou la [station de démonstration](#quoi-de-neuf) sur une VM ou un Raspberry Pi
@@ -256,7 +256,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 - **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
 - **Icom IC-910H et IC-9100** en mode satellite, à côté de l'IC-9700 : leur adresse CI-V et leur vitesse (19 200 bauds), et la commande de mode satellite propre à l'IC-910H. Éprouvés au banc, pas encore sur les vrais postes.
-- **Rotor : plus de claquements de relais en continu** — un axe à la fois, le mât un peu en avance du satellite, au plus une consigne toutes les 6 s, et jamais deux fois la même tant que le mât reste où le contrôleur l'a laissé ; une consigne que le contrôleur n'a pas prise repart au bout de 10 s.
+- **Rotor : plus de claquements de relais en continu** — un axe à la fois, le pylône un peu en avance du satellite, au plus une consigne toutes les 6 s, et jamais deux fois la même tant que le pylône reste où le contrôleur l'a laissé ; une consigne que le contrôleur n'a pas prise repart au bout de 10 s.
 - Corrigé : un enregistrement arrêté à la main pendant que le rotor était connecté pouvait rester affiché en cours.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>

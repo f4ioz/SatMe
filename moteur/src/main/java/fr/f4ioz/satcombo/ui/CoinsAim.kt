@@ -18,7 +18,7 @@ package fr.f4ioz.satcombo.ui
  * **The read-back position wins.** As soon as the mast reports where it points,
  * show that, visible pass or not, tracking or not. It is the only real number.
  *
- * **The label follows the source.** "155°" under `AZ` and under `AZ MÂT` mean
+ * **The label follows the source.** "155°" under `AZ` and under `AZ PYLÔNE` mean
  * different things and look identical. When the controller goes quiet the label
  * reverts to `AZ`, so the switch back to the satellite is visible.
  *

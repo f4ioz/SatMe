@@ -4702,7 +4702,7 @@ ${DemarragePagePc.CARTES}
         <button onclick="post('api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
       </div>
       <div class="paire" style="margin-top:8px">
-        <span class="petit">Mât <span class="val" id="rot-pos">—</span></span>
+        <span class="petit">Pylône <span class="val" id="rot-pos">—</span></span>
         <span class="petit">Cible <span class="val" id="rot-cible">—</span></span>
       </div>
       <div class="etat" id="rot-statut"></div>
@@ -4906,8 +4906,8 @@ ${ConversionPagePc.DIALOGUES}
   <div class="etal-pas" id="etal-pas" role="tablist"></div>
 
   <section class="etal-e" data-e="0">
-    <p class="petit">Tant que cet assistant est ouvert, <b>le suivi automatique est arrêté</b> (il reprend tel qu'il était à la fermeture). Rien ne bouge sans un clic de ta part : pour amener le mât aux butées, utilise <b>le boîtier de commande</b> (ou les boutons de la vérification, plus loin). Le bouton <b>STOP</b> envoie <code>S</code> à tout moment.</p>
-    <p class="petit">Les étapes 1 à 3 utilisent les commandes de calibration du contrôleur, celles du GS-232A reprises par le firmware K3NG : <code>O2</code> / <code>F2</code> pour l'élévation, <code>O</code> / <code>F</code> pour l'azimut (la lettre O, pas le chiffre zéro). Chacune lit le potentiomètre <b>là où est le mât</b> et l'écrit tout de suite dans l'EEPROM. Le firmware attend alors une touche : SatMe l'envoie et lit la réponse (« Wrote to memory »).</p>
+    <p class="petit">Tant que cet assistant est ouvert, <b>le suivi automatique est arrêté</b> (il reprend tel qu'il était à la fermeture). Rien ne bouge sans un clic de ta part : pour amener le pylône aux butées, utilise <b>le boîtier de commande</b> (ou les boutons de la vérification, plus loin). Le bouton <b>STOP</b> envoie <code>S</code> à tout moment.</p>
+    <p class="petit">Les étapes 1 à 3 utilisent les commandes de calibration du contrôleur, celles du GS-232A reprises par le firmware K3NG : <code>O2</code> / <code>F2</code> pour l'élévation, <code>O</code> / <code>F</code> pour l'azimut (la lettre O, pas le chiffre zéro). Chacune lit le potentiomètre <b>là où est le pylône</b> et l'écrit tout de suite dans l'EEPROM. Le firmware attend alors une touche : SatMe l'envoie et lit la réponse (« Wrote to memory »).</p>
     <p class="petit" id="etal-rotctld" hidden style="color:var(--warn)">Rotor par rotctld (Hamlib) : les commandes O/F du contrôleur ne passent pas par là. Seule la correction logicielle de SatMe (étapes 4 et 5) s'applique.</p>
     <div class="ligne"><button class="primaire" onclick="etalVa(1)">Compris, commencer</button></div>
   </section>
@@ -4923,7 +4923,7 @@ ${ConversionPagePc.DIALOGUES}
     <p class="petit">Amène l'antenne en <b>butée haute réelle</b> avec le boîtier. Quel angle réel montre l'inclinomètre (de 0 à 180, au-delà de 90 en comptant depuis l'horizon de départ) ?</p>
     <div class="ligne"><span class="petit">Angle réel en haut</span><input id="etal-haut" value="180" style="max-width:80px" oninput="etalHautMontre()"><span class="petit">°</span></div>
     <div id="etal-haut-180">
-      <p class="petit"><code>F2</code> fait de la position actuelle <b>l'élévation maximale configurée dans le firmware</b> (ELEVATION_MAXIMUM_DEGREES, 180 par défaut) : à n'envoyer que si le mât est vraiment à cet angle.</p>
+      <p class="petit"><code>F2</code> fait de la position actuelle <b>l'élévation maximale configurée dans le firmware</b> (ELEVATION_MAXIMUM_DEGREES, 180 par défaut) : à n'envoyer que si le pylône est vraiment à cet angle.</p>
       <div class="ligne"><button onclick="etalCmd('F2', 'l\'élévation à l\'angle maximal du firmware (180° réels)')">Envoyer F2 (ici = 180°)</button><button onclick="etalVa(3)">Passer</button></div>
     </div>
     <div id="etal-haut-autre" hidden>
@@ -4941,7 +4941,7 @@ ${ConversionPagePc.DIALOGUES}
 
   <section class="etal-e" data-e="4" hidden>
     <b>Vérification</b>
-    <p class="petit">Chaque bouton envoie le mât à cette position (<b>seulement sur ton clic</b>, l'autre axe ne bouge pas). Une fois immobile, note ce que montre l'inclinomètre (élévation, 0 à 180) ou la boussole (azimut vrai), puis « Relever ».</p>
+    <p class="petit">Chaque bouton envoie le pylône à cette position (<b>seulement sur ton clic</b>, l'autre axe ne bouge pas). Une fois immobile, note ce que montre l'inclinomètre (élévation, 0 à 180) ou la boussole (azimut vrai), puis « Relever ».</p>
     <div class="ligne" id="etal-btn-el"></div>
     <div class="ligne" id="etal-btn-az"></div>
     <div class="ligne"><span class="petit">Mesuré</span><input id="etal-mes" placeholder="°" style="max-width:80px"><select id="etal-mes-axe"><option value="EL">élévation (inclinomètre)</option><option value="AZ">azimut (boussole, vrai)</option></select><button onclick="etalReleve()">Relever</button></div>
@@ -6393,7 +6393,7 @@ function etalMontre(e) {
   etalHautMontre();
 }
 async function etalCmd(c, quoi) {
-  if (!confirm('Envoyer ' + c + ' au contrôleur ?\n\nLa position actuelle du mât deviendra ' + quoi + ', écrite dans l\'EEPROM du contrôleur.\nLe mât doit y être vraiment (inclinomètre / boussole) et immobile.')) return;
+  if (!confirm('Envoyer ' + c + ' au contrôleur ?\n\nLa position actuelle du pylône deviendra ' + quoi + ', écrite dans l\'EEPROM du contrôleur.\nLe pylône doit y être vraiment (inclinomètre / boussole) et immobile.')) return;
   txt('etal-msg', c + ' : envoi, poignée de main avec le contrôleur…');
   await etalPost('commande?c=' + enc(c) + '&confirme=1');
 }
@@ -6414,7 +6414,7 @@ function etalHautCorrige() {
   const h = parseFloat((g('etal-haut').value || '').replace(',', '.'));
   if (!ETAL || ETAL.brutEl == null || isNaN(h)) { txt('etal-msg', 'pas de lecture du contrôleur'); return; }
   // The mast must be up there: a reading near 0 would make a correction of the whole range from nothing.
-  if (ETAL.brutEl < 90) { txt('etal-msg', 'Le contrôleur lit ' + etalN(ETAL.brutEl) + ' : amène d\'abord le mât en butée haute avec le boîtier.'); return; }
+  if (ETAL.brutEl < 90) { txt('etal-msg', 'Le contrôleur lit ' + etalN(ETAL.brutEl) + ' : amène d\'abord le pylône en butée haute avec le boîtier.'); return; }
   etalPost('correction?axe=EL&valeur=' + enc('0:0;' + ETAL.brutEl + ':' + h)).then(j => { if (j.ok !== false) etalVa(4); });
 }
 /** Writes down the controller's reading, SatMe's and the measure, now. */

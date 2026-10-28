@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="1000" height="640" role="img" aria-label="Les trois SatMe : SatMe sur le téléphone Android, SatMe-PC sur un PC Linux, Windows ou un Raspberry Pi, et SatMe-Node sur un Raspberry Pi au pied du mât. Le téléphone rejoint le PC en scannant un QR code : ses passages, contacts, images SSTV et sons arrivent sur le PC. Le PC pilote le node par le réseau. Les trois partagent le même moteur.">
-<title>Les trois SatMe : SatMe sur le téléphone Android, SatMe-PC sur un PC Linux, Windows ou un Raspberry Pi, et SatMe-Node sur un Raspberry Pi au pied du mât. Le téléphone rejoint le PC en scannant un QR code : ses passages, contacts, images SSTV et sons arrivent sur le PC. Le PC pilote le node par le réseau. Les trois partagent le même moteur.</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="1000" height="640" role="img" aria-label="Les trois SatMe : SatMe sur le téléphone Android, SatMe-PC sur un PC Linux, Windows ou un Raspberry Pi, et SatMe-Node sur un Raspberry Pi au pied du pylône. Le téléphone rejoint le PC en scannant un QR code : ses passages, contacts, images SSTV et sons arrivent sur le PC. Le PC pilote le node par le réseau. Les trois partagent le même moteur.">
+<title>Les trois SatMe : SatMe sur le téléphone Android, SatMe-PC sur un PC Linux, Windows ou un Raspberry Pi, et SatMe-Node sur un Raspberry Pi au pied du pylône. Le téléphone rejoint le PC en scannant un QR code : ses passages, contacts, images SSTV et sons arrivent sur le PC. Le PC pilote le node par le réseau. Les trois partagent le même moteur.</title>
 <style>
   text{font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif}
   .bg{fill:#ffffff} .box{fill:#ffffff;stroke:#1b2329;stroke-width:1.6} .soft{fill:#f3f6f8;stroke:#c9d2d8}
@@ -16,7 +16,7 @@
 <defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker><marker id="mas" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="acc"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="blu"/></marker><marker id="mbs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="blu"/></marker><marker id="mc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="amb"/></marker><marker id="mcs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="amb"/></marker></defs>
 <rect width="1000" height="640" class="bg"/>
 <text x="500.0" y="40" class="t" font-size="22" text-anchor="middle" font-weight="700">Une station, trois SatMe</text>
-<text x="500.0" y="64" class="m" font-size="14" text-anchor="middle" font-weight="400">le même moteur sur le téléphone, le PC et le Raspberry Pi du mât</text>
+<text x="500.0" y="64" class="m" font-size="14" text-anchor="middle" font-weight="400">le même moteur sur le téléphone, le PC et le Raspberry Pi du pylône</text>
 <rect x="370" y="92" width="260" height="54" rx="10" class="soft"/>
 <text x="500" y="115" class="t" font-size="14" text-anchor="middle" font-weight="600">Le navigateur</text>
 <text x="500" y="135" class="m" font-size="12" text-anchor="middle" font-weight="400">ce PC, une tablette, un autre PC (--reseau)</text>
@@ -40,7 +40,7 @@
 <text x="500" y="355" class="m" font-size="12" text-anchor="middle" font-weight="400">mode automatique des passages</text>
 <rect x="740" y="210" width="200" height="160" rx="12" class="box"/>
 <text x="840" y="250" class="acc" font-size="22" text-anchor="middle" font-weight="800">SatMe-Node</text>
-<text x="840" y="273" class="m" font-size="13" text-anchor="middle" font-weight="400">Raspberry Pi au mât</text>
+<text x="840" y="273" class="m" font-size="13" text-anchor="middle" font-weight="400">Raspberry Pi au pylône</text>
 <text x="840" y="302" class="m" font-size="12" text-anchor="middle" font-weight="400">reçoit le DATV de QO-100</text>
 <text x="840" y="321" class="m" font-size="12" text-anchor="middle" font-weight="400">là où est le LNB ; piloté</text>
 <text x="840" y="340" class="m" font-size="12" text-anchor="middle" font-weight="400">depuis le PC et le téléphone</text>

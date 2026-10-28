@@ -30,7 +30,10 @@ import javax.imageio.ImageWriteParam
  * picture, the last picture received; during a pass, the picture arriving
  * every few seconds, which the site's live block shows instead of QO-100), **Spectre QO-100** (the narrow band
  * as the SDR sees it, one compact line a second), **Image DATV** (a small
- * JPEG every few seconds while the receiver is locked, with its figures).
+ * JPEG every few seconds while the receiver is locked, with its figures),
+ * **Satellites favoris** (the list of the satellites marked ★, type `favoris`: as soon as it changes, else once an
+ * hour; to a folder, `favoris.json`; a receiver that does not know the type — 400, 404 or 415 — is left alone for
+ * the day, without an error).
  *
  * SatMe-PC pushes; the site never connects to the station. Nothing is
  * queued: what the site does not take is dropped and the next try waits
@@ -47,7 +50,9 @@ class DirectSitePc(
     enum class Canal(val nom: String, val libelle: String, val periodeDefaut: Int, val min: Int, val max: Int) {
         PILOTE("pilote", "Auto-pilote", 10, 10, 10),
         SPECTRE("spectre", "Spectre QO-100", 1, 1, 10),
-        DATV("datv", "Image DATV", 5, 3, 30);
+        DATV("datv", "Image DATV", 5, 3, 30),
+        /** The favourites: on change, else once an hour ([PERIODE_FAVORIS_MS]). */
+        FAVORIS("favoris", "Satellites favoris", 3600, 3600, 3600);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -72,11 +77,15 @@ class DirectSitePc(
     @Volatile var panorama: () -> Panorama? = { null }
     /** Keeps the SDR's panorama worked out (it runs only while asked). */
     @Volatile var demandePanorama: () -> Unit = {}
+    /** The satellites marked ★ (name, NORAD number), null while not known yet. */
+    @Volatile var favoris: () -> List<Pair<String, Int>>? = { null }
 
     fun on(c: Canal): Boolean = stockage.getBoolean("site_direct_" + c.nom, false)
     fun periode(c: Canal): Int = stockage.getInt("site_direct_" + c.nom + "_s", c.periodeDefaut).coerceIn(c.min, c.max)
 
-    private class Suivi { var prochainMs = 0L; var delaiMs = 0L; var okMs = 0L; var erreur = ""; var envoye = false; var dernier = ""; var dernierMs = 0L }
+    private class Suivi { var prochainMs = 0L; var delaiMs = 0L; var okMs = 0L; var erreur = ""; var envoye = false; var dernier = ""; var dernierMs = 0L
+        /** The site answered that it does not know the type (400, 404, 415): not tried again before [prochainMs]. */
+        var nonPris = false }
     private val suivis = Canal.values().associateWith { Suivi() }
     private val suiviSstv = Suivi()
     /** The pass under way the auto-pilot said last (AOS, LOS), for its pictures. */
@@ -100,6 +109,7 @@ class DirectSitePc(
             val s = suivis.getValue(c)
             if (!on(c)) { s.envoye = false; continue }
             if (c == Canal.SPECTRE) runCatching { demandePanorama() }
+            if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -134,6 +144,8 @@ class DirectSitePc(
                 val l = ligneSpectre(pan.db, pan.centreHz, pan.largeurHz) ?: return
                 poste(s, t, "direct-spectre", l)
             }
+            // Its own pace (tic).
+            Canal.FAVORIS -> favoris(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -149,6 +161,24 @@ class DirectSitePc(
                     if (r.first in 200..299) imageEnvoyee = img else echec(s, t, r.first, raison(r.second))
                 }
             }
+        }
+    }
+
+    /**
+     * The favourites: sent when the list changed since the last one the site took, else once every [PERIODE_FAVORIS_MS];
+     * only once the target is ready. A site that does not know the type is left alone for a day.
+     */
+    private fun favoris(s: Suivi, t: Long) {
+        if (t < s.prochainMs || !site.configure) return
+        val l = favoris() ?: return
+        val o = favorisJson(l, t)
+        val texte = o.getJSONArray("satellites").toString()
+        if (texte == s.dernier && t - s.dernierMs < PERIODE_FAVORIS_MS) return
+        val r = site.envoieDirect("favoris", o) ?: run { s.prochainMs = t + 60_000L; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.dernier = texte; s.dernierMs = t }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_MS }
+            else -> echec(s, t, r.first, raison(r.second))
         }
     }
 
@@ -179,6 +209,7 @@ class DirectSitePc(
         val s = suivis.getValue(c)
         JSONObject().put("nom", c.nom).put("libelle", c.libelle).put("on", on(c)).put("periode", periode(c)).put("min", c.min).put("max", c.max)
             .put("ok", s.okMs).put("erreur", if (on(c)) s.erreur else "")
+            .also { o -> if (c == Canal.FAVORIS) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
     }))
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
@@ -190,12 +221,24 @@ class DirectSitePc(
         }
         e.apply()
         // A change: try at once.
-        suivis.values.forEach { it.prochainMs = 0L; it.delaiMs = 0L; it.erreur = "" }
+        suivis.values.forEach { it.prochainMs = 0L; it.delaiMs = 0L; it.erreur = ""; it.nonPris = false }
+        // The favourites sent again at once (the site may have forgotten them while the box was off).
+        suivis.getValue(Canal.FAVORIS).dernierMs = 0L
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
     }
 
     companion object {
         const val PERIODE_SSTV_MS = 5_000L
+        /** The favourites again, unchanged, after an hour. */
+        const val PERIODE_FAVORIS_MS = 3_600_000L
+        /** A site that does not know `favoris` is asked again the next day. */
+        const val NON_PRIS_MS = 24 * 3_600_000L
+
+        /** The favourites' message: `{"satellites":[{"nom","norad"}…],"t"}` (sorted by name, then number). */
+        fun favorisJson(l: List<Pair<String, Int>>, t: Long): JSONObject = JSONObject()
+            .put("satellites", JSONArray(l.filter { it.second > 0 }.distinctBy { it.second }.sortedWith(compareBy({ it.first.lowercase() }, { it.second }))
+                .map { JSONObject().put("nom", it.first.take(40)).put("norad", it.second) }))
+            .put("t", t)
 
         private fun raison(t: String): String = runCatching { JSONObject(t).optString("erreur") }.getOrNull()?.takeIf { it.isNotEmpty() } ?: t.take(160)
 

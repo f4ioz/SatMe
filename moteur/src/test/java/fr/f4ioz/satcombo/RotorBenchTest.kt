@@ -136,7 +136,7 @@ class RotorBenchTest {
                 )
                 // A 540° mast should never miss anything.
                 if (course >= 540.0) {
-                    assertEquals("un mât de $course° a manqué du ciel", 1.0, somme / n, 1e-9)
+                    assertEquals("un pylône de $course° a manqué du ciel", 1.0, somme / n, 1e-9)
                 }
             }
         }
@@ -170,13 +170,13 @@ class RotorBenchTest {
         )
         // The plan must never cost more than aiming on the fly: it picks the same
         // branch, just in advance.
-        assertTrue("le plan fait tourner le mât davantage : $avec contre $sans", avec <= sans + 1e-6)
+        assertTrue("le plan fait tourner le pylône davantage : $avec contre $sans", avec <= sans + 1e-6)
     }
 
     @Test
     fun balayage_des_passages_au_nord() {
         Assume.assumeTrue("banc désactivé (passer -Dsatme.bench=1)", benchEnabled())
-        println("=== la traversée du nord, sur un mât à butée nord ===")
+        println("=== la traversée du nord, sur un pylône à butée nord ===")
         val limits = RotorMath.Limits(450.0, 90.0, 2.0, azStopDeg = 0.0)
         var pireSaut = 0.0
         var n = 0
@@ -196,7 +196,7 @@ class RotorBenchTest {
     @Test
     fun balayage_des_passages_au_zenith() {
         Assume.assumeTrue("banc désactivé (passer -Dsatme.bench=1)", benchEnabled())
-        println("=== retournements, sur un mât d'élévation qui monte à 180° ===")
+        println("=== retournements, sur un pylône d'élévation qui monte à 180° ===")
         val limits = RotorMath.Limits(450.0, 180.0, 2.0, azStopDeg = 0.0)
         var total = 0
         var n = 0
@@ -210,13 +210,13 @@ class RotorBenchTest {
         println(String.format(Locale.US, "%.2f retournement par passage (%d passages)", total.toDouble() / n, n))
         // That is what hysteresis is for: near zenith the choice flips every
         // second if nothing holds it.
-        assertTrue("le mât passe son temps à se retourner", total.toDouble() / n < 2.0)
+        assertTrue("le pylône passe son temps à se retourner", total.toDouble() / n < 2.0)
     }
 
     @Test
     fun balayage_de_l_ecart_tolere() {
         Assume.assumeTrue("banc désactivé (passer -Dsatme.bench=1)", benchEnabled())
-        println("=== part des passages tenus sous l'écart toléré, mât 360° butée sud ===")
+        println("=== part des passages tenus sous l'écart toléré, pylône 360° butée sud ===")
         val limits = RotorMath.Limits(360.0, 90.0, 2.0, azStopDeg = 180.0)
         val alea = Random(20_260_801L)
         val traces = ArrayList<Trace>()
@@ -252,6 +252,6 @@ class RotorBenchTest {
             }
         }
         println(String.format(Locale.US, "%d passages, pire écart %.3f°", n, pire))
-        assertEquals("un mât d'un tour et demi a buté", 0.0, pire, 1e-9)
+        assertEquals("un pylône d'un tour et demi a buté", 0.0, pire, 1e-9)
     }
 }

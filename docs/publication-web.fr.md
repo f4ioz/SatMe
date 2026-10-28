@@ -4,7 +4,8 @@
 
 SatMe-PC peut **pousser des éléments vers un site web extérieur** : images
 SSTV, planches, rapports d'événement, contacts, vidéos du journal, et en
-option des données en direct (auto-pilote, spectre QO-100, image DATV).
+option des données en direct (auto-pilote, spectre QO-100, image DATV) et la
+liste de vos satellites favoris.
 Votre site les reçoit **comme il veut** — un fichier PHP sur un hébergement
 mutualisé, une extension WordPress, un petit serveur Python ou Node, n'importe
 quoi qui sait répondre à une requête HTTP. Cette page décrit le réglage dans
@@ -234,6 +235,7 @@ Content-Type: image/png
 | `journal-video` | multipart | MP4 | une vidéo faite par l'éditeur du journal (peut faire des centaines de Mo) |
 | `retrait` | JSON | — | retirer un élément (pas encore de bouton dans SatMe-PC ; prévu dans l'API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-efface` | JSON ou multipart | JPEG | le [direct](#le-direct-facultatif), seulement si coché |
+| `favoris` | JSON | — | les [satellites favoris](#les-satellites-favoris), seulement si coché |
 
 **`ping`** : `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types` : ceux qui ne sont pas à « Jamais »). Le récepteur répond **n'importe
@@ -312,6 +314,26 @@ un code d'appairage, un mot de passe ou une clé.
 
 Un récepteur qui ne veut pas du direct répond `403` (ou `404`) à ces types.
 
+### Les satellites favoris
+
+Sous **En direct**, la ligne **Satellites favoris** (décochée d'origine)
+envoie la liste des satellites marqués ★ dans SatMe-PC, par exemple pour
+qu'une page d'accueil les mette en avant. Elle part dès que la liste change,
+sinon une fois par heure au plus, et seulement quand le module est activé et
+la cible testée.
+
+```json
+{"type":"favoris","version":1,"satellites":[{"nom":"ISS","norad":25544},{"nom":"SO-50","norad":27607}],"t":1798000000000}
+```
+
+`satellites` est la liste complète (triée par nom ; vide quand il n'y a plus
+de favori) : elle remplace la précédente. `t` : l'heure de l'envoi, en ms UTC.
+Vers un dossier : `favoris.json` à la racine, même contenu.
+
+Un récepteur qui ne connaît pas ce type répond `400`, `404` ou `415` :
+SatMe-PC le note « non pris en charge par le site », sans erreur, et ne
+réessaie que le lendemain (ou quand on recoche la ligne).
+
 ---
 
 ## Sécurité
@@ -379,6 +401,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….png     le fichier
 ├── sstv-image/2026/0b6f7c1e-….json    sa fiche : le JSON meta + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
+├── favoris.json                       les satellites favoris (si coché)
 └── direct/direct.json, datv.jpg, sstv.jpg   (le direct, réécrit sur place)
 ```
 
@@ -420,7 +443,8 @@ fiches que l'API :
   version du même élément remplace l'ancienne, fichiers compris) ;
 - `flux.xml` : un flux Atom des 50 derniers (liens relatifs au dossier) ;
 - `direct/direct.json` (réécrit sur place), `direct/datv.jpg`,
-  `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier.
+  `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier ;
+- `favoris.json` si **Satellites favoris** est coché.
 
 Chaque fichier est écrit à côté puis renommé (atomique quand le système le
 permet) : un lecteur ne voit jamais un fichier à moitié écrit, et l'index ne

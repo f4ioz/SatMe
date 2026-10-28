@@ -35,7 +35,7 @@ object CatalogueMateriel {
     private fun audioB(id: String = "audio", nom: String = "Audio (ACC)") = Port(id, nom, Sens.BIDIR, Signal.AUDIO, connecteur = "DIN")
     private fun cat(id: String = "cat", nom: String = "CAT (série)") = Port(id, nom, Sens.BIDIR, Signal.COMMANDE, connecteur = "DB9")
     private fun ptt(id: String = "ptt", nom: String = "PTT") = Port(id, nom, Sens.BIDIR, Signal.COMMANDE, connecteur = "jack")
-    private fun mat() = Port("mat", "Mât (rotor)", Sens.BIDIR, Signal.MECA, connecteur = "rotor")
+    private fun mat() = Port("mat", "Pylône (rotor)", Sens.BIDIR, Signal.MECA, connecteur = "rotor")
     // A frequency reference (10 MHz, 25 MHz…), a DC supply, a GPS antenna, a program's network link.
     private fun refE(id: String, nom: String, mhz: Int?) = Port(id, nom, Sens.ENTREE, Signal.REF, mhz = mhz, connecteur = "SMA")
     private fun refS(id: String, nom: String, mhz: Int?) = Port(id, nom, Sens.SORTIE, Signal.REF, mhz = mhz, connecteur = "SMA")
