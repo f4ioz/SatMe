@@ -1379,7 +1379,7 @@ ${Ft8EmissionJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; paddin
   .sx-tx { padding-top:6px; border-top:1px solid var(--bord); }
   #v-sstv button.emettre, #v-sstv button.arret-tx { font-size:14px; padding:6px 16px; }
   #v-sstv .sx-tx button.emettre, #v-sstv .sx-tx button.arret-tx { font-size:13px; padding:5px 12px; }
-  #i-galerie .petit { font-size:11px; line-height:1.3; }
+${EncartSstvJs.CSS}  #i-galerie .petit { font-size:11px; line-height:1.3; }
   #i-groupes .cl-gr { border:1px solid var(--bord); border-radius:8px; padding:6px 8px; margin-top:8px; }
   #i-groupes .cl-tete { cursor:pointer; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:13px; }
   #i-groupes .cl-tete .petit { font-size:11px; }
@@ -2632,7 +2632,7 @@ ${rail()}
       <div class="ligne sx-tx" id="sx-tx" hidden><span class="petit">Émission</span><span id="sx-tx-pastille" class="pastille" style="color:var(--gris)">arrêtée</span><span class="petit" id="sx-tx-pc"></span>
         <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
   </div>
-  <div class="st" data-st="sstv">
+${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
     <div class="st-nav"><button data-p="sx-p-rx" title="Source, mode imposé, calage, indicateur d’accord">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Réception</span></button><button data-p="sx-p-tx" title="L’émission SSTV par l’ADALM-PLUTO ou le bladeRF">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="sx-p-mire" title="La mire SSTV jouée sur une sortie son">${IconesPc.svg("tv", "st-ico")}<span>Mire</span></button><button data-p="sx-p-img" title="Les images reçues">${IconesPc.svg("grid_on", "st-ico")}<span>Images</span></button><button data-p="sx-p-reg" title="Décodage continu, nettoyage, décoder un enregistrement">${IconesPc.svg("settings", "st-ico")}<span>Réglages</span></button></div>
     <div class="st-pan" id="sx-p-rx">
     <div class="carte">
@@ -2748,7 +2748,7 @@ ${rail()}
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
       <label class="petit" style="display:block;margin-top:4px" title="À la fin de chaque image, son propre son est décodé à nouveau en entier, en arrière-plan, puis corrigé ; la version corrigée est gardée à côté (corrigees/) seulement si sa note est meilleure, l’image reçue n’est jamais modifiée"><input type="checkbox" id="so-redecode" onchange="soReglage('redecode', this.checked ? 1 : 0)"> Re-décoder chaque image à la fin <span class="petit">(version corrigée gardée si meilleure)</span></label>
     </div>
-    <div class="carte" id="so-carte">
+${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <div class="t">Options SSTV</div>
       <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="so-alerte" onchange="soReglage('alerte', this.checked ? 1 : 0)"> Prévenir quand une diapo manquante est attendue</label>
       <div class="ligne" style="margin-top:2px"><span class="petit"><input id="so-avant" type="number" min="1" max="120" style="max-width:56px" onchange="soReglage('avant', +this.value || 15)"> min avant la diapo · aussi une diapo reçue avec une note sous <input id="so-note" type="number" min="0" max="100" style="max-width:56px" onchange="soReglage('note', +this.value || 0)"> (0 : seulement les manquantes)</span></div>
@@ -6237,6 +6237,7 @@ function dessine() {
   } else { txt('compte', ''); txt('infos-passage', ''); }
   dessineCiel();
   dessineCarteStation();
+  esRend();
   // Transmitters: the list rebuilt only when it changes (an open select would close).
   const cle = JSON.stringify(E.emetteurs.map(t => t.desc)) + (E.suivi ? E.suivi.catnum : '');
   if (cle !== dernierEmetteurs) {
@@ -7000,7 +7001,7 @@ function vue(n) {
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
-  if (n === 'sstv') { ticMire(true); xsCharge(); }
+  if (n === 'sstv') { ticMire(true); xsCharge(); esRend(true); }
   if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); acVu = ''; acCharge(); }
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
@@ -10341,7 +10342,7 @@ setInterval(() => {
   const e = typeof AP !== 'undefined' && AP && AP.enCours;
   piRend(g('ap-prochaine'), e && e.prochaine && e.phase !== 'PRET' ? Object.assign({ visible: true, sat: e.sat }, e.prochaine) : null);
 }, 250);
-// The sound from 900 to 2600 Hz, the SSTV tones marked: the sync line shows where the receiver is tuned.
+${EncartSstvJs.JS}// The sound from 900 to 2600 Hz, the SSTV tones marked: the sync line shows where the receiver is tuned.
 function spectreSstv(D) {
   const c = g('sstv-spectre'), x = c.getContext('2d'), w = c.width, h = c.height;
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
