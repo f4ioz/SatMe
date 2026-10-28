@@ -12,6 +12,7 @@ import fr.f4ioz.site.EntreeMenu
 import fr.f4ioz.site.Groupe
 import fr.f4ioz.site.ModuleSite
 import fr.f4ioz.site.Site
+import fr.f4ioz.site.ciel.CielStation
 import fr.f4ioz.site.direct.ApiDirect
 import fr.f4ioz.site.http.Requete
 import fr.f4ioz.site.http.Reponse
@@ -42,17 +43,22 @@ class Accueil(private val s: Site) : ModuleSite {
         val reg = s.reglages.courant
         val sec = reg.accueil
         val sb = StringBuilder()
-        sb.append("""<section class="home-hero" aria-labelledby="hero-title">${Icones.marque(88, "h")}<div>
+        val ville = z.id.substringAfterLast('/').replace('_', ' ')
+        sb.append("""<section class="home-hero" aria-labelledby="hero-title">${Icones.marque(88, "h")}<div class="hero-txt">
 <h1 id="hero-title">${h(c.indicatif)}<small>${h(c.nom)} · radioamateur · ${h(c.locator)}${if (c.club.isNotEmpty()) " · " + h(c.club) else ""}</small></h1>
 <p>Satellites, trafic HF et VHF depuis la région parisienne : articles, images SSTV reçues, logbook, outils de passages
 et de poursuite — et SatMe, l'appli de poursuite de satellites que je développe.</p>
-<div class="pills"><span class="pill accent"><span class="dot"></span><span data-utc-clock>--:-- UTC</span></span>
-<span class="pill mono">${h(c.locator)}</span>${if (s.visible("/sat/pass")) "<a class=\"pill\" href=\"/sat/pass\">Prochains passages →</a>" else ""}${if (s.visible("/satme")) "<a class=\"pill\" href=\"/satme\">SatMe →</a>" else ""}</div></div></section>
+<div class="pills"><span class="pill mono">${h(c.locator)}</span>${if (s.visible("/sat/pass")) "<a class=\"pill\" href=\"/sat/pass\">Prochains passages →</a>" else ""}${if (s.visible("/satme")) "<a class=\"pill\" href=\"/satme\">SatMe →</a>" else ""}</div></div>
+<div class="hero-horloges" aria-hidden="true"><span class="hh utc"><span class="hh-l">UTC</span><span class="hh-v" data-utc-clock="nu">--:--:--</span></span>
+<span class="hh"><span class="hh-l">${h(ville)}</span><span class="hh-v" data-heure-locale="${h(z.id)}">--:--</span></span></div></section>
 <div class="home-grid">
 """)
         // Live from the station (« Admin › Paramètres »): QO-100's spectrum, the DATV picture, or BATC's pages.
         val avecDirect = reg.direct.actif && reg.direct.accueil
         if (avecDirect) sb.append(ApiDirect.bloc(s, place = "@direct@"))
+        // « Au-dessus de JN18FS »: the globe, the sky dial, the next AOS (needs the elements).
+        val ciel = if (sec.ciel) s.ciel.maintenant() else null
+        if (ciel != null) carteCiel(sb, ciel)
         // Each card on or off; a card whose page is hidden goes with it.
         val avecPassages = sec.passages
         val avecQso = sec.qso && s.visible("/logbook")
@@ -67,7 +73,7 @@ et de poursuite — et SatMe, l'appli de poursuite de satellites que je dévelop
 <span class="card-meta">${h(Html.utc(image.quandMs))}</span></header><div class="card-body derniere-image"><a href="/gallery/item/${image.id}">
 <img src="/media/${image.id}/vignette.jpg" alt="${h(image.titre)}" loading="lazy" width="${if (image.largeur > 0) minOf(480, image.largeur) else 320}"></a>
 <p><b>${h(image.titre)}</b>${if (image.groupe != image.satellite && image.groupe != "Divers") " · " + h(image.groupe) else ""}</p></div>
-<footer class="card-foot"><a href="/gallery">Toutes les images</a></footer></section>
+<footer class="card-foot">${if (image.type == TypePublication.SSTV) "<a href=\"/gallery/sstv\">Le mur SSTV</a>" else "<a href=\"/gallery\">Toutes les images</a>"}</footer></section>
 """)
         }
         if (article != null) {
@@ -105,18 +111,57 @@ ${tuiles.joinToString("\n")}
 """)
         sb.append("</div>\n")
         // The desktop's one-screen layout: each card's place on the grid.
-        val presentes = listOfNotNull("direct".takeIf { avecDirect }, "passages".takeIf { avecPassages }, "qso".takeIf { avecQso },
+        val presentes = listOfNotNull("direct".takeIf { avecDirect }, "ciel".takeIf { ciel != null }, "passages".takeIf { avecPassages }, "qso".takeIf { avecQso },
             "image".takeIf { image != null }, "article".takeIf { article != null }, "outils".takeIf { tuiles.isNotEmpty() })
         val places = places(presentes)
         var html = sb.toString()
-        for (k in listOf("direct", "passages", "qso", "image", "article", "outils")) html = html.replace("@$k@", places[k].orEmpty())
+        for (k in listOf("direct", "ciel", "passages", "qso", "image", "article", "outils")) html = html.replace("@$k@", places[k].orEmpty())
         val jsonLd = JSONObject().put("@context", "https://schema.org").put("@type", "Person").put("name", c.nom).put("alternateName", c.indicatif)
             .put("url", c.urlBaseNette + "/").put("sameAs", JSONArray(listOf(c.qrz, c.github)))
             .also { j -> if (c.club.isNotEmpty()) j.put("memberOf", JSONObject().put("@type", "Organization").put("name", c.club)) }
             .put("knowsAbout", JSONArray(listOf("Radioamateur", "Satellites radioamateurs", "SSTV", "QO-100")))
         return s.gabarit.reponse(q, Page("", "Site radioamateur de ${c.indicatif} — ${c.nom} (${c.locator})${if (c.club.isNotEmpty()) ", " + c.club else ""} : articles, images SSTV reçues, logbook, passages de satellites, Sked, Orbites et SatMe.",
             html, "/", jsonLd = jsonLd.toString(), classeCorps = "ecran", ogImage = s.statique.url("img/satme/pc-orbites-tableau.webp").substringBefore('?'),
-            scripts = if (reg.direct.actif && reg.direct.accueil) listOf("js/direct.js") else emptyList())).cache("public, max-age=60")
+            scripts = (if (ciel != null) listOf("/api/lib/satellite.js", "js/ciel-station.js") else emptyList()) +
+                (if (reg.direct.actif && reg.direct.accueil) listOf("js/direct.js") else emptyList()))).cache("public, max-age=60")
+    }
+
+    /**
+     * « Au-dessus de JN18FS »: the Earth seen from space with the station, the satellites and their footprints (a canvas the
+     * script draws), the sky dial (drawn here, the script keeps it alive), the pass under way or the next AOS with its
+     * countdown, the Sun and the Moon. Without a script: the dial and the next pass as they were when the page was made.
+     */
+    private fun carteCiel(sb: StringBuilder, i: CielStation.Instantane) {
+        val c = s.config
+        val z = c.fuseau
+        val en = i.enCours
+        val p = en ?: i.prochain
+        sb.append("""<section class="card carte-ciel" style="@ciel@" aria-labelledby="h-ciel" data-ciel><header class="card-head"><h2 class="card-title" id="h-ciel">${Icones.svg("radar")}Au-dessus de ${h(c.locator)}</h2>
+<span class="card-meta"><span data-ciel-nb>${enVue(i.vus.size)}</span></span></header><div class="card-body ciel-corps">
+<div class="ciel-globe"><canvas data-ciel-globe tabindex="0" role="img" aria-label="La Terre vue de l'espace : la station ${h(c.locator)}, les satellites et leurs empreintes. Flèches : tourner ; Entrée : revenir à la station."></canvas>
+<p class="ciel-globe-att" data-ciel-attente>La Terre se dessine…</p></div>
+<div class="ciel-cote"><div class="ciel-aos" data-ciel-aos>""")
+        if (p == null) sb.append("<span class=\"ciel-aos-l\">Aucun passage au-dessus de 5° dans les 24 heures</span>")
+        else {
+            sb.append("<span class=\"ciel-aos-l\">").append(if (en != null) "<span class=\"bd-led\"></span>Passage en cours" else "Prochain passage").append("</span>")
+                .append("<b class=\"ciel-aos-nom\">").append(h(p.satName)).append("</b><span class=\"ciel-aos-compte\" data-ciel-compte>")
+                .append(if (en != null) "<small>LOS dans</small>" + h(CielStation.compte(en.losEpochMs - i.t)) else "<small>dans</small>" + h(CielStation.compte(p.aosEpochMs - i.t))).append("</span>")
+                .append("<span class=\"ciel-aos-det\">").append(h(Html.heure(p.aosEpochMs, z))).append("–").append(h(Html.heure(p.losEpochMs, z)))
+                .append(" · max ").append(p.maxElevationDeg.toInt()).append("° · ").append(h(cap(p.aosAzimuthDeg))).append(" → ").append(h(cap(p.losAzimuthDeg))).append("</span>")
+        }
+        sb.append("</div>").append(CielStation.svg(i, "Le ciel de ${c.locator} maintenant : les satellites au-dessus de l'horizon et la trace du prochain passage"))
+        sb.append("<ul class=\"ciel-astres\" data-ciel-astres><li class=\"soleil\"><span class=\"ast\" aria-hidden=\"true\"></span>Soleil <b>")
+            .append(i.soleilEl.toInt()).append("°</b></li><li class=\"lune\" hidden><span class=\"ast\" aria-hidden=\"true\"></span>Lune <b></b></li></ul></div></div>")
+        sb.append("<script type=\"application/json\" id=\"ciel-donnees\">").append(Html.jsonScript(CielStation.json(i, c.locator, s.ciel.satellites()).toString())).append("</script>")
+        sb.append("<footer class=\"card-foot\">").append(liens("/sat/radar" to "Le ciel en direct", "/sat/orbites" to "Globe 3D", "/sat/pass" to "Passages")).append("</footer></section>\n")
+    }
+
+    private fun enVue(n: Int) = when (n) { 0 -> "aucun satellite en vue"; 1 -> "1 satellite en vue"; else -> "$n satellites en vue" }
+
+    /** An azimuth as the compass says it (« NO », « SSE »). */
+    private fun cap(az: Double): String {
+        val n = listOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
+        return n[(((CielStation.norm360(az) + 11.25) / 22.5).toInt()) % 16]
     }
 
     /** The next passes over the station (worked out here, SatMe's engine). */
@@ -129,7 +174,7 @@ ${tuiles.joinToString("\n")}
         val maintenant = System.currentTimeMillis()
         val passes = if (obs != null && sats.isNotEmpty()) s.catalogue.passages(sats, obs, 24, 5.0, maintenant).take(7) else emptyList()
         sb.append("""<section class="card $largeur" style="@passages@" aria-labelledby="h-passes"><header class="card-head"><h2 class="card-title" id="h-passes">${Icones.svg("pass")}Prochains passages</h2>
-<span class="card-meta">${h(c.locator)} · 24 h · heure de Paris</span></header><div class="card-body">""")
+<span class="card-meta">24 h · heure de Paris</span></header><div class="card-body">""")
         if (passes.isEmpty()) sb.append("<p class=\"card-empty\">").append(if (s.catalogue.satellites.isEmpty()) "Les éléments orbitaux arrivent…" else "Aucun passage dans les 24 heures.").append("</p>")
         else {
             sb.append("<ul class=\"rows pass-rows\">")
@@ -137,14 +182,26 @@ ${tuiles.joinToString("\n")}
                 val enCours = p.aosEpochMs <= maintenant
                 val el = p.maxElevationDeg.toInt()
                 sb.append("<li><span class=\"name\">").append(h(p.satName)).append("</span><span class=\"num").append(if (enCours) " now" else "").append("\">")
-                    .append(if (enCours) "en cours" else Html.jourHeure(p.aosEpochMs, z)).append("</span><span class=\"num dur\">")
+                    .append(if (enCours) "en cours" else quand(p.aosEpochMs, maintenant)).append("</span><span class=\"num dur\">")
                     .append(Html.duree(p.losEpochMs - p.aosEpochMs)).append("</span><span class=\"num el ").append(if (el >= 45) "high" else if (el < 20) "low" else "")
                     .append("\">").append(el).append("°</span></li>")
             }
             sb.append("</ul>")
         }
-        sb.append("</div><footer class=\"card-foot\">").append(liens("/sat/pass" to "Tous les passages", "/sat/orbites" to "Orbites", "/sat/sked" to "Sked à deux stations"))
+        sb.append("</div><footer class=\"card-foot\">").append(liens("/sat/pass" to "Tous les passages", "/sat/sked" to "Sked"))
             .append("</footer></section>\n")
+    }
+
+    /** A pass's AOS, short: « 14:05 » today, « demain 06:12 », else « ven. 07:40 » (the station's time). */
+    private fun quand(t: Long, maintenant: Long): String {
+        val z = s.config.fuseau
+        val j = java.time.Instant.ofEpochMilli(t).atZone(z).toLocalDate()
+        val auj = java.time.Instant.ofEpochMilli(maintenant).atZone(z).toLocalDate()
+        return when (j) {
+            auj -> Html.heure(t, z)
+            auj.plusDays(1) -> "demain " + Html.heure(t, z)
+            else -> java.time.format.DateTimeFormatter.ofPattern("EEE HH:mm", java.util.Locale.FRANCE).format(java.time.Instant.ofEpochMilli(t).atZone(z))
+        }
     }
 
     /** The last contacts. */
@@ -175,10 +232,22 @@ ${tuiles.joinToString("\n")}
         fun places(cartes: List<String>): Map<String, String> {
             val m = LinkedHashMap<String, String>()
             fun p(k: String, c: String, r: String) { m[k] = "--gc:$c;--gr:$r" }
-            val autres = cartes.filter { it != "direct" && it != "outils" }
-            if ("direct" in cartes) {
-                if (autres.isEmpty()) p("direct", "1/13", "1/4") else {
-                    p("direct", "1/8", "1/4")
+            // The big card on the left: the live block, else the station's sky; the others in the column beside it.
+            val grand = if ("direct" in cartes) "direct" else if ("ciel" in cartes) "ciel" else null
+            // The live block and the sky together: the sky a strip under the live block (its dial and countdown).
+            val sousDirect = grand == "direct" && "ciel" in cartes
+            val autres = cartes.filter { it != grand && it != "outils" && !(sousDirect && it == "ciel") }
+            val gauche = if (autres.isEmpty()) "1/13" else "1/8"
+            if (sousDirect) { p("direct", gauche, "1/3"); p("ciel", gauche, "3/4") }
+            if (grand != null) {
+                if (autres.isEmpty()) { if (!sousDirect) p(grand, "1/13", "1/4") }
+                // The sky beside three or four cards: half the width, the others two by two (their lists two rows high).
+                else if (grand == "ciel" && autres.size >= 3) {
+                    p(grand, "1/7", "1/4")
+                    p(autres[0], "7/10", "1/3"); p(autres[1], "10/13", "1/3")
+                    if (autres.size == 3) p(autres[2], "7/13", "3/4") else { p(autres[2], "7/10", "3/4"); p(autres[3], "10/13", "3/4") }
+                } else {
+                    if (!sousDirect) p(grand, "1/8", "1/4")
                     when (autres.size) {
                         1 -> p(autres[0], "8/13", "1/4")
                         2 -> { p(autres[0], "8/13", "1/3"); p(autres[1], "8/13", "3/4") }

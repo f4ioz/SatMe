@@ -12,11 +12,11 @@ planches, rapports, contacts, vidéos du journal).
 
 | Page | Adresse | D'où ça vient |
 |---|---|---|
-| Accueil | `/` | passages des 24 h depuis JN18FS (moteur SatMe), derniers QSO, dernier article, dernière image SSTV ou planche publiée, SatMe |
+| Accueil | `/` | « Au-dessus de JN18FS » (la Terre éclairée vue de l'espace, les satellites et leurs empreintes, le cadran du ciel, le prochain AOS et son compte à rebours, le Soleil et la Lune), passages des 24 h depuis JN18FS (moteur SatMe), derniers QSO, dernier article, dernière image SSTV ou planche publiée, SatMe |
 | Articles | `/articles`, `/articles/<année>/<slug>`, `/articles/feed.xml` | Markdown + en-tête YAML (mêmes adresses que l'ancien site), tags, pagination, flux Atom |
 | Pages | `/<slug>` | `contenu/pages/<slug>.md` (« À propos »…) |
-| Galeries | `/gallery`, `/gallery/sstv/<groupe>`, `/gallery/item/<id>`, `/gallery/album/<nom>` | publications de SatMe-PC (groupées par événement ou satellite), albums photo du dossier `contenu/galeries/` |
-| Logbook | `/logbook` | Wavelog en lecture seule (cache, toutes les 15 min) + contacts publiés par SatMe ; filtre satellite / HF / VHF / indicatif |
+| Galeries | `/gallery`, `/gallery/sstv` (le mur), `/gallery/sstv/<groupe>`, `/gallery/item/<id>`, `/gallery/album/<nom>` | publications de SatMe-PC (groupées par événement ou satellite ; le mur : passage par passage, la dernière en lumière), albums photo du dossier `contenu/galeries/` ; une visionneuse sur toutes les vignettes |
+| Logbook | `/logbook` | Wavelog en lecture seule (cache, toutes les 15 min) + contacts publiés par SatMe ; filtre satellite / HF / VHF / indicatif ; les chiffres (QSO, indicatifs, pays, carrés, satellites, le plus loin), la carte des contacts (arcs de grand cercle depuis JN18FS), la carte de la station façon QSL |
 | SatMe | `/satme` | la vitrine de SatMe (captures du dépôt) |
 | Passages | `/sat/pass` | n'importe quel locator, favoris gardés dans le navigateur, trace dans le ciel, frise |
 | Sked | `/sat/sked` | **l'onglet Sked de SatMe-PC** : fenêtres communes à deux stations, rejouées sur la carte ou le globe d'Orbites |
@@ -34,7 +34,7 @@ planches, rapports, contacts, vidéos du journal).
 | Admin | `/admin` | privé : cacher, remontrer, supprimer ce que SatMe a publié (par type) ; relire les éléments et Wavelog |
 | Paramètres | `/admin/parametres` | privé : ce que le site montre, changé en direct (voir plus bas) |
 
-Les anciennes adresses : `/sat/passes` → `/sat/sked`, `/sstv` → `/gallery`
+Les anciennes adresses : `/sat/passes` → `/sat/sked`, `/sstv` → `/gallery/sstv`
 (redirections 301) ; `/tm60louv`, `/cw`, `/activation`, `/login` répondent 410
 (retirées).
 
@@ -148,8 +148,8 @@ version plus récente) sont gardées telles quelles.
   d'origine) ; le bandeau porte alors un badge « Passage en cours » qui mène
   au bloc. Le choix est une fonction pure (`direct/VueDirect.kt`) ; un
   passage dont la station ne parle plus avant son LOS n'est pas montré.
-- **Accueil** : chaque carte (passages, QSO, dernière image, dernier article,
-  SatMe, outils) et la liste des satellites des passages (vide :
+- **Accueil** : chaque carte (« Au-dessus de la station », passages, QSO,
+  dernière image, dernier article, SatMe, outils) et la liste des satellites des passages (vide :
   `satellites.accueil` de site.conf).
 - « Aperçu de l'accueil » (nouvel onglet) et « Rétablir les valeurs
   d'origine » (le fichier supprimé).
@@ -157,8 +157,10 @@ version plus récente) sont gardées telles quelles.
 **Un seul écran** : sur un ordinateur (fenêtre d'au moins 1100 × 640),
 l'accueil et `/direct` tiennent dans la fenêtre sans défiler (1920×1080,
 1500×900, 1366×768) : bandeau, en-tête compact, une grille de 12 colonnes
-sur trois rangs (le direct à gauche, les autres cartes à côté —
-`Accueil.places`), les outils et SatMe en une bande ; chaque carte défile
+sur trois rangs (le direct à gauche, sinon « Au-dessus de JN18FS » ; les
+autres cartes à côté, deux par deux quand le ciel est là ; avec le direct, le
+ciel devient une bande sous lui — `Accueil.places`), les outils et SatMe en une
+bande ; chaque carte défile
 en elle-même, les dessins suivent la hauteur. Sur un téléphone ou une
 fenêtre basse, les cartes s'empilent et la page défile.
 
@@ -177,6 +179,55 @@ Services en ligne › Mon site web s'ouvre en assistant :
    « prêt » qu'après un essai réussi ;
 4. quoi envoyer : chaque type d'abord **Sur clic**, « Automatique » seulement
    si l'opérateur le choisit ; le direct reste décoché.
+
+## Au-dessus de JN18FS (accueil)
+
+La fenêtre de la station sur l'espace, **avec des données réelles seulement** :
+les éléments du site (serveur GP), l'heure du navigateur, le moteur de SatMe.
+
+- **Côté serveur** (`ciel/CielStation.kt`, `ciel/ModuleCiel.kt`) : les
+  satellites de l'accueil (Paramètres, sinon `satellites.accueil`) au-dessus de
+  l'horizon maintenant, le passage en cours ou le prochain (AOS, LOS, hauteur,
+  trace dans le ciel), le Soleil — `PassPredictor` et `SunCalc` du moteur. La
+  page arrive avec le cadran déjà dessiné (SVG) et le prochain passage écrit :
+  sans script, on a l'essentiel. `GET /api/ciel` (30/min par adresse, gardé
+  60 s) redonne la même chose au script toutes les dix minutes.
+- **Côté navigateur** (`js/ciel-station.js`, assemblé au démarrage) : les
+  fonctions pures de SatMe (`OrbitesJs.PUR` du moteur : `obSoleil`, `obLune`,
+  `obLunePath`, `obEmpreinte`, `obSoleilJour`…) suivies de
+  `static/js/ciel-accueil.js`. La Terre vue de l'espace, centrée sur la
+  station : terres et mers d'après les traits de côte, la nuit et son
+  crépuscule calculés pixel par pixel (refaits chaque minute), le cadran du
+  ciel et le compte à rebours chaque seconde, les satellites de l'accueil où
+  ils sont (satellite.js), l'empreinte de ceux que la station entend, leur
+  trace de la demi-heure à venir, les autres satellites amateurs en points
+  pâles. On tourne la Terre à la main (ou aux flèches ; Entrée y revient ;
+  elle revient seule une minute après). Rien ne se dessine hors de la vue ni
+  onglet caché ; avec « réduire les animations », pas d'entrée en rotation ni
+  de halo qui respire, les positions toutes les quatre secondes. Le globe 3D
+  complet reste celui d'Orbites (lien « Globe 3D »).
+- **Traits de côte légers** : `GET /api/carte/traits-legers` (un point tous les
+  0,45° au plus, au dixième de degré, sans les îlots de moins de 1,2°) — le
+  tiers des traits complets ; pour le globe de l'accueil et la carte du
+  logbook. Gardés un jour par les navigateurs.
+
+## Le logbook en chiffres et en carte, le mur SSTV
+
+- `carnet/StatsCarnet.kt` : QSO, indicatifs, pays (tels que le journal les
+  nomme, l'entité DXCC de Wavelog), carrés (quatre caractères), satellites,
+  bandes, le contact le plus lointain ; les carrés contactés avec leur nombre
+  de QSO, le dernier indicatif et la distance. Calculés sur ce que le filtre
+  de la page garde. `js/carte-qso.js` : les chiffres comptent en arrivant à
+  l'écran, la carte (cadrée sur les contacts) trace un arc de grand cercle de
+  JN18FS à chaque carré ; pointeur ou flèches pour le détail d'un carré.
+- La carte de la station façon QSL, en bas du logbook : indicatif, locator,
+  centre du carré, trafic, la page QRZ pour confirmer.
+- `pages/MurSstv.kt` : les images regroupées par passage (le même `passage`
+  quand SatMe-PC le nomme, sinon le même satellite à moins de 25 min d'écart),
+  le plus récent d'abord ; filtre par satellite, vingt passages par page.
+- `js/galerie.js` : la visionneuse de toutes les galeries (un `<dialog>` :
+  flèches, Début/Fin, glisser du doigt, Échap ; le focus revient à la
+  vignette) ; sans script, chaque vignette mène à la fiche de l'image.
 
 ## Le direct (SatMe-PC → site)
 

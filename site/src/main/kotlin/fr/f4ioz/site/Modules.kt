@@ -47,6 +47,7 @@ object Modules {
         PageLogbook(s),
         PageSatme(s),
         ApiSat(s),
+        s.ciel,
         PagePassages(s),
         PageSked(s),
         PageOrbites(s),

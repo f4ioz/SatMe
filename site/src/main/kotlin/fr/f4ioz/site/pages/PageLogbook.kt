@@ -18,6 +18,8 @@ import fr.f4ioz.site.http.Routeur
 import fr.f4ioz.site.vue.Html
 import fr.f4ioz.site.vue.Html.h
 import fr.f4ioz.site.vue.Page
+import fr.f4ioz.site.vue.Icones
+import fr.f4ioz.site.carnet.StatsCarnet
 
 /**
  * The logbook: every contact (Wavelog's, SatMe's), the newest first, by
@@ -49,6 +51,8 @@ class PageLogbook(private val s: Site) : ModuleSite {
             .append(" · ").append(tous.map { it.indicatif }.distinct().size).append(" indicatifs · ").append(tous.map { it.carre }.filter { it.length == 4 }.distinct().size).append(" carrés")
         if (s.logbook.luLe > 0) sb.append(" · Wavelog lu le ").append(h(Html.dateHeure(s.logbook.luLe, s.config.fuseau)))
         sb.append("</p></header>")
+        val filtre = sat.isNotEmpty() || genre.isNotEmpty() || call.isNotEmpty()
+        if (l.isNotEmpty()) chiffresEtCarte(sb, l, filtre)
         // The filters: a plain form (GET), no script needed.
         sb.append("<form class=\"filtres card\" method=\"get\" action=\"/logbook\"><div class=\"card-body\"><label>Satellite <select name=\"sat\"><option value=\"\">tous</option>")
         sats.forEach { (n, c) -> sb.append("<option value=\"").append(h(n)).append("\"").append(if (n.equals(sat, true)) " selected" else "").append(">").append(h(n)).append(" (").append(c).append(")</option>") }
@@ -79,11 +83,63 @@ class PageLogbook(private val s: Site) : ModuleSite {
                 .append("<span>page $page / $pages</span>")
                 .append(if (page < pages) "<a href=\"${h(base)}page=${page + 1}\">plus anciens →</a>" else "<span></span>").append("</nav>")
         }
-        val filtre = sat.isNotEmpty() || genre.isNotEmpty() || call.isNotEmpty() || page > 1
+        sb.append(carteQsl())
+        val indexe = !filtre && page == 1
         return s.gabarit.reponse(q, Page(if (sat.isNotEmpty()) "Logbook · $sat" else "Logbook",
             "Les QSO de ${s.config.indicatif} : satellites, HF et VHF, par satellite et par indicatif.", sb.toString(),
-            "/logbook", actif = "/logbook",
-            robots = if (filtre) "noindex, follow" else "index, follow")).cache("public, max-age=60")
+            "/logbook", actif = "/logbook", scripts = if (l.isNotEmpty()) listOf("js/carte-qso.js") else emptyList(),
+            robots = if (indexe) "index, follow" else "noindex, follow")).cache("public, max-age=60")
+    }
+
+    /**
+     * The log in figures (counted up when they come into view) and on a map: an arc from the station to each square
+     * worked, as the filter chose them; the satellites by contacts beside it.
+     */
+    private fun chiffresEtCarte(sb: StringBuilder, l: List<fr.f4ioz.site.carnet.Qso>, filtre: Boolean) {
+        val c = s.config
+        val ici = s.catalogue.observateur(c.locator)
+        val st = StatsCarnet.stats(l, ici?.latDeg, ici?.lonDeg)
+        val carres = StatsCarnet.carres(l, ici?.latDeg, ici?.lonDeg)
+        fun chiffre(n: Int, libelle: String, detail: String = "") = "<div class=\"chiffre\"><b data-compte=\"$n\">${Html.nombre(n)}</b><span>${h(libelle)}</span>" +
+            (if (detail.isNotEmpty()) "<small>${h(detail)}</small>" else "") + "</div>"
+        sb.append("<section class=\"carnet-chiffres\" aria-label=\"").append(if (filtre) "Ces QSO en chiffres" else "Le carnet en chiffres").append("\">")
+            .append(chiffre(st.qso, "QSO")).append(chiffre(st.indicatifs, "indicatifs")).append(chiffre(st.pays, "pays (DXCC)"))
+            .append(chiffre(st.carres, "carrés")).append(chiffre(st.satellites, "satellites"))
+        if (st.odx != null) sb.append(chiffre(st.odxKm, "km, le plus loin", st.odx.indicatif + " · " + st.odx.carre.take(4)))
+        sb.append("</section>")
+        if (carres.isEmpty() || ici == null) return
+        sb.append("<section class=\"card carte-qso\" aria-labelledby=\"h-carte-qso\"><header class=\"card-head\"><h2 class=\"card-title\" id=\"h-carte-qso\">")
+            .append(Icones.svg("dx")).append("Carte des contacts</h2><span class=\"card-meta\">depuis ").append(h(c.locator)).append(" · ")
+            .append(carres.size).append(if (carres.size > 1) " carrés" else " carré").append("</span></header><div class=\"card-body carte-qso-corps\">")
+            .append("<div class=\"carte-qso-cadre\"><canvas data-carte-qso tabindex=\"0\" role=\"img\" aria-label=\"Carte : un arc de grand cercle depuis ")
+            .append(h(c.locator)).append(" vers chacun des ").append(carres.size).append(" carrés contactés\"></canvas><div class=\"carte-bulle\" data-carte-bulle hidden></div></div>")
+        if (st.parSatellite.isNotEmpty()) {
+            val max = st.parSatellite.first().second.toDouble()
+            sb.append("<div class=\"par-sat\"><h3 class=\"sous\">Par satellite</h3><ul>")
+            st.parSatellite.take(8).forEach { (n, k) ->
+                sb.append("<li><a href=\"/logbook?sat=").append(Html.u(n)).append("\"><span class=\"ps-n\">").append(h(n)).append("</span><span class=\"ps-b\"><i style=\"--p:")
+                    .append(String.format(java.util.Locale.ROOT, "%.3f", k / max)).append("\"></i></span><span class=\"num\">").append(k).append("</span></a></li>")
+            }
+            sb.append("</ul></div>")
+        }
+        sb.append("</div><script type=\"application/json\" id=\"carte-qso-donnees\">")
+            .append(Html.jsonScript(org.json.JSONObject().put("locator", c.locator).put("lat", ici.latDeg).put("lon", ici.lonDeg).put("carres", StatsCarnet.json(carres)).toString()))
+            .append("</script><footer class=\"card-foot carte-legende\"><span><i class=\"pt sat\"></i>par satellite</span><span><i class=\"pt ter\"></i>HF et VHF</span>")
+            .append("<span class=\"dim\">Arcs de grand cercle depuis ").append(h(c.locator)).append(" ; carrés de quatre caractères.</span></footer></section>")
+    }
+
+    /** The station's card, in the spirit of a QSL card: who, where (the square's centre), how to confirm. */
+    private fun carteQsl(): String {
+        val c = s.config
+        val ici = s.catalogue.observateur(c.locator)
+        val coord = ici?.let { String.format(java.util.Locale.FRANCE, "%.2f° %s · %.2f° %s", kotlin.math.abs(it.latDeg), if (it.latDeg >= 0) "N" else "S",
+            kotlin.math.abs(it.lonDeg), if (it.lonDeg >= 0) "E" else "O") }.orEmpty()
+        return "<aside class=\"carte-qsl\" aria-label=\"Carte de la station\"><div class=\"qsl-gauche\">" + Icones.marque(64, "q") +
+            "<p class=\"qsl-call\">" + h(c.indicatif) + "</p><p class=\"qsl-nom\">" + h(c.nom) + (if (c.club.isNotEmpty()) " · " + h(c.club) else "") + "</p></div>" +
+            "<dl class=\"qsl-champs\"><dt>Locator</dt><dd class=\"mono\">" + h(c.locator) + "</dd>" +
+            (if (coord.isNotEmpty()) "<dt>Centre du carré</dt><dd class=\"mono\">" + h(coord) + "</dd>" else "") +
+            "<dt>Trafic</dt><dd>Satellites, QO-100, SSTV, DATV, HF</dd><dt>Confirmer</dt><dd><a href=\"" + h(c.qrz) + "\" rel=\"noopener\">ma page QRZ</a></dd></dl>" +
+            "<p class=\"qsl-merci\">Merci pour le QSO — 73 !</p></aside>"
     }
 
     companion object { const val PAR_PAGE = 50 }

@@ -27,6 +27,12 @@ object OrbitesJs {
     /** The page's script, in five parts (a constant holds at most 64 KB). */
     val JS: String get() = DEBUT + MILIEU + MONUMENTS + TRACES + FIN
 
+    /**
+     * Its pure part alone (footprints, night, passes, the Sun and the Moon, locators), without the globe: for a page that
+     * draws the sky by itself and needs no three.js (the F4IOZ site's home page).
+     */
+    val PUR: String get() = DEBUT.substringBefore("const Orbites = (function")
+
     private const val DEBUT = """
 /* ------------------------------------------------------------ pure part (OrbitesJsTest) */
 /**

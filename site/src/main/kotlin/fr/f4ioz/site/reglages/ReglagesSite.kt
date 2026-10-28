@@ -65,6 +65,8 @@ data class SectionsAccueil(
     val article: Boolean = true,
     val satme: Boolean = true,
     val outils: Boolean = true,
+    /** « Au-dessus de JN18FS »: the globe and the sky dial, the next AOS. */
+    val ciel: Boolean = true,
 )
 
 /**
@@ -98,7 +100,7 @@ data class Reglages(
         o.put("direct", JSONObject().put("actif", direct.actif).put("source", direct.source).put("accueil", direct.accueil).put("page", direct.page)
             .put("spectre", direct.spectre).put("datv", direct.datv).put("basculeSstv", direct.basculeSstv).put("maintienS", direct.maintienS))
         o.put("accueil", JSONObject().put("passages", accueil.passages).put("qso", accueil.qso).put("image", accueil.image)
-            .put("article", accueil.article).put("satme", accueil.satme).put("outils", accueil.outils))
+            .put("article", accueil.article).put("satme", accueil.satme).put("outils", accueil.outils).put("ciel", accueil.ciel))
         if (satellitesAccueil != null) o.put("satellitesAccueil", JSONArray(satellitesAccueil)) else o.remove("satellitesAccueil")
         return o
     }
@@ -147,7 +149,7 @@ data class Reglages(
                     b(di, "accueil", true), b(di, "page", true), b(di, "spectre", true), b(di, "datv", true), b(di, "basculeSstv", true),
                     di?.opt("maintienS").let { if (it is Number) it.toInt().coerceIn(Direct.MAINTIEN_MIN, Direct.MAINTIEN_MAX) else 60 }),
                 accueil = SectionsAccueil(b(ac, "passages", true), b(ac, "qso", true), b(ac, "image", true), b(ac, "article", true),
-                    b(ac, "satme", true), b(ac, "outils", true)),
+                    b(ac, "satme", true), b(ac, "outils", true), b(ac, "ciel", true)),
                 satellitesAccueil = sats?.takeIf { it.isNotEmpty() },
                 extra = extra,
             )

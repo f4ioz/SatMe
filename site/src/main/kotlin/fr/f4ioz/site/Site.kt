@@ -52,6 +52,8 @@ class Site(val config: Config, private val horloge: () -> Long = System::current
     val direct = EtatDirect(horloge)
 
     val admin by lazy { fr.f4ioz.site.admin.Admin(this) }
+    /** The station's sky (« Au-dessus de JN18FS »): the home page's card and `/api/ciel`. */
+    val ciel by lazy { fr.f4ioz.site.ciel.ModuleCiel(this) }
     val apiPublication by lazy { ApiPublication(config, publications, accepte = { reglages.courant.publication(it).accepte }) }
     val modules: List<ModuleSite> by lazy { Modules.liste(this) }
     val gabarit = Gabarit(config, ::menuVisible, statique, bandeau = { reglages.courant.bandeau.actif })

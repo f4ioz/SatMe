@@ -30,6 +30,9 @@ object Html {
     }
 
     /** [s] for a URL's query. */
+    /** A whole number as French writes it: « 12 345 » (a narrow no-break space between thousands). */
+    fun nombre(n: Int): String = String.format(java.util.Locale.ROOT, "%,d", n).replace(",", "\u202F")
+
     fun u(s: String): String = URLEncoder.encode(s, Charsets.UTF_8)
 
     /** A JSON string in a `<script>` (JSON-LD, data): `</` broken so the script cannot end early. */

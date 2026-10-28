@@ -67,7 +67,7 @@ class ApiSat(private val s: Site) : ModuleSite {
     private fun orbites(q: Requete): Reponse {
         val c = s.config
         val ici = q.param("loc")?.uppercase()?.let { s.catalogue.observateur(it) } ?: s.catalogue.observateur(c.locator)
-        val favoris = c.satellitesAccueil.mapNotNull { s.catalogue.cherche(it)?.catalogNumber }.distinct()
+        val favoris = (s.reglages.courant.satellitesAccueil ?: c.satellitesAccueil).mapNotNull { s.catalogue.cherche(it)?.catalogNumber }.distinct()
         val o = JSONObject().put("indicatif", c.indicatif).put("locator", ici?.name ?: c.locator).put("suivi", 0).put("favoris", JSONArray(favoris))
         ici?.let { o.put("obs", JSONObject().put("lat", it.latDeg).put("lon", it.lonDeg).put("alt", it.altMeters)) }
         o.put("sats", JSONArray(s.catalogue.satellites.map { e ->
