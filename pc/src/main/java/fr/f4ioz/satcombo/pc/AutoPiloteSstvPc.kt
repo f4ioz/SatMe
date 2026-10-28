@@ -392,6 +392,38 @@ class AutoPiloteSstvPc(
             .put("tesseract", OutilsPc.trouve("tesseract") != null)
     }
 
+    /**
+     * What the web site's banner shows (« Direct sur le site » › Auto-pilote, [DirectSitePc]): the next
+     * campaign pass while the master switch is on, the pass under way and its next picture. Names,
+     * times and counts only: no sound card, file or setting of this PC.
+     */
+    fun etatSite(): JSONObject {
+        val t = horloge()
+        val ec = pilote.enCours
+        val o = JSONObject().put("maitre", donnees.maitre)
+        if (donnees.maitre) runCatching { plan() }.getOrDefault(emptyList())
+            .firstOrNull { it.statut == CampagneSstv.Statut.PREVU && it.passage.losEpochMs > t }?.let { pr ->
+                o.put("prochain", JSONObject().put("campagne", pr.campagne.nom).put("sat", pr.campagne.satNom).put("aos", pr.passage.aosEpochMs)
+                    .put("los", pr.passage.losEpochMs).put("el", Math.round(pr.passage.maxElevationDeg)))
+            }
+        ec?.let { e ->
+            val s = son
+            val j = JSONObject().put("campagne", e.campagne.nom).put("sat", e.campagne.satNom).put("phase", e.phase.name)
+                .put("aos", e.passage.aosEpochMs).put("los", e.passage.losEpochMs).put("el", Math.round(e.passage.maxElevationDeg)).put("mode", e.campagne.modeSstv)
+                .put("images", runCatching { s?.images()?.count { it.timeMs >= e.passage.aosEpochMs - 60_000L } ?: 0 }.getOrDefault(0))
+            // Where the satellite is now, for the site's live block.
+            runCatching { station.positionSatellite(e.campagne.catnum, t) }.getOrNull()?.let { x ->
+                j.put("elMaintenant", Math.round(x.elevationDeg)).put("azMaintenant", Math.round(x.azimuthDeg))
+            }
+            runCatching { s?.sstv?.prochaine(station.etat.value.suivi?.name?.takeIf { it.isNotBlank() } ?: e.campagne.satNom, e.passage.aosEpochMs,
+                e.passage.losEpochMs, e.campagne.horaire, e.campagne.modeSstv) }.getOrNull()?.let { p ->
+                j.put("image", JSONObject().put("phase", p.phase.name).put("prochaine", p.prochaineMs).put("progression", p.progression).put("mode", p.mode))
+            }
+            o.put("enCours", j)
+        }
+        return o
+    }
+
     /** The frequency a campaign listens to (sky Hz): its own, else its transmitter's. */
     private fun frequence(c: Campagne): Long = if (c.personnalisee) c.freqHz
         else station.emetteursDe(c.catnum).firstOrNull { it.description == c.emetteur }?.downlinkLowHz ?: 0L

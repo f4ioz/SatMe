@@ -102,8 +102,13 @@ class Publications(private val dossier: File, private val horloge: () -> Long = 
         }
     }
 
+    /** The kinds shown to the public now (« Admin › Paramètres »); a hidden kind is kept, only not shown. */
+    @Volatile var typePublic: (TypePublication) -> Boolean = { true }
+
     fun toutes(): List<Publication> = parId.values.sortedByDescending { it.quandMs }
-    fun visibles(type: TypePublication? = null): List<Publication> = toutes().filter { !it.cache && (type == null || it.type == type) }
+    fun visibles(type: TypePublication? = null): List<Publication> = toutes().filter { !it.cache && typePublic(it.type) && (type == null || it.type == type) }
+    /** [id] when the public may see it (not hidden, nor its kind). */
+    fun publique(id: String): Publication? = parId(id)?.takeIf { !it.cache && typePublic(it.type) }
     fun parId(id: String): Publication? = if (ID.matches(id)) parId[id] else null
 
     /** The folder of [p]; its files only by the names the site gave them. */

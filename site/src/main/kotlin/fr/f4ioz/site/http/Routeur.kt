@@ -23,6 +23,12 @@ class Routeur {
 
     private val routes = ArrayList<Route>()
 
+    /**
+     * Asked before each route added while it is set (a module's, see [fr.f4ioz.site.Site.routeur]):
+     * an answer stops the request there (a hidden page's 404), null lets the route answer.
+     */
+    var garde: ((Requete) -> Reponse?)? = null
+
     fun get(chemin: String, t: Traitement) = ajoute("GET", chemin, false, t)
     fun post(chemin: String, t: Traitement) = ajoute("POST", chemin, false, t)
     fun delete(chemin: String, t: Traitement) = ajoute("DELETE", chemin, false, t)
@@ -30,7 +36,8 @@ class Routeur {
     fun prefixe(methode: String, chemin: String, t: Traitement) = ajoute(methode, chemin.trimEnd('/'), true, t)
 
     private fun ajoute(methode: String, chemin: String, prefixe: Boolean, t: Traitement) {
-        routes += Route(methode, decoupe(chemin), prefixe, t)
+        val g = garde
+        routes += Route(methode, decoupe(chemin), prefixe, if (g == null) t else { q -> g(q) ?: t(q) })
     }
 
     private fun decoupe(c: String) = c.trim('/').split('/').filter { it.isNotEmpty() }

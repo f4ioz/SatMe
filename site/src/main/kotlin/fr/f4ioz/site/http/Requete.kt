@@ -101,16 +101,16 @@ class Requete(
         return md.digest().joinToString("") { "%02x".format(it) } to total
     }
 
-    /** A form's fields (`application/x-www-form-urlencoded`), [max] bytes at most. */
-    fun formulaire(max: Long = 16 * 1024): Map<String, String> =
-        analyse(String(corps(max), Charsets.UTF_8)).mapValues { it.value.firstOrNull().orEmpty() }
+    /** A form's fields (`application/x-www-form-urlencoded`), [max] bytes and [champs] fields at most. */
+    fun formulaire(max: Long = 16 * 1024, champs: Int = 64): Map<String, String> =
+        analyse(String(corps(max), Charsets.UTF_8), champs).mapValues { it.value.firstOrNull().orEmpty() }
 
     companion object {
-        /** `a=1&b=x%20y` → {a: [1], b: [x y]}; at most 64 fields, each name and value decoded. */
-        fun analyse(q: String): Map<String, List<String>> {
+        /** `a=1&b=x%20y` → {a: [1], b: [x y]}; at most [champs] fields (64), each name and value decoded. */
+        fun analyse(q: String, champs: Int = 64): Map<String, List<String>> {
             if (q.isEmpty()) return emptyMap()
             val m = LinkedHashMap<String, MutableList<String>>()
-            for (p in q.split('&').take(64)) {
+            for (p in q.split('&').take(champs)) {
                 if (p.isEmpty()) continue
                 val k = decode(p.substringBefore('='))
                 val v = if ('=' in p) decode(p.substringAfter('=')) else ""

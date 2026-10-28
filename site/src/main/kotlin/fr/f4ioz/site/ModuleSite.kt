@@ -26,6 +26,13 @@ interface ModuleSite {
     /** Adds its routes. */
     fun installe(r: Routeur)
 
+    /**
+     * Its name in « Admin › Paramètres », where it can be hidden (gone from the menu, the sitemap
+     * and the home page, its routes answering 404): its first menu entry's path by default; null
+     * for what cannot be hidden (the base, the admin, the APIs, the home page).
+     */
+    val idReglage: String? get() = menu.firstOrNull()?.chemin?.takeIf { it != "/" }
+
     /** Starts what it keeps up to date in the background (the elements, the logbook…). */
     fun demarre() {}
 }

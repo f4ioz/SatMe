@@ -42,6 +42,8 @@ object Icones {
         "rss" to "M5 19h.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14",
         "report" to "M6 3h9l4 4v14H6zM15 3v4h4M9 17v-3M12 17v-6M15 17v-4",
         "video" to "M3 6h13v12H3zM16 10l5-3v10l-5-3",
+        "direct" to "M12 11.5a1.5 1.5 0 1 0 .01 0zM8.3 15.7a6 6 0 0 1 0-8.4M15.7 7.3a6 6 0 0 1 0 8.4M5.4 18.6a10 10 0 0 1 0-14.2M18.6 4.4a10 10 0 0 1 0 14.2",
+        "reglages" to "M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5",
     )
 
     /** An icon by name (an empty square for an unknown one). */

@@ -128,7 +128,7 @@ class PagesGaleries(private val s: Site) : ModuleSite {
     }
 
     private fun item(q: Requete): Reponse {
-        val p = s.publications.parId(q.variable("id"))?.takeIf { !it.cache } ?: return s.pageErreur(q, 404)
+        val p = s.publications.publique(q.variable("id")) ?: return s.pageErreur(q, 404)
         val sb = StringBuilder("<article class=\"item\"><header class=\"page-head\"><h1>").append(h(p.titre)).append("</h1><p><a href=\"/gallery\">← les galeries</a>")
         if (p.type == TypePublication.SSTV) sb.append(" · <a href=\"/gallery/sstv/").append(Html.slug(p.groupe)).append("\">").append(h(p.groupe)).append("</a>")
         sb.append("</p></header>")
@@ -174,7 +174,7 @@ class PagesGaleries(private val s: Site) : ModuleSite {
     }
 
     private fun media(q: Requete): Reponse {
-        val p = s.publications.parId(q.variable("id"))?.takeIf { !it.cache } ?: return s.pageErreur(q, 404)
+        val p = s.publications.publique(q.variable("id")) ?: return s.pageErreur(q, 404)
         return when (val n = q.variable("fichier")) {
             "vignette.jpg" -> s.publications.vignetteDe(p)?.let { Reponse.fichier(it, "image/jpeg").cache("public, max-age=86400") } ?: s.pageErreur(q, 404)
             p.fichier -> {

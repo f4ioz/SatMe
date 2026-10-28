@@ -15,6 +15,14 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Réglages › Services en ligne › Site web › Direct sur le site** : SatMe-PC peut envoyer en direct à votre site, chaque partie cochée à part (rien d'origine) — **Auto-pilote** (prochain passage d'une campagne, réception en cours, prochaine image, dernière image reçue : le bandeau du site ; pendant un passage, l'image qui arrive toutes les 5 s, que le site montre à la place de QO-100), **Spectre QO-100** (le transpondeur étroit vu par le SDR, une ligne par seconde) et **Image DATV** (une image réduite et le MER toutes les quelques secondes, tant que le récepteur est verrouillé). Le site ne se connecte jamais à la station ; seulement des noms, des heures et des mesures, jamais une adresse, un code ou une clé. Pas de file : si le site ne répond pas, SatMe-PC attend et réessaie ; **Effacer le direct du site** le retire tout de suite. À activer aussi sur le site (*Admin › Paramètres*).
+- **Site web** : un type que le site refuse (dans ses *Paramètres*) s'affiche « refusé (403) » dans l'historique, et **Tester la connexion** nomme les types refusés.
+
+### en
+- **Settings › Online services › Web site › « Direct sur le site »** (live on the site): SatMe-PC can push live to your site, each part ticked on its own (nothing by default) — **Auto-pilot** (a campaign's next pass, the reception under way, the next picture, the last picture received: the site's banner; during a pass, the picture arriving every 5 s, which the site shows instead of QO-100), **QO-100 spectrum** (the narrow band as the SDR sees it, one line a second) and **DATV picture** (a small picture and the MER every few seconds while the receiver is locked). The site never connects to the station; only names, times and measurements, never an address, a code or a key. No queue: when the site does not answer, SatMe-PC waits and tries again; **« Effacer le direct du site »** removes it at once. It must be switched on on the site too (*Admin › Paramètres*).
+- **Web site**: a kind the site refuses (in its *Paramètres*) shows « refusé (403) » in the history, and **Test the connection** names the refused kinds.
+
 ## 2026.10.33
 
 ### fr

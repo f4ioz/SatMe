@@ -30,7 +30,9 @@ planches, rapports, contacts, vidéos du journal).
 | WSPR | `/wspr` | activité des bandes (wspr.live ou RBN), empreinte d'un indicatif |
 | Ouvertures | `/openings` | bande × heure UTC depuis le locator de la station, archives RBN ; où la région est entendue |
 | Station | `/station` | **privé** : panadapter du Brick2 (openHPSDR, réception seule) ; les visiteurs voient « réservé » |
-| Admin | `/admin` | privé : cacher, remontrer, supprimer ce que SatMe a publié ; relire les éléments et Wavelog |
+| En direct | `/direct` | spectre et chute d'eau QO-100, image DATV, ou les pages du BATC (si activé dans les paramètres) |
+| Admin | `/admin` | privé : cacher, remontrer, supprimer ce que SatMe a publié (par type) ; relire les éléments et Wavelog |
+| Paramètres | `/admin/parametres` | privé : ce que le site montre, changé en direct (voir plus bas) |
 
 Les anciennes adresses : `/sat/passes` → `/sat/sked`, `/sstv` → `/gallery`
 (redirections 301) ; `/tm60louv`, `/cw`, `/activation`, `/login` répondent 410
@@ -109,6 +111,88 @@ Les anciennes adresses : `/sat/passes` → `/sat/sked`, `/sstv` → `/gallery`
   `Cross-Origin-Opener-Policy`, HSTS quand nginx dit HTTPS ; pages privées en
   `no-store`.
 
+## Paramètres du site (Admin › Paramètres)
+
+La couche éditoriale, changée **sans redémarrer ni toucher à site.conf** (qui
+garde les secrets et l'infrastructure) : `/admin/parametres`, derrière la
+connexion admin, chaque formulaire avec son jeton (CSRF) et l'Origin vérifiée.
+Gardé dans `donnees/reglages-site.json`, écrit d'un coup (fichier temporaire
+puis remplacement atomique) ; **pas de fichier = le site tel qu'il était**.
+Un fichier illisible est mis de côté (`.illisible`) ; les clés inconnues (une
+version plus récente) sont gardées telles quelles.
+
+- **Pages et menu** : chaque page montrée ou cachée — cachée, elle disparaît
+  du menu, du plan du site (`sitemap.xml`) et de l'accueil (tuiles, liens des
+  cartes), et ses adresses répondent 404 (vérifié à chaque requête) ; son nom
+  et sa place dans le menu, facultatifs. L'accueil, l'admin, les API et la
+  base ne se cachent pas (les API de calcul d'Orbites/Sked/HF restent
+  ouvertes même si leur page est cachée).
+- **Publications de SatMe-PC**, par type (images SSTV, planches, rapports,
+  QSO, vidéos) : **acceptées** ou refusées (l'API répond 403
+  `{"ok":false,"refuse":true,"erreur":…}`, que SatMe-PC affiche ; « Tester la
+  connexion » nomme les types refusés) et **publiques** ou non (un type non
+  public est gardé mais n'apparaît plus : galeries, accueil, logbook,
+  `/media/…`). Un à un : la liste de `/admin`, filtrable par type.
+- **Bandeau de l'auto-pilote** (désactivé par défaut) : en haut des pages
+  publiques, le prochain passage d'une campagne avec son compte à rebours, la
+  réception en cours (image, progression, prochaine image), la dernière image
+  (la dernière publiée, avec son lien, ou celle annoncée par SatMe-PC).
+- **En direct** (désactivé par défaut) : source « la station, sinon le
+  BATC », « la station seulement » ou « le BATC seulement » ; sur l'accueil
+  et/ou la page `/direct` (alors dans le menu) ; spectre QO-100 et image DATV
+  séparément. **Basculer sur un passage SSTV en cours** (coché d'origine) :
+  pendant un passage d'une campagne de l'auto-pilote, le bloc montre le
+  passage (satellite, élévation et azimut, l'image qui arrive, le compte à
+  rebours de la prochaine image, le LOS) au lieu de QO-100, puis y revient
+  tout seul après le LOS ou la dernière image plus le délai réglé (60 s
+  d'origine) ; le bandeau porte alors un badge « Passage en cours » qui mène
+  au bloc. Le choix est une fonction pure (`direct/VueDirect.kt`) ; un
+  passage dont la station ne parle plus avant son LOS n'est pas montré.
+- **Accueil** : chaque carte (passages, QSO, dernière image, dernier article,
+  SatMe, outils) et la liste des satellites des passages (vide :
+  `satellites.accueil` de site.conf).
+- « Aperçu de l'accueil » (nouvel onglet) et « Rétablir les valeurs
+  d'origine » (le fichier supprimé).
+
+**Un seul écran** : sur un ordinateur (fenêtre d'au moins 1100 × 640),
+l'accueil et `/direct` tiennent dans la fenêtre sans défiler (1920×1080,
+1500×900, 1366×768) : bandeau, en-tête compact, une grille de 12 colonnes
+sur trois rangs (le direct à gauche, les autres cartes à côté —
+`Accueil.places`), les outils et SatMe en une bande ; chaque carte défile
+en elle-même, les dessins suivent la hauteur. Sur un téléphone ou une
+fenêtre basse, les cartes s'empilent et la page défile.
+
+## Le direct (SatMe-PC → site)
+
+Le site ne se connecte **jamais** à la station : SatMe-PC envoie (Réglages ›
+Services en ligne › Site web › « Direct sur le site », chaque partie cochée à
+part, rien par défaut), avec le jeton de publication. Le site garde tout en
+mémoire seulement et l'oublie de lui-même ; lecture seule pour le public,
+aucune commande de matériel, jamais.
+
+| Requête (jeton) | Corps | Effet |
+|---|---|---|
+| `POST /api/publication/direct` | JSON ≤ 8 Ko : `{"t", "pilote": {…}\|null, "datv": {…}\|null}` | l'état de l'auto-pilote (oublié après 2 min), les mesures DATV |
+| `POST /api/publication/direct/spectre` | JSON ≤ 8 Ko : `{centreHz, largeurHz, minDb, maxDb, bins}` (64 à 2048 octets en base64) | une ligne ; 120 gardées pour la chute d'eau ; « arrêté » après 15 s |
+| `POST /api/publication/direct/datv-image` | JPEG ≤ 200 Ko, 1920 × 1080 au plus | « hors ligne » après 30 s, oubliée après 10 min |
+| `POST /api/publication/direct/sstv-image` | JPEG ≤ 200 Ko | l'image du passage SSTV en cours (409 si aucun passage n'est connu) |
+| `DELETE /api/publication/direct` | — | tout oublié |
+
+Ce qui arrive est relu champ par champ (noms connus, textes et nombres
+bornés) ; le reste est ignoré. Une partie que les paramètres n'affichent pas
+est refusée (403 `refuse`), et SatMe-PC attend 2 min avant de réessayer.
+L'heure du PC est corrigée si elle s'écarte de plus de 5 s.
+
+Pour les visiteurs, par interrogation (pas de connexion tenue ouverte), avec un
+frein par adresse : `GET /api/direct/etat` (40/min ; la page le demande toutes
+les 10 s), `GET /api/direct/spectre?depuis=<n>` (150/min ; une fois par
+seconde, la dernière minute au premier appel puis seulement les lignes nouvelles, arrêté quand l'onglet est caché ou
+le bloc hors de vue), `GET /api/direct/datv.jpg` et `/api/direct/sstv.jpg` (40/min). Le dessin
+(`static/js/direct.js`) : spectre, chute d'eau, l'échelle avec les
+transpondeurs, les segments du plan de bande AMSAT-DL (noms de SatMe) et les
+balises. Les pages du BATC (`eshail.batc.org.uk/wb/` et `/nb/`) refusent
+d'être encadrées (`X-Frame-Options: SAMEORIGIN`) : ce sont des liens.
+
 ## Configuration
 
 Clés de la phase 2 (toutes facultatives) :
@@ -168,7 +252,7 @@ HTTPS par nginx ; `Authorization: Bearer <jeton>`, comparé en temps constant
 | Requête | Effet |
 |---|---|
 | `GET /api/publication/ping` | le jeton est bon : le site, l'indicatif, les types et leurs limites |
-| `POST /api/publication/{type}` | le fichier en corps ; ses mots dans `X-SatMe-Meta` (JSON en base64url) : `satellite`, `utc`, `frequence`, `mode`, `passage`, `evenement`, `station`, `titre`, `description`, `cle` |
+| `POST /api/publication/{type}` | (403 `refuse` si le type est refusé dans les paramètres) le fichier en corps ; ses mots dans `X-SatMe-Meta` (JSON en base64url) : `satellite`, `utc`, `frequence`, `mode`, `passage`, `evenement`, `station`, `titre`, `description`, `cle` |
 | `GET /api/publication[?type=]` | ce qui est publié |
 | `DELETE /api/publication/{id}` ou `?type=…&cle=…` | retiré |
 

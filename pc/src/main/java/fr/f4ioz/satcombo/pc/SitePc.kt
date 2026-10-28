@@ -90,6 +90,9 @@ class SitePc(
     /** The planches worth publishing now (ids of those with a picture), for « Automatique ». */
     @Volatile var planchesRemplies: () -> List<String> = { emptyList() }
 
+    /** « Direct sur le site » (set by Main): the live state sent beside the publications. */
+    @Volatile var direct: DirectSitePc? = null
+
     // ------------------------------------------------------------------ settings
 
     var url: String
@@ -257,11 +260,27 @@ class SitePc(
         val r = runCatching { transport.envoie("GET", "$url/api/publication/ping", mapOf("Authorization" to "Bearer $jeton"), null, null) }
             .getOrElse { return "pas de réponse : " + (it.message ?: it.javaClass.simpleName) }
         return when (r.first) {
-            200 -> runCatching { JSONObject(r.second) }.getOrNull()?.let { "ok : site de " + it.optString("indicatif") + " (" + it.optString("site") + ")" } ?: "ok"
+            200 -> runCatching { JSONObject(r.second) }.getOrNull()?.let { o ->
+                // The kinds the site does not take now (its « Admin › Paramètres »).
+                val refuses = o.optJSONArray("refuses")?.let { a -> (0 until a.length()).mapNotNull { Genre.de(a.optString(it))?.libelle } }.orEmpty()
+                "ok : site de " + o.optString("indicatif") + " (" + o.optString("site") + ")" + if (refuses.isEmpty()) "" else " — refusés par le site : " + refuses.joinToString(", ")
+            } ?: "ok"
             401 -> "jeton refusé par le site"
             403 -> "le site n'accepte pas de publication (jeton non réglé côté site)"
             else -> "HTTP " + r.first + " : " + raison(r.second)
         }
+    }
+
+    /**
+     * One live request of [DirectSitePc] (`/api/publication/direct…`) with the token: its answer, or null
+     * when the site is not set or the demonstration forbids it. Never queued: live data that does not go is dropped.
+     */
+    fun envoieDirect(methode: String, route: String, type: String?, corps: ByteArray?): Pair<Int, String>? {
+        if (!configure || refusDemo() != null) return null
+        val entetes = LinkedHashMap<String, String>()
+        entetes["Authorization"] = "Bearer $jeton"
+        if (type != null) entetes["Content-Type"] = type
+        return transport.envoie(methode, url + "/api/publication/direct" + route, entetes, corps, null)
     }
 
     /** Withdraws [ref] from the site. */
@@ -305,6 +324,7 @@ class SitePc(
             .put("modes", JSONObject(Genre.values().associate { it.nom to mode(it).nom }))
             .put("libelles", JSONObject(Genre.values().associate { it.nom to it.libelle }))
             .put("publies", publies.size)
+        direct?.let { o.put("direct", it.json()) }
         synchronized(this) {
             o.put("file", JSONArray(file.map { JSONObject().put("titre", it.titre).put("genre", it.genre.nom).put("essais", it.essais).put("prochain", it.prochainMs).put("erreur", it.erreur) }))
         }
@@ -336,6 +356,7 @@ class SitePc(
                 val g = Genre.de(p("type")) ?: return rep(JSONObject().put("ok", false).put("erreur", "type inconnu"))
                 dit(retire(g, p("ref")), "retiré du site")
             }
+            "/direct" -> { direct?.regle(p); rep(json()) }
             "/vide" -> { synchronized(this) { file.forEach { if (it.temporaire) File(it.fichier).delete() }; file.clear(); ecritDisque() }; rep(json()) }
             "/maintenant" -> { synchronized(this) { for (i in file.indices) file[i] = file[i].copy(prochainMs = 0L) }; reveille(); rep(json()) }
             else -> rep(JSONObject().put("ok", false).put("erreur", "inconnu"))

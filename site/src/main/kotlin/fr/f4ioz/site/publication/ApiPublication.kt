@@ -34,7 +34,13 @@ import java.util.Base64
  * - `GET  /api/publication` — what is published (`?type=`);
  * - `DELETE /api/publication/{id}`, or `DELETE /api/publication?type=…&cle=…` — withdrawn.
  */
-class ApiPublication(private val config: Config, private val pubs: Publications, private val apresPublication: (Publication) -> Unit = {}) : ModuleSite {
+class ApiPublication(
+    private val config: Config,
+    private val pubs: Publications,
+    private val apresPublication: (Publication) -> Unit = {},
+    /** Whether the site takes this kind now (« Admin › Paramètres »): refused with a 403 SatMe-PC shows. */
+    private val accepte: (TypePublication) -> Boolean = { true },
+) : ModuleSite {
 
     private val echecs = Limiteur(10, 15 * 60_000L)
     private val debit = Limiteur(600, 60_000L)
@@ -48,7 +54,8 @@ class ApiPublication(private val config: Config, private val pubs: Publications,
         r.delete("/api/publication") { q -> autorise(q) { retireCle(q) } }
     }
 
-    private fun autorise(q: Requete, suite: () -> Reponse): Reponse {
+    /** [suite] when [q] carries the token (the live pushes of [fr.f4ioz.site.direct.ApiDirect] too). */
+    fun autorise(q: Requete, suite: () -> Reponse): Reponse {
         if (config.jetonSha256.isBlank()) return Reponse.erreur(403, "publication non configurée sur ce site")
         if (echecs.nombre(q.ip) >= echecs.limite) return Reponse.erreur(429, "trop d'essais, réessayer plus tard").entete("Retry-After", "900")
         if (!Jetons.verifieJeton(Jetons.porteur(q.entete("authorization")), config.jetonSha256)) {
@@ -60,7 +67,8 @@ class ApiPublication(private val config: Config, private val pubs: Publications,
     }
 
     private fun ping(): Reponse = Reponse.json(JSONObject().put("ok", true).put("site", config.urlBaseNette).put("indicatif", config.indicatif)
-        .put("version", VERSION).put("types", JSONObject(TypePublication.values().associate { it.nom to limite(it) })))
+        .put("version", VERSION).put("types", JSONObject(TypePublication.values().associate { it.nom to limite(it) }))
+        .put("refuses", JSONArray(TypePublication.values().filter { !accepte(it) }.map { it.nom })))
 
     private fun limite(t: TypePublication): Long = if (t == TypePublication.VIDEO) config.videoMaxMo.toLong() shl 20 else t.maxOctets
 
@@ -72,6 +80,8 @@ class ApiPublication(private val config: Config, private val pubs: Publications,
 
     private fun publie(q: Requete): Reponse {
         val type = TypePublication.de(q.variable("type")) ?: return Reponse.erreur(404, "type inconnu : " + q.variable("type").take(40))
+        if (!accepte(type)) return Reponse.json(JSONObject().put("ok", false).put("refuse", true)
+            .put("erreur", "le site ne prend plus les « ${type.libelle} » (Admin › Paramètres)"), 403)
         val meta = runCatching { meta(q.entete("x-satme-meta")) }.getOrElse { return Reponse.erreur(400, "X-SatMe-Meta illisible") }
         val annonce = q.entete("content-type").orEmpty().lowercase()
         return try {

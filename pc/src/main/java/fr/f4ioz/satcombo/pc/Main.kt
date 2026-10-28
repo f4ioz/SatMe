@@ -594,6 +594,24 @@ fun main(args: Array<String>) {
     journalWeb.videoFaite = { f -> site.nouvelleVideo(f.name) }
     serveur.site = site
     site.demarre()
+    // « Direct sur le site »: the auto-pilot, QO-100's spectrum and the DATV picture pushed live (each off unless chosen).
+    val directSite = DirectSitePc(station.stockage, site)
+    directSite.pilote = { runCatching { autopilote.etatSite() }.getOrNull() }
+    directSite.derniereImage = {
+        runCatching { son.images().filter { !SstvPc.horsAntenne(it) }.maxByOrNull { it.timeMs } }.getOrNull()?.let { Triple(it.satName, it.timeMs, it.mode) }
+    }
+    // The pass's SSTV picture: the one arriving, else the last received since AOS.
+    directSite.imageSstv = { aos ->
+        son.sstv.imageEnCours() ?: son.images().filter { it.timeMs >= aos - 60_000L && !SstvPc.horsAntenne(it) }.maxByOrNull { it.timeMs }
+            ?.let { son.sstv.fichier(it.fileName)?.readBytes() }
+    }
+    directSite.datv = { DirectSitePc.Datv(datv.etat, datv.reglage, datv.marge(), datv.image) }
+    directSite.panorama = {
+        if (!sdr.surQo100) null else sdr.panorama?.let { p -> sdr.axeQo100()?.let { (c, w) -> DirectSitePc.Panorama(p, c, w) } }
+    }
+    directSite.demandePanorama = { if (sdr.surQo100) sdr.demandePanorama() }
+    site.direct = directSite
+    directSite.demarre()
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
     val diplomes = DiplomesPc(station, dossier,
         images = {

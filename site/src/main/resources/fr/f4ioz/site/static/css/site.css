@@ -392,3 +392,115 @@ td.ciel-c { padding: 2px 6px; }
 .appli-tete p { flex: 1 1 380px; margin: 0; font-size: 13.5px; }
 .site-moi input { width: 7.5em; text-transform: uppercase; font-family: var(--font-mono); }
 .appli-credits { margin: 6px 20px 14px; font-size: 12px; color: var(--text-muted); }
+
+/* live: the auto-pilot's banner, the « En direct » block (direct.js) */
+.bandeau-direct { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 0 0 16px; padding: 9px 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--r-l); background: linear-gradient(90deg, var(--accent-soft), transparent 80%), var(--panel); font-size: 13.5px; color: var(--text); }
+.bandeau-direct .bd-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 4px; color: var(--text); }
+.bandeau-direct a.bd-item:hover { text-decoration: none; color: var(--accent); }
+.bandeau-direct b { font-weight: 700; }
+.bandeau-direct .bd-compte { font-family: var(--font-mono); color: var(--accent); font-weight: 700; }
+.bandeau-direct .bd-led { width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 4px; box-shadow: 0 0 0 0 rgba(229,72,77,.6); animation: bd-pulse 1.6s infinite; }
+@keyframes bd-pulse { 70% { box-shadow: 0 0 0 7px rgba(229,72,77,0); } 100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); } }
+@media (prefers-reduced-motion: reduce) { .bandeau-direct .bd-led { animation: none; } }
+.direct-corps { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .direct-corps:has(.direct-spectre:not([hidden])):has(.direct-datv:not([hidden])) { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); } }
+@media (min-width: 900px) { .direct-corps:not(:has(.direct-spectre:not([hidden]))):has(.direct-datv:not([hidden])):has(.direct-batc:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+.direct-bloc .card-meta.vivant { color: var(--red); font-weight: 700; }
+.direct-spectre, .direct-datv { margin: 0; min-width: 0; }
+.direct-spectre canvas { display: block; width: 100%; image-rendering: pixelated; background: #040814; }
+.direct-spectre .direct-echelle { height: 46px; background: transparent; image-rendering: auto; }
+.direct-spectre .direct-trace { height: 100px; border-radius: var(--r-s) var(--r-s) 0 0; }
+.direct-spectre .direct-chute { height: 120px; border-radius: 0 0 var(--r-s) var(--r-s); }
+.direct-bloc.grand .direct-trace { height: 140px; } .direct-bloc.grand .direct-chute { height: 220px; }
+.direct-spectre figcaption, .direct-datv figcaption { margin-top: 6px; font-size: 13px; color: var(--text-dim); }
+.datv-cadre { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-s); overflow: hidden; background: #040814; border: 1px solid var(--border); }
+.datv-cadre img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.direct-datv.hors img { filter: grayscale(1) brightness(.55); }
+.datv-hors { position: absolute; top: 8px; left: 8px; padding: 2px 9px; border-radius: 999px; background: rgba(10,15,20,.8); color: var(--warn); font: 700 11px var(--font-sans); letter-spacing: .6px; text-transform: uppercase; }
+.direct-batc { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.direct-batc p { grid-column: 1 / -1; margin: 0; }
+.batc-carte { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--panel-2); color: var(--text); }
+.batc-carte:hover { border-color: var(--accent); text-decoration: none; color: var(--text); }
+.batc-carte .ico { width: 20px; height: 20px; flex: none; stroke: var(--accent); fill: none; stroke-width: 1.7; }
+.batc-carte span { display: flex; flex-direction: column; } .batc-carte span span { color: var(--text-muted); font-size: 13px; }
+.petit { font-size: 12.5px; }
+
+/* admin › paramètres */
+form.parametres .card-body { display: block; }
+form.parametres .card-body > p.dim:first-child { margin: 0 0 10px; font-size: 13px; }
+.parametres table.params input:not([type=checkbox]) { min-height: 32px; padding: 4px 8px; width: 100%; min-width: 9em; }
+.parametres table.params input.court { width: 5.5em; min-width: 0; }
+.parametres table.params input[type=checkbox] { width: 18px; height: 18px; }
+.parametres .choix { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 4px 0 10px; }
+.parametres label.large { display: flex; flex-direction: column; align-items: stretch; margin-top: 6px; }
+.params-actions { position: sticky; bottom: 0; padding: 10px 0; background: linear-gradient(transparent, var(--bg) 35%); z-index: 2; }
+.ok-ligne { color: var(--green); font-weight: 600; }
+.taglist .tag[aria-current] { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 560px) { .parametres table.params input:not([type=checkbox]) { min-width: 6.5em; } .parametres table.params input.court { width: 4.2em; } }
+.parametres .choix input.court { width: 5.5em; min-height: 32px; padding: 4px 8px; }
+
+/* the SSTV pass in the live block (the auto-pilot's), and the banner's badge */
+.bandeau-direct .bd-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: color-mix(in srgb, var(--red) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent); color: var(--text); font-weight: 700; font-size: 12.5px; }
+.bandeau-direct .bd-badge:hover { text-decoration: none; border-color: var(--red); color: var(--text); }
+.bandeau-direct .bd-badge .bd-led { margin-right: 0; }
+.direct-sstv { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 719px) { .direct-sstv { grid-template-columns: 1fr; } }
+.sstv-cadre { position: relative; aspect-ratio: 320 / 256; border-radius: var(--r-s); overflow: hidden; background: #040814; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+.sstv-cadre img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.sstv-attente { color: var(--text-muted); font-size: 13px; }
+.sstv-info p { margin: 0 0 8px; }
+.sstv-titre { display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.sstv-titre .bd-led { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: bd-pulse 1.6s infinite; flex: none; }
+.sstv-compte { font: 700 22px var(--font-mono); color: var(--accent); }
+.sstv-mesures { color: var(--text-dim); font-size: 14px; }
+.outils-bande .tuile-satme { display: none; }
+
+/* One screen on a desktop (« ecran »: the home page, the live page): the grid fills the window, each card scrolls
+   inside itself, the canvases follow the height; a phone or a short window scrolls as usual. */
+@media (min-width: 1100px) and (min-height: 640px) {
+  body.ecran { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body.ecran .site-main { flex: 1; min-height: 0; width: 100%; max-width: 1720px; padding: 14px 24px 12px; display: flex; flex-direction: column; }
+  body.ecran .site-footer { margin-top: 0; } body.ecran .site-footer .container { padding: 6px 24px; }
+  body.ecran .bandeau-direct { margin-bottom: 10px; padding: 6px 12px; }
+  body.ecran .page-head { margin-bottom: 10px; padding-bottom: 8px; } body.ecran .page-head h1 { font-size: 22px; margin-bottom: 2px; }
+  body.ecran .home-hero { grid-template-columns: auto minmax(0, 1fr); gap: 16px; padding: 10px 18px; margin-bottom: 12px; }
+  body.ecran .home-hero .mark { width: 52px; height: 52px; border-radius: 12px; }
+  body.ecran .home-hero h1 { font-size: 26px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  body.ecran .home-hero h1 small { display: inline; margin: 0; font-size: 14px; }
+  body.ecran .home-hero p { margin-top: 2px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: none; }
+  body.ecran .home-hero .pills { margin-top: 6px; }
+  body.ecran .home-grid { flex: 1; min-height: 0; margin: 0; gap: 12px; grid-template-rows: repeat(3, minmax(0, 1fr)) auto; }
+  body.ecran .home-grid > .card { grid-column: var(--gc, span 12); grid-row: var(--gr, auto); min-height: 0; }
+  body.ecran .home-grid > .card > .card-body { min-height: 0; overflow: auto; padding: 10px 14px; }
+  body.ecran .card-title { flex: 1 1 auto; min-width: 5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  body.ecran .card-head .card-meta { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  body.ecran .card-title .ico { vertical-align: -3px; margin-right: 6px; }
+  body.ecran .card-head { padding: 8px 14px 7px; } body.ecran .card-foot { padding: 7px 14px; }
+  body.ecran .home-grid > .carte-satme { display: none; }
+  body.ecran .outils-bande .card-head { display: none; }
+  body.ecran .outils-bande .card-body { padding: 8px; overflow: hidden; }
+  body.ecran .outils-bande .tool-tiles { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+  body.ecran .outils-bande .tool-tiles a { padding: 7px 10px; align-items: center; }
+  body.ecran .outils-bande .tool-tiles span span { display: none; }
+  body.ecran .outils-bande .tuile-satme { display: flex; }
+  body.ecran .derniere-image { display: flex; flex-direction: column; overflow: hidden !important; }
+  body.ecran .derniere-image a { flex: 1; min-height: 0; display: flex; justify-content: center; }
+  body.ecran .derniere-image img { max-height: 100%; width: auto; max-width: 100%; object-fit: contain; }
+  body.ecran .derniere-image p { margin-top: 6px; }
+  body.ecran .latest-article h3 { font-size: 16px; }
+  /* The live block: its drawings take the height left. */
+  body.ecran .direct-bloc > .card-body { display: grid; overflow: hidden; }
+  body.ecran .direct-corps { min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  body.ecran .direct-corps > [hidden] { display: none !important; }
+  body.ecran .direct-spectre { display: flex; flex-direction: column; min-height: 0; }
+  body.ecran .direct-spectre .direct-trace { flex: 2 1 0; height: auto; min-height: 40px; }
+  body.ecran .direct-spectre .direct-chute { flex: 3 1 0; height: auto; min-height: 40px; }
+  body.ecran .direct-datv { display: flex; flex-direction: column; min-height: 0; }
+  body.ecran .datv-cadre { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; }
+  body.ecran .direct-datv .datv-cadre { max-height: 100%; }
+  body.ecran .direct-sstv { min-height: 0; height: 100%; align-items: stretch; }
+  body.ecran .sstv-cadre { aspect-ratio: auto; min-height: 0; height: 100%; }
+  body.ecran .direct-batc { align-content: start; }
+}

@@ -23,7 +23,7 @@ import fr.f4ioz.site.pages.PageLogbook
 import fr.f4ioz.site.pages.PageSatme
 import fr.f4ioz.site.pages.PagesArticles
 import fr.f4ioz.site.pages.PagesGaleries
-import fr.f4ioz.site.publication.ApiPublication
+import fr.f4ioz.site.direct.ApiDirect
 import fr.f4ioz.site.sat.ApiSat
 import fr.f4ioz.site.sat.PageCiel
 import fr.f4ioz.site.sat.PageOrbites
@@ -53,7 +53,9 @@ object Modules {
         PageCiel(s),
         PageTle(s),
         PageGrid(s),
-        ApiPublication(s.config, s.publications),
+        // Before the publication API: « /api/publication/direct » is its own, not a kind.
+        ApiDirect(s),
+        s.apiPublication,
         s.admin,
         ApiHf(s),
         PageDx(s),

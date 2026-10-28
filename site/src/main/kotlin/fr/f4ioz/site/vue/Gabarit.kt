@@ -55,7 +55,13 @@ class Page(
  * default, kept in the browser); the footer. The head carries the page's
  * title, description, canonical address, Open Graph and its JSON-LD.
  */
-class Gabarit(private val config: Config, private val menu: () -> List<EntreeMenu>, private val statique: Statique) {
+class Gabarit(
+    private val config: Config,
+    private val menu: () -> List<EntreeMenu>,
+    private val statique: Statique,
+    /** The banner of the auto-pilot's events on (« Admin › Paramètres »): its place at the top, filled by `direct.js`. */
+    private val bandeau: () -> Boolean = { false },
+) {
 
     fun reponse(r: Requete, p: Page): Reponse {
         val rep = Reponse.html(html(r, p), p.statut)
@@ -99,11 +105,14 @@ class Gabarit(private val config: Config, private val menu: () -> List<EntreeMen
         sb.append("</head>\n<body class=\"has-rail").append(if (p.appli) " appli" else "").append(if (p.classeCorps.isNotEmpty()) " " + h(p.classeCorps) else "").append("\">\n")
         sb.append(coque(p.actif))
         sb.append("<main class=\"site-main").append(if (p.appli) " site-appli" else "").append("\" id=\"contenu\" tabindex=\"-1\">\n")
+        val avecBandeau = !p.appli && p.robots.startsWith("index") && bandeau()
+        if (avecBandeau) sb.append("<div class=\"bandeau-direct\" data-bandeau role=\"status\" aria-live=\"polite\" hidden></div>\n")
         sb.append(p.corps)
         sb.append("\n</main>\n")
         if (!p.appli) sb.append(pied())
         sb.append("<script src=\"").append(statique.url("js/site.js")).append("\" nonce=\"").append(n).append("\"></script>\n")
-        for (s in p.scripts) sb.append("<script src=\"").append(h(statique.urlOuTel(s))).append("\" nonce=\"").append(n).append("\"></script>\n")
+        val scripts = if (avecBandeau && "js/direct.js" !in p.scripts) p.scripts + "js/direct.js" else p.scripts
+        for (s in scripts) sb.append("<script src=\"").append(h(statique.urlOuTel(s))).append("\" nonce=\"").append(n).append("\"></script>\n")
         if (p.scriptEnLigne.isNotEmpty()) sb.append("<script nonce=\"").append(n).append("\">\n").append(p.scriptEnLigne).append("\n</script>\n")
         sb.append("</body>\n</html>\n")
         return sb.toString()

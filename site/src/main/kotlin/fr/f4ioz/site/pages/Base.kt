@@ -48,8 +48,9 @@ class Base(private val s: Site) : ModuleSite {
             if (lastmod != null) sb.append("<lastmod>").append(lastmod).append("</lastmod>")
             sb.append("<priority>").append(String.format(java.util.Locale.ROOT, "%.1f", priorite)).append("</priority></url>\n")
         }
-        s.modules.forEach { m -> m.plan().forEach { (c, p) -> url(c, p) } }
-        s.articles.tous().forEach { a -> url(a.url, 0.7, a.date.toString()) }
+        // The pages hidden in « Admin › Paramètres » left out.
+        s.modules.filter { s.visible(it) }.forEach { m -> m.plan().forEach { (c, p) -> url(c, p) } }
+        if (s.visible("/articles")) s.articles.tous().forEach { a -> url(a.url, 0.7, a.date.toString()) }
         sb.append("</urlset>\n")
         return sb.toString()
     }
