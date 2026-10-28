@@ -105,7 +105,8 @@ class ParametresAdmin(private val s: Site) {
         // The home page.
         val a = r.accueil
         sb.append(carte("Accueil", "Les cartes de la page d'accueil."))
-        sb.append("<div class=\"choix\">").append(caseLibelle("a_passages", a.passages, "Prochains passages")).append(caseLibelle("a_qso", a.qso, "Derniers QSO"))
+        sb.append("<div class=\"choix\">").append(caseLibelle("a_ciel", a.ciel, "Au-dessus de la station (globe, ciel, prochain AOS)"))
+            .append(caseLibelle("a_passages", a.passages, "Prochains passages")).append(caseLibelle("a_qso", a.qso, "Derniers QSO"))
             .append(caseLibelle("a_image", a.image, "Dernière image SSTV ou planche")).append(caseLibelle("a_article", a.article, "Dernier article"))
             .append(caseLibelle("a_satme", a.satme, "SatMe")).append(caseLibelle("a_outils", a.outils, "Outils")).append("</div>")
             .append("<label class=\"large\">Satellites des prochains passages <input name=\"satellites\" value=\"").append(h(r.satellitesAccueil?.joinToString(", ").orEmpty()))
@@ -144,7 +145,7 @@ class ParametresAdmin(private val s: Site) {
             bandeau = Bandeau(c("b_actif"), c("b_prochain"), c("b_encours"), c("b_derniere")),
             direct = Direct(c("d_actif"), f["d_source"]?.takeIf { it in Direct.SOURCES } ?: "auto", c("d_accueil"), c("d_page"), c("d_spectre"), c("d_datv"),
                 c("d_bascule"), f["d_maintien"]?.trim()?.toIntOrNull()?.coerceIn(Direct.MAINTIEN_MIN, Direct.MAINTIEN_MAX) ?: 60),
-            accueil = SectionsAccueil(c("a_passages"), c("a_qso"), c("a_image"), c("a_article"), c("a_satme"), c("a_outils")),
+            accueil = SectionsAccueil(c("a_passages"), c("a_qso"), c("a_image"), c("a_article"), c("a_satme"), c("a_outils"), c("a_ciel")),
             satellitesAccueil = sats.takeIf { it.isNotEmpty() },
         )
     }

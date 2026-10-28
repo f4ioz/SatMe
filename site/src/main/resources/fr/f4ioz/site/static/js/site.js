@@ -32,9 +32,13 @@
   document.addEventListener('submit', e => { const m = e.target.getAttribute && e.target.getAttribute('data-confirmer'); if (m && !confirm(m)) e.preventDefault(); });
 
   const p2 = n => (n < 10 ? '0' : '') + n;
+  // The station's own time (its time zone, given by the page), whatever the visitor's.
+  const locales = [];
+  document.querySelectorAll('[data-heure-locale]').forEach(c => { try { locales.push([c, new Intl.DateTimeFormat('fr-FR', { timeZone: c.getAttribute('data-heure-locale'), hour: '2-digit', minute: '2-digit' })]); } catch (e) {} });
   function tic() {
-    const d = new Date(), hm = p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes());
-    document.querySelectorAll('[data-utc-clock]').forEach(c => { c.textContent = (c.closest('.rail') ? hm + ':' + p2(d.getUTCSeconds()) : hm) + ' UTC'; });
+    const d = new Date(), hm = p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()), hms = hm + ':' + p2(d.getUTCSeconds());
+    document.querySelectorAll('[data-utc-clock]').forEach(c => { c.textContent = c.getAttribute('data-utc-clock') === 'nu' ? hms : (c.closest('.rail') ? hms : hm) + ' UTC'; });
+    locales.forEach(l => { l[0].textContent = l[1].format(d); });
   }
   tic(); setInterval(tic, 1000);
 })();

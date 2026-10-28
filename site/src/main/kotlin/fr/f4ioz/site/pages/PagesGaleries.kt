@@ -36,11 +36,12 @@ class PagesGaleries(private val s: Site) : ModuleSite {
 
     override val menu = listOf(EntreeMenu(Groupe.SITE, 30, "/gallery", "Galeries", "gallery", "Images SSTV, planches, photos"))
 
-    override fun plan(): List<Pair<String, Double>> = listOf("/gallery" to 0.7) +
+    override fun plan(): List<Pair<String, Double>> = listOf("/gallery" to 0.7, "/gallery/sstv" to 0.6) +
         groupes().keys.map { "/gallery/sstv/" + Html.slug(it) to 0.5 } + s.albums.tous().map { "/gallery/album/" + it.nom to 0.5 }
 
     override fun installe(r: Routeur) {
         r.get("/gallery") { q -> apercu(q) }
+        r.get("/gallery/sstv") { q -> mur(q) }
         r.get("/gallery/sstv/{groupe}") { q -> groupe(q) }
         r.get("/gallery/planches") { q -> grille(q, TypePublication.PLANCHE, "Planches", "Les planches SSTV composées par SatMe-PC : les images d'une série sur un modèle.") }
         r.get("/gallery/item/{id}") { q -> item(q) }
@@ -54,8 +55,12 @@ class PagesGaleries(private val s: Site) : ModuleSite {
     private fun groupes(): Map<String, List<Publication>> =
         s.publications.visibles(TypePublication.SSTV).groupBy { it.groupe }.toList().sortedByDescending { (_, l) -> l.maxOf { it.quandMs } }.toMap()
 
-    private fun vignette(p: Publication, legende: Boolean = true): String =
-        "<figure class=\"vign\"><a href=\"/gallery/item/${p.id}\"><img src=\"/media/${p.id}/vignette.jpg\" alt=\"${h(p.titre)}\" loading=\"lazy\"" +
+    /** What the viewer (galerie.js) says under a picture: its satellite or title, when (UTC), its mode. */
+    private fun legende(p: Publication): String = listOf(if (p.type == TypePublication.PLANCHE) p.titre else p.satellite.ifEmpty { p.titre }, Html.utc(p.quandMs), p.texte("mode"))
+        .filter { it.isNotEmpty() }.joinToString(" · ")
+
+    private fun vignette(p: Publication, legende: Boolean = true, classe: String = ""): String =
+        "<figure class=\"vign$classe\"><a href=\"/gallery/item/${p.id}\" data-plein=\"/media/${p.id}/${h(p.fichier)}\" data-legende=\"${h(legende(p))}\"><img src=\"/media/${p.id}/vignette.jpg\" alt=\"${h(p.titre)}\" loading=\"lazy\" decoding=\"async\"" +
             (if (p.largeur > 0 && p.hauteur > 0) " width=\"${minOf(480, p.largeur)}\" height=\"${(minOf(480, p.largeur) * p.hauteur / p.largeur)}\"" else "") +
             "></a>" + (if (legende) "<figcaption>${h(if (p.type == TypePublication.PLANCHE) p.titre else p.satellite.ifEmpty { p.type.libelle })}<span>${h(Html.utc(p.quandMs))}</span></figcaption>" else "") + "</figure>"
 
@@ -63,12 +68,13 @@ class PagesGaleries(private val s: Site) : ModuleSite {
         val sb = StringBuilder("<header class=\"page-head\"><h1>Galeries</h1><p>Les images reçues des satellites et publiées par SatMe-PC à mesure qu'elles arrivent, " +
             "les planches et les rapports de mes campagnes SSTV, et quelques albums photo.</p></header>")
         val g = groupes()
-        sb.append("<section class=\"gal-section\"><h2 class=\"sm-section-title\">").append(Icones.svg("sstv")).append("Images SSTV</h2>")
+        sb.append("<section class=\"gal-section\"><h2 class=\"sm-section-title\">").append(Icones.svg("sstv")).append("Images SSTV")
+            .append(if (g.isNotEmpty()) "<a class=\"pill accent titre-lien\" href=\"/gallery/sstv\">Le mur, passage par passage →</a>" else "").append("</h2>")
         if (g.isEmpty()) sb.append("<p class=\"card-empty\">Aucune image publiée pour l'instant : elles arrivent de SatMe-PC au fil des passages.</p>")
         for ((nom, l) in g) {
             sb.append("<div class=\"gal-groupe card\"><header class=\"card-head\"><h3 class=\"card-title\"><a href=\"/gallery/sstv/").append(Html.slug(nom)).append("\">")
                 .append(h(nom)).append("</a></h3><span class=\"card-meta\">").append(l.size).append(if (l.size > 1) " images" else " image").append(" · ")
-                .append(h(Html.date(l.maxOf { it.quandMs }, s.config.fuseau))).append("</span></header><div class=\"card-body vign-grille\">")
+                .append(h(Html.date(l.maxOf { it.quandMs }, s.config.fuseau))).append("</span></header><div class=\"card-body vign-grille\" data-galerie>")
             l.take(8).forEach { sb.append(vignette(it)) }
             sb.append("</div>")
             if (l.size > 8) sb.append("<footer class=\"card-foot\"><a href=\"/gallery/sstv/").append(Html.slug(nom)).append("\">Les ").append(l.size).append(" images</a></footer>")
@@ -77,7 +83,7 @@ class PagesGaleries(private val s: Site) : ModuleSite {
         sb.append("</section>")
         val planches = s.publications.visibles(TypePublication.PLANCHE)
         if (planches.isNotEmpty()) {
-            sb.append("<section class=\"gal-section\"><h2 class=\"sm-section-title\">").append(Icones.svg("gallery")).append("Planches</h2><div class=\"vign-grille large\">")
+            sb.append("<section class=\"gal-section\"><h2 class=\"sm-section-title\">").append(Icones.svg("gallery")).append("Planches</h2><div class=\"vign-grille large\" data-galerie>")
             planches.take(6).forEach { sb.append(vignette(it)) }
             sb.append("</div>")
             if (planches.size > 6) sb.append("<p><a href=\"/gallery/planches\">Toutes les planches (").append(planches.size).append(")</a></p>")
@@ -106,25 +112,72 @@ class PagesGaleries(private val s: Site) : ModuleSite {
             sb.append("</div></section>")
         }
         return s.gabarit.reponse(q, Page("Galeries", "Images SSTV reçues des satellites par ${s.config.indicatif}, planches, rapports de campagne et albums photo.",
-            sb.toString(), "/gallery")).cache("public, max-age=60")
+            sb.toString(), "/gallery", scripts = listOf("js/galerie.js"))).cache("public, max-age=60")
+    }
+
+    /**
+     * The SSTV wall: every picture, pass by pass (the newest first), each pass with its satellite, its day and its span,
+     * the very last picture glowing; a viewer over the page (galerie.js: arrows, swipe, Échap). A satellite chosen
+     * (`?sat=`) keeps only its passes; twenty passes a page.
+     */
+    private fun mur(q: Requete): Reponse {
+        val toutes = s.publications.visibles(TypePublication.SSTV)
+        val sat = q.param("sat")?.trim()?.take(40).orEmpty()
+        val l = if (sat.isEmpty()) toutes else toutes.filter { it.satellite.equals(sat, true) }
+        val passages = MurSstv.parPassage(l)
+        val pages = maxOf(1, (passages.size + 19) / 20)
+        val page = (q.param("page")?.toIntOrNull() ?: 1).coerceIn(1, pages)
+        val z = s.config.fuseau
+        val parSat = toutes.map { it.satellite }.filter { it.isNotEmpty() }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
+        val sb = StringBuilder("<header class=\"page-head\"><h1>Mur SSTV</h1><p><a href=\"/gallery\">← les galeries</a> · ")
+            .append(Html.nombre(toutes.size)).append(if (toutes.size > 1) " images reçues" else " image reçue").append(" en ")
+            .append(MurSstv.parPassage(toutes).size).append(" passages, publiées par SatMe-PC à mesure qu'elles arrivent.</p></header>")
+        if (parSat.size > 1) {
+            sb.append("<nav class=\"taglist mur-filtres\" aria-label=\"Par satellite\"><a class=\"tag\" href=\"/gallery/sstv\"").append(if (sat.isEmpty()) " aria-current=\"page\"" else "")
+                .append(">tous <span class=\"tag-count\">").append(toutes.size).append("</span></a>")
+            parSat.forEach { (n, k) -> sb.append("<a class=\"tag\" href=\"/gallery/sstv?sat=").append(Html.u(n)).append("\"").append(if (n.equals(sat, true)) " aria-current=\"page\"" else "")
+                .append(">").append(h(n)).append(" <span class=\"tag-count\">").append(k).append("</span></a>") }
+            sb.append("</nav>")
+        }
+        if (passages.isEmpty()) sb.append("<p class=\"card-empty\">Aucune image publiée pour l'instant : elles arrivent de SatMe-PC au fil des passages.</p>")
+        val premiere = toutes.firstOrNull()?.id
+        sb.append("<div class=\"mur\" data-galerie>")
+        for (p in passages.drop((page - 1) * 20).take(20)) {
+            sb.append("<section class=\"mur-passage\" style=\"--n:").append(minOf(p.images.size, 6)).append("\"><header class=\"mur-tete\"><span class=\"mur-jour\">")
+                .append(h(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", java.util.Locale.FRANCE).format(java.time.Instant.ofEpochMilli(p.debutMs).atZone(z)).replaceFirstChar { it.titlecase() }))
+                .append("</span><a class=\"mur-sat\" href=\"/gallery/sstv?sat=").append(Html.u(p.satellite)).append("\">").append(h(p.satellite)).append("</a><span class=\"num\">")
+                .append(h(Html.heure(p.debutMs, java.time.ZoneOffset.UTC))).append(if (p.finMs - p.debutMs >= 60_000L) "–" + h(Html.heure(p.finMs, java.time.ZoneOffset.UTC)) else "")
+                .append(" UTC · ").append(p.images.size).append(if (p.images.size > 1) " images" else " image").append("</span></header><div class=\"mur-grille\">")
+            p.images.forEach { sb.append(vignette(it, legende = false, classe = if (it.id == premiere) " recente" else "")) }
+            sb.append("</div></section>")
+        }
+        sb.append("</div>")
+        if (pages > 1) {
+            val base = "/gallery/sstv?" + (if (sat.isNotEmpty()) "sat=" + Html.u(sat) + "&" else "")
+            sb.append("<nav class=\"pager\" aria-label=\"Pagination\">").append(if (page > 1) "<a href=\"${h(base)}page=${page - 1}\">← plus récents</a>" else "<span></span>")
+                .append("<span>page $page / $pages</span>").append(if (page < pages) "<a href=\"${h(base)}page=${page + 1}\">plus anciens →</a>" else "<span></span>").append("</nav>")
+        }
+        return s.gabarit.reponse(q, Page("Mur SSTV — les images reçues, passage par passage", "Les images SSTV reçues des satellites par ${s.config.indicatif}, passage par passage, publiées par SatMe-PC.",
+            sb.toString(), "/gallery/sstv", actif = "/gallery", ogImage = toutes.firstOrNull()?.let { "/media/${it.id}/vignette.jpg" }, scripts = listOf("js/galerie.js"),
+            robots = if (sat.isEmpty() && page == 1) "index, follow" else "noindex, follow")).cache("public, max-age=60")
     }
 
     private fun groupe(q: Requete): Reponse {
         val (nom, l) = groupes().entries.firstOrNull { Html.slug(it.key) == q.variable("groupe") } ?: return s.pageErreur(q, 404)
         val sb = StringBuilder("<header class=\"page-head\"><h1>").append(h(nom)).append("</h1><p><a href=\"/gallery\">← les galeries</a> · ")
-            .append(l.size).append(if (l.size > 1) " images SSTV" else " image SSTV").append("</p></header><div class=\"vign-grille\">")
+            .append(l.size).append(if (l.size > 1) " images SSTV" else " image SSTV").append("</p></header><div class=\"vign-grille\" data-galerie>")
         l.forEach { sb.append(vignette(it)) }
         sb.append("</div>")
         return s.gabarit.reponse(q, Page("$nom — images SSTV", "Les images SSTV de $nom reçues par ${s.config.indicatif} avec SatMe.", sb.toString(),
-            "/gallery/sstv/" + q.variable("groupe"), actif = "/gallery", ogImage = l.firstOrNull()?.let { "/media/${it.id}/vignette.jpg" })).cache("public, max-age=60")
+            "/gallery/sstv/" + q.variable("groupe"), actif = "/gallery", ogImage = l.firstOrNull()?.let { "/media/${it.id}/vignette.jpg" }, scripts = listOf("js/galerie.js"))).cache("public, max-age=60")
     }
 
     private fun grille(q: Requete, t: TypePublication, titre: String, texte: String): Reponse {
         val l = s.publications.visibles(t)
-        val sb = StringBuilder("<header class=\"page-head\"><h1>").append(h(titre)).append("</h1><p><a href=\"/gallery\">← les galeries</a> · ").append(h(texte)).append("</p></header><div class=\"vign-grille large\">")
+        val sb = StringBuilder("<header class=\"page-head\"><h1>").append(h(titre)).append("</h1><p><a href=\"/gallery\">← les galeries</a> · ").append(h(texte)).append("</p></header><div class=\"vign-grille large\" data-galerie>")
         l.forEach { sb.append(vignette(it)) }
         sb.append("</div>")
-        return s.gabarit.reponse(q, Page(titre, texte, sb.toString(), q.chemin, actif = "/gallery")).cache("public, max-age=60")
+        return s.gabarit.reponse(q, Page(titre, texte, sb.toString(), q.chemin, actif = "/gallery", scripts = listOf("js/galerie.js"))).cache("public, max-age=60")
     }
 
     private fun item(q: Requete): Reponse {
@@ -163,14 +216,15 @@ class PagesGaleries(private val s: Site) : ModuleSite {
         if (a.resume.isNotEmpty()) sb.append(" · ").append(h(a.resume))
         sb.append("</p></header>")
         if (a.texteHtml.isNotEmpty()) sb.append("<div class=\"article-body\">").append(a.texteHtml).append("</div>")
-        sb.append("<div class=\"vign-grille\">")
+        sb.append("<div class=\"vign-grille\" data-galerie>")
         a.photos.forEach { ph ->
-            sb.append("<figure class=\"vign\"><a href=\"/media/album/").append(a.nom).append("/").append(Html.u(ph)).append("\"><img src=\"/media/album/")
+            sb.append("<figure class=\"vign\"><a href=\"/media/album/").append(a.nom).append("/").append(Html.u(ph)).append("\" data-plein=\"/media/album/").append(a.nom).append("/").append(Html.u(ph))
+                .append("\" data-legende=\"").append(h(a.titre + " · " + ph.substringBeforeLast('.'))).append("\"><img src=\"/media/album/")
                 .append(a.nom).append("/v/").append(Html.u(ph)).append("\" alt=\"").append(h(ph.substringBeforeLast('.'))).append("\" loading=\"lazy\"></a></figure>")
         }
         sb.append("</div>")
         return s.gabarit.reponse(q, Page(a.titre, a.resume.ifEmpty { "Album photo de ${s.config.indicatif} : ${a.titre}." }, sb.toString(), "/gallery/album/" + a.nom,
-            actif = "/gallery", ogImage = a.photos.firstOrNull()?.let { "/media/album/${a.nom}/v/" + Html.u(it) })).cache("public, max-age=300")
+            actif = "/gallery", ogImage = a.photos.firstOrNull()?.let { "/media/album/${a.nom}/v/" + Html.u(it) }, scripts = listOf("js/galerie.js"))).cache("public, max-age=300")
     }
 
     private fun media(q: Requete): Reponse {

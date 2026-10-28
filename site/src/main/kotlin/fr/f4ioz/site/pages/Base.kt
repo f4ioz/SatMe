@@ -57,7 +57,7 @@ class Base(private val s: Site) : ModuleSite {
 
     companion object {
         /** The old site's paths and where they are now. */
-        val DEPLACEES = mapOf("/sat/passes" to "/sat/sked", "/sstv" to "/gallery", "/about" to "/satme", "/index.html" to "/")
+        val DEPLACEES = mapOf("/sat/passes" to "/sat/sked", "/sstv" to "/gallery/sstv", "/about" to "/satme", "/index.html" to "/")
         /** Taken away with the new site. */
         val RETIREES = listOf("/tm60louv", "/cw", "/activation", "/login", "/logout", "/admin/visites")
     }
