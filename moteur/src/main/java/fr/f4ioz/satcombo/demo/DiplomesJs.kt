@@ -72,7 +72,7 @@ object DiplomesJs {
       <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="dp-actif" onchange="dpReglage('actif', this.checked)"> <b>Actif</b></label>
         <label><input type="checkbox" id="dp-sources-on" onchange="dpReglage('sources', this.checked)"> chercher en ligne</label>
         <button onclick="dpActualise()" title="Demander les sources maintenant (chacune au plus toutes les 5 min)">Actualiser</button></div>
-      <div class="aide">Les diplômes permanents (AMSAT, ARRL : comptés dans le carnet), le diplôme ARISS SSTV de chaque session (sa page, l'agenda ARISS, tes campagnes) et les certificats annoncés dans les flux AMSAT, AMSAT-UK, AMSAT-F (toutes les 12 h au plus). Les images de la galerie et le carnet sont comparés ici, sur ce PC. Rien n'est jamais envoyé.</div>
+      <div class="aide">Les diplômes permanents (AMSAT, ARRL : comptés dans le carnet), le diplôme ARISS SSTV de chaque session (sa page, l'agenda ARISS, tes campagnes) et les certificats annoncés dans les flux AMSAT, AMSAT-UK, AMSAT-F (toutes les 12 h au plus). Les images de la galerie et le carnet sont comparés ici, sur ce PC. Rien n'est envoyé, sauf vers ton site si tu coches « Diplômes » dans Publication web (la liste et ta progression) ou cliques « Envoyer le diplôme reçu ».</div>
       <div class="dp-src" id="dp-sources"></div>
     </div>
     <div class="carte">
@@ -240,6 +240,8 @@ function dpCarte(d) {
   if (s !== 'RECU') a += b('Marquer reçu', "dpSuivi(this.dataset.id, 'RECU')");
   a += b(d.suivi.certificat ? 'Remplacer le diplôme reçu…' : 'Joindre le diplôme reçu…', 'dpChoisitCertificat(this.dataset.id)', 'L’image du diplôme reçu, gardée sur ce PC');
   if (d.suivi.certificat) a += '<a class="bouton" href="api/diplomes/certificat?id=' + enc(d.id) + '" target="_blank">Voir le diplôme</a>';
+  if (d.suivi.certificat && DP.site) a += b(d.suivi.envoyeSite ? 'Renvoyer au site' : 'Envoyer le diplôme reçu', 'dpEnvoieSite(this.dataset.id)',
+    (d.suivi.envoyeSite ? 'Envoyé le ' + dpJour(d.suivi.envoyeSite) + '. ' : '') + 'Son image vers ton site (Publication web), seulement sur ce clic');
   if (s !== 'AUCUN') a += b(s === 'MASQUE' ? 'Ne plus masquer' : 'Annuler (' + esc(d.statutLibelle) + ')', "dpSuivi(this.dataset.id, 'AUCUN')");
   else a += b('Masquer', "dpSuivi(this.dataset.id, 'MASQUE')", 'Ne plus le montrer parmi les autres');
   if (d.ajoute) a += b('Retirer', 'dpRetire(this.dataset.id)', 'Retirer ce diplôme ajouté à la main');
@@ -253,6 +255,11 @@ async function dpRetire(id) { if (!confirm('Retirer ce diplôme ?')) return; awa
 async function dpIdentite() {
   const j = await post('api/diplomes/identite?nom=' + enc(g('dp-nom').value.trim()) + '&courriel=' + enc(g('dp-courriel').value.trim()));
   if (j && j.ok) { delete g('dp-nom').dataset.touche; delete g('dp-courriel').dataset.touche; txt('dp-id-etat', 'Enregistré.'); dpCharge(); }
+}
+async function dpEnvoieSite(id) {
+  let j = null; try { j = await (await fetch('api/diplomes/envoie-site?id=' + enc(id), { method: 'POST' })).json(); } catch (x) {}
+  toast(j && j.ok ? '🏅 Diplôme envoyé au site' : 'Non envoyé' + (j && j.erreur ? ' : ' + j.erreur : ''));
+  dpVu = ''; dpCharge();
 }
 function dpChoisitCertificat(id) { dpCertId = id; g('dp-cert-f').click(); }
 async function dpCertificat(inp) {

@@ -91,6 +91,11 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
                 racine().mkdirs(); ecritAtomique(File(racine(), "favoris.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
             }
+            "diplomes" -> {
+                val f = JSONObject().put("version", SitePc.VERSION_API).put("type", "diplomes")
+                o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
+                racine().mkdirs(); ecritAtomique(File(racine(), "diplomes.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
+            }
             "direct-station" -> {
                 val f = JSONObject()
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
@@ -99,6 +104,16 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
             "direct-efface" -> { direct.keySet().toList().forEach { direct.remove(it) }; d.deleteRecursively(); 200 to "{\"ok\":true}" }
             else -> 415 to "{\"ok\":false,\"erreur\":\"pas de spectre vers un dossier\"}"
         }
+    } catch (e: Exception) { 0 to ("dossier : " + (e.message ?: e.javaClass.simpleName)) }
+
+    /** An award's picture or PDF (`diplome-image`): `diplomes/<id>.<ext>`, replacing the one before. */
+    @Synchronized fun diplome(id: String, ext: String, octets: ByteArray): Pair<Int, String> = try {
+        val d = File(racine(), "diplomes")
+        d.mkdirs()
+        val base = sur(id.replace(':', '-'))
+        listOf("png", "jpg", "pdf").filter { it != ext }.forEach { File(d, "$base.$it").delete() }
+        ecritAtomique(File(d, "$base.$ext"), octets)
+        201 to JSONObject().put("ok", true).put("url", "diplomes/$base.$ext").toString()
     } catch (e: Exception) { 0 to ("dossier : " + (e.message ?: e.javaClass.simpleName)) }
 
     /** « Tester »: the folder made if needed, then a file written and removed. Null when it works, else why. */

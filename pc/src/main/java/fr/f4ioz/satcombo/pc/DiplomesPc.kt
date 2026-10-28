@@ -244,6 +244,17 @@ class DiplomesPc(
             .put("proposition", Diplomes.json(l.diplome))
     }
 
+    // ------------------------------------------------------------------ the web site
+
+    /** « Publication web »: the awards and the pictures of those received, sent to the owner's site (set by Main). */
+    @Volatile var site: DiplomesSitePc? = null
+
+    /** The awards' message for the site ([DiplomesSitePc.json]); null while « Diplômes » is off here. */
+    fun pourSite(): JSONObject? = if (!donnees.reglages.actif) null else DiplomesSitePc.json(bilans(), site?.envoyes()?.keys.orEmpty())
+
+    /** The picture kept of award [id] received, if any. */
+    fun certificat(id: String): File? = donnees.suivis[id]?.certificat?.takeIf { it.isNotBlank() }?.let { File(dossierCertificats, File(it).name) }?.takeIf { it.isFile }
+
     private fun suivi(id: String, s: Diplomes.Suivi) = garde(donnees.copy(suivis = donnees.suivis + (id to s)))
 
     private fun nomCertificat(id: String, ext: String) = id.replace(Regex("[^A-Za-z0-9_-]+"), "_").take(80) + "." + ext
@@ -328,6 +339,12 @@ class DiplomesPc(
                 json(JSONObject().put("ok", true))
             }
             "/rafraichit" -> { forcer = true; json(JSONObject().put("ok", true)) }
+            // « Envoyer le diplôme reçu »: its picture to the owner's site, on this click only.
+            "/envoie-site" -> {
+                val id = p("id"); if (id.isBlank()) return refus("id")
+                val s = site ?: return refus("Publication web absente")
+                s.envoie(id, certificat(id))?.let { refus(it) } ?: json(JSONObject().put("ok", true))
+            }
             else -> refus("inconnu")
         }
     }
@@ -343,6 +360,7 @@ class DiplomesPc(
             .put("identite", JSONObject().put("nom", f.identite.nom).put("courriel", f.identite.courriel).put("indicatif", s.callsign)
                 .put("locator", station.etat.value.locator).put("nomPlanche", s.plancheNom))
             .put("demo", !enLigneAutorise)
+            .put("site", site?.pret == true)
             .put("sources", JSONArray(if (!enLigneAutorise) emptyList() else enLigne.etats().map { e ->
                 JSONObject().put("id", e.src.name).put("nom", e.src.nom).put("lien", e.src.lien).put("tentative", e.tentativeMs)
                     .put("succes", e.succesMs).put("erreur", e.erreur).put("n", e.diplomes.size)
@@ -352,7 +370,8 @@ class DiplomesPc(
                     .put("remarque", b.remarque).put("elements", JSONArray(b.elements.take(400)))
                     .put("images", JSONArray(b.images.take(6).map { JSONObject().put("nom", it.nom).put("quand", it.quandMs).put("note", it.note).put("complete", it.complete) }))
                     .put("nImages", b.images.size).put("ajoute", b.diplome.source == "Affiche" || b.diplome.source == "Texte")
-                    .put("suivi", JSONObject().put("etat", b.suivi.etat.name).put("quand", b.suivi.quandMs).put("certificat", b.suivi.certificat.isNotBlank()).put("note", b.suivi.note))
+                    .put("suivi", JSONObject().put("etat", b.suivi.etat.name).put("quand", b.suivi.quandMs).put("certificat", b.suivi.certificat.isNotBlank()).put("note", b.suivi.note)
+                        .put("envoyeSite", site?.envoyes()?.get(b.diplome.id) ?: 0L))
             }))
             .put("annonces", JSONArray(synchronized(this) { annonces.toList() }.map { JSONObject().put("n", it.n).put("quand", it.quandMs).put("sorte", it.sorte).put("texte", it.texte).put("id", it.id) }))
     }

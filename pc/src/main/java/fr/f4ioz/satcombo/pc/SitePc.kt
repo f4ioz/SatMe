@@ -426,6 +426,20 @@ class SitePc(
         return transport.envoie("POST", adresse(type), entetes(type, id, JSON), Corps.json(corps))
     }
 
+    /**
+     * One file sent at once, outside the queue (an award received, `diplome-image`: the owner's click): [octets] of type
+     * [mime] named [nom], with [meta] (the award's id). Its answer, or null when the target is not set.
+     */
+    fun envoieDocument(type: String, meta: JSONObject, nom: String, mime: String, ext: String, octets: ByteArray): Pair<Int, String>? {
+        if (refus() != null) return null
+        if (cible == Cible.DOSSIER) return ecrivain.diplome(meta.optString("diplome"), ext, octets)
+        val id = UUID.randomUUID().toString()
+        val m = JSONObject(meta.toString()).put("version", VERSION_API).put("type", type).put("id", id).put("t", horloge())
+            .put("fichier", JSONObject().put("nom", nom).put("type", mime).put("taille", octets.size))
+        val (ct, corps) = Corps.multipart(type, m, nom, mime, octets)
+        return transport.envoie("POST", adresse(type), entetes(type, id, ct), corps)
+    }
+
     /** Withdraws [ref] from the site (`retrait`). */
     fun retire(g: Genre, ref: String): String? {
         chargeDisque()
