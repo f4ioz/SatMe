@@ -14,20 +14,20 @@ class ModulesStationTest {
     @Test fun une_station_qui_avait_coche_des_fonctions_non_sat_les_garde() {
         val st = StockageMemoire()
         FonctionsNonSat.migre(st) { it == "ais" }
-        assertEquals(setOf("sondes", "avions"), ModulesStation.migre(st))
+        assertEquals(setOf("sondes", "avions", "site"), ModulesStation.migre(st))
         assertTrue(ModulesStation.actif(st, "ais"))
         assertTrue(ModulesStation.actif(st, "qo100"))
         assertFalse(ModulesStation.actif(st, "avions"))
         // Decided once: the old key changed afterwards does not count.
         st.edit().putStringSet(FonctionsNonSat.CLE, setOf("avions", "ais", "sondes")).apply()
-        assertEquals(setOf("sondes", "avions"), ModulesStation.migre(st))
+        assertEquals(setOf("sondes", "avions", "site"), ModulesStation.migre(st))
     }
 
     @Test fun avant_tout_choix_seules_les_fonctions_non_sat_decochees_sont_coupees() {
         val st = StockageMemoire()
-        assertEquals(setOf("sondes", "avions", "ais"), ModulesStation.coupes(st))
+        assertEquals(setOf("sondes", "avions", "ais", "site"), ModulesStation.coupes(st))
         st.edit().putStringSet(FonctionsNonSat.CLE, setOf("sondes", "avions", "ais")).apply()
-        assertEquals(emptySet<String>(), ModulesStation.coupes(st))
+        assertEquals(setOf("site"), ModulesStation.coupes(st))
     }
 
     @Test fun poser_garde_la_cle_des_fonctions_non_sat_au_pas() {
@@ -39,7 +39,8 @@ class ModulesStationTest {
     }
 
     @Test fun les_profils() {
-        assertEquals(emptySet<String>(), ModulesStation.profil("tout"))
+        assertEquals(setOf("site"), ModulesStation.profil("tout"))
+        assertEquals(emptySet<String>(), ModulesStation.profil("tout", emptySet()))
         assertNull(ModulesStation.profil("rien"))
         val sstv = ModulesStation.profil("sstv")!!
         assertFalse("sstv" in sstv); assertFalse("sdr" in sstv)
@@ -50,8 +51,44 @@ class ModulesStationTest {
         ModulesStation.PROFILS.forEach { p ->
             assertTrue(p.id, tous.containsAll(p.modules))
             assertEquals(p.id, ModulesStation.profilDe(ModulesStation.profil(p.id)!!))
+            // A profile never switches « Mon site web » on, nor off when the owner has it on.
+            assertFalse(p.id, ModulesStation.SITE in p.modules)
+            assertTrue(p.id, ModulesStation.SITE in ModulesStation.profil(p.id)!!)
+            assertFalse(p.id, ModulesStation.SITE in ModulesStation.profil(p.id, emptySet())!!)
+            assertEquals(p.id, ModulesStation.profilDe(ModulesStation.profil(p.id, emptySet())!!))
         }
         assertNull(ModulesStation.profilDe(setOf("qo100")))
+    }
+
+    @Test fun mon_site_web_est_coupe_par_defaut() {
+        // A new install: off, whatever else is chosen.
+        val neuf = StockageMemoire()
+        assertFalse(ModulesStation.actif(neuf, ModulesStation.SITE))
+        assertTrue(ModulesStation.SITE in ModulesStation.migre(neuf))
+        assertFalse(ModulesStation.actif(neuf, ModulesStation.SITE))
+        assertTrue(ModulesStation.module(ModulesStation.SITE)!!.surDemande)
+        // Switched on by the owner: kept (decided), a later start does not undo it.
+        ModulesStation.pose(neuf, ModulesStation.bascule(ModulesStation.coupes(neuf), ModulesStation.SITE, true))
+        assertTrue(ModulesStation.actif(neuf, ModulesStation.SITE))
+        ModulesStation.migre(neuf) { false }
+        assertTrue(ModulesStation.actif(neuf, ModulesStation.SITE))
+    }
+
+    @Test fun une_station_d_avant_le_module_site_le_garde_seulement_s_il_etait_regle() {
+        // Modules already chosen before « Mon site web » existed: the site set up → on, the rest unchanged.
+        val regle = StockageMemoire()
+        regle.edit().putStringSet(ModulesStation.CLE, setOf("datv")).apply()
+        assertFalse(ModulesStation.actif(regle, ModulesStation.SITE))
+        assertEquals(setOf("datv"), ModulesStation.migre(regle) { it == ModulesStation.SITE })
+        assertTrue(ModulesStation.actif(regle, ModulesStation.SITE))
+        // Decided once: the owner's later choice stays.
+        ModulesStation.pose(regle, setOf("datv", ModulesStation.SITE))
+        assertEquals(setOf("datv", ModulesStation.SITE), ModulesStation.migre(regle) { true })
+        // Not set up: off.
+        val non = StockageMemoire()
+        non.edit().putStringSet(ModulesStation.CLE, emptySet()).apply()
+        assertEquals(setOf(ModulesStation.SITE), ModulesStation.migre(non) { false })
+        assertFalse(ModulesStation.actif(non, ModulesStation.SITE))
     }
 
     @Test fun bascule() {

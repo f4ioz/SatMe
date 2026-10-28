@@ -24,13 +24,19 @@ import fr.f4ioz.satcombo.plateforme.Stockage
  * The functions not about satellites ([FonctionsNonSat]) are modules too:
  * their own key is kept in step ([pose]), the first start reading it
  * ([migre]) so nothing ticked or unticked changes.
+ *
+ * Some modules are switched on by the owner only ([Module.surDemande]: the
+ * owner's own web site, which sends things out of the station): off on a
+ * new install, never on through a profile, and decided once for a station
+ * that existed before them ([migre]: on only where already set up).
  */
 object ModulesStation {
 
     /**
      * A module: [onglets] its tabs, [masques] the page's elements that only
      * concern it (CSS selectors), [utilise] the modules it works through
-     * (advice only), [avis] a hint shown beside it.
+     * (advice only), [avis] a hint shown beside it; [surDemande] off until
+     * the owner switches it on (never by default, never by a profile).
      */
     data class Module(
         val id: String,
@@ -40,6 +46,7 @@ object ModulesStation {
         val masques: List<String> = emptyList(),
         val utilise: List<String> = emptyList(),
         val avis: String = "",
+        val surDemande: Boolean = false,
     )
 
     /** A ready-made choice: the modules on (all others off). */
@@ -76,9 +83,14 @@ object ModulesStation {
         Module("telephone", "Téléphone", "SatMe sur le téléphone : réglages et contacts", masques = listOf("#carteTelephone")),
         Module("polar", "Polarisation", "Le commutateur de polarisation d’antenne (V, H, circulaires) : boîtier ESP32 en USB", masques = listOf("#pol-carte", "#polr-carte"),
             avis = "Un boîtier ESP32 et un WiMo ; ne fait rien tant qu’aucun port n’est choisi (l’ESP32 virtuel pour essayer)"),
+        Module(SITE, "Mon site web", "Publier vos images, planches, rapports, contacts et vidéos sur VOTRE site radioamateur (module « site » de SatMe, hébergé par vous). Rien n’est envoyé tant que ce module n’est pas activé et configuré.",
+            masques = listOf("#site-carte", ".site-b"), avis = "Désactivé par défaut ; aucun profil ne l’active", surDemande = true),
     )
 
     private val PAR_ID = MODULES.associateBy { it.id }
+
+    /** The modules switched on by the owner only. */
+    val SUR_DEMANDE: Set<String> = MODULES.filter { it.surDemande }.map { it.id }.toSet()
 
     val PROFILS: List<Profil> = listOf(
         Profil("fm", "Satellites FM/SSB", "Les satellites en phonie, CW et numérique",
@@ -89,32 +101,45 @@ object ModulesStation {
             setOf("sdr", "qo100", "datv", "ft8", "cw", "phonie", "annonces", "noeud", "montage", "telephone")),
         Profil("meteo", "Météo et non-sat", "Images METEOR, radiosondes, avions, navires, météo spatiale",
             setOf("sdr", "meteor", "sondes", "avions", "ais", "espace", "annonces", "telephone")),
-        Profil("tout", "Tout", "Tous les modules", MODULES.map { it.id }.toSet()),
+        Profil("tout", "Tout", "Tous les modules (sauf ceux à activer soi-même, comme Mon site web)", MODULES.filter { !it.surDemande }.map { it.id }.toSet()),
     )
 
     /** The modules switched off (a set of [MODULES]' ids); absent until [migre] or a first choice. */
     const val CLE = "pc_modules_coupes"
 
+    /** The modules [surDemande] already decided (by [migre] or a choice): the others are off. */
+    const val CLE_DECIDES = "pc_modules_decides"
+
+    /** The owner's own web site (SitePc): off until switched on. */
+    const val SITE = "site"
+
     fun module(id: String): Module? = PAR_ID[id]
 
     /**
      * The modules switched off: those stored, else (never chosen) the
-     * functions not about satellites left unticked, so the menu stays as it was.
+     * functions not about satellites left unticked, so the menu stays as it was;
+     * and the modules [surDemande] never decided.
      */
     fun coupes(st: Stockage): Set<String> =
-        st.getStringSet(CLE, null)?.filter { it in PAR_ID }?.toSet()
-            ?: FonctionsNonSat.ONGLETS.keys.filter { it !in FonctionsNonSat.choisis(st).orEmpty() }.toSet()
+        (st.getStringSet(CLE, null)?.filter { it in PAR_ID }?.toSet()
+            ?: FonctionsNonSat.ONGLETS.keys.filter { it !in FonctionsNonSat.choisis(st).orEmpty() }.toSet()) +
+            (SUR_DEMANDE - st.getStringSet(CLE_DECIDES, null).orEmpty())
 
-    /** Decided once (after [FonctionsNonSat.migre]): everything on but the functions not about satellites left unticked. */
-    fun migre(st: Stockage): Set<String> {
-        if (st.getStringSet(CLE, null) != null) return coupes(st)
-        return pose(st, coupes(st))
+    /**
+     * Decided once (after [FonctionsNonSat.migre]): everything on but the functions not about satellites left unticked;
+     * a module [surDemande] not yet decided on only when [pret] says it is already set up (the owner's own site), else off.
+     */
+    fun migre(st: Stockage, pret: (String) -> Boolean = { false }): Set<String> {
+        val nouveaux = SUR_DEMANDE - st.getStringSet(CLE_DECIDES, null).orEmpty()
+        if (st.getStringSet(CLE, null) != null && nouveaux.isEmpty()) return coupes(st)
+        return pose(st, coupes(st) - nouveaux.filter { runCatching { pret(it) }.getOrDefault(false) }.toSet())
     }
 
-    /** [coupes] stored, the functions not about satellites' own key kept in step. */
+    /** [coupes] stored, the functions not about satellites' own key kept in step (the modules [surDemande] decided). */
     fun pose(st: Stockage, coupes: Set<String>): Set<String> {
         val l = coupes.filter { it in PAR_ID }.toSet()
-        st.edit().putStringSet(CLE, l).putStringSet(FonctionsNonSat.CLE, FonctionsNonSat.ONGLETS.keys.filter { it !in l }.toSet()).apply()
+        st.edit().putStringSet(CLE, l).putStringSet(CLE_DECIDES, SUR_DEMANDE)
+            .putStringSet(FonctionsNonSat.CLE, FonctionsNonSat.ONGLETS.keys.filter { it !in l }.toSet()).apply()
         return l
     }
 
@@ -122,12 +147,17 @@ object ModulesStation {
     fun bascule(coupes: Set<String>, id: String, on: Boolean): Set<String> =
         if (id !in PAR_ID) coupes else if (on) coupes - id else coupes + id
 
-    /** What [profil] leaves off; null for an unknown profile. */
-    fun profil(profil: String): Set<String>? =
-        PROFILS.firstOrNull { it.id == profil }?.let { p -> MODULES.map { it.id }.filter { it !in p.modules }.toSet() }
+    /**
+     * What [profil] leaves off; null for an unknown profile. A profile never switches a module [surDemande] on:
+     * those stay as they are in [avant] (off when not given).
+     */
+    fun profil(profil: String, avant: Set<String>? = null): Set<String>? =
+        PROFILS.firstOrNull { it.id == profil }?.let { p ->
+            MODULES.filter { !it.surDemande && it.id !in p.modules }.map { it.id }.toSet() + (avant?.intersect(SUR_DEMANDE) ?: SUR_DEMANDE)
+        }
 
-    /** The profile that leaves exactly [coupes] off, if any. */
-    fun profilDe(coupes: Set<String>): String? = PROFILS.firstOrNull { profil(it.id) == coupes }?.id
+    /** The profile that leaves exactly [coupes] off (the modules [surDemande] aside), if any. */
+    fun profilDe(coupes: Set<String>): String? = PROFILS.firstOrNull { profil(it.id, coupes) == coupes }?.id
 
     fun actif(st: Stockage, id: String): Boolean = id !in coupes(st)
 

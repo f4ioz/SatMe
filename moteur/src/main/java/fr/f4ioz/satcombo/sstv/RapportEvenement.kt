@@ -43,7 +43,7 @@ import kotlin.math.sin
  *
  * [Rapport] is all the report says, and [html] a pure function of it: no
  * address of the station's own (no link to SatMe-PC, no picture fetched), so
- * the same report can one day be published on the website (f4ioz.fr).
+ * the same report can one day be published on the operator's own web site (the optional « Mon site web » module).
  *
  * Receive only: nothing is sent to make it.
  */

@@ -224,7 +224,7 @@ object PagePlanche {
   <input type="file" id="fichier" accept="image/*,.satme-planche,.zip,application/zip" class="cache">
   <button class="discret" id="exporter"></button>
   <button class="discret" id="rapport"></button>
-  <button class="discret cache" id="sitePlanche" title="Publier cette planche sur le site web (SatMe-PC › Réglages › Site web)">🌐 Planche sur le site</button>
+  <button class="discret cache" id="sitePlanche" title="Publier cette planche sur le site web (SatMe-PC › Réglages › Mon site web)">🌐 Planche sur le site</button>
   <button class="discret cache" id="siteRapport" title="Publier le rapport de son événement (PDF) sur le site web">🌐 Rapport sur le site</button>
   <button class="primaire" id="telecharger"></button>
   <span id="message"></span>
@@ -1034,7 +1034,7 @@ g('rapportDl').onclick = async () => {
   } catch (e) { g('message').textContent = T.hors_ligne; }
 };
 g('rapportNon').onclick = () => g('dlgRapport').classList.add('cache');
-// SatMe-PC only: « Publier sur le site » (Réglages › Site web), the planche and its event's report, through the PC's queue.
+// SatMe-PC only: « Publier sur le site » (Réglages › Mon site web, a module off by default), the planche and its event's report, through the PC's queue.
 async function siteWeb() {
   if (!window.SATME_PC) return;
   let S = null; try { S = await (await fetch(base + '/api/site')).json(); } catch (e) {}

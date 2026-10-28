@@ -89,9 +89,21 @@ class ModulesPcTest {
             assertTrue(ModulesStation.actif(stockage, "ais"))
             assertEquals(setOf("ais"), FonctionsNonSat.choisis(stockage))
 
-            // « Tout »: everything.
+            // « Tout »: everything but « Mon site web », which only the owner switches on.
             j = post("/api/modules?profil=tout")
             assertEquals(PagePc.TOUS.size, j.getJSONArray("onglets").length())
+            assertEquals(listOf("#site-carte", ".site-b"), liste(j.getJSONArray("masques")))
+            assertEquals("tout", j.getString("profil"))
+            // Its actions refused while it is off.
+            val refus = post("/api/site/essai")
+            assertFalse(refus.getBoolean("ok")); assertEquals("site", refus.getString("module"))
+            // Switched on by hand: a profile leaves it on, and still matches.
+            j = post("/api/modules?m=site&on=1")
+            assertEquals(0, j.getJSONArray("masques").length())
+            j = post("/api/modules?profil=sstv")
+            assertEquals("sstv", j.getString("profil"))
+            assertTrue(ModulesStation.actif(stockage, "site"))
+            j = post("/api/modules?profil=tout")
             assertEquals(0, j.getJSONArray("masques").length())
 
             // From another site's page open in the same browser: refused, nothing changed.

@@ -34,10 +34,17 @@ class DirectSitePcTest {
     private var reponse: (Envoi) -> Pair<Int, String> = { 200 to "{\"ok\":true}" }
     private var t = 1_800_000_000_000L
 
+    /** The settings of the last [direct]. */
+    private lateinit var reglages: StockageFichier
+
     private fun direct(): Pair<SitePc, DirectSitePc> {
         val st = StockageFichier(tmp.newFile("r-" + System.nanoTime() + ".properties"))
+        reglages = st
         val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { m, u, e, c, _ -> val x = Envoi(m, u, e, c); envois += x; reponse(x) })
-        site.sert("/api/site/reglages", "POST") { k -> when (k) { "url" -> "https://f4ioz.example"; "jeton" -> "le-jeton"; else -> "" } }
+        // « Mon site web » switched on, the site set and tested.
+        fr.f4ioz.satcombo.demo.ModulesStation.pose(st, emptySet())
+        site.sert("/api/site/essai", "POST") { k -> when (k) { "url" -> "https://f4ioz.example"; "jeton" -> "le-jeton"; else -> "" } }
+        envois.clear()
         val d = DirectSitePc(st, site, { t })
         site.direct = d
         return site to d
@@ -119,6 +126,23 @@ class DirectSitePcTest {
         // The token is never shown on SatMe-PC's page either.
         assertFalse(site.json().toString().contains("le-jeton"))
         assertTrue(site.json().getJSONObject("direct").getJSONArray("canaux").getJSONObject(0).getBoolean("on"))
+    }
+
+    @Test fun `nothing at all while Mon site web is switched off, even the parts chosen`() {
+        val (site, d) = direct()
+        d.pilote = { ap() }
+        d.panorama = { DirectSitePc.Panorama(FloatArray(16384) { -90f }, 10_489_750_000.0, 1_058_400.0) }
+        var demande = 0
+        d.demandePanorama = { demande++ }
+        site.sert("/api/site/direct", "POST") { k -> when (k) { "on_pilote", "on_spectre", "on_datv" -> "1"; else -> "" } }
+        fr.f4ioz.satcombo.demo.ModulesStation.pose(reglages, setOf(fr.f4ioz.satcombo.demo.ModulesStation.SITE))
+        repeat(5) { t += 10_000L; d.tic() }
+        assertTrue(envois.isEmpty())
+        assertEquals(0, demande)
+        assertNull(site.envoieDirect("POST", "", null, null))
+        // The page cannot switch a part on or wipe the site's live block either.
+        assertFalse(site.sert("/api/site/direct", "POST") { k -> if (k == "efface") "1" else "" }.corps.toString(Charsets.UTF_8).contains("\"ok\":true"))
+        assertTrue(envois.isEmpty())
     }
 
     @Test fun `a refusal waits two minutes and says why, a silent site backs off`() {

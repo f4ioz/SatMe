@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import com.sun.net.httpserver.HttpServer
+import fr.f4ioz.satcombo.demo.ModulesStation
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -56,19 +57,33 @@ class SitePcTest {
 
     private val url get() = "http://127.0.0.1:" + serveur.address.port
 
-    private fun site(demo: Boolean = false): SitePc {
-        val s = SitePc(StockageFichier(tmp.newFile("reglages-" + System.nanoTime() + ".properties")), tmp.newFolder(), { demo }, { t })
+    /** The settings of the last [site]. */
+    private lateinit var st: StockageFichier
+
+    /** « Mon site web » switched on in Réglages › Modules ([on]), as the owner does before anything goes. */
+    private fun site(demo: Boolean = false, on: Boolean = true): SitePc {
+        st = StockageFichier(tmp.newFile("reglages-" + System.nanoTime() + ".properties"))
+        if (on) ModulesStation.pose(st, emptySet())
+        val s = SitePc(st, tmp.newFolder(), { demo }, { t })
         s.sources = { g, ref -> SitePc.Contenu(("contenu de " + ref).toByteArray(), null, if (g == SitePc.Genre.QSO) "text/plain" else "image/png",
             JSONObject().put("satellite", "ISS").put("titre", "image $ref")) }
         return s
     }
 
-    private fun regle(s: SitePc, jeton: String = "le-jeton") =
+    /** The address and the token set, then « Tester la connexion » passed (unless not [teste]); the test's request forgotten. */
+    private fun regle(s: SitePc, jeton: String = "le-jeton", teste: Boolean = true) {
         s.sert("/api/site/reglages", "POST") { k -> when (k) { "url" -> url; "jeton" -> jeton; else -> "" } }
+        if (!teste) return
+        val avant = reponse
+        reponse = { 200 to "{\"ok\":true,\"site\":\"x\",\"indicatif\":\"F4XYZ\"}" }
+        assertTrue(s.essai().startsWith("ok"))
+        reponse = avant
+        recus.clear()
+    }
 
     @Test fun `nothing goes before the site is set`() {
         val s = site()
-        assertEquals("le site web n'est pas réglé (Réglages › Site web)", s.publie(SitePc.Genre.SSTV, "a.png", true))
+        assertEquals("le site web n'est pas réglé (Réglages › Services en ligne › Mon site web)", s.publie(SitePc.Genre.SSTV, "a.png", true))
         assertEquals(0, s.envoieDus())
         assertTrue(recus.isEmpty())
     }
@@ -92,8 +107,14 @@ class SitePcTest {
 
     @Test fun `each kind as chosen - automatic, at a click, never`() {
         val s = site(); regle(s)
-        // Defaults: SSTV pictures and planches by themselves, contacts at a click.
+        // Defaults: every kind at a click only, nothing by itself until the owner chooses « Automatique ».
+        SitePc.Genre.values().forEach { assertEquals(it.name, SitePc.Mode.CLIC, s.mode(it)) }
         s.nouveauContact(42L)
+        s.nouvelleVideo("v.webm")
+        s.publie(SitePc.Genre.SSTV, "b.png", false)
+        assertEquals(0, s.envoieDus())
+        assertTrue(recus.isEmpty())
+        s.regleMode(SitePc.Genre.SSTV, SitePc.Mode.AUTO)
         s.publie(SitePc.Genre.SSTV, "b.png", false)
         assertEquals(1, s.envoieDus())
         assertEquals("/api/publication/sstv-image", recus.single().chemin)
@@ -109,6 +130,7 @@ class SitePcTest {
     @Test fun `while the site does not answer, the item waits on disk and is sent later`() {
         val dossier = tmp.newFolder("pc")
         val st = StockageFichier(File(dossier, "r.properties"))
+        ModulesStation.pose(st, emptySet())
         val s = SitePc(st, dossier, { false }, { t })
         s.sources = { _, ref -> SitePc.Contenu(ref.toByteArray(), null, "image/png", JSONObject()) }
         regle(s)
@@ -157,6 +179,82 @@ class SitePcTest {
         regle(s)
         assertNull(s.publie(SitePc.Genre.SSTV, "f.png", true))
         assertEquals(1, s.envoieDus())
+    }
+
+    @Test fun `switched off, nothing goes out - no queue, no test, no live data, no button`() {
+        val s = site(); regle(s)
+        s.regleMode(SitePc.Genre.SSTV, SitePc.Mode.AUTO)
+        reponse = { 503 to "" }
+        assertNull(s.publie(SitePc.Genre.SSTV, "g.png", true))
+        assertEquals(0, s.envoieDus()); recus.clear()
+        reponse = { 201 to "{\"ok\":true,\"id\":\"00000000000000bb\"}" }
+        // Réglages › Modules: « Mon site web » unticked.
+        ModulesStation.pose(st, setOf(ModulesStation.SITE))
+        t += 10 * 3_600_000L
+        assertEquals(0, s.envoieDus())
+        assertEquals(SitePc.MODULE_COUPE, s.publie(SitePc.Genre.SSTV, "h.png", true))
+        assertNull(s.publie(SitePc.Genre.SSTV, "h.png", false))
+        s.nouvelleImage("i.png"); s.nouveauContact(44L)
+        assertEquals(SitePc.MODULE_COUPE, s.essai())
+        assertNull(s.envoieDirect("POST", "/spectre", "application/json", ByteArray(1)))
+        assertEquals(SitePc.MODULE_COUPE, s.retire(SitePc.Genre.SSTV, "g.png"))
+        // The page's actions refused; its state says « off », so no 🌐 button anywhere.
+        listOf("reglages", "essai", "publie", "retire", "direct", "maintenant").forEach { r ->
+            val o = JSONObject(String(s.sert("/api/site/$r", "POST") { k -> if (k == "type") "sstv-image" else if (k == "url") url else "" }.corps))
+            assertFalse(r, o.getBoolean("ok"))
+        }
+        val o = s.json()
+        assertFalse(o.getBoolean("module")); assertFalse(o.getBoolean("configure"))
+        assertTrue(recus.isEmpty())
+        // Back on: what waited goes.
+        ModulesStation.pose(st, emptySet())
+        assertEquals(1, s.envoieDus())
+        assertTrue(s.json().getBoolean("configure"))
+    }
+
+    @Test fun `a new station - off, then the assistant - ready only after a test that passes`() {
+        val s = site(on = false)
+        assertFalse(ModulesStation.actif(st, ModulesStation.SITE))
+        assertFalse(s.json().getBoolean("module"))
+        ModulesStation.pose(st, ModulesStation.bascule(ModulesStation.coupes(st), ModulesStation.SITE, true))
+        assertTrue(s.json().getBoolean("module"))
+        // Address and token saved but not tested: not ready, nothing goes.
+        regle(s, teste = false)
+        assertFalse(s.json().getBoolean("pret")); assertFalse(s.json().getBoolean("configure"))
+        assertTrue(s.publie(SitePc.Genre.SSTV, "a.png", true)!!.contains("pas encore été testée"))
+        // A test that fails: still not ready.
+        reponse = { 401 to "" }
+        val faux = JSONObject(String(s.sert("/api/site/essai", "POST") { k -> when (k) { "url" -> url; "jeton" -> "faux"; else -> "" } }.corps))
+        assertFalse(faux.getBoolean("ok")); assertEquals("jeton refusé par le site", faux.getString("message"))
+        assertFalse(s.json().getBoolean("configure"))
+        // The assistant's step 3 with the right token: kept and ready; every kind « Sur clic », the live parts off.
+        reponse = { 200 to "{\"ok\":true,\"site\":\"x\",\"indicatif\":\"F4XYZ\"}" }
+        val bon = JSONObject(String(s.sert("/api/site/essai", "POST") { k -> when (k) { "url" -> url; "jeton" -> "le-jeton"; else -> "" } }.corps))
+        assertTrue(bon.getBoolean("ok")); assertTrue(bon.getJSONObject("etat").getBoolean("configure"))
+        val modes = s.json().getJSONObject("modes")
+        modes.keySet().forEach { assertEquals(it, "clic", modes.getString(it)) }
+        // Another address: to be tested again.
+        s.sert("/api/site/reglages", "POST") { k -> if (k == "url") "http://127.0.0.1:1" else "" }
+        assertFalse(s.json().getBoolean("configure"))
+    }
+
+    @Test fun `an existing station - on only if its site was already set`() {
+        val avec = StockageFichier(tmp.newFile("avec.properties"))
+        avec.edit().putStringSet(ModulesStation.CLE, setOf("noeud")).putString("site_url", "https://mon-site-radioamateur.fr").putString("site_jeton", "j").apply()
+        ModulesStation.migre(avec) { it == ModulesStation.SITE && SitePc.regle(avec) }
+        assertTrue(ModulesStation.actif(avec, ModulesStation.SITE))
+        assertFalse(ModulesStation.actif(avec, "noeud"))
+        // Set before the test was asked: counts as tested.
+        assertTrue(SitePc(avec, tmp.newFolder(), { false }, { t }).json().getBoolean("configure"))
+        val sans = StockageFichier(tmp.newFile("sans.properties"))
+        sans.edit().putStringSet(ModulesStation.CLE, emptySet()).putString("site_url", "https://mon-site-radioamateur.fr").apply()
+        ModulesStation.migre(sans) { it == ModulesStation.SITE && SitePc.regle(sans) }
+        assertFalse(ModulesStation.actif(sans, ModulesStation.SITE))
+        // A new install: off.
+        val neuf = StockageFichier(tmp.newFile("neuf.properties"))
+        ModulesStation.migre(neuf) { it == ModulesStation.SITE && SitePc.regle(neuf) }
+        assertFalse(ModulesStation.actif(neuf, ModulesStation.SITE))
+        assertFalse(SitePc(neuf, tmp.newFolder(), { false }, { t }).json().getBoolean("module"))
     }
 
     @Test fun `the delays grow to an hour`() {

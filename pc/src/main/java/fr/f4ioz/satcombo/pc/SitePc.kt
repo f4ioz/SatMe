@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.demo.ModulesStation
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.plateforme.Stockage
 import org.json.JSONArray
@@ -19,11 +20,17 @@ import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * « Réglages › Site web »: what SatMe-PC publishes on the operator's web
- * site (the F4IOZ site's publication API, `site` module): the SSTV
- * pictures, the planches, the reports, the contacts, the journal's videos.
- * Each kind **Automatique** (as it comes), **Sur clic** (the « Publier sur le
- * site » button of each item) or **Jamais**.
+ * « Mon site web » (Réglages › Services en ligne): what SatMe-PC publishes on
+ * the operator's own web site (SatMe's `site` module, hosted by the
+ * operator, its publication API): the SSTV pictures, the planches, the
+ * reports, the contacts, the journal's videos. Each kind **Sur clic** (the
+ * « Publier sur le site » button of each item; the default), **Automatique**
+ * (as it comes) or **Jamais**.
+ *
+ * An optional module ([ModulesStation.SITE]), off by default: while it is off
+ * nothing at all goes out (no queue, no test, no live data). Switched on, the
+ * site is ready only once its address and token passed **Tester la
+ * connexion** ([pret]).
  *
  * Nothing is sent from the request that asks: each item is copied into a
  * queue on disk (`site/`) and a thread sends it, again and again while the
@@ -38,6 +45,7 @@ class SitePc(
     private val demo: () -> Boolean = { ModeDemo.actif },
     private val horloge: () -> Long = System::currentTimeMillis,
     private val transport: Transport = Transport.HTTP,
+    private val module: () -> Boolean = { ModulesStation.actif(stockage, ModulesStation.SITE) },
 ) {
     /** One request to the site: its answer's status and text. */
     fun interface Transport {
@@ -66,8 +74,8 @@ class SitePc(
 
     /** The kinds, as the site's API names them. */
     enum class Genre(val nom: String, val libelle: String, val parDefaut: Mode) {
-        SSTV("sstv-image", "Images SSTV", Mode.AUTO),
-        PLANCHE("planche", "Planches", Mode.AUTO),
+        SSTV("sstv-image", "Images SSTV", Mode.CLIC),
+        PLANCHE("planche", "Planches", Mode.CLIC),
         RAPPORT("rapport", "Rapports", Mode.CLIC),
         QSO("qso", "Contacts (QSO)", Mode.CLIC),
         VIDEO("journal-video", "Vidéos du journal", Mode.CLIC);
@@ -95,22 +103,40 @@ class SitePc(
 
     // ------------------------------------------------------------------ settings
 
+    /** The address; a new one is to be tested again. */
     var url: String
         get() = stockage.getString("site_url", "") ?: ""
-        set(v) { stockage.edit().putString("site_url", normalise(v)).apply() }
+        set(v) { val n = normalise(v); if (n != url) stockage.edit().putString("site_url", n).putBoolean(CLE_PRET, false).apply() }
 
-    /** The token: kept, never given back (only whether there is one). */
+    /** The token: kept, never given back (only whether there is one); a new one is to be tested again. */
     private var jeton: String
         get() = stockage.getString("site_jeton", "") ?: ""
-        set(v) { stockage.edit().putString("site_jeton", v.trim()).apply() }
+        set(v) { val n = v.trim(); if (n != jeton) stockage.edit().putString("site_jeton", n).putBoolean(CLE_PRET, false).apply() }
 
     fun mode(g: Genre): Mode = Mode.de(stockage.getString("site_mode_" + g.nom, null)) ?: g.parDefaut
     fun regleMode(g: Genre, m: Mode) { stockage.edit().putString("site_mode_" + g.nom, m.nom).apply() }
 
-    val configure: Boolean get() = url.isNotEmpty() && jeton.isNotEmpty()
+    /** « Mon site web » switched on in Réglages › Modules: else nothing goes out. */
+    val actif: Boolean get() = runCatching { module() }.getOrDefault(false)
+
+    /**
+     * The address and the token passed « Tester la connexion ». A station set before the test was asked (the key
+     * absent, address and token there) counts as tested.
+     */
+    val pret: Boolean get() = regle(stockage) && stockage.getBoolean(CLE_PRET, true)
+
+    /** Publishing can go: the module on, the site set and tested. */
+    val configure: Boolean get() = actif && pret
+
+    /** Why nothing can go now, else null. */
+    private fun refus(): String? = when {
+        !actif -> MODULE_COUPE
+        url.isEmpty() || jeton.isEmpty() -> "le site web n'est pas réglé (Réglages › Services en ligne › Mon site web)"
+        else -> refusDemo() ?: if (!pret) "la connexion au site n'a pas encore été testée (Réglages › Services en ligne › Mon site web)" else null
+    }
 
     /** In the demonstration, a site on this machine only. */
-    private fun refusDemo(): String? = if (demo() && !local(url)) "démonstration : publication seulement vers un site de cette machine (http://127.0.0.1:…)" else null
+    private fun refusDemo(u: String = url): String? = if (demo() && !local(u)) "démonstration : publication seulement vers un site de cette machine (http://127.0.0.1:…)" else null
 
     // ------------------------------------------------------------------ the queue
 
@@ -168,10 +194,10 @@ class SitePc(
     fun publie(g: Genre, ref: String, manuel: Boolean): String? {
         chargeDisque()
         val m = mode(g)
-        if (m == Mode.JAMAIS) return "« ${g.libelle} » : jamais publiés (Réglages › Site web)"
+        if (!actif) return if (manuel) MODULE_COUPE else null
+        if (m == Mode.JAMAIS) return "« ${g.libelle} » : jamais publiés (Réglages › Mon site web)"
         if (!manuel && m != Mode.AUTO) return null
-        if (!configure) return "le site web n'est pas réglé (Réglages › Site web)"
-        refusDemo()?.let { return it }
+        refus()?.let { return it }
         val c = runCatching { sources(g, ref) }.getOrNull() ?: return "introuvable : $ref"
         val id = java.lang.Long.toString(horloge(), 36) + (1000..9999).random()
         val (fichier, temporaire) = if (c.octets != null) {
@@ -213,7 +239,7 @@ class SitePc(
         var n = 0
         while (true) {
             val e = synchronized(this) { file.firstOrNull { it.prochainMs <= horloge() } } ?: return n
-            if (!configure || refusDemo() != null) return n
+            if (refus() != null) return n
             val r = runCatching { envoie(e) }.getOrElse { 0 to (it.message ?: it.javaClass.simpleName) }
             synchronized(this) {
                 file.removeAll { it.id == e.id }
@@ -252,13 +278,18 @@ class SitePc(
         else transport.envoie("POST", url + "/api/publication/" + e.genre.nom, entetes, null, f)
     }
 
-    /** « Tester la connexion »: the site answers, and takes the token. */
+    /**
+     * « Tester la connexion »: the site answers, and takes the token. Only then is it [pret] (a failure leaves it
+     * not ready: nothing published until a test passes).
+     */
     fun essai(): String {
+        if (!actif) return MODULE_COUPE
         if (url.isEmpty()) return "renseigner l'adresse du site"
         if (jeton.isEmpty()) return "renseigner le jeton de publication"
         refusDemo()?.let { return it }
         val r = runCatching { transport.envoie("GET", "$url/api/publication/ping", mapOf("Authorization" to "Bearer $jeton"), null, null) }
-            .getOrElse { return "pas de réponse : " + (it.message ?: it.javaClass.simpleName) }
+            .getOrElse { stockage.edit().putBoolean(CLE_PRET, false).apply(); return "pas de réponse : " + (it.message ?: it.javaClass.simpleName) }
+        stockage.edit().putBoolean(CLE_PRET, r.first == 200).apply()
         return when (r.first) {
             200 -> runCatching { JSONObject(r.second) }.getOrNull()?.let { o ->
                 // The kinds the site does not take now (its « Admin › Paramètres »).
@@ -276,7 +307,7 @@ class SitePc(
      * when the site is not set or the demonstration forbids it. Never queued: live data that does not go is dropped.
      */
     fun envoieDirect(methode: String, route: String, type: String?, corps: ByteArray?): Pair<Int, String>? {
-        if (!configure || refusDemo() != null) return null
+        if (refus() != null) return null
         val entetes = LinkedHashMap<String, String>()
         entetes["Authorization"] = "Bearer $jeton"
         if (type != null) entetes["Content-Type"] = type
@@ -286,8 +317,7 @@ class SitePc(
     /** Withdraws [ref] from the site. */
     fun retire(g: Genre, ref: String): String? {
         chargeDisque()
-        if (!configure) return "le site web n'est pas réglé"
-        refusDemo()?.let { return it }
+        refus()?.let { return it }
         val p = publies[cle(g, ref)]
         val u = if (p != null && p.id.isNotEmpty()) "$url/api/publication/" + p.id
             else "$url/api/publication?type=" + g.nom + "&cle=" + java.net.URLEncoder.encode(g.nom.substringBefore('-') + ":" + ref, Charsets.UTF_8)
@@ -303,6 +333,7 @@ class SitePc(
 
     /** A picture received live: published if « Automatique »; the planches (and reports) after a quiet couple of minutes. */
     fun nouvelleImage(nom: String) {
+        if (!actif) return
         publie(Genre.SSTV, nom, false)
         if (mode(Genre.PLANCHE) == Mode.AUTO || mode(Genre.RAPPORT) == Mode.AUTO) {
             val t = horloge(); planchesT = t
@@ -320,7 +351,8 @@ class SitePc(
 
     fun json(): JSONObject {
         chargeDisque()
-        val o = JSONObject().put("ok", true).put("url", url).put("jeton", jeton.isNotEmpty()).put("configure", configure).put("demo", demo())
+        val o = JSONObject().put("ok", true).put("module", actif).put("url", url).put("jeton", jeton.isNotEmpty())
+            .put("pret", pret).put("configure", configure).put("demo", demo())
             .put("modes", JSONObject(Genre.values().associate { it.nom to mode(it).nom }))
             .put("libelles", JSONObject(Genre.values().associate { it.nom to it.libelle }))
             .put("publies", publies.size)
@@ -338,6 +370,8 @@ class SitePc(
         fun rep(o: JSONObject) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8), "Cache-Control: no-store\r\n")
         fun dit(err: String?, ok: String) = rep(if (err == null) JSONObject().put("ok", true).put("message", ok) else JSONObject().put("ok", false).put("erreur", err))
         if (methode != "POST") return if (route == "" || route == "/") rep(json()) else rep(JSONObject().put("ok", false).put("erreur", "inconnu"))
+        // Switched off in Réglages › Modules: nothing set, tested or sent from here.
+        if (!actif) return rep(JSONObject().put("ok", false).put("module", ModulesStation.SITE).put("erreur", MODULE_COUPE))
         return when (route) {
             "/reglages" -> {
                 p("url").takeIf { it.isNotEmpty() || p("efface") == "1" }?.let { url = it }
@@ -347,7 +381,13 @@ class SitePc(
                 reveille()
                 rep(json())
             }
-            "/essai" -> { val r = essai(); rep(JSONObject().put("ok", r.startsWith("ok")).put("message", r)) }
+            // The assistant's step 3: the address and the token typed (when given) kept, then tried; ready only if it passes.
+            "/essai" -> {
+                p("url").takeIf { it.isNotEmpty() }?.let { url = it }
+                p("jeton").takeIf { it.isNotEmpty() }?.let { jeton = it }
+                val r = essai()
+                rep(JSONObject().put("ok", r.startsWith("ok")).put("message", r).put("etat", json()))
+            }
             "/publie" -> {
                 val g = Genre.de(p("type")) ?: return rep(JSONObject().put("ok", false).put("erreur", "type inconnu"))
                 dit(publie(g, p("ref"), true), "dans la file d'envoi vers le site")
@@ -366,11 +406,16 @@ class SitePc(
     companion object {
         const val MAX_FILE = 300
         const val APRES_IMAGE_MS = 120_000L
+        const val CLE_PRET = "site_pret"
+        const val MODULE_COUPE = "Module « Mon site web » désactivé — l'activer dans Réglages › Modules"
+
+        /** An address and a token are set (before any test): the station's own site, kept on by [ModulesStation.migre]. */
+        fun regle(st: Stockage): Boolean = !st.getString("site_url", "").isNullOrEmpty() && !st.getString("site_jeton", "").isNullOrEmpty()
 
         /** 30 s, 1 min, 2 min, 4 min… an hour at most. */
         fun attente(essais: Int): Long = (30_000L shl (essais - 1).coerceIn(0, 7)).coerceAtMost(3_600_000L)
 
-        /** « f4ioz.fr », « https://f4ioz.fr/ » → « https://f4ioz.fr »; plain http only for this machine and the local network. */
+        /** « mon-site.fr », « https://mon-site.fr/ » → « https://mon-site.fr »; plain http only for this machine and the local network. */
         fun normalise(u: String): String {
             val t = u.trim().trimEnd('/')
             if (t.isEmpty()) return ""

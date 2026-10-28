@@ -162,10 +162,26 @@ sur trois rangs (le direct à gauche, les autres cartes à côté —
 en elle-même, les dessins suivent la hauteur. Sur un téléphone ou une
 fenêtre basse, les cartes s'empilent et la page défile.
 
+## Le côté SatMe-PC
+
+Dans SatMe-PC, la publication vers un site est un **module facultatif,
+désactivé d'origine** : **Mon site web** (Réglages › Modules), qu'aucun profil
+n'active. Tant qu'il est décoché, SatMe-PC n'envoie rien à aucun site (ni
+file, ni essai, ni direct) et n'affiche aucun bouton 🌐. Coché, Réglages ›
+Services en ligne › Mon site web s'ouvre en assistant :
+
+1. l'adresse de **votre** site (celui que vous hébergez avec ce module) ;
+2. le jeton de publication, créé ici sur le serveur du site par
+   `f4ioz-site jeton` (voir « Réglages » plus bas) ;
+3. **Tester la connexion** (`GET /api/publication/ping`) : le site n'est
+   « prêt » qu'après un essai réussi ;
+4. quoi envoyer : chaque type d'abord **Sur clic**, « Automatique » seulement
+   si l'opérateur le choisit ; le direct reste décoché.
+
 ## Le direct (SatMe-PC → site)
 
 Le site ne se connecte **jamais** à la station : SatMe-PC envoie (Réglages ›
-Services en ligne › Site web › « Direct sur le site », chaque partie cochée à
+Services en ligne › Mon site web › « Direct sur le site », chaque partie cochée à
 part, rien par défaut), avec le jeton de publication. Le site garde tout en
 mémoire seulement et l'oublie de lui-même ; lecture seule pour le public,
 aucune commande de matériel, jamais.

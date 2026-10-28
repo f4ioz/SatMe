@@ -22,7 +22,7 @@ import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 
 /**
- * « Réglages › Site web › Direct sur le site »: what SatMe-PC sends live to
+ * « Réglages › Mon site web › Direct sur le site »: what SatMe-PC sends live to
  * the operator's site (its `/api/publication/direct…`, with the publication
  * token), each part switched on by itself and off by default —
  * **Auto-pilote** (the next campaign pass, the one under way, its next
@@ -91,8 +91,9 @@ class DirectSitePc(
         fil = Thread({ while (true) { runCatching { tic() }; Thread.sleep(1000L) } }, "satme-site-direct").apply { isDaemon = true; start() }
     }
 
-    /** Once a second: each part on and due goes. */
+    /** Once a second: each part on and due goes (nothing at all while « Mon site web » is switched off). */
     fun tic() {
+        if (!site.actif) return
         val t = horloge()
         for (c in Canal.values()) {
             val s = suivis.getValue(c)

@@ -159,7 +159,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var optionsSstv: OptionsSstvPc? = null
     /** « Agenda › Diplômes »: the awards, matched with the gallery and the log. */
     @Volatile var diplomes: DiplomesPc? = null
-    /** « Réglages › Site web »: what is published on the operator's web site (set before [demarre]). */
+    /** « Réglages › Mon site web »: what is published on the operator's web site (set before [demarre]). */
     @Volatile var site: SitePc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
@@ -911,7 +911,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
-        // « Réglages › Site web »: its settings and its queue; a POST from this page's own origin only, its fields in the body
+        // « Réglages › Mon site web »: its settings and its queue; a POST from this page's own origin only, its fields in the body
         // (the token never in an address).
         if (chemin == "/api/site" || chemin.startsWith("/api/site/")) {
             val rep = site?.let { st ->
@@ -1523,7 +1523,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/datv/demarre", "/api/datv/emission/demarre" -> "datv"
         // Its settings stay open (to tick it again is elsewhere); every gesture on the box is refused.
         "/api/polar/pol", "/api/polar/test", "/api/polar/sim", "/api/polar/sonde" -> "polar"
-        else -> null
+        // The owner's own web site: nothing set, tested, published or sent while it is off.
+        else -> if (chemin.startsWith("/api/site/")) ModulesStation.SITE else null
     }?.takeIf { !ModulesStation.actif(station.stockage, it) }
 
     /**
@@ -1787,7 +1788,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // Réglages › Modules: one module on or off (m, on), or a profile (profil); switching off what runs: stopped once confirmed.
             "/api/modules" -> {
                 val c = ModulesStation.coupes(station.stockage)
-                val apres = q["profil"]?.let { ModulesStation.profil(it) ?: return JSONObject().put("ok", false).put("erreur", "profil inconnu") }
+                val apres = q["profil"]?.let { ModulesStation.profil(it, c) ?: return JSONObject().put("ok", false).put("erreur", "profil inconnu") }
                     ?: q["m"]?.takeIf { ModulesStation.module(it) != null }?.let { ModulesStation.bascule(c, it, q["on"] == "1") }
                     ?: return JSONObject().put("ok", false).put("erreur", "module inconnu")
                 return posModules(apres, q["force"] == "1")

@@ -559,7 +559,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** The SSTV picture's place sent with a request ("auto": by itself), else the one kept. */
     private fun cadreSstv(v: String): CadreSstv? = if (v.isBlank()) CadreSstv.lit(s.journalCadreSstv) else CadreSstv.lit(v)
 
-    /** Told of each video made by the editor (« Réglages › Site web »). */
+    /** Told of each video made by the editor (« Réglages › Mon site web »). */
     @Volatile var videoFaite: (File) -> Unit = {}
 
     private val client by lazy { okhttp3.OkHttpClient() }

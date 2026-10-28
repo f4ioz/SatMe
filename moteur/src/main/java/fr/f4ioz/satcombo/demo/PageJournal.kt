@@ -1736,7 +1736,7 @@ async function suitTravail(j, zone, barre, mot) {
     return;
   }
 }
-/** SatMe-PC only: « Publier sur le site » (Réglages › Site web) under a video made, when its kind is not « Jamais ». */
+/** SatMe-PC only: « Publier sur le site » (Réglages › Mon site web, a module off by default) under a video made, when its kind is not « Jamais ». */
 async function siteVideo(zone, nom) {
   if (!window.SATME_PC) return;
   let S = null; try { S = await (await fetch(base + '/api/site')).json(); } catch (x) {}

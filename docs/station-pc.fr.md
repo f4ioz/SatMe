@@ -1050,12 +1050,12 @@ Le module **Polarisation** commande un commutateur de polarisation à distance *
 
 ### Modules
 
-**Réglages › Modules** : les parties de SatMe-PC qui t'intéressent, une case chacune — SDR, QO-100, DATV, FT8 / FT4, CW, Phonie → texte, Annonces vocales, APRS / KISS, Télémesure, SSTV (avec la Planche et l'auto-pilote de l'Agenda), Orbites, Météo spatiale, Activités à venir, METEOR, Sondes, Avions, Navires, Montage, SatMe-Node, Téléphone, Polarisation. Le cœur est toujours là : le suivi et les passages (Suivi, Agenda, Frise, Carrés, Sked, Carte), le poste, le rotor et le Doppler, le Carnet, le Journal, le Son, les Réglages, l'accès à distance, les mises à jour.
+**Réglages › Modules** : les parties de SatMe-PC qui t'intéressent, une case chacune — SDR, QO-100, DATV, FT8 / FT4, CW, Phonie → texte, Annonces vocales, APRS / KISS, Télémesure, SSTV (avec la Planche et l'auto-pilote de l'Agenda), Orbites, Météo spatiale, Activités à venir, METEOR, Sondes, Avions, Navires, Montage, SatMe-Node, Téléphone, Polarisation, et **Mon site web** (décoché d'origine, voir plus bas). Le cœur est toujours là : le suivi et les passages (Suivi, Agenda, Frise, Carrés, Sked, Carte), le poste, le rotor et le Doppler, le Carnet, le Journal, le Son, les Réglages, l'accès à distance, les mises à jour.
 
-- **Les profils**, en un clic : **Satellites FM/SSB** (FT8, CW, phonie, APRS, télémesure, orbites, météo spatiale, activités, polarisation), **SSTV ARISS** (SSTV, SDR, orbites, activités, polarisation), **Parabole QO-100 / DATV** (SDR, QO-100, DATV, FT8, CW, SatMe-Node, Montage), **Météo et non-sat** (SDR, METEOR, sondes, avions, navires, météo spatiale), **Tout**. Les annonces et le téléphone sont de tous. On coche ou décoche ensuite module par module.
+- **Les profils**, en un clic : **Satellites FM/SSB** (FT8, CW, phonie, APRS, télémesure, orbites, météo spatiale, activités, polarisation), **SSTV ARISS** (SSTV, SDR, orbites, activités, polarisation), **Parabole QO-100 / DATV** (SDR, QO-100, DATV, FT8, CW, SatMe-Node, Montage), **Météo et non-sat** (SDR, METEOR, sondes, avions, navires, météo spatiale), **Tout**. Les annonces et le téléphone sont de tous. Aucun profil ne coche **Mon site web**, ni ne le décoche s'il l'est. On coche ou décoche ensuite module par module.
 - **Décoché** : ses onglets quittent le rail (un espace vide aussi), la palette (Ctrl+K) et les couches de la carte ; ses cartes de réglages, ses sous-onglets et ses voyants de la barre d'état (SDR, DATV, Node…) aussi ; son adresse affiche « Ce module est désactivé · Réglages › Modules ». Ce qui reçoit ou émet ne démarre plus (Avions, Navires, Sondes, METEOR, DATV) ; décoché pendant qu'il reçoit ou émet, il s'arrête après confirmation et rend son récepteur.
 - **À côté de chaque case**, ce qu'il lui faut : METEOR, Sondes, Avions et Navires passent par le SDR (ou un SatMe-Node) — signalé si le SDR est décoché.
-- Le choix est gardé par SatMe-PC : la même page dans tous les navigateurs. À la mise à jour, rien ne change : tout reste coché, sauf Avions, Navires et Sondes s'ils étaient décochés (au premier démarrage, ceux que la station utilisait déjà restent). Un module ajouté plus tard arrive coché. La **configuration rapide** propose les profils (« Tout » d'origine).
+- Le choix est gardé par SatMe-PC : la même page dans tous les navigateurs. À la mise à jour, rien ne change : tout reste coché, sauf Avions, Navires et Sondes s'ils étaient décochés (au premier démarrage, ceux que la station utilisait déjà restent). Un module ajouté plus tard arrive coché, sauf **Mon site web** : décoché, sauf pour une station dont le site était déjà réglé (adresse et jeton). La **configuration rapide** propose les profils (« Tout » d'origine).
 
 ### Éléments orbitaux
 
@@ -1088,12 +1088,19 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 
 `T` (PTT) et tout réglage d'émission sont toujours refusés (`RPRT -11`). `F` et `M` aussi, sauf si « Autoriser le changement de fréquence » est coché : ils n'accordent alors que le récepteur SDR — jamais le poste, ni quand QO-100 est au poste.
 
-### Site web : publier sur votre site
+### Mon site web : publier sur votre site (module facultatif)
 
-**Réglages › Services en ligne › Site web** relie SatMe-PC à votre site radioamateur — le module `site` de SatMe, celui de f4ioz.fr (voir `site/README.md`) :
+SatMe-PC n'envoie rien à aucun site de lui-même. **Mon site web** est un module **désactivé d'origine** (Réglages › Modules), qu'aucun profil n'active : tant qu'il est décoché, pas de carte, pas de bouton 🌐, aucune connexion vers un site (ni file, ni essai, ni direct). Il sert à publier sur **votre** site radioamateur, celui que vous hébergez avec le module `site` de SatMe (voir `site/README.md` ; f4ioz.fr en est un exemple).
 
-- **Adresse** du site (`https://f4ioz.fr`) et **jeton de publication**, créé sur le serveur du site (`f4ioz-site jeton`, qui donne aussi la ligne à mettre dans `site.conf`). Le jeton reste sur ce PC, comme la clé Wavelog : il n'est jamais réaffiché ni écrit dans un journal. **Tester la connexion** demande au site s'il répond et s'il accepte le jeton, sans rien publier.
-- **Pour chaque genre, Automatique / Sur clic / Jamais** : les **images SSTV** (d'origine Automatique : chaque image reçue en direct, pas les essais ni les relectures), les **planches** (Automatique : celles qui ont des images, deux minutes après la dernière image reçue ; la nouvelle version remplace l'ancienne sur le site), les **rapports** d'événement en PDF, les **contacts** (ADIF) et les **vidéos du journal** (d'origine Sur clic).
+Coché, **Réglages › Services en ligne › Mon site web** s'ouvre comme un assistant :
+
+1. **Adresse de votre site** (par exemple `https://mon-site-radioamateur.fr`).
+2. **Jeton de publication** : une clé secrète créée sur le serveur de votre site avec `f4ioz-site jeton` (qui donne aussi la ligne à mettre dans `site.conf`). Le jeton reste sur ce PC, comme la clé Wavelog : il n'est jamais réaffiché ni écrit dans un journal.
+3. **Tester la connexion** : SatMe-PC demande au site s'il répond et s'il accepte le jeton, sans rien publier. Le site n'est **prêt** qu'après un essai réussi ; une autre adresse ou un autre jeton se testent à nouveau.
+4. **Quoi envoyer** : pour chaque genre **Sur clic / Automatique / Jamais**, tout d'origine **Sur clic** (rien ne part tout seul tant que vous ne choisissez pas « Automatique ») — les **images SSTV** (en Automatique : chaque image reçue en direct, pas les essais ni les relectures), les **planches** (en Automatique : celles qui ont des images, deux minutes après la dernière image reçue ; la nouvelle version remplace l'ancienne sur le site), les **rapports** d'événement en PDF, les **contacts** (ADIF) et les **vidéos du journal**. Le « Direct sur le site » reste décoché.
+
+Une station dont le site était déjà réglé (adresse et jeton) avant ce module le garde coché à la mise à jour ; sinon il est décoché. Décocher le module arrête tout envoi ; ce qui attendait dans la file repart quand il est recoché.
+
 - **🌐 Publier sur le site** à côté de chaque élément : dans la visionneuse des images SSTV, sur chaque ligne du carnet (Contacts), sur la page Planche (**🌐 Planche sur le site**, **🌐 Rapport sur le site**) et sous une vidéo faite par l'éditeur du journal.
 - Rien ne part de la page elle-même : chaque élément est copié dans une **file sur le disque** (dossier `site/` des données) et envoyé par SatMe-PC ; si le site ne répond pas, il réessaie (30 s, 1 min, 2 min… une heure au plus), même après un redémarrage. La carte montre ce qui attend, le dernier essai, les dernières réponses ; **Réessayer maintenant**, **Vider la file**. Un refus du site (jeton, genre, taille) n'est pas réessayé.
 - Le même élément envoyé deux fois n'est publié qu'une fois. Tout se retire **sur le site** (sa page privée `/admin` : cacher, remontrer, supprimer).

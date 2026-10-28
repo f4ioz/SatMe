@@ -5056,7 +5056,7 @@ ${DemarragePagePc.DIALOGUES}
     <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
     <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur : une image de plus dans la galerie (une copie de plus de la même diapo). Pour une version corrigée à côté de la reçue : « Version corrigée depuis l’enregistrement »">⟳ Redécoder en nouvelle image</button>
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
-    <button class="site-b" data-site="sstv-image" hidden onclick="sitePublie('sstv-image', viNom, this)" title="Publier cette image sur le site web (Réglages › Site web)">🌐 Publier sur le site</button>
+    <button class="site-b" data-site="sstv-image" hidden onclick="sitePublie('sstv-image', viNom, this)" title="Publier cette image sur votre site web (Réglages › Mon site web)">🌐 Publier sur le site</button>
     <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button id="vi-reunir" hidden onclick="viReunit()" title="Cette image partielle et la suivante sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble, re-décodées de leur son à la bonne ligne. Les deux partielles sont gardées (cachées tant que l’image réunie existe).">⧉ Réunir</button>
     <button id="vi-separer" hidden onclick="viSepare()" title="Défaire la réunion : l’image réunie est supprimée, les deux images partielles reviennent dans la galerie">↶ Séparer</button>
@@ -5683,7 +5683,7 @@ const CATS_REG = [
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
-  { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, votre site web', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Site web'] },
+  { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, votre site web (module)', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Mon site web'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
@@ -18309,6 +18309,8 @@ function appliqueCapacites(j) {
   document.querySelectorAll('.mod-off').forEach(e => e.classList.remove('mod-off'));
   (j.masques || []).forEach(q => { try { document.querySelectorAll(q).forEach(e => e.classList.add('mod-off')); } catch (x) {} });
   stMaj(); regNavMaj(); modRend();
+  // « Mon site web » switched on or off: its card and its 🌐 buttons follow.
+  if (typeof siteCharge === 'function') siteCharge();
   [['sonde', 'sondes'], ['avions', 'avions'], ['navires', 'ais'], ['diff', 'avions']].forEach(([c, n]) => {
     const i = document.querySelector('[data-cg="' + c + '"]'); if (i) i.closest('label').hidden = nsOff(n);
   });
