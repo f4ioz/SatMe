@@ -233,7 +233,7 @@ Content-Type: image/png
 | `qso` | multipart | ADIF (`.adi`, one record) | a contact of the log; in Automatique, each contact added |
 | `journal-video` | multipart | MP4 | a video made by the journal's editor (can be hundreds of MB) |
 | `retrait` | JSON | — | withdraw an item (no button in SatMe-PC yet; part of the API) |
-| `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-efface` | JSON or multipart | JPEG | [live data](#live-data-optional), only when ticked |
+| `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON or multipart | JPEG | [live data](#live-data-optional), only when ticked |
 | `favoris` | JSON | — | the [favourite satellites](#favourite-satellites), only when ticked |
 
 **`ping`**: `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
@@ -330,6 +330,48 @@ A receiver that does not know this type answers `400`, `404` or `415`:
 SatMe-PC shows « non pris en charge par le site », without an error, and
 tries again only the next day (or when the line is ticked again).
 
+### The station
+
+Under **En direct**, the **Station** line (unticked by default) sends the
+station as it is now, for a live page to draw the satellite, the antennas and
+the receiving chain beside the pictures: type `direct-station`, JSON, about
+1 KB. It goes when something changed, at most every 2 s (2 to 10 s, chosen on
+the line), and every 30 s when nothing changed — so a receiver can take a
+silence of a minute or two as « station off line ».
+
+```json
+{"type":"direct-station","version":1,"t":1798000000000,
+ "satellite":{"nom":"ISS","norad":25544,"geo":false,"az":212.4,"el":31.6,"distanceKm":812,"vitesseKmS":-5.84,
+   "aos":1797999700000,"los":1798000300000,"elMax":61.3,"choisi":"Mode V/U FM",
+   "emetteurs":[{"description":"Mode V/U FM","mode":"FM","descenteHz":437800000,"monteeHz":145990000}]},
+ "antennes":{"rotor":{"connecte":true,"az":209.8,"el":30.9,"cibleAz":212.4,"cibleEl":31.6,"enMouvement":true,"horsPortee":false,"azSeul":false},
+   "parabole":{"az":150.0,"el":29.7}},
+ "reception":{"sdr":{"actif":true,"type":"RTL-SDR","frequenceHz":437800000},
+   "datv":{"actif":true,"verrouille":true,"mer":7.4,"marge":2.1,"service":"F4XYZ","cielKhz":10494750},
+   "poste":{"modele":"IC-9700","connecte":true,"descenteHz":437800000,"monteeHz":145990000,"mode":"FM"}},
+ "enEmission":false,"mode":"phonie"}
+```
+
+| Key | Meaning |
+|---|---|
+| `satellite` | the satellite followed, or QO-100 while the station works it (SDR or DATV receiver on it) and the one followed is below the horizon; `geo`: geostationary (then no `aos`/`los`); `az`/`el` (°), `distanceKm`, `vitesseKmS` (+ moving away) from the station; `aos`, `los`, `elMax`: the pass under way or the next one; `emetteurs`: up to 6 of its transmitters (SatNOGS' public list), `choisi` the one in use |
+| `antennes.rotor` | only when a rotor is set: `az`/`el` as the controller reads them back, `cibleAz`/`cibleEl` where it is sent, `enMouvement`, `horsPortee` (beyond its range), `azSeul` (no elevation) |
+| `antennes.parabole` | a geostationary satellite: the fixed dish's pointing from the station's locator |
+| `reception.sdr` | the SDR: on or off, its kind (`RTL-SDR`, `ADALM-PLUTO`, `bladeRF`, `SatMe-Node`, `FI du poste`, …), the sky frequency heard |
+| `reception.datv` | the DATV receiver: on, locked; while locked, `mer` and `marge` (dB), `service` |
+| `reception.poste` | only while the rig is connected: its model's name, its sky frequencies and mode as read back |
+| `enEmission` | something transmits now (yes or no, nothing more) |
+| `mode` | what the station does, when known: `DATV`, `FT8`, `FT4`, `SSTV`, `CW`, `phonie`, `numérique` |
+
+Every key is optional except `t` and `enEmission`. Never in it: an address, a
+port, a serial device, a file path, a pairing code, a token, another setting.
+To a folder: `direct/station.json`, same content. A receiver that does not know
+the type answers `400`, `404` or `415`: SatMe-PC shows « non pris en charge par
+le site », without an error, and tries again ten minutes later.
+
+The settings call, for a script (`POST /api/site/direct`, the same as the
+line's box), parameters in the query string: `POST /api/site/direct?on_station=1` (or `0`), `&periode_station=2` (2 to 10 s).
+
 ---
 
 ## Security
@@ -397,7 +439,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    its card: the meta JSON + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       the favourite satellites (when ticked)
-└── direct/direct.json, datv.jpg, sstv.jpg   (live data, rewritten in place)
+└── direct/direct.json, station.json, datv.jpg, sstv.jpg   (live data, rewritten in place)
 ```
 
 `index.json`:
@@ -437,8 +479,9 @@ as the API:
 - `index.json`: the last 500, newest first (a new version of the same item
   replaces the old one, files included);
 - `flux.xml`: an Atom feed of the last 50 (links relative to the folder);
-- `direct/direct.json` (rewritten in place), `direct/datv.jpg`,
-  `direct/sstv.jpg` when live data is ticked — no spectrum to a folder;
+- `direct/direct.json` (rewritten in place), `direct/station.json`,
+  `direct/datv.jpg`, `direct/sstv.jpg` when live data is ticked — no spectrum
+  to a folder;
 - `favoris.json` when **Satellites favoris** is ticked.
 
 Each file is written beside its place then renamed (atomic where the system

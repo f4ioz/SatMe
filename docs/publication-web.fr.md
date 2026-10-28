@@ -234,7 +234,7 @@ Content-Type: image/png
 | `qso` | multipart | ADIF (`.adi`, un enregistrement) | un contact du carnet ; en Automatique, chaque contact ajouté |
 | `journal-video` | multipart | MP4 | une vidéo faite par l'éditeur du journal (peut faire des centaines de Mo) |
 | `retrait` | JSON | — | retirer un élément (pas encore de bouton dans SatMe-PC ; prévu dans l'API) |
-| `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-efface` | JSON ou multipart | JPEG | le [direct](#le-direct-facultatif), seulement si coché |
+| `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON ou multipart | JPEG | le [direct](#le-direct-facultatif), seulement si coché |
 | `favoris` | JSON | — | les [satellites favoris](#les-satellites-favoris), seulement si coché |
 
 **`ping`** : `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
@@ -334,6 +334,50 @@ Un récepteur qui ne connaît pas ce type répond `400`, `404` ou `415` :
 SatMe-PC le note « non pris en charge par le site », sans erreur, et ne
 réessaie que le lendemain (ou quand on recoche la ligne).
 
+### La station
+
+Sous **En direct**, la ligne **Station** (décochée d'origine) envoie la
+station telle qu'elle est maintenant, pour qu'une page en direct dessine le
+satellite, les antennes et la chaîne de réception à côté des images : type
+`direct-station`, JSON, environ 1 Ko. Elle part dès que quelque chose change,
+au plus toutes les 2 s (2 à 10 s, au choix sur la ligne), et toutes les 30 s
+quand rien ne change — un récepteur peut donc prendre un silence d'une ou deux
+minutes pour « station hors ligne ».
+
+```json
+{"type":"direct-station","version":1,"t":1798000000000,
+ "satellite":{"nom":"ISS","norad":25544,"geo":false,"az":212.4,"el":31.6,"distanceKm":812,"vitesseKmS":-5.84,
+   "aos":1797999700000,"los":1798000300000,"elMax":61.3,"choisi":"Mode V/U FM",
+   "emetteurs":[{"description":"Mode V/U FM","mode":"FM","descenteHz":437800000,"monteeHz":145990000}]},
+ "antennes":{"rotor":{"connecte":true,"az":209.8,"el":30.9,"cibleAz":212.4,"cibleEl":31.6,"enMouvement":true,"horsPortee":false,"azSeul":false},
+   "parabole":{"az":150.0,"el":29.7}},
+ "reception":{"sdr":{"actif":true,"type":"RTL-SDR","frequenceHz":437800000},
+   "datv":{"actif":true,"verrouille":true,"mer":7.4,"marge":2.1,"service":"F4XYZ","cielKhz":10494750},
+   "poste":{"modele":"IC-9700","connecte":true,"descenteHz":437800000,"monteeHz":145990000,"mode":"FM"}},
+ "enEmission":false,"mode":"phonie"}
+```
+
+| Clé | Sens |
+|---|---|
+| `satellite` | le satellite suivi, ou QO-100 quand la station y travaille (SDR ou récepteur DATV dessus) et que le satellite suivi est sous l'horizon ; `geo` : géostationnaire (alors ni `aos` ni `los`) ; `az`/`el` (°), `distanceKm`, `vitesseKmS` (+ : il s'éloigne) vus de la station ; `aos`, `los`, `elMax` : le passage en cours ou le prochain ; `emetteurs` : jusqu'à 6 de ses émetteurs (la liste publique de SatNOGS), `choisi` celui en service |
+| `antennes.rotor` | seulement si un rotor est réglé : `az`/`el` relus au contrôleur, `cibleAz`/`cibleEl` où il est envoyé, `enMouvement`, `horsPortee` (hors de sa course), `azSeul` (sans élévation) |
+| `antennes.parabole` | un satellite géostationnaire : le pointage de la parabole fixe depuis le locator de la station |
+| `reception.sdr` | le SDR : en marche ou non, son genre (`RTL-SDR`, `ADALM-PLUTO`, `bladeRF`, `SatMe-Node`, `FI du poste`…), la fréquence (ciel) écoutée |
+| `reception.datv` | le récepteur DATV : en marche, verrouillé ; verrouillé, `mer` et `marge` (dB), `service` |
+| `reception.poste` | seulement quand le poste est connecté : le nom de son modèle, ses fréquences (ciel) et son mode relus |
+| `enEmission` | quelque chose émet en ce moment (oui ou non, rien de plus) |
+| `mode` | ce que fait la station, quand c'est connu : `DATV`, `FT8`, `FT4`, `SSTV`, `CW`, `phonie`, `numérique` |
+
+Toutes les clés sont facultatives sauf `t` et `enEmission`. Jamais dedans :
+une adresse, un port, un périphérique série, un chemin de fichier, un code
+d'appairage, un jeton, un autre réglage. Vers un dossier :
+`direct/station.json`, même contenu. Un récepteur qui ne connaît pas ce type
+répond `400`, `404` ou `415` : SatMe-PC le note « non pris en charge par le
+site », sans erreur, et réessaie dix minutes plus tard.
+
+L'appel de réglage, pour un script (`POST /api/site/direct`, comme la case de
+la ligne), paramètres dans l'adresse : `POST /api/site/direct?on_station=1` (ou `0`), `&periode_station=2` (2 à 10 s).
+
 ---
 
 ## Sécurité
@@ -402,7 +446,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    sa fiche : le JSON meta + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       les satellites favoris (si coché)
-└── direct/direct.json, datv.jpg, sstv.jpg   (le direct, réécrit sur place)
+└── direct/direct.json, station.json, datv.jpg, sstv.jpg   (le direct, réécrit sur place)
 ```
 
 `index.json` :
@@ -442,8 +486,8 @@ fiches que l'API :
 - `index.json` : les 500 derniers, le plus récent d'abord (une nouvelle
   version du même élément remplace l'ancienne, fichiers compris) ;
 - `flux.xml` : un flux Atom des 50 derniers (liens relatifs au dossier) ;
-- `direct/direct.json` (réécrit sur place), `direct/datv.jpg`,
-  `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier ;
+- `direct/direct.json` (réécrit sur place), `direct/station.json`,
+  `direct/datv.jpg`, `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier ;
 - `favoris.json` si **Satellites favoris** est coché.
 
 Chaque fichier est écrit à côté puis renommé (atomique quand le système le

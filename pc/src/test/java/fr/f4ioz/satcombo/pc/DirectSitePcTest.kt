@@ -285,4 +285,117 @@ class DirectSitePcTest {
         assertEquals("favoris", o.getString("type"))
         assertEquals(25544, o.getJSONArray("satellites").getJSONObject(0).getInt("norad"))
     }
+
+    // ------------------------------------------------------------------ « Station »
+
+    /** A station with everything filled, and words the site must never get hidden where a careless copy would put them. */
+    private fun stationPleine(az: Double = 123.456, el: Double = 30.04) = DirectSitePc.Station(
+        sat = DirectSitePc.Sat("ISS\u0007", 25544, false, az, el, 812.7, -6.123, t + 60_000L, t + 600_000L, 61.27,
+            listOf(DirectSitePc.Emetteur("Mode V/U FM", "FM", 437_800_000L, 145_990_000L), DirectSitePc.Emetteur("APRS", "AFSK", 145_825_000L, null)), "Mode V/U FM"),
+        rotor = DirectSitePc.Rotor(true, 118.2, 28.9, az, el, true, false, false),
+        parabole = null,
+        sdr = DirectSitePc.Sdr(true, DirectSitePc.nomSdr(SdrPc.PLUTO), 437_800_000L),
+        datv = DirectSitePc.DatvCourt(true, true, 7.43, 2.11, "F4XYZ", 10_494_750L),
+        poste = DirectSitePc.Poste(DirectSitePc.nomPoste("IC9700"), true, 437_800_000L, 145_990_000L, "FM"),
+        enEmission = false, mode = "phonie")
+
+    /** Every key of [o], level by level, must be in [DirectSitePc.CLES_STATION]. */
+    private fun verifieCles(o: JSONObject, niveau: String) {
+        val permis = DirectSitePc.CLES_STATION.getValue(niveau)
+        assertTrue(niveau + " : " + o.keySet(), permis.containsAll(o.keySet()))
+        for (k in o.keySet()) when (val v = o.get(k)) {
+            is JSONObject -> verifieCles(v, k)
+            is org.json.JSONArray -> { assertEquals("emetteurs", k); for (i in 0 until v.length()) verifieCles(v.getJSONObject(i), "emetteur") }
+            is String -> assertTrue(k, v.length <= 60 && v.none { it.isISOControl() })
+            else -> assertTrue(k + " = " + v, v is Number || v is Boolean)
+        }
+    }
+
+    @Test fun `the station's message holds only the listed keys, rounded and cut short`() {
+        val o = DirectSitePc.stationJson(stationPleine())
+        verifieCles(o, "")
+        val s = o.getJSONObject("satellite")
+        assertEquals(123.5, s.getDouble("az"), 1e-9); assertEquals(30.0, s.getDouble("el"), 1e-9)
+        assertEquals("ISS", s.getString("nom")); assertEquals(813L, s.getLong("distanceKm")); assertEquals(-6.12, s.getDouble("vitesseKmS"), 1e-9)
+        assertEquals("IC-9700", o.getJSONObject("reception").getJSONObject("poste").getString("modele"))
+        assertEquals("ADALM-PLUTO", o.getJSONObject("reception").getJSONObject("sdr").getString("type"))
+        assertTrue(o.getJSONObject("antennes").getJSONObject("rotor").getBoolean("enMouvement"))
+        // A geostationary: no AOS/LOS, the fixed dish's pointing; a receiver off says so and nothing else.
+        val geo = DirectSitePc.stationJson(DirectSitePc.Station(DirectSitePc.Sat("QO-100", 43700, true, 150.04, 29.71, aos = 5L, los = 9L),
+            parabole = 150.04 to 29.71, sdr = DirectSitePc.Sdr(false, "RTL-SDR", 10_489_750_000L),
+            datv = DirectSitePc.DatvCourt(false, true, 7.0, 1.0, "X", 10_494_750L), poste = DirectSitePc.Poste("IC-9700", false, 1L, 2L, "USB")))
+        verifieCles(geo, "")
+        assertFalse(geo.getJSONObject("satellite").has("aos"))
+        assertEquals(29.7, geo.getJSONObject("antennes").getJSONObject("parabole").getDouble("el"), 1e-9)
+        assertEquals(setOf("actif", "type"), geo.getJSONObject("reception").getJSONObject("sdr").keySet())
+        assertEquals(setOf("actif", "verrouille"), geo.getJSONObject("reception").getJSONObject("datv").keySet())
+        assertEquals(setOf("modele", "connecte"), geo.getJSONObject("reception").getJSONObject("poste").keySet())
+        assertTrue(DirectSitePc.stationJson(DirectSitePc.Station()).toString().length < 40)
+        assertTrue(o.toString().length < 1500)
+    }
+
+    @Test fun `the station goes only when chosen, on change at most every two seconds, else every 30 s`() {
+        val (site, d) = direct()
+        var st = stationPleine()
+        d.station = { st }
+        d.tic()
+        assertTrue(envois.isEmpty())
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_station") "1" else "" }
+        d.tic()
+        assertEquals(listOf("https://example.org/api/publication/direct-station"), envois.map { it.url })
+        assertEquals("direct-station", envois[0].entetes["X-SatMe-Type"])
+        val o = JSONObject(String(envois[0].corps!!))
+        assertEquals(t, o.getLong("t")); assertEquals(1, o.getInt("version")); assertEquals("direct-station", o.getString("type"))
+        assertFalse(o.toString().contains("le-jeton"))
+        // Unchanged: nothing until the heartbeat.
+        repeat(14) { t += 2_000L; d.tic() }
+        assertEquals(1, envois.size)
+        t += 2_000L; d.tic()
+        assertEquals(2, envois.size)
+        // Changed: within the period, not at once.
+        st = stationPleine(az = 130.0)
+        t += 1_000L; d.tic()
+        assertEquals(2, envois.size)
+        t += 1_000L; d.tic()
+        assertEquals(3, envois.size)
+        // Moving every second: still one every two seconds at most.
+        repeat(10) { k -> st = stationPleine(az = 131.0 + k); t += 1_000L; d.tic() }
+        assertEquals(8, envois.size)
+        // Slower when chosen.
+        site.sert("/api/site/direct", "POST") { k -> if (k == "periode_station") "10" else "" }
+        val n = envois.size
+        repeat(20) { k -> st = stationPleine(az = 200.0 + k); t += 1_000L; d.tic() }
+        assertEquals(n + 2, envois.size)
+    }
+
+    @Test fun `a site that does not know the station is asked again ten minutes later, without an error`() {
+        val (site, d) = direct()
+        d.station = { stationPleine() }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_station") "1" else "" }
+        reponse = { 404 to "{\"ok\":false,\"erreur\":\"type inconnu\"}" }
+        d.tic()
+        val c = d.json().getJSONArray("canaux").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("nom") == "station" }
+        assertTrue(c.getBoolean("nonPris")); assertEquals("", c.getString("erreur"))
+        repeat(5) { t += 60_000L; d.tic() }
+        assertEquals(1, envois.size)
+        reponse = { 200 to "{\"ok\":true}" }
+        t += DirectSitePc.NON_PRIS_STATION_MS; d.tic()
+        assertEquals(2, envois.size)
+    }
+
+    @Test fun `to a folder the station is direct_station_json`() {
+        val st = StockageFichier(tmp.newFile("r-dossier-st.properties"))
+        val dos = tmp.newFolder("site-dossier-st")
+        val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { _, _, _, _ -> throw AssertionError("pas de web") })
+        fr.f4ioz.satcombo.demo.ModulesStation.pose(st, emptySet())
+        site.sert("/api/site/essai", "POST") { k -> when (k) { "cible" -> "dossier"; "dossier" -> dos.absolutePath; else -> "" } }
+        val d = DirectSitePc(st, site, { t })
+        site.direct = d
+        d.station = { stationPleine() }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_station") "1" else "" }
+        d.tic()
+        val o = JSONObject(java.io.File(dos, "direct/station.json").readText())
+        assertEquals("ISS", o.getJSONObject("satellite").getString("nom"))
+        assertEquals(t, o.getLong("t"))
+    }
 }

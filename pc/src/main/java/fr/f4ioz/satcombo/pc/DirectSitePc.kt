@@ -33,7 +33,9 @@ import javax.imageio.ImageWriteParam
  * JPEG every few seconds while the receiver is locked, with its figures),
  * **Satellites favoris** (the list of the satellites marked ★, type `favoris`: as soon as it changes, else once an
  * hour; to a folder, `favoris.json`; a receiver that does not know the type — 400, 404 or 415 — is left alone for
- * the day, without an error).
+ * the day, without an error), **Station** (type `direct-station`: the satellite followed, where the antennas
+ * really point, the receivers and the rig in use, as [stationJson] builds it; when it changes, at most every
+ * [periode] seconds, and every [BATTEMENT_STATION_MS] unchanged; to a folder, `direct/station.json`).
  *
  * SatMe-PC pushes; the site never connects to the station. Nothing is
  * queued: what the site does not take is dropped and the next try waits
@@ -52,7 +54,9 @@ class DirectSitePc(
         SPECTRE("spectre", "Spectre QO-100", 1, 1, 10),
         DATV("datv", "Image DATV", 5, 3, 30),
         /** The favourites: on change, else once an hour ([PERIODE_FAVORIS_MS]). */
-        FAVORIS("favoris", "Satellites favoris", 3600, 3600, 3600);
+        FAVORIS("favoris", "Satellites favoris", 3600, 3600, 3600),
+        /** The station now: on change, at most every [periode] s, else every [BATTEMENT_STATION_MS]. */
+        STATION("station", "Station", 2, 2, 10);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -79,6 +83,29 @@ class DirectSitePc(
     @Volatile var demandePanorama: () -> Unit = {}
     /** The satellites marked ★ (name, NORAD number), null while not known yet. */
     @Volatile var favoris: () -> List<Pair<String, Int>>? = { null }
+    /** The station now ([Station]), null when it cannot be told. */
+    @Volatile var station: () -> Station? = { null }
+
+    /**
+     * The station as the site's live page shows it: the satellite it works ([Sat]), the antennas ([Rotor], and
+     * the fixed dish's pointing for QO-100), the receivers and the rig ([Sdr], [DatvCourt], [Poste]), whether
+     * something transmits, the mode. Names, angles, frequencies only: no port, address or path has a place here.
+     */
+    class Station(val sat: Sat? = null, val rotor: Rotor? = null, val parabole: Pair<Double, Double>? = null, val sdr: Sdr? = null,
+                  val datv: DatvCourt? = null, val poste: Poste? = null, val enEmission: Boolean = false, val mode: String? = null)
+    /** [geo]: geostationary (no AOS/LOS); az/el/km/km·s⁻¹ from the station; the next pass or the one under way. */
+    class Sat(val nom: String, val norad: Int, val geo: Boolean, val az: Double? = null, val el: Double? = null, val distanceKm: Double? = null,
+              val vitesseKmS: Double? = null, val aos: Long? = null, val los: Long? = null, val elMax: Double? = null,
+              val emetteurs: List<Emetteur> = emptyList(), val choisi: String? = null)
+    class Emetteur(val description: String, val mode: String?, val descenteHz: Long?, val monteeHz: Long?)
+    /** The mast: read back ([az], [el]), aimed at ([cibleAz], [cibleEl]). */
+    class Rotor(val connecte: Boolean, val az: Double?, val el: Double?, val cibleAz: Double?, val cibleEl: Double?, val enMouvement: Boolean,
+                val horsPortee: Boolean, val azSeul: Boolean)
+    /** [type]: the receiver's public name (« RTL-SDR », « ADALM-PLUTO »…); [frequenceHz]: the sky frequency heard. */
+    class Sdr(val actif: Boolean, val type: String, val frequenceHz: Long?)
+    class DatvCourt(val actif: Boolean, val verrouille: Boolean, val mer: Double?, val marge: Double?, val service: String?, val cielKhz: Long?)
+    /** [modele]: the rig's model name only (« IC-9700 »); its sky frequencies and mode read back. */
+    class Poste(val modele: String, val connecte: Boolean, val descenteHz: Long?, val monteeHz: Long?, val mode: String?)
 
     fun on(c: Canal): Boolean = stockage.getBoolean("site_direct_" + c.nom, false)
     fun periode(c: Canal): Int = stockage.getInt("site_direct_" + c.nom + "_s", c.periodeDefaut).coerceIn(c.min, c.max)
@@ -88,6 +115,8 @@ class DirectSitePc(
         var nonPris = false }
     private val suivis = Canal.values().associateWith { Suivi() }
     private val suiviSstv = Suivi()
+    /** The station's payload sent last (without its time), for « on change ». */
+    private var stationTexte = ""
     /** The pass under way the auto-pilot said last (AOS, LOS), for its pictures. */
     @Volatile private var passage: Pair<Long, Long>? = null
     @Volatile private var imageEnvoyee: ByteArray? = null
@@ -110,6 +139,7 @@ class DirectSitePc(
             if (!on(c)) { s.envoye = false; continue }
             if (c == Canal.SPECTRE) runCatching { demandePanorama() }
             if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.STATION) { runCatching { station(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -144,8 +174,9 @@ class DirectSitePc(
                 val l = ligneSpectre(pan.db, pan.centreHz, pan.largeurHz) ?: return
                 poste(s, t, "direct-spectre", l)
             }
-            // Its own pace (tic).
+            // Their own pace (tic).
             Canal.FAVORIS -> favoris(s, t)
+            Canal.STATION -> station(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -182,6 +213,26 @@ class DirectSitePc(
         }
     }
 
+    /**
+     * The station: looked at every [periode] seconds, sent when it changed (its time aside) or after
+     * [BATTEMENT_STATION_MS] unchanged, so the site knows it is still there. A site that does not know the type is
+     * asked again after [NON_PRIS_STATION_MS].
+     */
+    private fun station(s: Suivi, t: Long) {
+        if (t < s.prochainMs) return
+        s.prochainMs = t + periode(Canal.STATION) * 1000L
+        val st = station() ?: return
+        val o = stationJson(st)
+        val texte = o.toString()
+        if (texte == stationTexte && s.envoye && t - s.dernierMs < BATTEMENT_STATION_MS) return
+        val r = site.envoieDirect("direct-station", JSONObject(texte).put("t", t)) ?: run { s.erreur = "site non réglé"; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.envoye = true; s.dernierMs = t; stationTexte = texte }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_STATION_MS }
+            else -> echec(s, t, r.first, raison(r.second))
+        }
+    }
+
     /** Sends [o] as [type]: true when taken, false when not (the next try put off), null when the target is not set. */
     private fun poste(s: Suivi, t: Long, type: String, o: JSONObject): Boolean? {
         val r = site.envoieDirect(type, o) ?: run { s.erreur = "site non réglé"; return null }
@@ -210,6 +261,7 @@ class DirectSitePc(
         JSONObject().put("nom", c.nom).put("libelle", c.libelle).put("on", on(c)).put("periode", periode(c)).put("min", c.min).put("max", c.max)
             .put("ok", s.okMs).put("erreur", if (on(c)) s.erreur else "")
             .also { o -> if (c == Canal.FAVORIS) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
+            .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
     }))
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
@@ -222,8 +274,9 @@ class DirectSitePc(
         e.apply()
         // A change: try at once.
         suivis.values.forEach { it.prochainMs = 0L; it.delaiMs = 0L; it.erreur = ""; it.nonPris = false }
-        // The favourites sent again at once (the site may have forgotten them while the box was off).
+        // The favourites sent again at once (the site may have forgotten them while the box was off), the station too.
         suivis.getValue(Canal.FAVORIS).dernierMs = 0L
+        suivis.getValue(Canal.STATION).dernierMs = 0L; stationTexte = ""
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
     }
 
@@ -233,6 +286,85 @@ class DirectSitePc(
         const val PERIODE_FAVORIS_MS = 3_600_000L
         /** A site that does not know `favoris` is asked again the next day. */
         const val NON_PRIS_MS = 24 * 3_600_000L
+        /** The station unchanged: sent again after 30 s, so the site knows it is on line. */
+        const val BATTEMENT_STATION_MS = 30_000L
+        /** A site that does not know `direct-station` is asked again after 10 minutes. */
+        const val NON_PRIS_STATION_MS = 10 * 60_000L
+
+        /** The keys [stationJson] may write, each level by itself: what a test checks, what the documentation lists. */
+        val CLES_STATION = mapOf(
+            "" to setOf("satellite", "antennes", "reception", "enEmission", "mode"),
+            "satellite" to setOf("nom", "norad", "geo", "az", "el", "distanceKm", "vitesseKmS", "aos", "los", "elMax", "emetteurs", "choisi"),
+            "emetteur" to setOf("description", "mode", "descenteHz", "monteeHz"),
+            "antennes" to setOf("rotor", "parabole"),
+            "rotor" to setOf("connecte", "az", "el", "cibleAz", "cibleEl", "enMouvement", "horsPortee", "azSeul"),
+            "parabole" to setOf("az", "el"),
+            "reception" to setOf("sdr", "datv", "poste"),
+            "sdr" to setOf("actif", "type", "frequenceHz"),
+            "datv" to setOf("actif", "verrouille", "mer", "marge", "service", "cielKhz"),
+            "poste" to setOf("modele", "connecte", "descenteHz", "monteeHz", "mode"))
+
+        private fun r1(x: Double) = Math.round(x * 10) / 10.0
+        private fun r2(x: Double) = Math.round(x * 100) / 100.0
+        private fun mot(x: String, n: Int) = x.replace(Regex("\\p{Cntrl}"), " ").trim().take(n)
+        private fun JSONObject.met(k: String, v: Any?): JSONObject { if (v != null && !(v is Double && (v.isNaN() || v.isInfinite())) && v != "") put(k, v); return this }
+
+        /**
+         * The station's message (`direct-station`, without its time): only the keys of [CLES_STATION], angles to a
+         * tenth of a degree, texts cut short. Never an address, a port, a path or a setting beyond these.
+         */
+        fun stationJson(s: Station): JSONObject {
+            val o = JSONObject()
+            s.sat?.let { a ->
+                val j = JSONObject().put("nom", mot(a.nom, 40)).put("norad", a.norad).put("geo", a.geo)
+                    .met("az", a.az?.let { r1((it % 360.0 + 360.0) % 360.0) }).met("el", a.el?.let { r1(it.coerceIn(-90.0, 90.0)) })
+                    .met("distanceKm", a.distanceKm?.let { Math.round(it) }).met("vitesseKmS", a.vitesseKmS?.let { r2(it) })
+                if (!a.geo) j.met("aos", a.aos?.takeIf { it > 0 }).met("los", a.los?.takeIf { it > 0 }).met("elMax", a.elMax?.let { r1(it) })
+                if (a.emetteurs.isNotEmpty()) j.put("emetteurs", JSONArray(a.emetteurs.take(6).map { e ->
+                    JSONObject().put("description", mot(e.description, 60)).met("mode", e.mode?.let { mot(it, 16) })
+                        .met("descenteHz", e.descenteHz?.takeIf { it > 0 }).met("monteeHz", e.monteeHz?.takeIf { it > 0 })
+                }))
+                j.met("choisi", a.choisi?.let { mot(it, 60) })
+                o.put("satellite", j)
+            }
+            val ant = JSONObject()
+            s.rotor?.let { r ->
+                ant.put("rotor", JSONObject().put("connecte", r.connecte).met("az", r.az?.let { r1((it % 360.0 + 360.0) % 360.0) }).met("el", r.el?.let { r1(it) })
+                    .met("cibleAz", r.cibleAz?.let { r1((it % 360.0 + 360.0) % 360.0) }).met("cibleEl", r.cibleEl?.let { r1(it) })
+                    .put("enMouvement", r.enMouvement).put("horsPortee", r.horsPortee).put("azSeul", r.azSeul))
+            }
+            s.parabole?.let { (az, el) -> ant.put("parabole", JSONObject().put("az", r1(az)).put("el", r1(el))) }
+            if (ant.length() > 0) o.put("antennes", ant)
+            val rec = JSONObject()
+            s.sdr?.let { d -> rec.put("sdr", JSONObject().put("actif", d.actif).put("type", mot(d.type, 30)).met("frequenceHz", d.frequenceHz?.takeIf { it > 0 && d.actif })) }
+            s.datv?.let { d ->
+                val j = JSONObject().put("actif", d.actif).put("verrouille", d.actif && d.verrouille)
+                if (d.actif) j.met("cielKhz", d.cielKhz?.takeIf { it > 0 })
+                if (d.actif && d.verrouille) j.met("mer", d.mer?.let { r1(it) }).met("marge", d.marge?.let { r1(it) }).met("service", d.service?.let { mot(it, 40) })
+                rec.put("datv", j)
+            }
+            s.poste?.let { p ->
+                val j = JSONObject().put("modele", mot(p.modele, 24)).put("connecte", p.connecte)
+                if (p.connecte) j.met("descenteHz", p.descenteHz?.takeIf { it > 0 }).met("monteeHz", p.monteeHz?.takeIf { it > 0 }).met("mode", p.mode?.let { mot(it, 12) })
+                rec.put("poste", j)
+            }
+            if (rec.length() > 0) o.put("reception", rec)
+            o.put("enEmission", s.enEmission)
+            s.mode?.let { o.met("mode", mot(it, 16)) }
+            return o
+        }
+
+        /** The rig's model as people say it (« IC-9700 »), from SatMe's own codes. */
+        fun nomPoste(code: String): String = when (code) {
+            "IC9700", "SIM" -> "IC-9700"; "IC9100" -> "IC-9100"; "IC910" -> "IC-910H"; "TS2000", "TS2000SIM" -> "TS-2000"
+            "PAIRE" -> "FT-817 (paire)"; "THD72" -> "TH-D72"; else -> code.take(24)
+        }
+
+        /** The receiver's public name, from SatMe's codes ([SdrPc.recepteur]). */
+        fun nomSdr(code: String): String = when (code) {
+            SdrPc.RTL -> "RTL-SDR"; SdrPc.PLUTO -> "ADALM-PLUTO"; SdrPc.BLADERF -> "bladeRF"; SdrPc.NOEUD -> "SatMe-Node"
+            SdrPc.FI_POSTE -> "FI du poste"; SdrPc.FICHIER -> "enregistrement I/Q"; SdrPc.GENERATEUR -> "générateur d'essai"; else -> "SDR"
+        }
 
         /** The favourites' message: `{"satellites":[{"nom","norad"}…],"t"}` (sorted by name, then number). */
         fun favorisJson(l: List<Pair<String, Int>>, t: Long): JSONObject = JSONObject()

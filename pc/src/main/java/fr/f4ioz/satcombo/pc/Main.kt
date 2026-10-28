@@ -623,6 +623,13 @@ fun main(args: Array<String>) {
         if (e.favoris.isNotEmpty() && e.satellites.isEmpty()) null
         else e.favoris.map { n -> (e.satellites.firstOrNull { it.catalogNumber == n }?.name ?: "") to n }
     }
+    // « Station »: the satellite worked, where the antennas really point, the receivers and the rig (names, angles,
+    // frequencies; never a port or an address).
+    directSite.station = {
+        stationSite(station, sdr, datv, son,
+            enEmission = emission.etat.emet || emissionSstv.etat.emet || emissionPoste.poste.etat.emet || emissionBe.emet || ft8Tx.emet,
+            passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
+    }
     site.direct = directSite
     directSite.demarre()
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
@@ -911,3 +918,79 @@ private fun mainNoeud(port: Int, dossier: File) {
 fun versionPc(): String = Main::class.java.`package`?.implementationVersion ?: "dev"
 
 private object Main
+
+/**
+ * The station for the site's live page ([DirectSitePc.Station]): the satellite followed — or QO-100 while the station
+ * works it (the SDR or the DATV receiver on it, the QO-100 tab at the rig) and the satellite followed is below the
+ * horizon —, the mast as it reads back, the fixed dish's pointing for QO-100, the receivers and the rig in use, the
+ * mode. Names, angles and frequencies only.
+ */
+/** The mast's last reading, to tell it moving between two looks ([stationSite], every few seconds). */
+internal object MouvementRotor {
+    private var az: Double? = null
+    private var el: Double? = null
+    private var ms = 0L
+    /** [a], [e] read at [t]: did it move by half a degree or more since the reading of up to 12 s before? */
+    @Synchronized fun bouge(a: Double?, e: Double?, t: Long): Boolean {
+        val avant = if (t - ms <= 12_000L) az to el else null to null
+        az = a; el = e; ms = t
+        val da = if (a != null && avant.first != null) Math.abs(((a - avant.first!!) % 360.0 + 540.0) % 360.0 - 180.0) else 0.0
+        val de = if (e != null && avant.second != null) Math.abs(e - avant.second!!) else 0.0
+        return da >= 0.5 || de >= 0.5
+    }
+}
+
+internal fun stationSite(station: StationPc, sdr: SdrPc, datv: DatvPc, son: SonStation, enEmission: Boolean, passageSstv: () -> Boolean): DirectSitePc.Station {
+    val Q = fr.f4ioz.satcombo.domain.Qo100
+    val e = station.etat.value
+    val t = System.currentTimeMillis()
+    val suivi = e.suivi
+    val pos = e.position
+    val datvQo = datv.etat.actif && fr.f4ioz.satcombo.datv.IndicatifsImage.qo100(datv.reglage.cielKhz)
+    val surQo = suivi?.catalogNumber == Q.NORAD || (sdr.etat.value.actif && sdr.surQo100) || datvQo || station.qo100.etat.value.auPoste
+    val pointage = e.observateur?.let { Q.pointage(it.latDeg, it.lonDeg) }
+    fun emetteurs(l: List<fr.f4ioz.satcombo.data.Transmitter>) = l.filter { it.alive }.take(6).map {
+        DirectSitePc.Emetteur(it.description, it.mode, it.downlinkLowHz, it.uplinkLowHz) }
+    val sat = if (surQo && (suivi == null || suivi.catalogNumber == Q.NORAD || (pos?.elevationDeg ?: -90.0) < 0.0)) {
+        val p = pos?.takeIf { suivi?.catalogNumber == Q.NORAD }
+        DirectSitePc.Sat("QO-100", Q.NORAD, true, p?.azimuthDeg ?: pointage?.azDeg, p?.elevationDeg ?: pointage?.elDeg, p?.rangeKm,
+            emetteurs = emetteurs(if (suivi?.catalogNumber == Q.NORAD) e.emetteurs else station.emetteursDe(Q.NORAD)),
+            choisi = if (suivi?.catalogNumber == Q.NORAD) station.emetteurChoisi()?.description else null)
+    } else if (suivi != null) {
+        val pas = e.passage?.takeIf { it.losEpochMs > t && it.catalogNumber == suivi.catalogNumber }
+            ?: e.passagesSuivi.firstOrNull { it.losEpochMs > t && it.catalogNumber == suivi.catalogNumber }
+        DirectSitePc.Sat(suivi.name, suivi.catalogNumber, false, pos?.azimuthDeg, pos?.elevationDeg, pos?.rangeKm, pos?.rangeRateKmS,
+            pas?.aosEpochMs, pas?.losEpochMs, pas?.maxElevationDeg, emetteurs(e.emetteurs), station.emetteurChoisi()?.description)
+    } else null
+    val r = station.stationRotor.etat.value
+    val rotor = if (!r.rotorEnabled) null else {
+        val az = r.rotorAimAz ?: r.rotorActualAz
+        val el = if (r.rotorAzOnly) null else r.rotorAimEl ?: r.rotorActualEl
+        val ecartAz = if (az != null && r.rotorTargetAz != null) Math.abs(((r.rotorTargetAz!! - az) % 360.0 + 540.0) % 360.0 - 180.0) else 0.0
+        val ecartEl = if (el != null && r.rotorTargetEl != null) Math.abs(r.rotorTargetEl!! - el) else 0.0
+        val seuil = maxOf(2.0, r.rotorDeadband.toDouble())
+        // Moving: far from where it is sent, or read somewhere else than a moment ago.
+        val bouge = MouvementRotor.bouge(az, el, t)
+        DirectSitePc.Rotor(r.rotorConnected, az, el, r.rotorTargetAz, if (r.rotorAzOnly) null else r.rotorTargetEl,
+            r.rotorConnected && (ecartAz > seuil || ecartEl > seuil || bouge), r.rotorOutOfRange, r.rotorAzOnly)
+    }
+    val parabole = if (sat?.geo == true && pointage != null && pointage.visible) pointage.azDeg to pointage.elDeg else null
+    val es = sdr.etat.value
+    val sdrC = DirectSitePc.Sdr(es.actif, DirectSitePc.nomSdr(sdr.recepteur), es.cielHz.takeIf { it > 0 })
+    val de = datv.etat
+    val datvC = DirectSitePc.DatvCourt(de.actif, de.verrouille, de.merDb, runCatching { datv.marge() }.getOrNull(), de.service, datv.reglage.cielKhz)
+    val cat = station.stationCat.etat.value
+    val poste = if (!e.catConnecte) null else DirectSitePc.Poste(DirectSitePc.nomPoste(e.catModele), true, cat.descenteHz, cat.monteeHz, cat.mode)
+    val modePoste = cat.mode?.uppercase().orEmpty()
+    val mode = when {
+        de.actif -> "DATV"
+        son.ft8.enMarche -> son.ft8.mode
+        son.sstv.etat.value.mode.isNotEmpty() || passageSstv() -> "SSTV"
+        !e.catConnecte -> null
+        modePoste.startsWith("CW") -> "CW"
+        cat.donnees == true || modePoste.contains("DATA") || modePoste.endsWith("-D") -> "numérique"
+        modePoste.startsWith("FM") || modePoste.startsWith("USB") || modePoste.startsWith("LSB") || modePoste.startsWith("AM") -> "phonie"
+        else -> null
+    }
+    return DirectSitePc.Station(sat, rotor, parabole, sdrC, datvC, poste, enEmission, mode)
+}

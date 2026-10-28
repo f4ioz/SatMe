@@ -27,7 +27,7 @@ import java.time.ZoneOffset
  * - `<dossier>/<type>/<AAAA>/<id>.<ext>` the file, `<id>.json` its meta;
  * - `index.json`: the last [MAX_INDEX] items, newest first;
  * - `flux.xml`: an Atom feed of the last [MAX_FLUX];
- * - `direct/direct.json`, `direct/datv.jpg`, `direct/sstv.jpg`: the live parts, overwritten in place.
+ * - `direct/direct.json`, `direct/station.json`, `direct/datv.jpg`, `direct/sstv.jpg`: the live parts, overwritten in place.
  *
  * Every file is written beside its place then renamed (atomic where the
  * system allows): a reader never sees half a file, and the index never names
@@ -90,6 +90,11 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
                 val f = JSONObject().put("version", SitePc.VERSION_API).put("type", "favoris")
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
                 racine().mkdirs(); ecritAtomique(File(racine(), "favoris.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
+            }
+            "direct-station" -> {
+                val f = JSONObject()
+                o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
+                d.mkdirs(); ecritAtomique(File(d, "station.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
             }
             "direct-efface" -> { direct.keySet().toList().forEach { direct.remove(it) }; d.deleteRecursively(); 200 to "{\"ok\":true}" }
             else -> 415 to "{\"ok\":false,\"erreur\":\"pas de spectre vers un dossier\"}"
