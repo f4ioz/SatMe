@@ -127,6 +127,64 @@ Depending on the type, when SatMe-PC knows them:
 | `indicatif` | string | `"EA4ABC"` | qso: the station worked |
 | `locator` | string | `"IN80DD"` | qso: its locator |
 
+#### SSTV: passes, auto-pilot, planches (optional)
+
+All optional: an older SatMe-PC does not send
+them, and a receiver may ignore them. Times are ISO 8601 UTC strings. A **pass
+id** is the satellite's NORAD number and its AOS to the minute
+(`"25544-20261003T1349Z"`): the same pass has the same id in every item that
+names it, as long as it is worked out from the same elements (when in doubt,
+compare the satellite and the times). A **key** (`"sstv:…"`, `"journal:…"`,
+`"rapport:…"`, `"planche:…"`) is another item's `cle`: it may name an item
+not published (yet) on your site.
+
+`sstv-image` and `journal-video`:
+
+| Field | Type | Example | Meaning |
+|---|---|---|---|
+| `catnum` | number | `25544` | the satellite's NORAD number |
+| `passage` | string | `"25544-20261003T1349Z"` | the pass it came on (pass id) |
+| `aos`, `los` | string | `"2026-10-03T13:49:30Z"` | that pass's AOS and LOS |
+| `elMax` | number | `62.4` | its highest elevation (degrees) |
+| `autopilote` | boolean | `true` | received by the SSTV auto-pilot (Agenda › SSTV) |
+| `campagne` | string | `"ARISS série 34"` | the auto-pilot's campaign that received it |
+| `diapo`, `diapos` | number | `3`, `12` | sstv-image: its slide, set by hand (3 of 12) |
+| `planches` | list of keys | `["planche:serie34"]` | journal-video: the planches of the event it belongs to |
+
+`planche`:
+
+| Field | Type | Example | Meaning |
+|---|---|---|---|
+| `satellite`, `catnum` | string, number | `"ISS"`, `25544` | the satellite of its event (else of most of its pictures) |
+| `evenementId` | string | `"c:ariss-34"` | its event's id (stable) |
+| `evenementGenre` | string | `"campagne"` | `campagne` (an auto-pilot campaign), `activite` (an activity announced), `images` (a run of pictures) |
+| `evenementDebut`, `evenementFin` | string | | the event's period |
+| `campagne`, `campagneId` | string | `"ARISS série 34"`, `"ariss-34"` | when the event is an auto-pilot campaign |
+| `mode` | string | `"PD120"` | the most frequent SSTV mode of its pictures |
+| `premiere`, `derniere` | string | | the first and the last picture |
+| `images` | number | `23` | pictures of the event |
+| `diapos` | number | `12` | slides expected |
+| `diaposRecues` | number | `10` | slides received |
+| `diaposManquantes` | list of numbers | `[5, 6]` | the slides missing |
+| `meilleures` | list | see below | the best picture of each slide received |
+| `passages` | list | see below | the passes that brought pictures, oldest first |
+| `autopilote` | boolean | `true` | at least one of those passes was received by the auto-pilot |
+| `videos` | list of keys | `["journal:SatMe_ISS_…mp4"]` | the journal's videos of those passes |
+| `rapport` | key | `"rapport:serie34"` | its event report |
+
+`meilleures[]`: `{"diapo": 3, "image": "sstv:<file>.png", "utc": "…", "note": 82, "copies": 4, "estimee": true}`
+(`note`: SatMe's mark 0–100 when known; `estimee`: the slide number was
+estimated from the timetable).
+`passages[]`: `{"id": "25544-20261003T1349Z", "aos": "…", "los": "…", "elMax": 62.4, "images": 5, "diapos": [3, 4],
+"autopilote": true, "campagne": "ARISS série 34", "video": "journal:<file>.mp4"}`.
+
+`rapport`: `planche` (the planche's key), `satellite`, `catnum`,
+`evenementId`, `evenementGenre`, `campagne`, `campagneId`, `premiere`,
+`derniere`, as above.
+
+Lists and objects are small (a series has a few dozen passes at most); a
+receiver that keeps only flat fields loses nothing else.
+
 A whole example (`sstv-image`):
 
 ```http

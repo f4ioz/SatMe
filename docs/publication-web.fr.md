@@ -125,6 +125,66 @@ Selon le type, quand SatMe-PC les connaît :
 | `indicatif` | texte | `"EA4ABC"` | qso : la station contactée |
 | `locator` | texte | `"IN80DD"` | qso : son carré |
 
+#### SSTV : passages, auto-pilote, planches (facultatif)
+
+Tous facultatifs : un SatMe-PC plus ancien
+ne les envoie pas, et un récepteur peut les ignorer. Les heures sont des textes
+ISO 8601 UTC. Un **identifiant de passage** est le numéro NORAD du satellite et
+son AOS à la minute (`"25544-20261003T1349Z"`) : le même passage a le même
+identifiant dans tous les éléments qui le nomment, tant qu'il est calculé avec
+les mêmes éléments orbitaux (en cas de doute, comparer le satellite et les
+heures). Une **clé** (`"sstv:…"`, `"journal:…"`, `"rapport:…"`, `"planche:…"`)
+est le `cle` d'un autre élément : elle peut nommer un élément pas (encore)
+publié sur votre site.
+
+`sstv-image` et `journal-video` :
+
+| Champ | Type | Exemple | Sens |
+|---|---|---|---|
+| `catnum` | nombre | `25544` | le numéro NORAD du satellite |
+| `passage` | texte | `"25544-20261003T1349Z"` | le passage où il a été reçu (identifiant) |
+| `aos`, `los` | texte | `"2026-10-03T13:49:30Z"` | l'AOS et le LOS de ce passage |
+| `elMax` | nombre | `62.4` | son élévation la plus haute (degrés) |
+| `autopilote` | booléen | `true` | reçu par l'auto-pilote SSTV (Agenda › SSTV) |
+| `campagne` | texte | `"ARISS série 34"` | la campagne de l'auto-pilote qui l'a reçu |
+| `diapo`, `diapos` | nombre | `3`, `12` | sstv-image : sa diapo, donnée à la main (3 sur 12) |
+| `planches` | liste de clés | `["planche:serie34"]` | journal-video : les planches de l'événement dont elle fait partie |
+
+`planche` :
+
+| Champ | Type | Exemple | Sens |
+|---|---|---|---|
+| `satellite`, `catnum` | texte, nombre | `"ISS"`, `25544` | le satellite de son événement (sinon de la plupart de ses images) |
+| `evenementId` | texte | `"c:ariss-34"` | l'identifiant (stable) de son événement |
+| `evenementGenre` | texte | `"campagne"` | `campagne` (une campagne de l'auto-pilote), `activite` (une activité annoncée), `images` (une suite d'images) |
+| `evenementDebut`, `evenementFin` | texte | | la période de l'événement |
+| `campagne`, `campagneId` | texte | `"ARISS série 34"`, `"ariss-34"` | quand l'événement est une campagne de l'auto-pilote |
+| `mode` | texte | `"PD120"` | le mode SSTV le plus fréquent de ses images |
+| `premiere`, `derniere` | texte | | la première et la dernière image |
+| `images` | nombre | `23` | les images de l'événement |
+| `diapos` | nombre | `12` | les diapos attendues |
+| `diaposRecues` | nombre | `10` | les diapos reçues |
+| `diaposManquantes` | liste de nombres | `[5, 6]` | les diapos qui manquent |
+| `meilleures` | liste | voir plus bas | la meilleure image de chaque diapo reçue |
+| `passages` | liste | voir plus bas | les passages qui ont apporté des images, le plus ancien d'abord |
+| `autopilote` | booléen | `true` | au moins un de ces passages a été reçu par l'auto-pilote |
+| `videos` | liste de clés | `["journal:SatMe_ISS_…mp4"]` | les vidéos du journal de ces passages |
+| `rapport` | clé | `"rapport:serie34"` | son rapport d'événement |
+
+`meilleures[]` : `{"diapo": 3, "image": "sstv:<fichier>.png", "utc": "…", "note": 82, "copies": 4, "estimee": true}`
+(`note` : la note de SatMe sur 100 quand elle est connue ; `estimee` : le
+numéro de la diapo a été estimé d'après l'horaire).
+`passages[]` : `{"id": "25544-20261003T1349Z", "aos": "…", "los": "…", "elMax": 62.4, "images": 5, "diapos": [3, 4],
+"autopilote": true, "campagne": "ARISS série 34", "video": "journal:<fichier>.mp4"}`.
+
+`rapport` : `planche` (la clé de la planche), `satellite`, `catnum`,
+`evenementId`, `evenementGenre`, `campagne`, `campagneId`, `premiere`,
+`derniere`, comme plus haut.
+
+Les listes et les objets restent petits (une série compte quelques dizaines de
+passages au plus) ; un récepteur qui ne garde que les champs simples ne perd
+rien d'autre.
+
 Exemple complet (`sstv-image`) :
 
 ```http
