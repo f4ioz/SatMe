@@ -128,12 +128,15 @@ class CielTest {
         assertEquals("--gc:1/13;--gr:4/5", p["outils"])
         assertEquals("--gc:7/13;--gr:3/4", Accueil.places(listOf("ciel", "passages", "qso", "article"))["article"])
         assertEquals("--gc:8/13;--gr:3/4", Accueil.places(listOf("ciel", "passages", "qso"))["qso"])
-        // With the live block, the sky is one of the column beside it; five there.
+        // With the live block, the sky is a strip under it; the column beside as without the sky.
         val d = Accueil.places(listOf("direct", "ciel", "passages", "qso", "image", "article"))
-        assertEquals("--gc:1/8;--gr:1/4", d["direct"])
-        assertEquals("--gc:8/13;--gr:1/2", d["ciel"])
+        assertEquals("--gc:1/8;--gr:1/3", d["direct"])
+        assertEquals("--gc:1/8;--gr:3/4", d["ciel"])
+        assertEquals("--gc:8/13;--gr:1/2", d["passages"])
         assertEquals("--gc:10/13;--gr:3/4", d["article"])
         assertEquals(6, d.size)
+        val seuls = Accueil.places(listOf("direct", "ciel"))
+        assertEquals("--gc:1/13;--gr:1/3", seuls["direct"]); assertEquals("--gc:1/13;--gr:3/4", seuls["ciel"])
         // Without the sky, as before.
         assertEquals("--gc:10/13;--gr:3/4", Accueil.places(listOf("direct", "passages", "qso", "image", "article"))["article"])
     }

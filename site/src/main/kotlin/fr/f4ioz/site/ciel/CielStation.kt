@@ -90,7 +90,7 @@ object CielStation {
             sb.append("<path class=\"cc-t\" d=\"M").append(fmt(100 * sin(a))).append(' ').append(fmt(-100 * cos(a))).append('L')
                 .append(fmt((100 + l) * sin(a))).append(' ').append(fmt(-(100 + l) * cos(a))).append("\"/>")
         }
-        for ((t, x, y) in listOf(Triple("N", 0, -108), Triple("E", 112, 4), Triple("S", 0, 116), Triple("O", -112, 4)))
+        for ((t, x, y) in listOf(Triple("N", 0, -112), Triple("E", 113, 0), Triple("S", 0, 112), Triple("O", -113, 0)))
             sb.append("<text class=\"cc-c\" x=\"").append(x).append("\" y=\"").append(y).append("\">").append(t).append("</text>")
         sb.append("<text class=\"cc-e\" x=\"3\" y=\"").append(fmt(-r * (1 - 30 / 90.0) + 8)).append("\">30°</text><text class=\"cc-e\" x=\"3\" y=\"")
             .append(fmt(-r * (1 - 60 / 90.0) + 8)).append("\">60°</text>")
@@ -110,7 +110,7 @@ object CielStation {
         }
         for (v in i.vus.take(12)) {
             val (x, y) = polaire(v.az, v.el, r)
-            sb.append("<g class=\"cc-sat\" transform=\"translate(").append(fmt(x)).append(' ').append(fmt(y)).append(")\"><circle r=\"3.6\"/><text x=\"6\" y=\"-5\">")
+            sb.append("<g class=\"cc-sat\" transform=\"translate(").append(fmt(x)).append(' ').append(fmt(y)).append(")\"><circle r=\"4.2\"/>").append(if (x > 35) "<text x=\"-7\" y=\"-6\" text-anchor=\"end\">" else "<text x=\"7\" y=\"-6\">")
                 .append(h(v.nom)).append("</text></g>")
         }
         sb.append("</svg>")

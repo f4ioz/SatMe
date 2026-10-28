@@ -60,6 +60,13 @@ body {
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
 }
+/* The night sky behind the pages (dark theme only): a few faint stars, fixed, drawn by CSS alone. */
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: radial-gradient(1px 1px at 20px 30px, rgba(220, 232, 255, .55) 50%, transparent 51%), radial-gradient(1px 1px at 140px 90px, rgba(220, 232, 255, .35) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 260px 170px, rgba(220, 232, 255, .45) 50%, transparent 51%), radial-gradient(1px 1px at 330px 40px, rgba(220, 232, 255, .3) 50%, transparent 51%),
+    radial-gradient(1px 1px at 90px 260px, rgba(220, 232, 255, .4) 50%, transparent 51%), radial-gradient(1px 1px at 380px 300px, rgba(220, 232, 255, .3) 50%, transparent 51%);
+  background-size: 410px 340px; }
+:root[data-theme="light"] body::before { display: none; }
 a { color: var(--accent); text-decoration: none; }
 a:hover, a:focus { color: var(--accent-hover); text-decoration: underline; }
 ::selection { background: var(--accent-soft); color: var(--text); }
@@ -233,6 +240,7 @@ form.inline { display: inline; }
 .home-hero h1 { background: linear-gradient(100deg, var(--text) 30%, color-mix(in srgb, var(--accent) 70%, var(--text)) 70%); -webkit-background-clip: text; background-clip: text; }
 .home-hero h1 small { -webkit-text-fill-color: var(--text-dim); }
 .home-hero h1 { -webkit-text-fill-color: transparent; }
+@media (forced-colors: active) { .home-hero h1, .home-hero h1 small { -webkit-text-fill-color: currentColor; background: none; } }
 @media (max-width: 719px) { .home-hero { grid-template-columns: auto 1fr; gap: 14px; padding: 18px; } .home-hero .hero-txt { grid-column: 1 / -1; grid-row: 2; }
   .home-hero .mark { width: 64px; height: 64px; border-radius: 15px; } .hero-horloges { grid-row: 1; grid-column: 2; justify-self: end; } }
 .home-grid { display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); margin-bottom: 18px; }
@@ -560,14 +568,14 @@ form.parametres .card-body > p.dim:first-child { margin: 0 0 10px; font-size: 13
 .ciel-cadran .cc-h { fill: none; stroke: var(--border-strong); stroke-width: 1; }
 .ciel-cadran .cc-g { fill: none; stroke: var(--border-strong); stroke-width: .6; stroke-dasharray: 2 3; opacity: .8; }
 .ciel-cadran .cc-t { stroke: var(--text-muted); stroke-width: .8; opacity: .6; }
-.ciel-cadran .cc-c { fill: var(--text-dim); font: 700 9px var(--font-sans); text-anchor: middle; }
-.ciel-cadran .cc-e { fill: var(--text-muted); font: 6.5px var(--font-mono); }
+.ciel-cadran .cc-c { fill: var(--text-dim); font: 700 11px var(--font-sans); text-anchor: middle; dominant-baseline: middle; }
+.ciel-cadran .cc-e { fill: var(--text-muted); font: 8px var(--font-mono); }
 .ciel-cadran .cc-trace { fill: none; stroke: var(--amber); stroke-width: 1.6; stroke-dasharray: 4 3; stroke-linecap: round; opacity: .85; }
 .ciel-cadran .cc-trace.encours { stroke: var(--accent); stroke-dasharray: none; opacity: .9; }
 .ciel-cadran .cc-aos { fill: var(--amber); }
 .ciel-cadran .cc-sat circle { fill: var(--accent); stroke: var(--bg); stroke-width: 1; filter: drop-shadow(0 0 3px var(--accent)); }
 .ciel-cadran .cc-sat.lui circle { fill: var(--amber); filter: drop-shadow(0 0 4px var(--amber)); }
-.ciel-cadran .cc-sat text { fill: var(--text); font: 600 7.5px var(--font-sans); paint-order: stroke; stroke: var(--bg); stroke-width: 2.4px; }
+.ciel-cadran .cc-sat text { fill: var(--text); font: 700 10.5px var(--font-sans); paint-order: stroke; stroke: var(--cc-horizon); stroke-width: 3px; stroke-linejoin: round; }
 .ciel-cadran .cc-soleil circle { fill: #FFD166; stroke: #FFB454; stroke-width: 1.5; filter: drop-shadow(0 0 4px #FFB454); }
 .ciel-cadran .cc-lune circle { fill: color-mix(in srgb, var(--text-muted) 35%, transparent); }
 .ciel-cadran .cc-lune path { fill: #E8EEF6; }
@@ -576,6 +584,7 @@ form.parametres .card-body > p.dim:first-child { margin: 0 0 10px; font-size: 13
 .ciel-astres b { color: var(--text-dim); font-family: var(--font-mono); font-weight: 600; }
 .ciel-astres .ast { width: 9px; height: 9px; border-radius: 50%; background: #FFD166; box-shadow: 0 0 6px #FFB454; }
 .ciel-astres .lune .ast { background: #DDE5EF; box-shadow: none; }
+.ciel-astres .sfi .ast { background: none; border: 2px solid #FFB454; width: 9px; height: 9px; box-shadow: 0 0 6px #FFB454; }
 @media (prefers-reduced-motion: reduce) { .ciel-globe::before, .ciel-aos-l .bd-led { animation: none; } .ciel-globe canvas { transition: none; } }
 /* Narrow: the globe on top, the dial and the countdown below it. */
 @container ciel (max-width: 470px) {
@@ -595,11 +604,13 @@ html:not(.js-nav) .carte-ciel > .card-body.ciel-corps { grid-template-columns: m
 @container ciel (max-height: 300px) {
   .carte-ciel > .card-body.ciel-corps { grid-template-columns: minmax(0, 1fr); }
   .ciel-globe { display: none; }
-  .ciel-cote { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 14px; padding: 8px 12px; }
-  .ciel-cote .ciel-cadran { grid-row: 1 / 3; grid-column: 1; height: 100%; width: auto; aspect-ratio: 1; min-height: 0; }
-  .ciel-cote .ciel-aos, .ciel-cote .ciel-astres { grid-column: 2; }
+  .ciel-cote { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); align-items: center; column-gap: 16px; padding: 8px 14px; height: 100%; }
+  .ciel-cote .ciel-cadran { grid-row: 1; grid-column: 1; height: 100%; width: auto; aspect-ratio: 1; min-height: 0; max-height: 100%; }
+  .ciel-cote .ciel-aos { grid-column: 2; }
+  .ciel-cote .ciel-astres { grid-column: 3; flex-direction: column; gap: 6px; }
   .ciel-aos-compte { font-size: 22px; }
 }
+@container ciel (max-height: 300px) and (max-width: 520px) { .ciel-cote .ciel-astres { display: none; } }
 
 /* ───────────────────────────── the logbook in figures, on a map (carte-qso.js), the station's QSL-like card */
 .carnet-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 16px; }
@@ -644,11 +655,13 @@ html:not(.js-nav) .carte-qso-cadre { display: none; }
 /* ───────────────────────────── the SSTV wall, the viewer (galerie.js) */
 .sm-section-title .titre-lien { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .mur-filtres { margin: 0 0 18px; }
-.mur { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.mur { display: flex; flex-wrap: wrap; gap: 14px; }
 .mur-passage { position: relative; flex: 1 1 calc(var(--n, 1) * 178px + 26px); max-width: 100%; padding: 12px 13px 13px; border: 1px solid var(--border); border-radius: var(--r-l);
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, transparent), transparent 60px), var(--panel); box-shadow: var(--shadow); }
 .mur-passage::before { content: ''; position: absolute; left: 13px; right: 13px; top: -1px; height: 2px; border-radius: 0 0 2px 2px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .7; }
-.mur-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 10px; }
+.mur-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 0 0 10px; }
+.mur-tete .mur-heure { flex-basis: 100%; }
+.mur-tete .mur-sat { margin-left: auto; }
 .mur-jour { font-weight: 700; color: var(--text); }
 .mur-sat { font: 700 12px var(--font-sans); padding: 1px 9px; border-radius: 999px; color: var(--sat); border: 1px solid color-mix(in srgb, var(--sat) 40%, transparent); background: color-mix(in srgb, var(--sat) 10%, transparent); }
 .mur-sat:hover { text-decoration: none; border-color: var(--sat); color: var(--sat); }

@@ -140,7 +140,7 @@ ${tuiles.joinToString("\n")}
 <span class="card-meta"><span data-ciel-nb>${enVue(i.vus.size)}</span></span></header><div class="card-body ciel-corps">
 <div class="ciel-globe"><canvas data-ciel-globe tabindex="0" role="img" aria-label="La Terre vue de l'espace : la station ${h(c.locator)}, les satellites et leurs empreintes. Flèches : tourner ; Entrée : revenir à la station."></canvas>
 <p class="ciel-globe-att" data-ciel-attente>La Terre se dessine…</p></div>
-<div class="ciel-cote"><div class="ciel-aos" data-ciel-aos aria-live="polite">""")
+<div class="ciel-cote"><div class="ciel-aos" data-ciel-aos>""")
         if (p == null) sb.append("<span class=\"ciel-aos-l\">Aucun passage au-dessus de 5° dans les 24 heures</span>")
         else {
             sb.append("<span class=\"ciel-aos-l\">").append(if (en != null) "<span class=\"bd-led\"></span>Passage en cours" else "Prochain passage").append("</span>")
@@ -234,23 +234,25 @@ ${tuiles.joinToString("\n")}
             fun p(k: String, c: String, r: String) { m[k] = "--gc:$c;--gr:$r" }
             // The big card on the left: the live block, else the station's sky; the others in the column beside it.
             val grand = if ("direct" in cartes) "direct" else if ("ciel" in cartes) "ciel" else null
-            val autres = cartes.filter { it != grand && it != "outils" }
+            // The live block and the sky together: the sky a strip under the live block (its dial and countdown).
+            val sousDirect = grand == "direct" && "ciel" in cartes
+            val autres = cartes.filter { it != grand && it != "outils" && !(sousDirect && it == "ciel") }
+            val gauche = if (autres.isEmpty()) "1/13" else "1/8"
+            if (sousDirect) { p("direct", gauche, "1/3"); p("ciel", gauche, "3/4") }
             if (grand != null) {
-                if (autres.isEmpty()) p(grand, "1/13", "1/4")
+                if (autres.isEmpty()) { if (!sousDirect) p(grand, "1/13", "1/4") }
                 // The sky beside three or four cards: half the width, the others two by two (their lists two rows high).
                 else if (grand == "ciel" && autres.size >= 3) {
                     p(grand, "1/7", "1/4")
                     p(autres[0], "7/10", "1/3"); p(autres[1], "10/13", "1/3")
                     if (autres.size == 3) p(autres[2], "7/13", "3/4") else { p(autres[2], "7/10", "3/4"); p(autres[3], "10/13", "3/4") }
                 } else {
-                    p(grand, "1/8", "1/4")
+                    if (!sousDirect) p(grand, "1/8", "1/4")
                     when (autres.size) {
                         1 -> p(autres[0], "8/13", "1/4")
                         2 -> { p(autres[0], "8/13", "1/3"); p(autres[1], "8/13", "3/4") }
                         3 -> autres.forEachIndexed { i, k -> p(k, "8/13", "${i + 1}/${i + 2}") }
-                        4 -> { p(autres[0], "8/13", "1/2"); p(autres[1], "8/13", "2/3"); p(autres[2], "8/10", "3/4"); p(autres[3], "10/13", "3/4") }
-                        5 -> { p(autres[0], "8/13", "1/2"); p(autres[1], "8/10", "2/3"); p(autres[2], "10/13", "2/3"); p(autres[3], "8/10", "3/4"); p(autres[4], "10/13", "3/4") }
-                        else -> autres.take(6).forEachIndexed { i, k -> p(k, if (i % 2 == 0) "8/10" else "10/13", "${i / 2 + 1}/${i / 2 + 2}") }
+                        else -> { p(autres[0], "8/13", "1/2"); p(autres[1], "8/13", "2/3"); p(autres[2], "8/10", "3/4"); p(autres[3], "10/13", "3/4") }
                     }
                 }
             } else when (autres.size) {

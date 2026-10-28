@@ -144,8 +144,8 @@ class PagesGaleries(private val s: Site) : ModuleSite {
         sb.append("<div class=\"mur\" data-galerie>")
         for (p in passages.drop((page - 1) * 20).take(20)) {
             sb.append("<section class=\"mur-passage\" style=\"--n:").append(minOf(p.images.size, 6)).append("\"><header class=\"mur-tete\"><span class=\"mur-jour\">")
-                .append(h(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", java.util.Locale.FRANCE).format(java.time.Instant.ofEpochMilli(p.debutMs).atZone(z)).replaceFirstChar { it.titlecase() }))
-                .append("</span><a class=\"mur-sat\" href=\"/gallery/sstv?sat=").append(Html.u(p.satellite)).append("\">").append(h(p.satellite)).append("</a><span class=\"num\">")
+                .append(h(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.FRANCE).format(java.time.Instant.ofEpochMilli(p.debutMs).atZone(z)).replaceFirstChar { it.titlecase() }))
+                .append("</span><a class=\"mur-sat\" href=\"/gallery/sstv?sat=").append(Html.u(p.satellite)).append("\">").append(h(p.satellite)).append("</a><span class=\"num mur-heure\">")
                 .append(h(Html.heure(p.debutMs, java.time.ZoneOffset.UTC))).append(if (p.finMs - p.debutMs >= 60_000L) "–" + h(Html.heure(p.finMs, java.time.ZoneOffset.UTC)) else "")
                 .append(" UTC · ").append(p.images.size).append(if (p.images.size > 1) " images" else " image").append("</span></header><div class=\"mur-grille\">")
             p.images.forEach { sb.append(vignette(it, legende = false, classe = if (it.id == premiere) " recente" else "")) }

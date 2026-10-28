@@ -275,7 +275,7 @@
     favoris.map(s => ({ s: s, e: etat(s, t) })).filter(o => o.e && o.e.el > 0).sort((a, b) => a.e.el - b.e.el).forEach(o => {
       n++;
       const q = pol(o.e.az, o.e.el), lui = p && o.s.catnum === p.catnum;
-      h += '<g class="cc-sat' + (lui ? ' lui' : '') + '" transform="translate(' + f1(q[0]) + ' ' + f1(q[1]) + ')"><circle r="' + (lui ? 4.4 : 3.6) + '"/><text x="6" y="-5">' + esc(o.s.nom) + '</text>' +
+      h += '<g class="cc-sat' + (lui ? ' lui' : '') + '" transform="translate(' + f1(q[0]) + ' ' + f1(q[1]) + ')"><circle r="' + (lui ? 5 : 4.2) + '"/>' + (q[0] > 35 ? '<text x="-7" y="-6" text-anchor="end">' : '<text x="7" y="-6">') + esc(o.s.nom) + '</text>' +
         '<title>' + esc(o.s.nom) + ' · az ' + Math.round(o.e.az) + '° · él ' + Math.round(o.e.el) + '° · ' + Math.round(o.e.km).toLocaleString('fr-FR') + ' km</title></g>';
     });
     dyn.innerHTML = h;
@@ -379,9 +379,22 @@
     });
   }
 
+  // The Sun's activity as HamQSL (N0NBH) gives it, read by the site for its HF pages: shown when it is known.
+  async function solaire() {
+    try {
+      const o = await (await fetch('/api/dx/solar')).json(), sfi = parseInt(o.solarflux, 10), k = String(o.kindex || '').trim();
+      if (!astres || !(sfi > 0)) return;
+      const li = document.createElement('li'); li.className = 'sfi'; li.title = 'Activité solaire : HamQSL / N0NBH';
+      li.innerHTML = '<span class="ast" aria-hidden="true"></span>SFI <b></b>' + (k ? ' · K <b></b>' : '');
+      const b = li.querySelectorAll('b'); b[0].textContent = sfi; if (b[1]) b[1].textContent = k;
+      astres.appendChild(li);
+    } catch (x) {}
+  }
+
   lisCouleurs(); taille();
   dessineCiel(Date.now());
   if (anime()) intro = { t0: performance.now(), duree: 2200, lon0: vue.lon - 75, lon1: vue.lon, lat0: vue.lat - 18, lat1: vue.lat };
   image(performance.now()); relance();
   plusTard(chargeTerre);
+  plusTard(solaire);
 })();
