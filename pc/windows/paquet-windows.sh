@@ -71,11 +71,24 @@ if [ "$windows" = 1 ]; then
     # The folder to unzip.
     jpackage --type app-image "${commun[@]}" --dest "$B/image"
     (cd "$B/image" && 7z a -tzip "../sortie/satme-pc-windows.zip" SatMe-PC > /dev/null)
+    # The installer's own mark beside the jars (not in the ZIP): SatMe-PC then never keeps
+    # its data in the install folder (DonneesMsiPc).
+    printf 'SatMe-PC installé par satme-pc-windows.msi : ses données ne sont jamais gardées dans ce dossier,\r\nqu'"'"'une mise à jour remplace (par défaut dans %%APPDATA%%\\SatMe).\r\n' > "$E/installe-par-msi.txt"
     # The installer: per user (no administrator), Start menu and desktop, updated in place.
-    jpackage --type msi "${commun[@]}" --dest "$B/msi" \
-        --win-per-user-install --win-menu --win-menu-group SatMe --win-shortcut --win-shortcut-prompt \
-        --win-upgrade-uuid 8eb50f5b-d5a0-4ee2-b29e-b103f4129360 \
-        --license-file LICENSE
+    msi=(--type msi "${commun[@]}"
+        --win-per-user-install --win-menu --win-menu-group SatMe --win-shortcut --win-shortcut-prompt
+        --win-upgrade-uuid 8eb50f5b-d5a0-4ee2-b29e-b103f4129360
+        --license-file LICENSE)
+    # jpackage's WiX fragment empties the whole install folder on uninstall (RemoveFolderEx), an
+    # update included: files the user put there with it. Made once to read it (--temp keeps it),
+    # that component taken out, then the installer made again from it (--resource-dir bundle.wxf).
+    jpackage "${msi[@]}" --dest "$B/msi-1" --temp "$B/wix-1"
+    mkdir -p "$B/ressources"
+    java pc/windows/SansNettoyage.java "$B/wix-1/config/bundle.wxf" "$B/ressources/bundle.wxf"
+    jpackage "${msi[@]}" --dest "$B/msi" --temp "$B/wix-2" --resource-dir "$B/ressources"
+    # Built from that fragment, not a new one: checked.
+    cmp -s "$B/ressources/bundle.wxf" "$B/wix-2/config/bundle.wxf" || { echo "bundle.wxf corrigé non repris par jpackage"; exit 1; }
+    ! grep -q RemoveFolderEx "$B/wix-2/config/bundle.wxf" || { echo "RemoveFolderEx encore dans l'installateur"; exit 1; }
     cp "$B"/msi/*.msi "$B/sortie/satme-pc-windows.msi"
 else
     jpackage --type app-image "${commun[@]}" --dest "$B/image"

@@ -34,12 +34,12 @@ class DemarragePcTest {
 
     private class Monde(val d: DemarragePc, val station: StationPc, val fichier: FichierLanceur)
 
-    private fun monde(version: String = "2026.10.27", stockage: StockageMemoire = StockageMemoire(), redemarrage: RedemarragePc? = null): Monde {
+    private fun monde(version: String = "2026.10.27", stockage: StockageMemoire = StockageMemoire(), redemarrage: RedemarragePc? = null, avis: String? = null): Monde {
         val st = StationPc(stockage, Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
         val f = FichierLanceur(File(dossier, "conf/satme-pc.properties"))
         val l = LanceurPc.resout(ArgumentsPc(), f.lit(), f.fichier, File(dossier, "donnees").apply { mkdirs() })
         val maj = MiseAJourPc(stockage, File(dossier, "maj.json"), version, { MiseAJourPc.Reponse(404, "{}") })
-        val d = DemarragePc(st, l, f, maj, NouveautesPc(NOTES), DeploiementPc(l.dossier, l, { emptyMap() }), redemarrage, version)
+        val d = DemarragePc(st, l, f, maj, NouveautesPc(NOTES), DeploiementPc(l.dossier, l, { emptyMap() }), redemarrage, version, avisDonnees = avis)
         return Monde(d, st, f)
     }
 
@@ -144,6 +144,20 @@ class DemarragePcTest {
         // Always there from the help menu.
         val t = m.d.sert("/api/demarrage/nouveautes", "GET", emptyMap(), true, false, null, null) { null }!!.json()
         assertEquals(2, t.getJSONArray("versions").length())
+    }
+
+    @Test
+    fun les_donnees_sorties_du_dossier_du_msi_dites_jusqu_a_lecture() {
+        val st = StockageMemoire()
+        val m = monde(stockage = st, avis = "Vos données étaient dans le dossier du programme")
+        m.d.auDemarrage(neuf = false)
+        fun avis() = m.d.sert("/api/demarrage", "GET", emptyMap(), true, false, null, null) { null }!!.json().opt("avisDonnees")
+        assertEquals("Vos données étaient dans le dossier du programme", avis())
+        assertTrue(post(m, "/api/demarrage/avis-vu", emptyMap(), true).json().getBoolean("ok"))
+        assertEquals(org.json.JSONObject.NULL, avis())
+        // The next start (nothing copied): nothing said.
+        monde(stockage = st).d.auDemarrage(neuf = false)
+        assertEquals(org.json.JSONObject.NULL, avis())
     }
 
     @Test

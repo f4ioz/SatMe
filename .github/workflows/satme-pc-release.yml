@@ -33,7 +33,8 @@ jobs:
         shell: bash
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
-          case "$GITHUB_REF" in refs/tags/*) ;; *) V=dev ;; esac
+          # A test build: the version in pc/windows/version-essai (an MSI only updates to a higher one), else "dev".
+          case "$GITHUB_REF" in refs/tags/*) ;; *) V=$(cat pc/windows/version-essai 2>/dev/null || echo dev) ;; esac
           ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:installDist
       - name: Build the Windows package
         shell: bash
@@ -41,7 +42,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
-          case "$GITHUB_REF" in refs/tags/*) ;; *) V=dev ;; esac
+          # A test build: the version in pc/windows/version-essai (an MSI only updates to a higher one), else "dev".
+          case "$GITHUB_REF" in refs/tags/*) ;; *) V=$(cat pc/windows/version-essai 2>/dev/null || echo dev) ;; esac
           command -v candle.exe || export PATH="$PATH:/c/Program Files (x86)/WiX Toolset v3.14/bin:/c/Program Files (x86)/WiX Toolset v3.11/bin"
           pc/windows/paquet-windows.sh "$V"
       - uses: actions/upload-artifact@v7
