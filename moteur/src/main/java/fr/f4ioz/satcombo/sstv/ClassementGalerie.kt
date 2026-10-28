@@ -38,7 +38,7 @@ class ClassementGalerie(private val charge: (File) -> Pixels?) {
         val p = runCatching { charge(f) }.getOrNull() ?: return null
         val a = runCatching {
             val hm = SstvMode.byName(s.mode)?.height ?: 0
-            ClassementSstv.avecLu(ClassementSstv.analyse(p.px, p.w, p.h, hm, s.complete), LectureDiapo.lit(p.px, p.w, p.h))
+            ClassementSstv.avecLu(ClassementSstv.analyse(p.px, p.w, p.h, hm, s.complete), LectureDiapo.litTout(p.px, p.w, p.h))
         }.getOrNull() ?: return null
         if (cache.size > 5000) cache.clear()
         cache[k] = a

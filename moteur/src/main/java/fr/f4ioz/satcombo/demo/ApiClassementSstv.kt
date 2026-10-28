@@ -36,12 +36,12 @@ object ApiClassementSstv {
 
     private fun groupe(g: ClassementSstv.Groupe, e: ClassementGalerie.Etat, serie: Boolean, enPlus: ((ClassementSstv.Groupe) -> JSONObject?)? = null) = JSONObject()
         .put("id", g.id).put("diapo", g.diapo).put("total", g.total).put("origine", origine(g.origine))
-        .put("sat", g.meilleure.satName).put("serie", serie)
+        .put("sat", g.meilleure.satName).put("serie", serie).put("serieLue", g.serie)
         .put("images", JSONArray(g.images.map { s ->
             val a = e.analyses[s.fileName]
             JSONObject().put("nom", s.fileName).put("t", s.timeMs).put("note", g.notes[s.fileName] ?: a?.note ?: -1)
                 .put("etoiles", ((g.notes[s.fileName] ?: a?.note ?: -10) + 10).div(20).coerceIn(0, 5))
-                .put("lu", a?.lu ?: 0).put("main", s.diapo).put("groupeMain", s.groupe.isNotEmpty())
+                .put("lu", a?.lu ?: 0).put("serieLue", a?.serie ?: 0).put("main", s.diapo).put("groupeMain", s.groupe.isNotEmpty())
                 .put("manque", a?.let { Math.round(it.manque * 100) } ?: 0).put("abimees", a?.let { Math.round(it.abimees * 100) } ?: 0)
         })).apply { enPlus?.invoke(g)?.let { put("traite", it) } }
 

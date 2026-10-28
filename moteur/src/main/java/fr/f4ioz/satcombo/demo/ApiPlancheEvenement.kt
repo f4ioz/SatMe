@@ -38,13 +38,17 @@ import java.io.File
  *
  * Routes under `/planche`: `/evenements?id=`, `/evenement?id=&ev=` (""
  * chosen by itself again, « aucun » none), `/galerie?id=`,
- * `/remplit-diapos?id=&tous=&sat=&reinit=`, `/relance?oublie=`, `/analyse`,
+ * `/remplit-diapos?id=&tous=&sat=&reinit=`, `/relance?id=&oublie=&ev=` (ev=1: the event's pictures only),
+ * `/analyse?id=&ev=`,
  * `/case?id=&i=` (a box's versions), `/fusionner?id=&i=`, `/version-vignette?f=`,
  * `/plans?id=`, `/rapport?id=&chaine=&vue=&plan=&dl=&format=` (`pdf`: the PDF, else the
  * page; `vue=simple`: the chain in boxes, else the montage's drawing when
  * there is one).
  */
 object ApiPlancheEvenement {
+
+    /** The pictures each sheet's last « Relancer l'analyse » took (its progress counts those). */
+    private val relances = HashMap<String, Set<String>>()
 
     /** What the platform gives. */
     interface Source {
@@ -181,7 +185,8 @@ object ApiPlancheEvenement {
                 .put("o", g?.let { ClassementSstv.code(it.origine) } ?: "")
                 .put("b", g?.let { ClassementSstv.badge(it.diapo, it.total, it.origine) } ?: "")
                 .put("best", g == null || g.meilleure.fileName == s.fileName).put("copies", g?.images?.size ?: 1)
-                .put("ev", ev != null && EvenementSstv.dans(ev, s))
+                .put("se", e.analyses[s.fileName]?.serie ?: 0)
+                .put("ev", ev != null && EvenementSstv.dans(ev, s, e.analyses[s.fileName]?.serie ?: 0))
         })
     }
 
@@ -191,9 +196,25 @@ object ApiPlancheEvenement {
         val ev = m?.evenement
         return when {
             sat.isNotBlank() -> l.filter { it.satName == sat }
-            !tous && ev != null -> l.filter { EvenementSstv.dans(ev, it) }
+            !tous && ev != null -> imagesDe(ev, src, l)
             else -> l
         }
+    }
+
+    /**
+     * [ev]'s pictures among [l]: its satellite's during it, less those whose
+     * footer says another series than its name ([EvenementSstv.dans]).
+     */
+    fun imagesDe(ev: EvenementSstv.Evenement, src: Source, l: List<SstvMeta.SstvShot> = src.images()): List<SstvMeta.SstvShot> {
+        val an = src.classement.etat(src.dossier, l).analyses
+        return l.filter { EvenementSstv.dans(ev, it, an[it.fileName]?.serie ?: 0) }
+    }
+
+    /** The pictures « Relancer l'analyse » measures again: the sheet's event's when [ev] and it has one, else all. */
+    fun aRelancer(m: Planche.Modele?, src: Source, ev: Boolean): List<SstvMeta.SstvShot> {
+        val e = m?.evenement
+        // Who is in the event is decided before their measures are forgotten (a series read keeps them out).
+        return if (ev && e != null) imagesDe(e, src) else src.images()
     }
 
     /**
@@ -299,16 +320,25 @@ object ApiPlancheEvenement {
                     .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases).put("gardes", r.gardes))
             }
         }
+        // « Relancer l'analyse »: every picture, or only the sheet's event's (?ev=1&id=).
         "/relance" -> {
-            val n = src.classement.relance(src.dossier, src.images(), p("oublie") == "1")
+            val m = if (p("ev") == "1") modele(p("id"))?.let { assure(it, src, rangement, verrou) } else null
+            val l = aRelancer(m, src, p("ev") == "1")
+            val n = src.classement.relance(src.dossier, l, p("oublie") == "1")
+            synchronized(relances) { relances[p("id")] = l.map { it.fileName }.toSet() }
             src.classement.etat(src.dossier, src.images())
-            json(JSONObject().put("ok", true).put("n", n))
+            json(JSONObject().put("ok", true).put("n", n).put("evenement", m?.evenement != null))
         }
         "/analyse" -> {
             val shots = src.images()
             val e = src.classement.etat(src.dossier, shots)
-            json(JSONObject().put("restent", e.restent).put("total", shots.size).put("groupes", e.groupes.size)
-                .put("lues", e.analyses.values.count { it.lu > 0 }))
+            // Only the event's pictures measured again: how far those are.
+            val noms = if (p("ev") == "1") synchronized(relances) { relances[p("id")] } else null
+            val l = if (noms != null) shots.filter { it.fileName in noms } else shots
+            val restent = if (noms != null) l.size - src.classement.mesurees(src.dossier, l) else e.restent
+            val gs = if (noms != null) e.groupes.filter { g -> g.images.any { it.fileName in noms } } else e.groupes
+            json(JSONObject().put("restent", restent).put("total", l.size).put("groupes", gs.size)
+                .put("lues", l.count { (e.analyses[it.fileName]?.lu ?: 0) > 0 }))
         }
         // A box's panel: the versions of its slide to choose from (each its mark and a small picture).
         "/case" -> {
