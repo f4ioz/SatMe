@@ -60,6 +60,11 @@ object DemarragePagePc {
     <a class="bouton" id="mj-page" href="#" target="_blank" rel="noopener noreferrer">La page de la version</a>
     <span class="h-esp"></span><button onclick="mjMasque()" title="Ne plus montrer le badge pour cette version, dans ce navigateur">Masquer</button></div>
 </dialog>
+<dialog id="avd-dlg" class="dlg-dem" aria-labelledby="avd-titre">
+  <div class="dlg-tete"><b id="avd-titre">Vos données</b><button class="discret" onclick="avdFerme()" aria-label="Fermer">✕</button></div>
+  <div class="dem-avert" id="avd-texte" style="word-break:break-word"></div>
+  <div class="dem-pied"><button class="primaire" onclick="avdFerme()">J’ai compris</button></div>
+</dialog>
 <dialog id="qdn-dlg" class="dlg-dem" aria-labelledby="qdn-titre">
   <div class="dlg-tete"><b id="qdn-titre">Quoi de neuf</b><button class="discret" onclick="qdnFerme()" aria-label="Fermer">✕</button></div>
   <div class="petit" id="qdn-sous"></div>
@@ -312,6 +317,13 @@ async function qdnOuvre(tout) {
   g('qdn-dlg').showModal();
 }
 function qdnFerme() { g('qdn-dlg').close(); if (QDN_AUTO) { QDN_AUTO = false; demPost('api/demarrage/vu'); if (DEM) DEM.quoiDeNeuf = []; } }
+// ---- The data found in the program's folder (MSI install) and copied out: said once, until read
+function avdOuvre() { txt('avd-texte', DEM.avisDonnees); g('avd-dlg').showModal(); }
+function avdFerme() {
+  g('avd-dlg').close(); demPost('api/demarrage/avis-vu');
+  const q = DEM && DEM.quoiDeNeuf; if (DEM) DEM.avisDonnees = null;
+  if (q && q.length) setTimeout(() => qdnOuvre(false), 300);
+}
 // ---- « Configuration rapide »: four steps, written to the same settings as Réglages
 const CFR_N = 5;
 const MAIDENHEAD = /^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?$/i;
@@ -454,7 +466,8 @@ async function depVoir() {
 demCharge().then(d => {
   if (!d) return;
   const q = new URLSearchParams(location.search);
-  if (q.has('configuration') || d.configRapide) setTimeout(cfrOuvre, 400);
+  if (d.avisDonnees) setTimeout(avdOuvre, 400);
+  else if (q.has('configuration') || d.configRapide) setTimeout(cfrOuvre, 400);
   else if (q.has('nouveautes')) setTimeout(() => qdnOuvre(true), 400);
   else if (d.quoiDeNeuf && d.quoiDeNeuf.length) setTimeout(() => qdnOuvre(false), 600);
   if (q.has('nouvelle-version')) setTimeout(mjOuvre, 500);

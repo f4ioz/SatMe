@@ -15,6 +15,14 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Windows, installateur : une mise à jour n'efface plus rien de vos fichiers.** L'installateur `satme-pc-windows.msi` vidait tout le dossier du programme en remplaçant l'ancienne version, y compris un dossier `donnees` posé à côté (mode portable). Il ne retire désormais que ses propres fichiers. **Avant d'installer celle-ci** par-dessus la 2026.10.33 ou une plus ancienne, copiez ailleurs un dossier `donnees` posé dans le dossier du programme : l'ancienne version le vide encore une dernière fois en se retirant.
+- **Installé par le MSI, SatMe-PC garde ses données dans `%APPDATA%\SatMe`**, jamais dans le dossier du programme : un dossier `donnees` trouvé là est copié au démarrage dans `%APPDATA%\SatMe` (ou `%APPDATA%\SatMe-portable-<date>` s'il sert déjà), vérifié, puis utilisé ; l'original est gardé et une fenêtre dit où sont vos données. *Réglages › Démarrage* refuse un dossier des données dans celui du programme. Le mode portable reste celui du ZIP (clé USB).
+
+### en
+- **Windows installer: an update no longer deletes any of your files.** `satme-pc-windows.msi` emptied the whole program folder when replacing the old version, a `donnees` folder put beside it (portable mode) included. It now removes only its own files. **Before installing this one** over 2026.10.33 or older, copy a `donnees` folder kept in the program folder elsewhere: the old version still empties it one last time as it goes.
+- **Installed by the MSI, SatMe-PC keeps its data in `%APPDATA%\SatMe`**, never in the program folder: a `donnees` folder found there is copied at start to `%APPDATA%\SatMe` (or `%APPDATA%\SatMe-portable-<date>` when that is in use), checked, then used; the original is kept and a window says where your data is. *Réglages › Démarrage* refuses a data folder inside the program folder. Portable mode stays the ZIP's (USB stick).
+
 ## 2026.10.33
 
 ### fr

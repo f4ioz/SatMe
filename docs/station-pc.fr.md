@@ -42,6 +42,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 - **Windows** : [Installer SatMe-PC sous Windows](installer-satme-pc-windows.fr.md) — tout en un : `satme-pc-windows.msi`, double-clic, la page s'ouvre.
 - **Le MiniTiouner près de l'antenne** : [Installer SatMe-Node sur un Raspberry Pi](installer-satme-node.fr.md).
 - **Portable** (une clé USB) : un dossier **`donnees`** à côté du programme — à côté de `SatMe-PC.exe` dans `satme-pc-windows.zip` (Java et ffmpeg dedans), ou de `bin` et `lib` sous Linux (Java nécessaire) — garde tous les réglages et fichiers, options de démarrage comprises ; rien n'est écrit ailleurs sur le PC.
+  Le mode portable est fait pour le **ZIP** (une clé USB), pas pour l'installateur : installé par `satme-pc-windows.msi`, SatMe-PC garde ses données dans `%APPDATA%\SatMe`, qu'une mise à jour laisse en place, jamais dans le dossier du programme, que l'installateur remplace. Un dossier `donnees` trouvé là y est copié au démarrage (dans `%APPDATA%\SatMe-portable-<date>` si `%APPDATA%\SatMe` sert déjà), puis utilisé de là ; l'original est gardé. *Réglages › Démarrage* refuse un dossier des données dans celui du programme.
 
 | Option | Effet |
 |---|---|

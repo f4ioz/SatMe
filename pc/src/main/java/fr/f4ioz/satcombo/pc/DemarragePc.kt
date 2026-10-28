@@ -15,6 +15,8 @@ import org.json.JSONObject
 
 /** The last version this station started (« Quoi de neuf » shows what came after it). */
 const val CLE_VERSION_VUE = "pc_version_vue"
+/** The message of [DonneesMsiPc] (data copied out of the MSI's folder), shown on the page until read. */
+const val CLE_AVIS_DONNEES = "pc_avis_donnees"
 /** "a_faire" from a new install until « Configuration rapide » is done or skipped, then "faite". */
 const val CLE_CONFIG_RAPIDE = "pc_config_rapide"
 
@@ -45,11 +47,14 @@ class DemarragePc(
     private val exeWindows: String? = null,
     /** The portable folder (a « donnees » folder beside the program), null when installed. */
     private val portable: java.io.File? = null,
+    /** Said once on the page: the data copied out of the MSI's folder at this start ([DonneesMsiPc]), or null. */
+    private val avisDonnees: String? = null,
 ) {
     private val stockage get() = station.stockage
 
     /** At start, after the settings are read: a new install gets the quick setup, not « Quoi de neuf ». */
     fun auDemarrage(neuf: Boolean) {
+        avisDonnees?.let { stockage.edit().putString(CLE_AVIS_DONNEES, it).apply() }
         if (neuf) {
             val e = stockage.edit().putString(CLE_CONFIG_RAPIDE, "a_faire")
             if (VersionPc.publiee(actuelle)) e.putString(CLE_VERSION_VUE, actuelle)
@@ -95,6 +100,7 @@ class DemarragePc(
                     f.dossier?.let { java.io.File(it).absoluteFile != l.dossier && l.sourceDossier != LanceurPc.Source.LIGNE } == true))
             .put("motDePasse", motDePasse())
             .put("portable", portable?.path ?: JSONObject.NULL)
+            .put("avisDonnees", stockage.getString(CLE_AVIS_DONNEES, null)?.takeIf { it.isNotBlank() } ?: JSONObject.NULL)
             .put("redemarrage", JSONObject().put("possible", refus == null).put("raison", refus.orEmpty()))
             .put("configRapide", configRapideAFaire)
             .put("quoiDeNeuf", notesJson(quoiDeNeuf()))
@@ -122,6 +128,10 @@ class DemarragePc(
             "/api/demarrage/nouveautes" -> json(JSONObject().put("ok", true).put("version", actuelle).put("versions", notesJson(nouveautes.toutes(actuelle))))
             "/api/demarrage/vu" -> if (!post) null else {
                 if (VersionPc.publiee(actuelle)) stockage.edit().putString(CLE_VERSION_VUE, actuelle).apply()
+                json(JSONObject().put("ok", true))
+            }
+            "/api/demarrage/avis-vu" -> if (!post) null else {
+                stockage.edit().remove(CLE_AVIS_DONNEES).apply()
                 json(JSONObject().put("ok", true))
             }
             "/api/demarrage/lanceur" -> if (!post) null else if (!ok) refuse() else json(regleLanceur(q))

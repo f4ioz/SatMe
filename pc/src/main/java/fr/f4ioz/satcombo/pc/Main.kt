@@ -48,11 +48,17 @@ fun main(args: Array<String>) {
     // The demonstration: before anything opens; its own folder, its own start options in it, never the station's.
     if (a.demo) ModeDemo.active()
     val dossierDemo = if (a.demo) (a.dossier ?: ModeDemo.dossierParDefaut()).absoluteFile else null
+    // Installed by the MSI with a `donnees` folder beside the program: an update empties that folder, the data copied out first.
+    val releveMsi = if (dossierDemo != null) null else runCatching {
+        DonneesMsiPc.auDemarrage(DonneesMsiPc.jar(), System.getenv("APPDATA")?.takeIf { it.isNotBlank() }?.let(::File))
+    }.getOrNull()
+    releveMsi?.let { println("  " + it.message) }
     // Portable (a `donnees` folder beside the program): its start options kept there too, nothing on the PC.
+    val portable = releveMsi?.takeIf { !it.copie }?.dossier ?: dossierPortable()
     val fichierLanceur = FichierLanceur(dossierDemo?.let { File(it, FichierLanceur.NOM) }
-        ?: dossierPortable()?.let { File(it, FichierLanceur.NOM) } ?: FichierLanceur.emplacement())
+        ?: portable?.let { File(it, FichierLanceur.NOM) } ?: FichierLanceur.emplacement())
     val optionsLanceur = fichierLanceur.lit().let { if (dossierDemo != null) it.copy(dossier = null, copieDepuis = null) else it }
-    val lanceur = LanceurPc.resout(if (dossierDemo != null) a.copy(dossier = dossierDemo) else a, optionsLanceur, fichierLanceur.fichier, dossierDemo ?: dossierParDefaut())
+    val lanceur = LanceurPc.resout(if (dossierDemo != null) a.copy(dossier = dossierDemo) else a, optionsLanceur, fichierLanceur.fichier, dossierDemo ?: dossierParDefaut(portable))
     val port = lanceur.port
     val reseau = lanceur.reseau
     val noeud = a.noeud
@@ -633,7 +639,8 @@ fun main(args: Array<String>) {
         },
         motDePasse = { acces.defini },
         exeWindows = ProcessHandle.current().info().command().orElse(null)?.takeIf { it.lowercase().endsWith(".exe") && !it.lowercase().endsWith("java.exe") && !it.lowercase().endsWith("javaw.exe") },
-        portable = dossierPortable()?.takeIf { it.absoluteFile == dossier.absoluteFile })
+        portable = portable?.takeIf { it.absoluteFile == dossier.absoluteFile && !DonneesMsiPc.installeParMsi() },
+        avisDonnees = releveMsi?.message)
     demarrage.auDemarrage(neuf)
     serveur.demarrage = demarrage
     portee.launch(kotlinx.coroutines.Dispatchers.IO) { while (true) { runCatching { demarrage.maj.tic() }; kotlinx.coroutines.delay(10_000) } }
@@ -826,16 +833,18 @@ internal fun instantaneAnnonces(station: StationPc, son: SonStation, sdr: SdrPc,
 /**
  * A portable SatMe-PC (on a USB stick): a `donnees` folder beside the program (next to `bin` and `lib`, or to
  * SatMe.exe) holds its settings and files, nothing written elsewhere on the PC. [jar]: where this program runs from.
+ * Never in an MSI install: an update empties its folder ([DonneesMsiPc]).
  */
-fun dossierPortable(jar: File? = runCatching { File(LanceurPc::class.java.protectionDomain.codeSource.location.toURI()) }.getOrNull()): File? {
+fun dossierPortable(jar: File? = DonneesMsiPc.jar()): File? {
     val ici = jar?.parentFile ?: return null
+    if (DonneesMsiPc.installeParMsi(jar)) return null
     val racine = if (ici.name == "lib" || ici.name == "app") ici.parentFile ?: return null else ici
-    return File(racine, "donnees").takeIf { it.isDirectory }
+    return File(racine, DonneesMsiPc.PORTABLE).takeIf { it.isDirectory }
 }
 
 /** The portable folder when there is one, else ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */
-fun dossierParDefaut(): File {
-    dossierPortable()?.let { return it }
+fun dossierParDefaut(portable: File? = dossierPortable()): File {
+    portable?.let { return it }
     val appdata = System.getenv("APPDATA")
     return if (System.getProperty("os.name").orEmpty().startsWith("Windows") && !appdata.isNullOrBlank())
         File(appdata, "SatMe") else File(System.getProperty("user.home"), ".satme")

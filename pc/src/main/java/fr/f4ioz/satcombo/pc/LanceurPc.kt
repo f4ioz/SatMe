@@ -138,9 +138,12 @@ data class LanceurPc(val port: Int, val reseau: Boolean, val dossier: File,
         /**
          * Why [cible] cannot be the data folder (null: it can): an absolute
          * path, not inside the folder used now (a copy would copy itself),
-         * writable; with [copier], empty or new (nothing there overwritten).
+         * nor inside the program's own folder ([programme]: an update
+         * replaces it, the MSI's empties it), writable; with [copier], empty
+         * or new (nothing there overwritten).
          */
-        fun refusDossier(cible: String, actuel: File, copier: Boolean): String? {
+        fun refusDossier(cible: String, actuel: File, copier: Boolean,
+                         programme: (File) -> String? = { DonneesMsiPc.refus(it) }): String? {
             val t = cible.trim()
             if (t.isEmpty()) return null
             val f = File(t)
@@ -149,6 +152,7 @@ data class LanceurPc(val port: Int, val reseau: Boolean, val dossier: File,
             val a = runCatching { actuel.canonicalFile }.getOrDefault(actuel.absoluteFile)
             if (c == a) return null
             if (c.path.startsWith(a.path + File.separator)) return "ce dossier est dans le dossier actuel des données : en choisir un autre"
+            programme(c)?.let { return it }
             if (a.path.startsWith(c.path + File.separator) && copier) return "ce dossier contient le dossier actuel : en choisir un autre"
             if (c.exists() && !c.isDirectory) return "c'est un fichier, pas un dossier"
             if (copier && c.isDirectory && (c.list()?.isNotEmpty() == true)) return "ce dossier n'est pas vide : pour y copier les données, choisir un dossier vide ou nouveau"
