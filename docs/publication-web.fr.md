@@ -4,8 +4,8 @@
 
 SatMe-PC peut **pousser des éléments vers un site web extérieur** : images
 SSTV, planches, rapports d'événement, contacts, vidéos du journal, et en
-option des données en direct (auto-pilote, spectre QO-100, image DATV) et la
-liste de vos satellites favoris.
+option des données en direct (auto-pilote, spectre QO-100, image DATV), la
+liste de vos satellites favoris et vos diplômes.
 Votre site les reçoit **comme il veut** — un fichier PHP sur un hébergement
 mutualisé, une extension WordPress, un petit serveur Python ou Node, n'importe
 quoi qui sait répondre à une requête HTTP. Cette page décrit le réglage dans
@@ -236,6 +236,8 @@ Content-Type: image/png
 | `retrait` | JSON | — | retirer un élément (pas encore de bouton dans SatMe-PC ; prévu dans l'API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON ou multipart | JPEG | le [direct](#le-direct-facultatif), seulement si coché |
 | `favoris` | JSON | — | les [satellites favoris](#les-satellites-favoris), seulement si coché |
+| `diplomes` | JSON | — | les [diplômes](#les-diplômes) suivis et votre progression, seulement si coché |
+| `diplome-image` | multipart | PNG, JPEG, PDF | l'image d'un [diplôme reçu](#les-diplômes), seulement sur un clic |
 
 **`ping`** : `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types` : ceux qui ne sont pas à « Jamais »). Le récepteur répond **n'importe
@@ -333,6 +335,55 @@ Vers un dossier : `favoris.json` à la racine, même contenu.
 Un récepteur qui ne connaît pas ce type répond `400`, `404` ou `415` :
 SatMe-PC le note « non pris en charge par le site », sans erreur, et ne
 réessaie que le lendemain (ou quand on recoche la ligne).
+
+### Les diplômes
+
+Sous **En direct**, la ligne **Diplômes** (décochée d'origine) envoie les
+diplômes suivis dans **Agenda › Diplômes** (qui doit être actif), par exemple
+pour une page « Diplômes » de votre site : dès qu'ils changent (regardé une
+fois par minute), sinon une fois par jour, seulement quand le module est
+activé et la cible testée.
+
+```json
+{"type":"diplomes","version":1,"t":1798000000000,"diplomes":[
+ {"id":"cat:vucc","nom":"VUCC Satellite","emetteur":"ARRL","sorte":"permanent","statut":"en_cours",
+  "libelle":"En cours : 37/100 carrés","progression":{"actuel":37,"objectif":100,"unite":"carrés"},
+  "reglement":"https://www.arrl.org/vucc"},
+ {"id":"cat:amsat-scc","nom":"AMSAT Satellite Communicators Club","emetteur":"AMSAT","sorte":"permanent",
+  "statut":"recu","recu":1790000000000,"progression":{"actuel":1,"objectif":1,"unite":"contacts"},"image":true},
+ {"id":"pzk:75-2","nom":"ARISS SSTV …","emetteur":"ARISS (géré par le PZK)","sorte":"evenement","statut":"a_venir",
+  "debut":1798100000000,"fin":1798300000000,"limite":1800500000000,"satellite":"ISS","mode":"PD120",
+  "reglement":"https://ariss.pzk.org.pl/sstv/"}]}
+```
+
+`diplomes` est la liste complète, qui remplace la précédente. Par diplôme :
+`id` (stable), `nom`, `emetteur`, `sorte` (`permanent` : compté dans le
+carnet ; `evenement` : des images reçues pendant une fenêtre), `statut`
+(`en_cours`, `obtenable` — objectif atteint, à demander —, `demande`, `recu`,
+`a_venir`, `pendant` — l'événement a lieu), `libelle` (la phrase de SatMe),
+`progression` (`actuel`, `objectif`, `unite` ; diplômes permanents),
+`debut`, `fin`, `limite` (la date limite des demandes), `demande`, `recu`
+(ms UTC), `reglement` (https), `satellite` et `mode` (événements), `image`
+(`true` quand l'image du diplôme reçu a été envoyée). Un champ inconnu est à
+ignorer ; un champ absent n'a pas de valeur.
+
+**Jamais envoyé** : ce qui a été compté (carrés, entités, États, indicatifs
+contactés), les noms des images, les notes, le nom et le courriel de « Pour
+les demandes », les formulaires, et les diplômes masqués, manqués, expirés ou
+« à vérifier ».
+
+**L'image d'un diplôme reçu** (`diplome-image`) ne part que sur un clic :
+dans Agenda › Diplômes, **Envoyer le diplôme reçu** sur un diplôme dont
+l'image est jointe (le bouton n'apparaît que si la publication web est
+prête). Multipart comme les médias, `meta` : `{"diplome": "<id>", …}`, le
+fichier : l'image telle que gardée (PNG ou JPEG ; réduite en JPEG de
+3000 px au plus si elle dépasse 8 Mo) ou un PDF de 8 Mo au plus. Pas de file
+d'attente : si le site ne répond pas, le bouton le dit ; on recommence.
+
+Vers un dossier : `diplomes.json` à la racine (même contenu) et
+`diplomes/<id>.png|jpg|pdf`. Un récepteur qui ne connaît pas `diplomes`
+répond `400`, `404` ou `415` : laissé tranquille jusqu'au lendemain, sans
+erreur.
 
 ### La station
 
@@ -446,6 +497,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    sa fiche : le JSON meta + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       les satellites favoris (si coché)
+├── diplomes.json, diplomes/…          les diplômes (si coché) et les images envoyées d'un clic
 └── direct/direct.json, station.json, datv.jpg, sstv.jpg   (le direct, réécrit sur place)
 ```
 
@@ -488,7 +540,9 @@ fiches que l'API :
 - `flux.xml` : un flux Atom des 50 derniers (liens relatifs au dossier) ;
 - `direct/direct.json` (réécrit sur place), `direct/station.json`,
   `direct/datv.jpg`, `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier ;
-- `favoris.json` si **Satellites favoris** est coché.
+- `favoris.json` si **Satellites favoris** est coché ;
+- `diplomes.json` si **Diplômes** est coché, `diplomes/<id>.<ext>` pour
+  chaque image envoyée par **Envoyer le diplôme reçu**.
 
 Chaque fichier est écrit à côté puis renommé (atomique quand le système le
 permet) : un lecteur ne voit jamais un fichier à moitié écrit, et l'index ne

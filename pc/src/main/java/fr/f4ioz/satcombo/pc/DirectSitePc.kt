@@ -56,7 +56,9 @@ class DirectSitePc(
         /** The favourites: on change, else once an hour ([PERIODE_FAVORIS_MS]). */
         FAVORIS("favoris", "Satellites favoris", 3600, 3600, 3600),
         /** The station now: on change, at most every [periode] s, else every [BATTEMENT_STATION_MS]. */
-        STATION("station", "Station", 2, 2, 10);
+        STATION("station", "Station", 2, 2, 10),
+        /** The awards followed (« Agenda › Diplômes »): on change, else once a day ([PERIODE_DIPLOMES_MS]). */
+        DIPLOMES("diplomes", "Diplômes", 86400, 86400, 86400);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -83,6 +85,8 @@ class DirectSitePc(
     @Volatile var demandePanorama: () -> Unit = {}
     /** The satellites marked ★ (name, NORAD number), null while not known yet. */
     @Volatile var favoris: () -> List<Pair<String, Int>>? = { null }
+    /** The awards as the site may show them ([DiplomesSitePc.json]: `{"diplomes":[…]}`), null while « Diplômes » is off. */
+    @Volatile var diplomes: () -> JSONObject? = { null }
     /** The station now ([Station]), null when it cannot be told. */
     @Volatile var station: () -> Station? = { null }
 
@@ -140,6 +144,7 @@ class DirectSitePc(
             if (c == Canal.SPECTRE) runCatching { demandePanorama() }
             if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.STATION) { runCatching { station(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -177,6 +182,7 @@ class DirectSitePc(
             // Their own pace (tic).
             Canal.FAVORIS -> favoris(s, t)
             Canal.STATION -> station(s, t)
+            Canal.DIPLOMES -> diplomes(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -206,6 +212,24 @@ class DirectSitePc(
         val texte = o.getJSONArray("satellites").toString()
         if (texte == s.dernier && t - s.dernierMs < PERIODE_FAVORIS_MS) return
         val r = site.envoieDirect("favoris", o) ?: run { s.prochainMs = t + 60_000L; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.dernier = texte; s.dernierMs = t }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_MS }
+            else -> echec(s, t, r.first, raison(r.second))
+        }
+    }
+
+    /**
+     * The awards: sent when they changed since the last list the site took, else once every [PERIODE_DIPLOMES_MS]
+     * (only once the target is ready); looked at once a minute. A site that does not know the type is left alone for a day.
+     */
+    private fun diplomes(s: Suivi, t: Long) {
+        if (t < s.prochainMs || !site.configure) return
+        s.prochainMs = t + 60_000L
+        val o = diplomes() ?: return
+        val texte = o.toString()
+        if (texte == s.dernier && t - s.dernierMs < PERIODE_DIPLOMES_MS) return
+        val r = site.envoieDirect("diplomes", JSONObject(texte).put("t", t)) ?: return
         when {
             r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.dernier = texte; s.dernierMs = t }
             r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_MS }
@@ -262,6 +286,7 @@ class DirectSitePc(
             .put("ok", s.okMs).put("erreur", if (on(c)) s.erreur else "")
             .also { o -> if (c == Canal.FAVORIS) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
+            .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
     }))
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
@@ -277,6 +302,7 @@ class DirectSitePc(
         // The favourites sent again at once (the site may have forgotten them while the box was off), the station too.
         suivis.getValue(Canal.FAVORIS).dernierMs = 0L
         suivis.getValue(Canal.STATION).dernierMs = 0L; stationTexte = ""
+        suivis.getValue(Canal.DIPLOMES).dernierMs = 0L
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
     }
 
@@ -286,6 +312,8 @@ class DirectSitePc(
         const val PERIODE_FAVORIS_MS = 3_600_000L
         /** A site that does not know `favoris` is asked again the next day. */
         const val NON_PRIS_MS = 24 * 3_600_000L
+        /** The awards again, unchanged, after a day. */
+        const val PERIODE_DIPLOMES_MS = 24 * 3_600_000L
         /** The station unchanged: sent again after 30 s, so the site knows it is on line. */
         const val BATTEMENT_STATION_MS = 30_000L
         /** A site that does not know `direct-station` is asked again after 10 minutes. */

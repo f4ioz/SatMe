@@ -4,7 +4,7 @@
 
 SatMe-PC can **push items to an outside web site**: SSTV pictures, planches,
 event reports, contacts, the journal's videos, and as an option live data
-(auto-pilot, QO-100 spectrum, DATV picture) and your favourite satellites. Your site receives them **as it
+(auto-pilot, QO-100 spectrum, DATV picture), your favourite satellites and your awards. Your site receives them **as it
 likes** — a PHP file on shared hosting, a WordPress plugin, a small Python or
 Node server, anything that can answer an HTTP request. This page covers the
 setting in SatMe-PC and **the wire format (API v1)**, stable and versioned,
@@ -235,6 +235,8 @@ Content-Type: image/png
 | `retrait` | JSON | — | withdraw an item (no button in SatMe-PC yet; part of the API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON or multipart | JPEG | [live data](#live-data-optional), only when ticked |
 | `favoris` | JSON | — | the [favourite satellites](#favourite-satellites), only when ticked |
+| `diplomes` | JSON | — | the [awards](#awards) followed and your progress, only when ticked |
+| `diplome-image` | multipart | PNG, JPEG, PDF | the picture of an [award received](#awards), only on a click |
 
 **`ping`**: `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types`: those not set to « Jamais »). The receiver answers **any 2xx**. If
@@ -329,6 +331,53 @@ To a folder: `favoris.json` at the root, same content.
 A receiver that does not know this type answers `400`, `404` or `415`:
 SatMe-PC shows « non pris en charge par le site », without an error, and
 tries again only the next day (or when the line is ticked again).
+
+### Awards
+
+Under **En direct**, the **Diplômes** line (unticked by default) sends the
+awards followed in **Agenda › Diplômes** (which must be active), for instance
+for an « Awards » page on your site: as soon as they change (looked at once a
+minute), otherwise once a day, only when the module is on and the target
+tested.
+
+```json
+{"type":"diplomes","version":1,"t":1798000000000,"diplomes":[
+ {"id":"cat:vucc","nom":"VUCC Satellite","emetteur":"ARRL","sorte":"permanent","statut":"en_cours",
+  "libelle":"En cours : 37/100 carrés","progression":{"actuel":37,"objectif":100,"unite":"carrés"},
+  "reglement":"https://www.arrl.org/vucc"},
+ {"id":"cat:amsat-scc","nom":"AMSAT Satellite Communicators Club","emetteur":"AMSAT","sorte":"permanent",
+  "statut":"recu","recu":1790000000000,"progression":{"actuel":1,"objectif":1,"unite":"contacts"},"image":true},
+ {"id":"pzk:75-2","nom":"ARISS SSTV …","emetteur":"ARISS (géré par le PZK)","sorte":"evenement","statut":"a_venir",
+  "debut":1798100000000,"fin":1798300000000,"limite":1800500000000,"satellite":"ISS","mode":"PD120",
+  "reglement":"https://ariss.pzk.org.pl/sstv/"}]}
+```
+
+`diplomes` is the whole list and replaces the previous one. Per award: `id`
+(stable), `nom` (name), `emetteur` (issuer), `sorte` (`permanent`: counted
+from the log; `evenement`: pictures received during a window), `statut`
+(`en_cours` in progress, `obtenable` goal reached, to ask for, `demande`
+asked, `recu` received, `a_venir` to come, `pendant` the event is on),
+`libelle` (SatMe's sentence, in French), `progression` (`actuel`, `objectif`,
+`unite`; standing awards), `debut`, `fin`, `limite` (deadline to ask),
+`demande`, `recu` (UTC ms), `reglement` (rules, https), `satellite` and
+`mode` (events), `image` (`true` once the received award's picture was sent).
+Ignore an unknown field; a missing one has no value.
+
+**Never sent**: what was counted (squares, entities, states, callsigns
+worked), the pictures' names, the notes, the name and e-mail of « Pour les
+demandes », the forms, and the awards hidden, missed, expired or « to check ».
+
+**The picture of an award received** (`diplome-image`) goes only on a click:
+in Agenda › Diplômes, **Envoyer le diplôme reçu** on an award whose picture is
+attached (the button shows only when web publishing is ready). Multipart like
+the media, `meta`: `{"diplome": "<id>", …}`, the file: the picture as kept
+(PNG or JPEG; made a JPEG of 3000 px at most when over 8 MB) or a PDF of 8 MB
+at most. No queue: when the site does not answer, the button says so; click
+again.
+
+To a folder: `diplomes.json` at the root (same content) and
+`diplomes/<id>.png|jpg|pdf`. A receiver that does not know `diplomes` answers
+`400`, `404` or `415`: left alone until the next day, without an error.
 
 ### The station
 
@@ -439,6 +488,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    its card: the meta JSON + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       the favourite satellites (when ticked)
+├── diplomes.json, diplomes/…          the awards (when ticked) and the pictures sent with a click
 └── direct/direct.json, station.json, datv.jpg, sstv.jpg   (live data, rewritten in place)
 ```
 
@@ -482,7 +532,9 @@ as the API:
 - `direct/direct.json` (rewritten in place), `direct/station.json`,
   `direct/datv.jpg`, `direct/sstv.jpg` when live data is ticked — no spectrum
   to a folder;
-- `favoris.json` when **Satellites favoris** is ticked.
+- `favoris.json` when **Satellites favoris** is ticked;
+- `diplomes.json` when **Diplômes** is ticked, `diplomes/<id>.<ext>` for each
+  picture sent with **Envoyer le diplôme reçu**.
 
 Each file is written beside its place then renamed (atomic where the system
 allows): a reader never sees half a file, and the index never names a file not

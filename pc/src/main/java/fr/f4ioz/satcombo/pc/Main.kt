@@ -645,6 +645,9 @@ fun main(args: Array<String>) {
         infosImage = { optionsSstv.infosImage(it) },
         fictifs = if (ModeDemo.actif) GenerateurDemo::diplomes else { _ -> emptyList() }, enLigneAutorise = !ModeDemo.actif)
     serveur.diplomes = diplomes
+    // « Publication web › Diplômes » (off by default): the awards and, on the owner's click, the picture of one received.
+    diplomes.site = DiplomesSitePc(File(dossier, "diplomes-site.json"), site)
+    directSite.diplomes = { diplomes.pourSite() }
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(25_000)
         while (true) { runCatching { diplomes.tic() }; repeat(60) { if (!diplomes.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }
