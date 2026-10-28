@@ -41,7 +41,7 @@ object PagePlanche {
         "annuler", "importer_aide", "modele_importe", "refus_version", "refus_fichier", "deposer",
         "renommer", "renommer_q", "evenement", "ev_auto", "ev_main", "ev_auto_revenir", "ev_aucun", "ev_campagne", "ev_activite",
         "ev_images", "filtre_ev", "remplir_diapos", "garder_vides", "rempli_diapos", "rempli_toutes", "sans_numero", "hors_cases",
-        "relancer", "relancer_aide", "relancer_oublie", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
+        "relancer", "relancer_aide", "relancer_oublie", "relancer_ev", "relancer_tout", "relancer_quelles", "relancer_confirme", "analyse_en_cours", "analyse_finie", "copies", "grouper",
         "note", "origine_lu", "origine_main", "origine_estime", "rapport", "rapport_titre", "rapport_aide", "rapport_chaine",
         "rapport_plan", "rapport_ouvrir", "rapport_telecharger", "rapport_sans_ev", "corrigees", "marque_traitees",
         "rapport_format", "rapport_web", "rapport_pdf", "version_titre", "version_auto", "version_recue", "version_corrigee",
@@ -368,6 +368,8 @@ const CHAMPS = ['INDICATIF', 'NOM_LOCATOR', 'DATES', 'TITRE', 'LIBRE'];
 let id = '', M = null, ratio = 1.414, galerie = [], choix = null, onglet = 'images', filtre = '@ev', aFond = false, decors = [];
 // The sheet's event, the events to choose from; copies grouped (one per slide), the groups opened.
 let EV = { evenement: null, main: false, liste: [] }, grouper = true, analyse = '';
+// « Relancer l'analyse »: the event's pictures (« ev », by default) or all (« tout »); the last one asked.
+let relanceQuelles = 'ev', relanceEv = false;
 const ouverts = new Set();
 try { grouper = localStorage.getItem('satme-planche-grouper') !== '0'; } catch (e) {}
 let defauts = { indicatif: '', nom: '', locator: '', dates: '' };
@@ -590,12 +592,19 @@ function panneauImages() {
   r2.appendChild(el('button', { class: 'rouge', text: T.tout_vider, onclick: () => { M.images = {}; for (const k in M.versions) M.versions[k].main = false; change(); } }));
   p.appendChild(r2);
   // The pictures measured again, their numbers read again (what the hand set kept unless asked).
+  // Which pictures: the sheet's event's (by default when it has one) or all of the gallery.
   const oublie = el('input', { type: 'checkbox' });
+  const quelles = el('select', { title: T.relancer_quelles });
+  if (EV.evenement) quelles.appendChild(el('option', { value: 'ev', text: tf('relancer_ev', evNom(EV.evenement)) }));
+  quelles.appendChild(el('option', { value: 'tout', text: T.relancer_tout }));
+  quelles.value = EV.evenement && relanceQuelles !== 'tout' ? 'ev' : 'tout';
+  quelles.addEventListener('change', () => { relanceQuelles = quelles.value; });
   p.appendChild(el('div', { class: 'rangee', style: 'margin-top:6px' }, [
     el('button', { class: 'discret', text: T.relancer, title: T.relancer_aide, onclick: async () => {
       if (oublie.checked && !confirm(T.relancer_confirme)) return;
-      await lire('/relance', { oublie: oublie.checked ? 1 : 0 }); suitAnalyse();
-    } }),
+      relanceEv = quelles.value === 'ev';
+      await lire('/relance', { id: id, oublie: oublie.checked ? 1 : 0, ev: relanceEv ? 1 : 0 }); suitAnalyse();
+    } }), quelles,
     el('label', { class: 'rangee' }, [oublie, el('span', { class: 'aide', text: T.relancer_oublie })])]));
   if (analyse) p.appendChild(el('p', { class: 'aide', text: analyse }));
   const gr = el('input', { type: 'checkbox' }); gr.checked = grouper;
@@ -731,7 +740,7 @@ let suivi2 = null;
 async function suitAnalyse() {
   clearTimeout(suivi2);
   try {
-    const j = await lire('/analyse');
+    const j = await lire('/analyse', { id: id, ev: relanceEv ? 1 : 0 });
     analyse = j.restent ? tf('analyse_en_cours', j.restent) : tf('analyse_finie', j.groupes, j.lues);
     if (onglet === 'images') panneau();
     if (j.restent) { suivi2 = setTimeout(suitAnalyse, 1500); return; }

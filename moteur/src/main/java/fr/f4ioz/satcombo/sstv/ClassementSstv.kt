@@ -61,6 +61,8 @@ object ClassementSstv {
         internal val vignette: FloatArray,
         /** The thumbnail rows worth comparing (received, not spoilt). */
         internal val bonnes: BooleanArray,
+        /** The series' number read on the footer (« СЕРИЯ 33 »), 0 when not read. */
+        val serie: Int = 0,
     ) {
         /** Stars 0–5 for a badge. */
         val etoiles: Int get() = ((note + 10) / 20).coerceIn(0, 5)
@@ -277,6 +279,8 @@ object ClassementSstv {
         val origine: Origine = Origine.AUCUNE,
         /** Each picture's mark in the group (its own, less the top it lacks). */
         val notes: Map<String, Int> = emptyMap(),
+        /** The series' number its pictures' footers say (the most of them), 0 none read. */
+        val serie: Int = 0,
     ) {
         val meilleure: SstvMeta.SstvShot get() = images.first()
     }
@@ -313,7 +317,8 @@ object ClassementSstv {
             val notes = notesDuGroupe(gr.membres, analyses)
             val tri = gr.membres.sortedWith(compareByDescending<SstvMeta.SstvShot> { notes[it.fileName] ?: -1 }.thenBy { it.timeMs })
             val (n, tot, o) = numero(tri, analyses)
-            Groupe(gr.id.ifBlank { tri.minByOrNull { it.timeMs }!!.fileName }, tri, n, tot, o, notes)
+            val serie = tri.mapNotNull { analyses[it.fileName]?.serie?.takeIf { k -> k > 0 } }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: 0
+            Groupe(gr.id.ifBlank { tri.minByOrNull { it.timeMs }!!.fileName }, tri, n, tot, o, notes, serie)
         }.sortedBy { g -> g.images.minOf { it.timeMs } }
     }
 
@@ -399,7 +404,10 @@ object ClassementSstv {
     /** [Origine] as the pages name it: « main », « lu », « estime », "". */
     fun code(o: Origine): String = when (o) { Origine.MAIN -> "main"; Origine.LU -> "lu"; Origine.ESTIME -> "estime"; Origine.AUCUNE -> "" }
 
-    /** [a] with what the footer reading found. */
-    fun avecLu(a: Analyse, lu: Int): Analyse =
-        Analyse(a.signature, a.note, a.manque, a.abimees, a.vert, a.glissements, lu, a.vignette, a.bonnes)
+    /** [a] with what the footer reading found: the slide, the series' number. */
+    fun avecLu(a: Analyse, lu: Int, serie: Int = 0): Analyse =
+        Analyse(a.signature, a.note, a.manque, a.abimees, a.vert, a.glissements, lu, a.vignette, a.bonnes, serie)
+
+    /** [a] with [l]. */
+    fun avecLu(a: Analyse, l: LectureDiapo.Lecture): Analyse = avecLu(a, l.diapo, l.serie)
 }

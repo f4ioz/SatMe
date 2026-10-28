@@ -112,6 +112,18 @@ object EvenementSstv {
         return s.timeMs in (e.debutMs - 3_600_000L)..(e.finMs + 3_600_000L)
     }
 
+    /** The ARISS series' number [e]'s name says (« ARISS SSTV Series 34 », « série 33 »), 0 none. */
+    fun numeroSerie(e: Evenement): Int =
+        Regex("(?i)s[ée]ries?\\s*(?:n[°o.]?\\s*)?#?\\s*(\\d{1,3})(?!\\d)").find(e.nom)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    /**
+     * [dans], unless the slide's footer says another series ([serieLue], 0
+     * not read) than the one [e]'s name says: a picture of series 33 is
+     * not one of « ARISS SSTV Series 34 » even when received in its window.
+     */
+    fun dans(e: Evenement, s: SstvMeta.SstvShot, serieLue: Int): Boolean =
+        dans(e, s) && (serieLue <= 0 || numeroSerie(e).let { it <= 0 || it == serieLue })
+
     /**
      * The event of [images] (a sheet's pictures, else the whole gallery): the
      * one holding most of them — a campaign of the autopilot before an
