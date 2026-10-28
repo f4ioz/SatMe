@@ -15,6 +15,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+## 2026.10.33
+
 ### fr
 - **SSTV › compte à rebours de la prochaine image** (sous l'image en direct, et dans la carte Auto-pilote) : un anneau et « Prochaine image dans 1:24 », d'après l'horaire de la campagne ou estimé sur les images reçues du passage, recalé à chaque image ; la progression de l'image en cours, « en retard », « en attente », « fin du passage » au LOS ; 🔔 bip 5 s avant (coupé d'origine).
 - **SSTV : une image n'est plus coupée en deux** quand la synchro se perd au milieu (évanouissement, saut du son — UmKA-1 le 27/10 : le haut dans une image partielle, le bas dans une autre) : le décodeur la retrouve et **continue la même image** à la bonne ligne, les lignes perdues marquées. **⧉ Réunir** (visionneuse, Journal, historique de l'auto-pilote ; tout seul à la fin d'un passage de l'auto-pilote) remet ensemble deux images partielles d'avant depuis leur son ; les partielles restent gardées, **↶ Séparer** les rend.
