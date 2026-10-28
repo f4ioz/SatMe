@@ -61,11 +61,6 @@ The settings' names below are the French ones shown by SatMe-PC.
 dot); elsewhere `https://` is required. Redirects are not followed: give the
 final address.
 
-This repository's `site` module (`site/`) is one complete receiver (gallery,
-logbook, live block), with the address
-`https://<your site>/api/publication/{type}`. It is not needed: the small
-examples below are enough to start.
-
 ---
 
 ## API v1

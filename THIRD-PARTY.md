@@ -139,23 +139,6 @@ The other backgrounds (starry sky, dusk, abyss, slate, nebula, orbit) are drawn 
 
 ---
 
-## The F4IOZ web site (`:site`)
-
-| Component or data | Licence / terms | Use |
-|---|---|---|
-| Leaflet 1.9.4 (`site/src/main/resources/fr/f4ioz/site/static/vendor/leaflet/`, unmodified, `LICENSE.txt` beside it; © Volodymyr Agafonkin, CloudMade) | BSD-2-Clause | The maps of the HF pages |
-| OpenStreetMap tiles (fetched by the site, kept a month, at most 120 a minute, zoom ≤ 12, the site's User-Agent) | © OpenStreetMap contributors, ODbL; OSMF tile usage policy | Map background, attributed on every map |
-| Natural Earth coastlines (`land.json`, the phone's) | Public domain | The beacons' world map |
-| PSKReporter reception reports (retrieve.pskreporter.info) | Philip Gladstone's terms: at most one query every five minutes, `appcontact` given | DX cluster, bands map |
-| HamQSL solar data (N0NBH, `solarxml.php`) | Free with credit to HamQSL.com; read hourly | Conditions, bands |
-| KC2G ionospheric model (prop.kc2g.com) | CC BY 4.0, attributed on the map | MUF and foF2 contours |
-| wspr.live (WSPRnet data, ClickHouse) | Free, non-commercial, results free for all; 20 requests/min (the site sends ≤ 10) | WSPR page, bands map |
-| Reverse Beacon Network (telnet and daily archives) | Free; telnet login with a callsign | Bands map, WSPR's RBN tab, Ouvertures |
-
-The site's own code (pages, scripts, styles) is GPL-2.0-or-later, as SatMe.
-
----
-
 ## What publishing the source exposes
 
 Two mechanisms in the app relied on the source being private, and no longer

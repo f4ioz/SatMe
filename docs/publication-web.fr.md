@@ -59,11 +59,6 @@ Sommaire : [Réglage](#réglage-dans-satme-pc) ·
 point) ; ailleurs, `https://` est obligatoire. Les redirections ne sont pas
 suivies : mettez l'adresse finale.
 
-Le module `site` de ce dépôt (`site/`) est un exemple complet de récepteur
-(galerie, carnet, bloc « en direct »), avec l'adresse
-`https://<votre site>/api/publication/{type}`. Il n'est pas nécessaire : les
-petits exemples plus bas suffisent pour commencer.
-
 ---
 
 ## L'API v1
