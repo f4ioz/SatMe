@@ -3691,6 +3691,10 @@ ${OngletSked.HTML}
         <div class="petit" id="bxc-ol"></div>
         <div class="avert" id="bxc-av"></div>
         <div class="ligne"><button onclick="bxMesure('poste')" title="L’IC-9700 en émission par SatMe, en CW (porteuse) : son signal retrouvé sur la descente donne l’oscillateur réel du convertisseur">Mesurer l’OL sur ma descente</button><span class="petit" id="bxc-msg"></span></div>
+        <label style="display:block;margin-top:6px"><input type="checkbox" id="pxg-on" onchange="post('api/poste/emission/reglage?garde=' + (this.checked ? 1 : 0))"> <b>Garde de niveau</b>
+          <span class="petit">— l’IC-9700 en émission sur QO-100, SatMe entendant la descente : notre signal plus fort que</span>
+          <select id="pxg-seuil" style="flex:none" aria-label="Seuil de la garde" onchange="post('api/poste/emission/reglage?gardeSeuil=' + this.value)"></select>
+          <span class="petit">pendant 1 s, la puissance RF baisse de l’excès + 1 dB ; 6 dB au-dessus de la balise, le PTT est relâché. Ne monte jamais la puissance (sur le PC de la station).</span></label>
         <div class="petit aide">Montée = fréquence du poste + OL du convertisseur (mesuré, onglet « Poste &amp; chaîne »). La montée suit la descente (liées, sans inversion) ; le calage sur la balise ne corrige que la descente (la dérive du LNB). « Appliquer au poste » coché, le PTT est refusé sur une balise ou hors du plan, et LEILA entendue le relâche. Le PTT, le micro et la puissance : le panneau « Émission IC-9700 » au-dessus.</div>
       </div>
       <div class="carte" id="bxc-pluto" hidden>
@@ -17160,7 +17164,16 @@ function pxRend() {
   // On QO-100, our level against the beacon's when SatMe hears its own downlink.
   const q = j.qo100 || {};
   if (j.emet && q.ecart != null) l.push('ton signal vs balise ' + (q.ecart > 0 ? '+' : '') + fr1(q.ecart) + ' dB' + (q.tropFort ? ' : PLUS FORT QUE LA BALISE, baisse la puissance' : ''));
+  const qg = q.garde || {};
+  if (j.emet && qg.on && qg.message) l.push('garde de niveau : ' + qg.message);
   txt('ptx-info', l.filter(x => x).join(' · '));
+  // The level guard's setting (Émission sub-tab of the QO-100 cockpit, the rig's chain).
+  const go = g('pxg-on'), gs = g('pxg-seuil');
+  if (go && gs) {
+    go.checked = !!qg.on; go.disabled = !j.local;
+    if (!gs.options.length) gs.innerHTML = (qg.seuils || [0]).map(x => '<option value="' + x + '">' + (x ? fr1(-x) + ' dB sous la balise' : 'la balise') + '</option>').join('');
+    if (document.activeElement !== gs) gs.value = String(qg.seuil); gs.disabled = !j.local;
+  }
   g('ptx-info').classList.toggle('avert', !!(j.erreur || (j.emet && (j.sortieErreur || j.posteEmet === false)) || (!j.pret && !j.emet) || q.tropFort));
 }
 async function pxAppuie() {

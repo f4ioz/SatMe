@@ -66,6 +66,20 @@ class EmissionPostePc(
         get() = stockage.getString("pc_tx_poste_carte", "") ?: ""
         set(v) { stockage.edit().putString("pc_tx_poste_carte", v.trim().take(200)).apply() }
 
+    /**
+     * QO-100's level guard (opt-in, off by default): keyed on QO-100, our
+     * signal heard stronger than the beacon lowers the RF power (or cuts),
+     * never raises it ([fr.f4ioz.satcombo.domain.GardeNiveauQo100]).
+     */
+    var gardeNiveau: Boolean
+        get() = stockage.getBoolean("pc_tx_poste_garde_niveau", false)
+        set(v) { stockage.edit().putBoolean("pc_tx_poste_garde_niveau", v).apply() }
+    var gardeSeuilDb: Double
+        get() = stockage.getFloat("pc_tx_poste_garde_seuil", 0f).toDouble().let { s -> fr.f4ioz.satcombo.domain.GardeNiveauQo100.SEUILS.minByOrNull { kotlin.math.abs(it - s) } ?: 0.0 }
+        set(v) { stockage.edit().putFloat("pc_tx_poste_garde_seuil", v.coerceIn(-10.0, 0.0).toFloat()).apply() }
+    @Volatile private var gardeNiv = fr.f4ioz.satcombo.domain.GardeNiveauQo100(gardeSeuilDb)
+    @Volatile private var gardeMessage = ""
+
     /** LEILA heard lately on QO-100's downlink (set by the station): keyed on QO-100, released at once. */
     @Volatile var leila: () -> Boolean = { false }
     /** QO-100's narrow band signals while SatMe hears it, or null: our level against the beacon's. */
@@ -138,13 +152,16 @@ class EmissionPostePc(
      * loop, 1.5 s at most) — no keying at an unknown power.
      */
     fun appuie(client: String, distant: Boolean, adresse: String): String? {
-        if (!poste.etat.emet) {
+        val nouveau = !poste.etat.emet
+        if (nouveau) {
             poste.totMs = totMin * 60_000L
             perteLien = false
             plafondAvant()?.let { return it }
         }
         val r = runBlocking { poste.appuie(client, distant, adresse) }
         if (r == null) { reponduMs = horloge(); lectureTxMs = 0L; posteEmet = null; ouvreSortie() }
+        // A new over: the level guard starts afresh.
+        if (r == null && nouveau) { gardeNiv = fr.f4ioz.satcombo.domain.GardeNiveauQo100(gardeSeuilDb); gardeMessage = "" }
         return r
     }
 
@@ -183,6 +200,7 @@ class EmissionPostePc(
             val q = station.qo100.etat.value
             niveauQo100 = signauxQo100()?.let { fr.f4ioz.satcombo.sstv.NiveauSstvQo100.mesure(it, q.monteeHz + 300, q.monteeHz + 2_800) }
                 ?: fr.f4ioz.satcombo.sstv.NiveauSstvQo100.Mesure(null, null)
+            if (gardeNiveau) gardeTic(t)?.let { relache("garde de niveau : $it"); return }
         } else niveauQo100 = fr.f4ioz.satcombo.sstv.NiveauSstvQo100.Mesure(null, null)
         if (poste.etat.emet && t - lectureTxMs >= 500L) {
             lectureTxMs = t
@@ -194,6 +212,24 @@ class EmissionPostePc(
             perteLien = false
             if (sortie != null) fermeSortie()
         }
+    }
+
+    /**
+     * The level guard's look, keyed on QO-100: the RF power (the knob's
+     * level, as dB under full) lowered by the guard's step; a cut's reason,
+     * or null. The power known only once read back.
+     */
+    private fun gardeTic(t: Long): String? {
+        val lu = station.puissanceLue ?: return null
+        val gainDb = 10 * kotlin.math.log10(lu.coerceAtLeast(1) / PuissanceRf.MAX.toDouble())
+        val minDb = 10 * kotlin.math.log10(1.0 / PuissanceRf.MAX)
+        val d = gardeNiv.tic(niveauQo100.ecartDb, gainDb, minDb, t) ?: return null
+        d.coupe?.let { gardeMessage = it; return it }
+        val g = d.gainDb ?: return null
+        val niveau = Math.round(PuissanceRf.MAX * Math.pow(10.0, g / 10)).toInt().coerceIn(1, lu)
+        station.puissanceAEcrire = niveau
+        gardeMessage = d.message.substringBefore(" : ") + " : puissance baissée à " + PuissanceRf.pourcent(niveau) + " %"
+        return null
     }
 
     // ------------------------------------------------------------ the microphone
@@ -332,7 +368,9 @@ class EmissionPostePc(
             .put("txMarque", station.settings.icomTxMarque).put("txOctets", station.settings.icomTxOctets)
             .put("txMarqueDefaut", FormatTxReseau.MARQUE_DEFAUT)
             .put("qo100", JSONObject().put("ecart", niveauQo100.ecartDb ?: JSONObject.NULL).put("tropFort", (niveauQo100.ecartDb ?: -99.0) > 0.0)
-                .put("refus", refusQo100() ?: ""))
+                .put("refus", refusQo100() ?: "")
+                .put("garde", JSONObject().put("on", gardeNiveau).put("seuil", gardeSeuilDb).put("message", gardeMessage)
+                    .put("seuils", JSONArray(fr.f4ioz.satcombo.domain.GardeNiveauQo100.SEUILS))))
         if (e.emet) o.put("client", if (e.distant) "un autre appareil" + (if (e.adresse.isNotBlank()) " (" + e.adresse + ")" else "") else "la page de ce PC")
             .put("moi", client != null && client == e.client).put("depuisS", (t - e.depuisMs) / 1000)
         return o
@@ -352,7 +390,7 @@ class EmissionPostePc(
      */
     fun reglage(q: Map<String, String>, local: Boolean): JSONObject {
         // The guards (network allowed, time-out, cap) and the rig's card: from this PC only; the power, from anyone.
-        if (!local && listOf("reseau", "tot", "plafond", "carte").any { it in q })
+        if (!local && listOf("reseau", "tot", "plafond", "carte", "garde", "gardeSeuil").any { it in q })
             return JSONObject().put("ok", false).put("erreur", "ce réglage se change seulement sur le PC de la station")
         q["reseau"]?.let { v ->
             station.txReseauAutorise = v == "1"
@@ -366,6 +404,8 @@ class EmissionPostePc(
             station.puissanceLue?.takeIf { it > max }?.let { station.puissanceAEcrire = max }
         }
         q["carte"]?.let { carte = it }
+        q["garde"]?.let { gardeNiveau = it == "1" }
+        q["gardeSeuil"]?.toDoubleOrNull()?.let { gardeSeuilDb = it }
         q["pct"]?.toIntOrNull()?.let { reglePuissance(it) }
         q["lire"]?.let { station.puissanceARelire = true }
         return JSONObject().put("ok", true)
