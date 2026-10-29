@@ -408,7 +408,7 @@ object PagePc {
   }
   // The light: only stops (never starts anything).
   const htx = g('h-tx');
-  if (htx) htx.onclick = () => Promise.all(['api/ft8/tx?arret=1', 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete', 'api/be/emission/arrete']
+  if (htx) htx.onclick = () => Promise.all(['api/ft8/tx?arret=1', 'api/trafic-sat?arret=1', 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete', 'api/be/emission/arrete']
     .map(u => fetch(u, { method: 'POST' }).catch(() => null))).then(radio);
   heure(); setInterval(heure, 1000); etat(); setInterval(etat, 15000); radio(); setInterval(radio, 3000);
   // The tabs the server offers (the phone some of them): the others hidden, an empty workspace too.
@@ -1276,7 +1276,8 @@ ${OngletOrbites.CSS}
   .tq-onglets button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
-${Ft8EmissionJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
+${Ft8EmissionJs.CSS}
+${TraficLeoJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
   .ck-l button { padding:2px 7px !important; }
   .ck-texte { margin-top:4px; height:120px; overflow-y:auto; padding:6px 8px; border-radius:8px; background:#0E1720; font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.45; word-break:break-word; }
   .ck-texte .ck-h { color:var(--texte-3); font-size:11px; margin-right:8px; }
@@ -2363,6 +2364,7 @@ ${rail()}
       <div class="petit aide">Le micro de ce navigateur part vers le poste seulement pendant le PTT : par sa carte son USB, ou par le réseau. Il faut une page sûre (ce PC, ou HTTPS depuis une autre machine : Réglages › Accès à distance). Sur le poste, la source de modulation doit être USB (ou LAN par le réseau) et le VOX coupé.</div>
       <div class="petit aide">La molette (USB ou de la souris sur les fréquences) accorde pendant l’émission comme en réception : sur un satellite linéaire elle déplace la position dans le transpondeur, montée et descente liées, le Doppler continue ; sans satellite suivi, elle accorde le cadran du poste (BLU terrestre).</div>
     </div></div>
+${TraficLeoJs.HTML}
     <div class="carte" id="nd-carte" hidden>
       <div class="paire" style="margin:0;flex-wrap:nowrap;align-items:center"><b style="white-space:nowrap;cursor:pointer" onclick="vue('noeud')" title="La page du SatMe-Node">SatMe-Node</b><button type="button" class="q" id="nd-q" aria-label="Le SatMe-Node">?</button>
         <span class="petit" id="nd-nom" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="h-esp"></span>
@@ -2860,7 +2862,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
     <div class="ligne"><span class="petit">SSID</span><select id="kiss-ssid" style="flex:none" onchange="kPost('reglage?ssid=' + this.value)"></select>
       <label class="petit"><input type="checkbox" id="kiss-floue" onchange="kPost('reglage?floue=' + (this.checked ? 1 : 0))"> position approchée (à moins de 500 m)</label></div>
     <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="kiss-balise" onchange="kPost('reglage?balise=' + (this.checked ? 1 : 0))">
-      Balise ISS : ma position une fois par passage, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825</label>
+      Balise ISS pour ce passage : ma position une fois, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825 ; se décoche au LOS</label>
     <div class="petit aide" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
   <details class="carte" id="tr-carte" open>
@@ -14974,6 +14976,7 @@ g('8-filtre').oninput = () => { ft8Vu = ''; ticFt8(); };
 g('8-cq').onchange = () => { ft8Vu = ''; ticFt8(); };
 setInterval(ticFt8, 1000);
 ${Ft8EmissionJs.CODE}
+${TraficLeoJs.CODE}
 ${Ft8SiteJs.JS}
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
@@ -18428,6 +18431,9 @@ function emissionsEnCours() {
   if (HX.iq && HX.iq.actif) l.push('calibration I/Q');
   if (HX.ptx && HX.ptx.emet) l.push('IC-9700');
   if (HX.btx && HX.btx.emet) l.push('BLU Pluto');
+  // « Trafic satellite »: its APRS beacon armed for this pass (its overs show as the IC-9700 keyed).
+  if (typeof LEO !== 'undefined' && LEO && LEO.balise && LEO.balise.armee) l.push('balise APRS armée');
+  if (typeof LEO !== 'undefined' && LEO && LEO.emet && !(HX.ptx && HX.ptx.emet)) l.push('Trafic satellite' + (LEO.simule ? ' (simulé)' : ''));
   // FT8/FT4 armed (its own poll, api/ft8/tx): keyed in its next slot.
   if (typeof F8TX !== 'undefined' && F8TX && F8TX.arme && !(HX.ptx && HX.ptx.emet)) l.push((F8TX.mode || 'FT8') + (F8TX.simule ? ' (simulé)' : ' armé'));
   return l;
@@ -18516,7 +18522,7 @@ function annonce(t, tx) {
  */
 async function arretEmissions() {
   const avant = emissionsEnCours(), inconnu = !HX.dtx && !HX.stx;
-  const l = ['api/ft8/tx?arret=1&client=' + TX_CLIENT, 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT, 'api/be/emission/arrete?client=' + TX_CLIENT];
+  const l = ['api/ft8/tx?arret=1&client=' + TX_CLIENT, 'api/trafic-sat?arret=1&client=' + TX_CLIENT, 'api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT, 'api/be/emission/arrete?client=' + TX_CLIENT];
   if (!HX.iq || HX.iq.actif) l.push('api/iq/arrete');
   pxTenu = false; pxVie(false);
   bxTenu = false; bxVerrouille = false; bxCwAuto = false; bxVie(false); { const b = g('btx-ptt'); if (b) b.classList.remove('on'); }

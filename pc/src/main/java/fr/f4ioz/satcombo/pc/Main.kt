@@ -496,6 +496,20 @@ fun main(args: Array<String>) {
     station.posteEmet = { emissionPoste.poste.etat.emet || ft8Tx.emet }
     ft8Tx.demarreBoucle()
     serveur.ft8Tx = ft8Tx
+    // « Trafic satellite » (module off until switched on): presets, SO-50's arming, CW and voice memories, APRS by
+    // satellite, through the same PTT; every over from an operator's click, the beacon armed for one pass only.
+    val traficLeo = TraficLeoPc(station.stockage, emissionPoste, File(dossier, "trafic"), { TraficLeoPc.situation(station) },
+        { station.settings.callsign }, { station.etat.value.locator },
+        sourceAprs = { fr.f4ioz.satcombo.aprs.EmissionKiss.source(station.settings) },
+        positionAprs = { station.etat.value.observateur?.let { o -> fr.f4ioz.satcombo.aprs.EmissionKiss.position(station.settings, o.latDeg, o.lonDeg) } },
+        aprsEmis = { t, quand -> son.aprs.ajouteEmis(t, quand) },
+        rearme = { station.stationCat.oublieArmement() },
+        tonArme = { station.stationCat.tonArme to station.stationCat.armements })
+    station.ctcssVoulu = { traficLeo.ctcssVoulu() }
+    emissionPoste.gardeTrafic = { traficLeo.garde() }
+    station.posteEmet = { emissionPoste.poste.etat.emet || ft8Tx.emet || traficLeo.emet }
+    traficLeo.demarreBoucle()
+    serveur.traficLeo = traficLeo
     if (ModeDemo.actif) {
         val ft8Demo = Ft8DemoPc(son.ft8, { station.settings.callsign })
         ft8Tx.auEnvoi = { tx, debut, hz -> ft8Demo.envoye(tx, debut, hz) }
