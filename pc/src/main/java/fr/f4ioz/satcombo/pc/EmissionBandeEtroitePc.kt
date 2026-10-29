@@ -372,6 +372,8 @@ class EmissionBandeEtroitePc(
         }
         if (!poste.etat.emet) { poste.totMs = totMin * 60_000L; voixDemandee = voixN }
         val r = runBlocking { poste.appuie(client, distant, adresse) }
+        // Refused before the transmitter started: the voice memory asked is not left for the next press.
+        if (r != null) voixDemandee = null
         if (r != null && dernierRefus != null) return dernierRefus
         return r
     }
