@@ -16,6 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Publication web : la description du montage** — une nouvelle ligne **Description du montage** sous *Réglages › Services en ligne › Envoyer vers un site web › En direct* (décochée d'origine) envoie à votre site le matériel de l'onglet **Montage** (parabole, LNB, convertisseurs, MiniTiouner, SDR, poste, ampli…) et les chemins du signal, de l'antenne aux récepteurs et de l'émetteur à l'antenne, pour qu'il dessine votre chaîne QO-100 (type `montage` ; vers un dossier, `montage.json`). Seulement des noms et des caractéristiques, jamais une adresse ni un numéro de série ; dès qu'elle change, sinon une fois par heure.
+
+### en
+- **Web publishing: the station's hardware** — a new **Description du montage** line under *Réglages › Services en ligne › Envoyer vers un site web › En direct* (unticked by default) sends your site the hardware of the **Montage** tab (dish, LNB, converters, MiniTiouner, SDR, rig, amplifier…) and the signal's paths, from the antenna to the receivers and from the transmitter to the antenna, so that it can draw your QO-100 chain (type `montage`; to a folder, `montage.json`). Names and characteristics only, never an address or a serial number; as soon as it changes, otherwise once an hour.
+
+### fr
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
 
 ### en

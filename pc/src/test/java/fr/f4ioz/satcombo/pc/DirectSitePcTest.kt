@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.EtatDatv
 import fr.f4ioz.satcombo.datv.ReglageDatv
+import fr.f4ioz.satcombo.station.CatalogueMateriel
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -284,6 +285,77 @@ class DirectSitePcTest {
         val o = JSONObject(java.io.File(dos, "favoris.json").readText())
         assertEquals("favoris", o.getString("type"))
         assertEquals(25544, o.getJSONArray("satellites").getJSONObject(0).getInt("norad"))
+    }
+
+    // ------------------------------------------------------------------ « Description du montage »
+
+    /** A ready-made plan of the catalogue as the site gets it (demonstration hardware). */
+    private fun montage(id: String = "qo100-station") = CatalogueMateriel.PREREGLAGES.first { it.id == id }.chaine.let { c ->
+        fr.f4ioz.satcombo.station.PublicationMontage.json(c.nom, c)
+    }
+
+    @Test fun `the station's hardware goes only when chosen, on change, else once an hour`() {
+        val (site, d) = direct()
+        var m = montage()
+        d.montage = { m }
+        d.tic()
+        assertTrue(envois.isEmpty())
+        val canal = { d.json().getJSONArray("canaux").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("nom") == "montage" } }
+        assertFalse(canal().getBoolean("on"))
+        assertEquals("Description du montage", canal().getString("libelle"))
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_montage") "1" else "" }
+        d.tic()
+        assertEquals(listOf("https://example.org/api/publication/montage"), envois.map { it.url })
+        assertEquals("montage", envois[0].entetes["X-SatMe-Type"])
+        val o = JSONObject(String(envois[0].corps!!))
+        assertEquals("montage", o.getString("type")); assertEquals(1, o.getInt("version")); assertEquals(t, o.getLong("t"))
+        assertEquals("Station QO-100", o.getString("plan"))
+        assertTrue(o.getJSONArray("voies").length() >= 3)
+        // Unchanged: not again before an hour (looked at once a minute).
+        t += 600_000L; d.tic()
+        assertEquals(1, envois.size)
+        // Changed: within the minute.
+        m = montage("qo100-pluto")
+        t += 60_000L; d.tic()
+        assertEquals(2, envois.size)
+        t += DirectSitePc.PERIODE_MONTAGE_MS - 60_000L; d.tic()
+        assertEquals(2, envois.size)
+        t += 60_000L; d.tic()
+        assertEquals(3, envois.size)
+        // Nothing to show: nothing sent.
+        m = null
+        t += DirectSitePc.PERIODE_MONTAGE_MS; d.tic()
+        assertEquals(3, envois.size)
+    }
+
+    @Test fun `a site that does not know the station's hardware is left alone for the day`() {
+        val (site, d) = direct()
+        d.montage = { montage() }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_montage") "1" else "" }
+        reponse = { 404 to "{\"ok\":false,\"erreur\":\"type inconnu\"}" }
+        d.tic()
+        assertEquals(1, envois.size)
+        repeat(5) { t += 3_600_000L; d.tic() }
+        assertEquals(1, envois.size)
+        reponse = { 200 to "{\"ok\":true}" }
+        t += DirectSitePc.NON_PRIS_MS; d.tic()
+        assertEquals(2, envois.size)
+    }
+
+    @Test fun `to a folder the station's hardware is montage_json`() {
+        val st = StockageFichier(tmp.newFile("r-dossier-m.properties"))
+        val dos = tmp.newFolder("site-dossier-m")
+        val site = SitePc(st, tmp.newFolder(), { false }, { t }, SitePc.Transport { _, _, _, _ -> throw AssertionError("pas de web") })
+        fr.f4ioz.satcombo.demo.ModulesStation.pose(st, emptySet())
+        site.sert("/api/site/essai", "POST") { k -> when (k) { "cible" -> "dossier"; "dossier" -> dos.absolutePath; else -> "" } }
+        val d = DirectSitePc(st, site, { t })
+        site.direct = d
+        d.montage = { montage() }
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_montage") "1" else "" }
+        d.tic()
+        val o = JSONObject(java.io.File(dos, "montage.json").readText())
+        assertEquals("montage", o.getString("type"))
+        assertTrue(o.getJSONArray("elements").length() > 5)
     }
 
     // ------------------------------------------------------------------ « Station »

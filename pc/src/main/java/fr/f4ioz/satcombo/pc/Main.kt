@@ -709,6 +709,24 @@ fun main(args: Array<String>) {
     // « Publication web › Diplômes » (off by default): the awards and, on the owner's click, the picture of one received.
     diplomes.site = DiplomesSitePc(File(dossier, "diplomes-site.json"), site)
     directSite.diplomes = { diplomes.pourSite() }
+    // « Description du montage »: the Montage page's plan drawing QO-100, the uplink profile, the QO-100 converters
+    // (names and characteristics only).
+    directSite.montage = {
+        serveur.montage?.planPourSite()?.let { plan ->
+            val pr = emissionBe.profil
+            val montee = fr.f4ioz.satcombo.station.PublicationMontage.Montee(pr.chaine.libelle, pr.antenne.libelle, pr.antenne.montage,
+                when (pr.antenne) { fr.f4ioz.satcombo.domain.ProfilMontee.Antenne.PARABOLE_80 -> 80; fr.f4ioz.satcombo.domain.ProfilMontee.Antenne.PARABOLE_35 -> 35; else -> null },
+                pr.gainDbi, pr.ampliW, pr.pertesDb, pr.pireMaxDbw)
+            val bandes = station.bandes()
+            val rx = fr.f4ioz.satcombo.domain.TableConversion.bande(bandes, fr.f4ioz.satcombo.domain.Convertisseur.BALISE_MEDIANE_HZ, fr.f4ioz.satcombo.domain.UsageConversion.SDR)
+                ?: fr.f4ioz.satcombo.domain.TableConversion.bande(bandes, fr.f4ioz.satcombo.domain.Convertisseur.BALISE_MEDIANE_HZ, fr.f4ioz.satcombo.domain.UsageConversion.CAT_RX)
+            val tx = fr.f4ioz.satcombo.domain.TableConversion.bande(bandes, fr.f4ioz.satcombo.domain.TableConversion.QO100_UL_BAS + 50_000L, fr.f4ioz.satcombo.domain.UsageConversion.CAT_TX)
+            val conv = listOfNotNull(rx?.let { "rx" to it }, tx?.let { "tx" to it }).map { (k, b) ->
+                fr.f4ioz.satcombo.station.PublicationMontage.Conversion(k, b.olHz, b.inverse, b.fenetreFi().first, b.fenetreFi().last)
+            }
+            fr.f4ioz.satcombo.station.PublicationMontage.json(plan.nom, plan.chaine, montee, conv)
+        }
+    }
     portee.launch(kotlinx.coroutines.Dispatchers.IO) {
         kotlinx.coroutines.delay(25_000)
         while (true) { runCatching { diplomes.tic() }; repeat(60) { if (!diplomes.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }

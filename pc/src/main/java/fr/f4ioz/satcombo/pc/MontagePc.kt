@@ -70,6 +70,8 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
 
     /** [plan]'s chain and name (the owner's plan when [plan] names none). */
     fun chaineDe(plan: String): Pair<String, Montage.Chaine> = (plans.plan(plan) ?: plans.choisi).let { PlansMontage.nomVu(it) to it.chaine }
+    /** The plan a web site is sent (« Description du montage »): the one drawing QO-100, else the owner's; null when empty. */
+    fun planPourSite(): PlansMontage.Plan? = fr.f4ioz.satcombo.station.PublicationMontage.choisit(plans)
     /** The plans and the owner's one, for the event's report's drawing. */
     fun plansRapport(): Pair<List<PlansMontage.Plan>, String> = plans.let { it.plans to it.choisi.id }
 

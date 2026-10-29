@@ -33,7 +33,10 @@ import javax.imageio.ImageWriteParam
  * JPEG every few seconds while the receiver is locked, with its figures),
  * **Satellites favoris** (the list of the satellites marked ★, type `favoris`: as soon as it changes, else once an
  * hour; to a folder, `favoris.json`; a receiver that does not know the type — 400, 404 or 415 — is left alone for
- * the day, without an error), **Station** (type `direct-station`: the satellite followed, where the antennas
+ * the day, without an error), **Description du montage** (type `montage`: the station's hardware and the paths a signal
+ * takes through it, as [fr.f4ioz.satcombo.station.PublicationMontage] builds it from the « Montage » page's plan; as
+ * soon as it changes, else once an hour; to a folder, `montage.json`; a receiver that does not know it is left alone
+ * for the day), **Station** (type `direct-station`: the satellite followed, where the antennas
  * really point, the receivers and the rig in use, as [stationJson] builds it; when it changes, at most every
  * [periode] seconds, and every [BATTEMENT_STATION_MS] unchanged; to a folder, `direct/station.json`), **FT8/FT4**
  * (type `direct-ft8`: each slot once decoded, its messages and a strip of the waterfall, [Ft8SitePc]; to a folder,
@@ -57,6 +60,8 @@ class DirectSitePc(
         DATV("datv", "Image DATV", 5, 3, 30),
         /** The favourites: on change, else once an hour ([PERIODE_FAVORIS_MS]). */
         FAVORIS("favoris", "Satellites favoris", 3600, 3600, 3600),
+        /** The station's hardware and its paths: on change, else once an hour ([PERIODE_MONTAGE_MS]). */
+        MONTAGE("montage", "Description du montage", 3600, 3600, 3600),
         /** The station now: on change, at most every [periode] s, else every [BATTEMENT_STATION_MS]. */
         STATION("station", "Station", 2, 2, 10),
         /** The awards followed (« Agenda › Diplômes »): on change, else once a day ([PERIODE_DIPLOMES_MS]). */
@@ -89,6 +94,8 @@ class DirectSitePc(
     @Volatile var demandePanorama: () -> Unit = {}
     /** The satellites marked ★ (name, NORAD number), null while not known yet. */
     @Volatile var favoris: () -> List<Pair<String, Int>>? = { null }
+    /** The station's hardware as the site may show it ([fr.f4ioz.satcombo.station.PublicationMontage.json]), null when there is none. */
+    @Volatile var montage: () -> JSONObject? = { null }
     /** The awards as the site may show them ([DiplomesSitePc.json]: `{"diplomes":[…]}`), null while « Diplômes » is off. */
     @Volatile var diplomes: () -> JSONObject? = { null }
     /** The station now ([Station]), null when it cannot be told. */
@@ -158,6 +165,7 @@ class DirectSitePc(
             if (c == Canal.SPECTRE && rapide?.on == true) { s.envoye = false; continue }
             if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.STATION) { runCatching { station(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.MONTAGE) { runCatching { montage(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.FT8) { runCatching { ft8(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
@@ -198,6 +206,7 @@ class DirectSitePc(
             Canal.FAVORIS -> favoris(s, t)
             Canal.STATION -> station(s, t)
             Canal.DIPLOMES -> diplomes(s, t)
+            Canal.MONTAGE -> montage(s, t)
             Canal.FT8 -> ft8(s, t)
             Canal.DATV -> {
                 val d = datv()
@@ -228,6 +237,25 @@ class DirectSitePc(
         val texte = o.getJSONArray("satellites").toString()
         if (texte == s.dernier && t - s.dernierMs < PERIODE_FAVORIS_MS) return
         val r = site.envoieDirect("favoris", o) ?: run { s.prochainMs = t + 60_000L; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.dernier = texte; s.dernierMs = t }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_MS }
+            else -> echec(s, t, r.first, raison(r.second))
+        }
+    }
+
+    /**
+     * The station's hardware: sent when it changed since the last one the site took, else once every
+     * [PERIODE_MONTAGE_MS] (only once the target is ready); looked at once a minute. A site that does not know the
+     * type is left alone for a day.
+     */
+    private fun montage(s: Suivi, t: Long) {
+        if (t < s.prochainMs || !site.configure) return
+        s.prochainMs = t + 60_000L
+        val o = montage() ?: return
+        val texte = o.toString()
+        if (texte == s.dernier && t - s.dernierMs < PERIODE_MONTAGE_MS) return
+        val r = site.envoieDirect("montage", JSONObject(texte).put("t", t)) ?: return
         when {
             r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.dernier = texte; s.dernierMs = t }
             r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_MS }
@@ -318,6 +346,7 @@ class DirectSitePc(
         JSONObject().put("nom", c.nom).put("libelle", c.libelle).put("on", on(c)).put("periode", periode(c)).put("min", c.min).put("max", c.max)
             .put("ok", s.okMs).put("erreur", if (on(c)) s.erreur else "")
             .also { o -> if (c == Canal.FAVORIS) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
+            .also { o -> if (c == Canal.MONTAGE) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.FT8) o.put("cadence", "chaque créneau décodé (15 s, FT4 7,5 s)").put("nonPris", on(c) && s.nonPris) }
@@ -337,6 +366,7 @@ class DirectSitePc(
         suivis.getValue(Canal.FAVORIS).dernierMs = 0L
         suivis.getValue(Canal.STATION).dernierMs = 0L; stationTexte = ""
         suivis.getValue(Canal.DIPLOMES).dernierMs = 0L
+        suivis.getValue(Canal.MONTAGE).dernierMs = 0L
         rapide?.regle(p)
         video?.regle(p)
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
@@ -348,6 +378,8 @@ class DirectSitePc(
         const val PERIODE_FAVORIS_MS = 3_600_000L
         /** A site that does not know `favoris` is asked again the next day. */
         const val NON_PRIS_MS = 24 * 3_600_000L
+        /** The station's hardware again, unchanged, after an hour. */
+        const val PERIODE_MONTAGE_MS = 3_600_000L
         /** The awards again, unchanged, after a day. */
         const val PERIODE_DIPLOMES_MS = 24 * 3_600_000L
         /** The station unchanged: sent again after 30 s, so the site knows it is on line. */

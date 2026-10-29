@@ -5,8 +5,8 @@
 SatMe-PC peut **pousser des éléments vers un site web extérieur** : images
 SSTV et SSDV, planches, rapports d'événement, contacts, vidéos du journal,
 passages FT8 / FT4, et en option des données en direct (auto-pilote, spectre
-QO-100, image DATV, station, FT8 / FT4), la liste de vos satellites favoris
-et vos diplômes.
+QO-100, image DATV, station, FT8 / FT4), la liste de vos satellites favoris,
+la description de votre montage et vos diplômes.
 Votre site les reçoit **comme il veut** — un fichier PHP sur un hébergement
 mutualisé, une extension WordPress, un petit serveur Python ou Node, n'importe
 quoi qui sait répondre à une requête HTTP. Cette page décrit le réglage dans
@@ -273,6 +273,7 @@ Content-Type: image/png
 | `retrait` | JSON | — | retirer un élément (pas encore de bouton dans SatMe-PC ; prévu dans l'API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON ou multipart | JPEG | le [direct](#le-direct-facultatif), seulement si coché |
 | `favoris` | JSON | — | les [satellites favoris](#les-satellites-favoris), seulement si coché |
+| `montage` | JSON | — | la [description du montage](#la-description-du-montage), seulement si coché |
 | `diplomes` | JSON | — | les [diplômes](#les-diplômes) suivis et votre progression, seulement si coché |
 | `diplome-image` | multipart | PNG, JPEG, PDF | l'image d'un [diplôme reçu](#les-diplômes), seulement sur un clic |
 | `direct-ft8` | JSON | — | chaque créneau [FT8 / FT4](#ft8--ft4) décodé, seulement si coché |
@@ -375,6 +376,70 @@ Vers un dossier : `favoris.json` à la racine, même contenu.
 Un récepteur qui ne connaît pas ce type répond `400`, `404` ou `415` :
 SatMe-PC le note « non pris en charge par le site », sans erreur, et ne
 réessaie que le lendemain (ou quand on recoche la ligne).
+
+### La description du montage
+
+Sous **En direct**, la ligne **Description du montage** (décochée d'origine)
+envoie le matériel de la station tel que l'onglet **Montage** le dessine, et
+les chemins que prend le signal — de chaque antenne à chaque récepteur, de
+chaque émetteur à son antenne — par exemple pour qu'une page « Station »
+dessine la chaîne QO-100 (parabole → LNB → convertisseur → MiniTiouner / SDR,
+et la montée). Elle part dès que la description change (regardé une fois par
+minute), sinon une fois par heure, et seulement quand le module est activé et
+la cible testée. Le plan envoyé est celui qui dessine le plus de chemins
+QO-100 (le plan affiché en cas d'égalité), sinon le plan affiché ; rien ne
+part tant que le montage est vide.
+
+```json
+{"type":"montage","version":1,"t":1798000000000,"plan":"Station QO-100",
+ "elements":[
+  {"id":"e1","genre":"antenne","modele":"parabole-qo100","nom":"Parabole + source QO-100 (POTY / patch)","court":"Parabole QO-100",
+   "bandesMhz":[2400,10489],"diametreCm":80,"gainDbi":23.5},
+  {"id":"e2","genre":"lnb","modele":"lnb-twin","nom":"LNB Octagon Twin « Green »","court":"LNB Twin","bandesMhz":[739,10489],
+   "options":[{"nom":"Référence externe 25 MHz","valeur":"oui"}],"references":[{"mhz":25,"de":"e12"}]},
+  {"id":"e3","genre":"recepteur_datv","modele":"minitiouner","nom":"MiniTiouner Pro V2","court":"MiniTiouner","bandesMhz":[739]}],
+ "voies":[
+  {"sens":"rx","qo100":true,"etapes":[{"id":"e1"},{"id":"e2","mhz":10489,"cable":"Monté directement"},{"id":"e3","mhz":739,"cable":"Coaxial F (TV)"}]},
+  {"sens":"tx","qo100":true,"etapes":[{"id":"e6"},{"id":"e7","mhz":435,"cable":"Coaxial SMA"},{"id":"e8","mhz":2400,"cable":"Coaxial SMA"},{"id":"e1","mhz":2400,"cable":"Coaxial N"}]}],
+ "montee":{"chaine":"IC-9700 + convertisseur montant","antenne":"Parabole 80 cm + source POTY","diametreCm":80,"gainDbi":23.5,
+  "ampliW":20,"pertesDb":1.5,"pireMaxDbw":35},
+ "conversions":[{"sens":"rx","olMhz":10344.973,"inverse":false,"fiBasMhz":144.027,"fiHautMhz":155.027}]}
+```
+
+Les champs :
+
+- `plan` : le nom du plan (absent s'il n'en a pas) ;
+- `elements` : chaque appareil du plan (les « boîtes logicielles » non) —
+  `id` (court, ne sert qu'à relier les chemins), `genre` (`antenne`, `lnb`,
+  `ampli`, `reference`, `convertisseur`, `alimentation`, `filtre`, `charge`,
+  `coupleur`, `rotor`, `poste`, `sdr`, `recepteur_datv`, `noeud`, `carte_son`,
+  `interface`, `ordinateur`, `telephone`), `modele` (l'identifiant du
+  catalogue de SatMe), `nom` (celui que vous lui avez donné, sinon celui du
+  catalogue), `court` (le nom court du dessin), `bandesMhz` (les bandes de ses
+  ports radio), `options` (`nom`, `valeur` : ses réglages de l'onglet
+  Montage), `references` (`mhz`, `de` : la référence de fréquence qui
+  l'alimente et l'appareil qui la donne), `diametreCm` et `gainDbi` pour
+  l'antenne du profil de montée ;
+- `voies` : les chemins, ceux de QO-100 d'abord (16 au plus) — `sens` (`rx` :
+  de l'antenne au récepteur ; `tx` : de l'émetteur à l'antenne), `qo100`
+  (10 GHz ou 2,4 GHz à l'antenne), `etapes` (`id` d'un élément, et pour
+  chacune après la première `mhz`, la bande du câble qui y arrive, et `cable`,
+  son genre) ;
+- `montee` : le profil de montée QO-100 choisi (émission bande étroite),
+  seulement quand le plan émet par son antenne — `chaine`, `antenne`,
+  `diametreCm`, `gainDbi`, `ampliW`, `pertesDb`, `pireMaxDbw` (une
+  estimation) ;
+- `conversions` : les oscillateurs de la table de conversion pour QO-100 —
+  `sens` (`rx`, `tx`), `olMhz`, `inverse`, `fiBasMhz`, `fiHautMhz`.
+
+Seulement des noms et des caractéristiques : jamais une adresse, un port, un
+chemin de fichier, un numéro de série, un code d'appairage ni un mot de passe.
+Un nom donné qui ressemble à une adresse ou à un numéro de série est remplacé
+par celui du catalogue. La description complète remplace la précédente ;
+vers un dossier : `montage.json` à la racine, même contenu. Un récepteur qui
+ne connaît pas ce type répond `400`, `404` ou `415` : SatMe-PC le note « non
+pris en charge par le site », sans erreur, et ne réessaie que le lendemain
+(ou quand on recoche la ligne).
 
 ### Les diplômes
 
@@ -662,6 +727,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    sa fiche : le JSON meta + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       les satellites favoris (si coché)
+├── montage.json                       la description du montage (si coché)
 ├── diplomes.json, diplomes/…          les diplômes (si coché) et les images envoyées d'un clic
 └── direct/direct.json, station.json, datv.jpg, sstv.jpg   (le direct, réécrit sur place)
 ```
@@ -708,6 +774,7 @@ fiches que l'API :
 - `direct/ft8.json` (le dernier créneau) si **FT8/FT4** est coché ; un
   passage (`ft8-passage`) comme tout élément, `ft8-passage/<année>/<id>.data.json` (sa fiche `<id>.json`) ;
 - `favoris.json` si **Satellites favoris** est coché ;
+- `montage.json` si **Description du montage** est coché ;
 - `diplomes.json` si **Diplômes** est coché, `diplomes/<id>.<ext>` pour
   chaque image envoyée par **Envoyer le diplôme reçu**.
 

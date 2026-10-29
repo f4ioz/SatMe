@@ -5,7 +5,7 @@
 SatMe-PC can **push items to an outside web site**: SSTV and SSDV pictures,
 planches, event reports, contacts, the journal's videos, FT8 / FT4 passes, and
 as an option live data (auto-pilot, QO-100 spectrum, DATV picture, station,
-FT8 / FT4), your favourite satellites and your awards. Your site receives them **as it
+FT8 / FT4), your favourite satellites, your station's hardware and your awards. Your site receives them **as it
 likes** — a PHP file on shared hosting, a WordPress plugin, a small Python or
 Node server, anything that can answer an HTTP request. This page covers the
 setting in SatMe-PC and **the wire format (API v1)**, stable and versioned,
@@ -271,6 +271,7 @@ Content-Type: image/png
 | `retrait` | JSON | — | withdraw an item (no button in SatMe-PC yet; part of the API) |
 | `direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-efface` | JSON or multipart | JPEG | [live data](#live-data-optional), only when ticked |
 | `favoris` | JSON | — | the [favourite satellites](#favourite-satellites), only when ticked |
+| `montage` | JSON | — | the [station hardware](#station-hardware), only when ticked |
 | `diplomes` | JSON | — | the [awards](#awards) followed and your progress, only when ticked |
 | `diplome-image` | multipart | PNG, JPEG, PDF | the picture of an [award received](#awards), only on a click |
 | `direct-ft8` | JSON | — | each [FT8 / FT4](#ft8--ft4) slot decoded, only when ticked |
@@ -370,6 +371,68 @@ To a folder: `favoris.json` at the root, same content.
 A receiver that does not know this type answers `400`, `404` or `415`:
 SatMe-PC shows « non pris en charge par le site », without an error, and
 tries again only the next day (or when the line is ticked again).
+
+### Station hardware
+
+Under **En direct**, the **Description du montage** line (unticked by
+default) sends the station's hardware as the **Montage** tab draws it, and
+the paths a signal takes through it — from each antenna to each receiver,
+from each transmitter to its antenna — for instance for a « Station » page to
+draw the QO-100 chain (dish → LNB → converter → MiniTiouner / SDR, and the
+uplink). It goes as soon as the description changes (looked at once a
+minute), otherwise once an hour, and only while the module is on and the
+target tested. The plan sent is the one drawing the most QO-100 paths (the
+plan shown on a tie), otherwise the plan shown; nothing goes while the
+Montage is empty.
+
+```json
+{"type":"montage","version":1,"t":1798000000000,"plan":"Station QO-100",
+ "elements":[
+  {"id":"e1","genre":"antenne","modele":"parabole-qo100","nom":"Parabole + source QO-100 (POTY / patch)","court":"Parabole QO-100",
+   "bandesMhz":[2400,10489],"diametreCm":80,"gainDbi":23.5},
+  {"id":"e2","genre":"lnb","modele":"lnb-twin","nom":"LNB Octagon Twin « Green »","court":"LNB Twin","bandesMhz":[739,10489],
+   "options":[{"nom":"Référence externe 25 MHz","valeur":"oui"}],"references":[{"mhz":25,"de":"e12"}]},
+  {"id":"e3","genre":"recepteur_datv","modele":"minitiouner","nom":"MiniTiouner Pro V2","court":"MiniTiouner","bandesMhz":[739]}],
+ "voies":[
+  {"sens":"rx","qo100":true,"etapes":[{"id":"e1"},{"id":"e2","mhz":10489,"cable":"Monté directement"},{"id":"e3","mhz":739,"cable":"Coaxial F (TV)"}]},
+  {"sens":"tx","qo100":true,"etapes":[{"id":"e6"},{"id":"e7","mhz":435,"cable":"Coaxial SMA"},{"id":"e8","mhz":2400,"cable":"Coaxial SMA"},{"id":"e1","mhz":2400,"cable":"Coaxial N"}]}],
+ "montee":{"chaine":"IC-9700 + convertisseur montant","antenne":"Parabole 80 cm + source POTY","diametreCm":80,"gainDbi":23.5,
+  "ampliW":20,"pertesDb":1.5,"pireMaxDbw":35},
+ "conversions":[{"sens":"rx","olMhz":10344.973,"inverse":false,"fiBasMhz":144.027,"fiHautMhz":155.027}]}
+```
+
+The fields (the words inside are SatMe-PC's, in French):
+
+- `plan`: the plan's name (absent when it has none);
+- `elements`: each piece of hardware of the plan (not the « boîtes
+  logicielles ») — `id` (short, only ties the paths together), `genre`
+  (`antenne`, `lnb`, `ampli`, `reference`, `convertisseur`, `alimentation`,
+  `filtre`, `charge`, `coupleur`, `rotor`, `poste`, `sdr`, `recepteur_datv`,
+  `noeud`, `carte_son`, `interface`, `ordinateur`, `telephone`), `modele` (the
+  id in SatMe's catalogue), `nom` (the name you gave it, else the
+  catalogue's), `court` (the drawing's short name), `bandesMhz` (its radio
+  ports' bands), `options` (`nom`, `valeur`: its settings in the Montage tab),
+  `references` (`mhz`, `de`: the frequency reference feeding it and the piece
+  giving it), `diametreCm` and `gainDbi` for the uplink profile's antenna;
+- `voies`: the paths, QO-100's first (16 at most) — `sens` (`rx`: from the
+  antenna to the receiver; `tx`: from the transmitter to the antenna),
+  `qo100` (10 GHz or 2.4 GHz at the antenna), `etapes` (an element's `id`,
+  and for each after the first `mhz`, the band of the cable reaching it, and
+  `cable`, its kind);
+- `montee`: the QO-100 uplink profile chosen (narrow-band transmission), only
+  when the plan transmits through its antenna — `chaine`, `antenne`,
+  `diametreCm`, `gainDbi`, `ampliW`, `pertesDb`, `pireMaxDbw` (an estimate);
+- `conversions`: the conversion table's oscillators for QO-100 — `sens`
+  (`rx`, `tx`), `olMhz`, `inverse`, `fiBasMhz`, `fiHautMhz`.
+
+Names and characteristics only: never an address, a port, a file path, a
+serial number, a pairing code or a password. A given name that looks like an
+address or a serial number is replaced by the catalogue's. The whole
+description replaces the previous one; to a folder: `montage.json` at the
+root, same content. A receiver that does not know this type answers `400`,
+`404` or `415`: SatMe-PC shows « non pris en charge par le site », without
+an error, and tries again only the next day (or when the line is ticked
+again).
 
 ### Awards
 
@@ -646,6 +709,7 @@ satme-donnees/
 ├── sstv-image/2026/0b6f7c1e-….json    its card: the meta JSON + "chemin" + "ajoute"
 ├── qso/2026/….adi + ….json
 ├── favoris.json                       the favourite satellites (when ticked)
+├── montage.json                       the station hardware (when ticked)
 ├── diplomes.json, diplomes/…          the awards (when ticked) and the pictures sent with a click
 └── direct/direct.json, station.json, datv.jpg, sstv.jpg   (live data, rewritten in place)
 ```
@@ -693,6 +757,7 @@ as the API:
 - `direct/ft8.json` (the last slot) when **FT8/FT4** is ticked; a pass
   (`ft8-passage`) like any item, `ft8-passage/<year>/<id>.data.json` (its card `<id>.json`);
 - `favoris.json` when **Satellites favoris** is ticked;
+- `montage.json` when **Description du montage** is ticked;
 - `diplomes.json` when **Diplômes** is ticked, `diplomes/<id>.<ext>` for each
   picture sent with **Envoyer le diplôme reçu**.
 

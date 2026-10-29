@@ -92,6 +92,11 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
                 racine().mkdirs(); ecritAtomique(File(racine(), "favoris.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
             }
+            "montage" -> {
+                val f = JSONObject().put("version", SitePc.VERSION_API).put("type", "montage")
+                o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
+                racine().mkdirs(); ecritAtomique(File(racine(), "montage.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
+            }
             "diplomes" -> {
                 val f = JSONObject().put("version", SitePc.VERSION_API).put("type", "diplomes")
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
