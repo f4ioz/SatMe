@@ -41,8 +41,8 @@ class DiplomesSitePcTest {
         val vieux = ariss.copy(id = "pzk:70", debutMs = t0 - 90 * 86_400_000L, finMs = t0 - 88 * 86_400_000L)
         val img = Diplomes.Image("iss-2026.png", "ISS", t0, true, 80, "PD120")
         return listOf(
-            Diplomes.Bilan(vucc, Diplomes.Statut.EN_COURS, 37, elements = listOf("JN18", "IO91", "FN31"), libelle = "En cours : 37/100 carrés",
-                remarque = "3 contacts sans carré"),
+            Diplomes.Bilan(vucc, Diplomes.Statut.EN_COURS, 37, elements = listOf("JN18", "IO91", "FN31"), libelle = "En cours : 37/100 locators",
+                remarque = "3 contacts sans locator"),
             Diplomes.Bilan(dxcc, Diplomes.Statut.DEMANDE, 104, elements = listOf("France", "Japon"), libelle = "Demandé le 02/09",
                 suivi = Diplomes.Suivi(Diplomes.EtatSuivi.DEMANDE, t0 - 1000L, note = "dossier envoyé à Olivier Gouyen")),
             Diplomes.Bilan(scc, Diplomes.Statut.RECU, 1, libelle = "Reçu le 01/09",
@@ -67,7 +67,7 @@ class DiplomesSitePcTest {
         val vucc = l[0]
         assertEquals("permanent", vucc.getString("sorte")); assertEquals("en_cours", vucc.getString("statut"))
         assertEquals(37, vucc.getJSONObject("progression").getInt("actuel")); assertEquals(100, vucc.getJSONObject("progression").getInt("objectif"))
-        assertEquals("carrés", vucc.getJSONObject("progression").getString("unite"))
+        assertEquals("locators", vucc.getJSONObject("progression").getString("unite"))
         assertEquals("https://www.arrl.org/vucc", vucc.getString("reglement"))
         assertEquals("demande", l[1].getString("statut")); assertEquals(t0 - 1000L, l[1].getLong("demande"))
         assertEquals("recu", l[2].getString("statut")); assertEquals(t0 - 2000L, l[2].getLong("recu")); assertTrue(l[2].getBoolean("image"))
@@ -79,7 +79,7 @@ class DiplomesSitePcTest {
         // What was counted, the pictures, the notes, the forms, the e-mails: never.
         val texte = o.toString()
         listOf("JN18", "IO91", "France", "F4ABC", "G0XYZ", "iss-2026", "Olivier", "classeur", "secret", "awards@example.org", "note privée",
-            "longues conditions", "sans carré", "kk5do", "cat_amsat-scc.png").forEach { assertFalse(it, texte.contains(it)) }
+            "longues conditions", "sans locator", "kk5do", "cat_amsat-scc.png").forEach { assertFalse(it, texte.contains(it)) }
     }
 
     @Test fun `only https rules links`() {

@@ -118,7 +118,7 @@ object PageDemo {
 <div class="bandeau">
   <div class="sur">Radioamateur · liaison par satellite</div>
   <h1>Écoute en direct</h1>
-  <div class="station">station <b id="station">—</b> · carré <b id="grille">—</b></div>
+  <div class="station">station <b id="station">—</b> · locator <b id="grille">—</b></div>
 </div>
 
 <main>

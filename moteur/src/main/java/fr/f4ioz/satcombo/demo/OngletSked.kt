@@ -31,7 +31,7 @@ object OngletSked {
   <div class="k-gauche">
     <div class="carte">
       <div class="t">Sked avec une autre station</div>
-      <div class="ligne" style="margin-top:0"><input id="k-loc" placeholder="Son carré (IN80, FN31…)" style="text-transform:uppercase"></div>
+      <div class="ligne" style="margin-top:0"><input id="k-loc" placeholder="Son locator (IN80, FN31…)" style="text-transform:uppercase"></div>
       <div class="ligne"><select id="k-sat"></select></div>
       <div class="ligne"><span class="petit">Il voit au-dessus de</span><input id="k-min" value="0" style="max-width:60px"><span class="petit">°</span>
         <button class="primaire" onclick="calculeSked()">Chercher</button></div>

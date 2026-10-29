@@ -95,7 +95,7 @@ class DiplomesPcTest {
         // The calendar's own session is the same one: kept once.
         assertEquals(1, liste(get(d)).count { Diplomes.estAriss(Diplomes.lis(it)!!) })
         // The log's: 2 grids of 100.
-        assertEquals("En cours : 2/100 carrés", liste(get(d)).first { it.getString("id") == "cat:vucc" }.getString("libelle"))
+        assertEquals("En cours : 2/100 locators", liste(get(d)).first { it.getString("id") == "cat:vucc" }.getString("libelle"))
 
         // A flyer's text read, then added.
         val prop = postJ(d, "/texte", corps = queretaro.toByteArray()).getJSONObject("proposition")

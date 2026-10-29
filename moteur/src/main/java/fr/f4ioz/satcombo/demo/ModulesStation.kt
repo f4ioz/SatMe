@@ -53,7 +53,7 @@ object ModulesStation {
     data class Profil(val id: String, val nom: String, val quoi: String, val modules: Set<String>)
 
     /** What is always there, said under the list. */
-    const val COEUR = "Suivi et passages (Suivi, Agenda, Frise, Carrés, Sked, Carte), poste, rotor et Doppler, Carnet, Journal, Son, Réglages, accès à distance, mises à jour"
+    const val COEUR = "Suivi et passages (Suivi, Agenda, Frise, Locators, Sked, Carte), poste, rotor et Doppler, Carnet, Journal, Son, Réglages, accès à distance, mises à jour"
 
     val MODULES: List<Module> = listOf(
         Module("sdr", "SDR", "Le récepteur SDR : écoute, spectre, cascade, balayage", listOf("sdr"), listOf("#sb-sdr", "#sb-bal", "#af-carte"),

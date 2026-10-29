@@ -66,13 +66,13 @@ private val SOURCES = listOf(
     Remerciement(
         "QRZ.com",
         "QRZ LLC",
-        "L'annuaire qui met un nom et un carré derrière un indicatif entendu.",
+        "L'annuaire qui met un nom et un locator derrière un indicatif entendu.",
         "https://www.qrz.com/"
     ),
     Remerciement(
         "Logbook of the World",
         "ARRL",
-        "La confirmation des contacts, et la source des carrés confirmés.",
+        "La confirmation des contacts, et la source des locators confirmés.",
         "https://lotw.arrl.org/"
     ),
     Remerciement(
@@ -111,7 +111,7 @@ private val SOURCES = listOf(
     Remerciement(
         "Maidenhead",
         "John Morris G4ANB",
-        "Le système de carrés locateurs, adopté en 1980 et jamais remplacé depuis.",
+        "Le système de locators, adopté en 1980 et jamais remplacé depuis.",
         null
     )
 )

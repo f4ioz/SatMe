@@ -38,9 +38,9 @@ object Diplomes {
         /** Pictures received during the event's window. */
         IMAGE("image"),
         /** Distinct 4-character grids worked by satellite (VUCC). */
-        GRILLES("carrés"),
+        GRILLES("locators"),
         /** Distinct grids the station worked *from*, home excluded (VUCC/r). */
-        MES_GRILLES("carrés activés"),
+        MES_GRILLES("locators activés"),
         /** DXCC entities worked by satellite. */
         DXCC("entités"),
         /** US states worked by satellite (WAS). */
@@ -121,7 +121,7 @@ object Diplomes {
         val images: List<Image> = emptyList(),
         /** What was counted (grids, entities…), sorted. */
         val elements: List<String> = emptyList(),
-        /** Said to the owner: « Obtenable — à demander avant le 30/10 », « En cours : 37/100 carrés ». */
+        /** Said to the owner: « Obtenable — à demander avant le 30/10 », « En cours : 37/100 locators ». */
         val libelle: String = "",
         /** A remark on the count (« 3 contacts US sans État noté »). */
         val remarque: String = "",
@@ -182,11 +182,11 @@ object Diplomes {
             lienReglement = "https://www.amsat.org/awards/", courrielDemande = "kk5do@amsat.org", frais = "5 \$ membre AMSAT, 10 \$ sinon, plus le port",
             champs = listOf("indicatif", "nom", "courriel", "liste"), source = "Catalogue SatMe", verifie = "27/10/2026"),
         Diplome("cat:vucc-r", "AMSAT VUCC/r (Reverse VUCC, rover)", "AMSAT", Genre.MES_GRILLES, 100,
-            conditions = "Des contacts confirmés faits depuis 100 carrés différents (hors carré de la station), contacts depuis le 1/1/1983, règles VUCC de l'ARRL.",
+            conditions = "Des contacts confirmés faits depuis 100 locators différents (hors locator de la station), contacts depuis le 1/1/1983, règles VUCC de l'ARRL.",
             lienReglement = "https://www.amsat.org/reverse-vucc-or-vucc-r-award/", courrielDemande = "kk5do@amsat.org", frais = "5 \$ membre AMSAT, 10 \$ sinon, plus le port",
             champs = listOf("indicatif", "nom", "courriel", "liste"), source = "Catalogue SatMe", verifie = "27/10/2026"),
         Diplome("cat:vucc", "VUCC Satellite", "ARRL", Genre.GRILLES, 100,
-            conditions = "100 carrés locator confirmés par satellite (mentions tous les 25) ; contacts depuis le 1/1/1983, tous faits à moins de 200 km les uns des autres. Adhésion ARRL exigée pour les stations américaines seulement.",
+            conditions = "100 locators confirmés par satellite (mentions tous les 25) ; contacts depuis le 1/1/1983, tous faits à moins de 200 km les uns des autres. Adhésion ARRL exigée pour les stations américaines seulement.",
             lienReglement = "https://www.arrl.org/vucc", lienFormulaire = "https://lotw.arrl.org/",
             frais = "LoTW : 15 \$ (international) + 0,15 \$ par QSO, plus le certificat (30 \$ hors USA)",
             champs = listOf("indicatif", "nom", "courriel", "liste"), source = "Catalogue SatMe", verifie = "27/10/2026",

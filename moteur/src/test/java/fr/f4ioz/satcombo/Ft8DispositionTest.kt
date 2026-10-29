@@ -69,7 +69,7 @@ class Ft8DispositionTest {
             val m = typeUn("CQ", indicatif, valeur(carre))
             val lu = Ft8.deplie(m)
             assertNotNull("$indicatif non déplié", lu)
-            assertEquals("carré de $indicatif", carre, lu!!.locator)
+            assertEquals("locator de $indicatif", carre, lu!!.locator)
         }
     }
 
@@ -104,7 +104,7 @@ class Ft8DispositionTest {
     fun au_dela_de_la_grille_ce_ne_sont_plus_des_carres() {
         for (code in listOf(1, 2, 3, 4, 5, 40)) {
             val lu = Ft8.deplie(typeUn("CQ", "F4IOZ", 32_400 + code))!!
-            assertNull("le code $code ne doit pas donner de carré", lu.locator)
+            assertNull("le code $code ne doit pas donner de locator", lu.locator)
         }
     }
 
