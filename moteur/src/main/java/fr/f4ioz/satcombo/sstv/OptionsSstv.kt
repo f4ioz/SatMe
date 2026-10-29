@@ -51,6 +51,31 @@ class OptionsSstv(private val prefs: Stockage) {
         get() = prefs.getBoolean("sstvo_redecode_fin", true)
         set(v) { prefs.edit().putBoolean("sstvo_redecode_fin", v).apply() }
 
+    /**
+     * « Corriger les couleurs » ([CouleurSstv], [RetouchesGalerie]): every
+     * picture without a switch of its own has its colour set right where it
+     * goes out (viewer, sheets, web site) — off by default; and which steps.
+     * The « IA » is never a default: picture by picture only.
+     */
+    var couleurDefaut: Boolean
+        get() = prefs.getBoolean("sstvo_couleur", false)
+        set(v) { prefs.edit().putBoolean("sstvo_couleur", v).apply() }
+    var couleurDominante: Boolean
+        get() = prefs.getBoolean("sstvo_couleur_dominante", true)
+        set(v) { prefs.edit().putBoolean("sstvo_couleur_dominante", v).apply() }
+    var couleurChroma: Boolean
+        get() = prefs.getBoolean("sstvo_couleur_chroma", true)
+        set(v) { prefs.edit().putBoolean("sstvo_couleur_chroma", v).apply() }
+    var couleurNiveaux: Boolean
+        get() = prefs.getBoolean("sstvo_couleur_niveaux", true)
+        set(v) { prefs.edit().putBoolean("sstvo_couleur_niveaux", v).apply() }
+    var couleurSaturation: Boolean
+        get() = prefs.getBoolean("sstvo_couleur_saturation", false)
+        set(v) { prefs.edit().putBoolean("sstvo_couleur_saturation", v).apply() }
+
+    val defautsRetouche: RetouchesGalerie.Defauts get() =
+        RetouchesGalerie.Defauts(couleurDefaut, CouleurSstv.Options(couleurDominante, couleurChroma, couleurNiveaux, couleurSaturation))
+
     /** Retention: days (0 for ever) and size (MB, 0 no limit); both off by default. */
     var retentionJours: Int
         get() = prefs.getInt("sstvo_ret_jours", 0).coerceIn(0, 3650)

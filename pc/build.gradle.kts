@@ -46,6 +46,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     // The event's report as a PDF, drawn without a browser (Apache 2.0; its fontbox and commons-logging with it).
     implementation("org.apache.pdfbox:pdfbox:3.0.8")
+    // The SSTV pictures' « IA » (MIT): compiled against, never shipped — its 93 Mo jar is downloaded when the
+    // owner installs the model (IaSstvPc), and loaded beside SatMe.
+    compileOnly("com.microsoft.onnxruntime:onnxruntime:1.20.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(testFixtures(project(":moteur")))

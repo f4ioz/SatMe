@@ -75,7 +75,9 @@ object SstvMeta {
          * version, [CorrectionsGalerie]: « corrigée », « fusion de 4 copies »);
          * "" as received. Never written to the sidecar.
          */
-        val traitement: String = ""
+        val traitement: String = "",
+        /** The picture shown in its place went through a learnt denoiser ([RetouchesGalerie]): « IA » always said. Never written to the sidecar. */
+        val retoucheIa: Boolean = false,
     )
 
     /**

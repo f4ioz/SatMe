@@ -606,6 +606,13 @@ fun main(args: Array<String>) {
     // « Réunir »: two partial pictures put together from the pass recording when their own sounds are gone.
     son.sstv.enregistrementDe = { son.fichierEnregistrement(it) }
     serveur.optionsSstv = optionsSstv
+    // The pictures' finish: their colour set right (SSTV › Réglages' defaults, picture by picture), and the « IA » once
+    // its model is installed (ia/, downloaded only when asked).
+    val iaSstv = IaSstvPc(dossier)
+    val retouches = classement.corrections.retouches { optionsSstv.options.defautsRetouche }
+    if (iaSstv.installe()) retouches.ia = iaSstv
+    optionsSstv.ia = iaSstv
+    optionsSstv.iaPrete = { pret -> retouches.ia = if (pret) iaSstv else null }
     // « Réglages › Envoyer vers un site web »: the SSTV pictures, planches, reports, contacts and videos sent to the owner's site (or a folder),
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
     val site = SitePc(station.stockage, dossier)

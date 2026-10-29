@@ -138,6 +138,10 @@ object ApiSon {
                 val png = File(d, it.fileName)
                 o.put("son", SstvSon.fichier(png).isFile).put("gif", SstvSon.gif(png).isFile)
                     .put("source", it.source).put("enregistrement", it.recording).put("redecode", it.redecodeMs > 0L)
+                // Its own finish (« IA », colour) for the gallery's badges.
+                val r = fr.f4ioz.satcombo.sstv.RetouchesGalerie.reglageDe(d, it.fileName)
+                if (r.ia) o.put("ia", true)
+                if (r.couleur != null) o.put("couleur", r.couleur)
             }
             o
         }))

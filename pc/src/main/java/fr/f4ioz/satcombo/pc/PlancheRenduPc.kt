@@ -349,8 +349,12 @@ object PlancheRenduPc {
             g.color = Color.WHITE; g.fill(Rectangle2D.Float(r.x, ri.y + ri.height, r.width, bande))
             texteAjuste(g, Planche.legende(img.second, v.indicatif, m.marqueTraitees), Rectangle2D.Float(r.x + 3 * k, ri.y + ri.height, r.width - 6 * k, bande), Color.BLACK, false)
         }
-        // A processed picture says so when the sheet asks (legend or corner); else a clean sheet.
-        if (m.marqueTraitees && bande == 0f && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
+        // A processed picture says so when the sheet asks (legend or corner); else a clean sheet — but a learnt
+        // denoiser's picture always says « IA ».
+        if (bande == 0f) {
+            if (m.marqueTraitees && img.second.traitement.isNotEmpty()) etiquetteTraitee(g, img.second.traitement, ri, k)
+            else if (img.second.retoucheIa) etiquetteTraitee(g, fr.f4ioz.satcombo.i18n.t("sstv_planche_ia"), ri, k)
+        }
     }
 
     /** The side of a box its frame is measured on. */

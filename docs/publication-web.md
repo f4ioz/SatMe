@@ -128,6 +128,8 @@ Depending on the type, when SatMe-PC knows them:
 | `evenement` | string | `"ARISS octobre 2026"` | sstv-image (campaign), planche, rapport |
 | `description` | string | `"Diapo 3/12"` | sstv-image |
 | `incomplete` | boolean | `true` | sstv-image partly received |
+| `traitement` | string | `"corrigée · couleur corrigée · IA"` | sstv-image not as received: what was done to it |
+| `ia` | boolean | `true` | sstv-image through the learnt denoiser (AI): to be said beside the picture; planche: at least one box (`imagesIa`: how many) |
 | `indicatif` | string | `"EA4ABC"` | qso: the station worked |
 | `locator` | string | `"IN80DD"` | qso: its locator |
 

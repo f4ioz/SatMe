@@ -1357,6 +1357,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (classement?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sstv/correction" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (classement?.corrections?.api?.etat(q["nom"].orEmpty()) ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/sstv/retouche" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (classement?.corrections?.api?.retouche(q["nom"].orEmpty(), q["version"].orEmpty()) { optionsSstv?.ia?.etat() ?: JSONObject() }
+                    ?: JSONObject().put("ok", false).put("erreur", "absent")).toString().toByteArray())
             "/api/sstv/prochaine" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", prochaineSstv().toString().toByteArray(Charsets.UTF_8))
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
@@ -2457,7 +2460,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/sstv/diapo", "/api/sstv/groupe", "/api/sstv/relance" ->
                 return classement?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
-            "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier" ->
+            "/api/sstv/corriger", "/api/sstv/fusionner", "/api/sstv/correction/oublier", "/api/sstv/retouche/reglage", "/api/sstv/retouche/ia" ->
                 return classement?.corrections?.api?.action(chemin) { q[it].orEmpty() } ?: JSONObject().put("ok", false).put("erreur", "absent")
             "/api/sstv/satellite" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)

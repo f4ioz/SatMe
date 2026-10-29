@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.demo.ApiCorrectionSstv
 import fr.f4ioz.satcombo.sstv.ClassementGalerie
 import fr.f4ioz.satcombo.sstv.CorrectionsGalerie
+import fr.f4ioz.satcombo.sstv.RetouchesGalerie
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -19,7 +20,7 @@ import javax.imageio.ImageIO
  * The corrected SSTV pictures on the PC ([CorrectionsGalerie]: kept apart in
  * `corrigees/`, the received ones untouched): the viewer's « Corrigée »,
  * « Version corrigée depuis l’enregistrement », « Fusionner les copies », and the
- * sheet's « versions corrigées ».
+ * sheet's « versions corrigées »; and their finish ([RetouchesGalerie]: colour, IA).
  */
 class CorrectionsSstvPc(sstv: SstvPc, classement: ClassementSstvPc) {
 
@@ -38,4 +39,8 @@ class CorrectionsSstvPc(sstv: SstvPc, classement: ClassementSstvPc) {
 
     val api = ApiCorrectionSstv(CorrectionsGalerie(::pixels, ::ecrit), { sstv.dossier },
         { sstv.images().filter { it.source != SstvPc.ESSAI } }, { classement.etat().groupes })
+
+    /** The pictures' finish (colour, IA), with [defauts] from SSTV › Réglages: set on [api]. */
+    fun retouches(defauts: () -> RetouchesGalerie.Defauts): RetouchesGalerie =
+        RetouchesGalerie(::pixels, ::ecrit, defauts).also { api.retouches = it }
 }

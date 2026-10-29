@@ -141,6 +141,9 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
 
     private fun places(m: Planche.Modele): Map<Int, Pair<File, SstvMeta.SstvShot>> = cases(m).places
 
+    /** Sheet [id]'s boxes whose picture went through the « IA » (said in what is sent to the web site). */
+    fun imagesIa(id: String): Int = modele(id)?.let { m -> places(m).values.count { it.second.retoucheIa } } ?: 0
+
     private fun modele(id: String): Planche.Modele? =
         id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }?.let { i -> rangement.modeles().firstOrNull { it.id == i } }
 
