@@ -52,7 +52,7 @@ object PageJournal {
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble", "pj_cam_satellite",
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
-        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_son_accelere", "pj_son_accelere_aide", "pj_s_sans_son",
+        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_son_accelere", "pj_son_accelere_aide", "pj_son_titre", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
         "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_duree_bilan", "pj_frise_legende", "pj_vitesse_aide",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
@@ -1312,9 +1312,9 @@ let morceauJoue = '', dernier = 0, allureVue = 1;
 function morceauA(tt) { return P ? P.sons.findIndex(s => tt >= s.o + s.an && tt < s.o + s.du) : -1; }
 /**
  * The paces (real time per time shown), as the station's files have them ([SessionRenduPc.Allure]): stretches each at
- * its pace — outside the windows (« continu » only), in a window, a picture or a contact coming, a contact heard with the
- * sound (real time); with the accelerated replay, its stretches' paces in the passes instead (normal: real time, else
- * faster), the margins at the pass's.
+ * its pace — « Hors passage » outside AOS → LOS (the margins, between two in « continu »), « Pendant le passage » from
+ * the AOS to the LOS, a picture or a contact coming, a contact heard with the sound (real time); with the accelerated
+ * replay, its stretches' paces in the passes instead (normal: real time, else faster), the margins at « Hors passage ».
  */
 function piecesAllure() {
   if (!S) return;
@@ -1322,25 +1322,39 @@ function piecesAllure() {
   let imposes = null;
   if (O.accelere) { imposes = []; S.ps.forEach(q => (q.segments || []).forEach(s => imposes.push(s))); }
   const ecoute = O.avecSon ? S.ecoute : [], dans = m => f.some(w => m >= w[0] && m <= w[1]);
+  // The passes themselves, AOS to LOS (merged when they overlap).
+  const pp = [];
+  S.ps.map(q => [q.de, q.a + 1]).sort((x, y) => x[0] - y[0]).forEach(q => { const d = pp[pp.length - 1]; if (d && q[0] <= d[1]) d[1] = Math.max(d[1], q[1]); else pp.push(q.slice()); });
+  S.passes = pp;
+  const passe = m => pp.some(q => m >= q[0] && m < q[1]);
   const bornes = new Set();
   f.forEach(w => { bornes.add(w[0]); bornes.add(w[1] + 1); });
+  pp.forEach(q => q.forEach(x => { if (f.some(w => x > w[0] && x <= w[1])) bornes.add(x); }));
   (imposes || S.actifs.concat(ecoute)).forEach(a => { if (f.some(w => a[0] <= w[1] && a[1] >= w[0])) { bornes.add(a[0]); bornes.add(a[1] + 1); } });
   const b = [...bornes].sort((x, y) => x - y), l = [];
   for (let k = 0; k < b.length - 1; k++) {
-    const m = Math.floor((b[k] + b[k + 1]) / 2), de = (q => m >= q[0] && m <= q[1]);
+    const m = Math.floor((b[k] + b[k + 1]) / 2), de = (q => m >= q[0] && m <= q[1]), base = passe(m) ? v.passage : v.hors;
     let r;
     if (!dans(m)) { if (!continu) continue; r = v.hors; }
-    else if (imposes) { const s = imposes.find(de); r = s ? Math.max(1, s[2]) : v.passage; }
-    else r = ecoute.some(de) ? Math.min(1, v.image) : S.actifs.some(de) ? v.image : v.passage;
+    else if (imposes) { const s = imposes.find(q => de(q) && (passe(m) || q[2] <= 1)); r = s ? Math.max(1, s[2]) : base; }
+    else r = ecoute.some(de) ? Math.min(1, v.image) : S.actifs.some(de) ? v.image : base;
     const d = l[l.length - 1];
     if (d && d[2] === r && d[1] === b[k]) d[1] = b[k + 1]; else l.push([b[k], b[k + 1], r]);
   }
+  l.forEach(q => { q[3] = coutA(q[0]); q[4] = coutA(q[1]); });
   S.pieces = l;
 }
-/** The pace at [tt]: the lowest of each stretch's plus 2 per second away — slowing down before a slower one, so none is jumped over. */
+/** [tt] on the weighed scale: the pace changes by 2 a second inside the passes (gently), by 10 outside (quickly). */
+function coutA(tt) {
+  let dedans = 0;
+  (S.passes || []).forEach(q => { if (tt > q[0]) dedans += Math.min(tt, q[1]) - q[0]; });
+  return (2 * dedans + 10 * (tt - S.segs[0][0] - dedans)) / 1000;
+}
+/** The pace at [tt]: the lowest of each stretch's plus its weighed distance — slowing down before a slower one, so none is jumped over. */
 function allureA(tt) {
   let r = Infinity;
-  (S.pieces || []).forEach(q => { const d = tt < q[0] ? q[0] - tt : tt >= q[1] ? tt - q[1] + 1 : 0; r = Math.min(r, q[2] + 2 * d / 1000); });
+  const c = coutA(tt), c1 = coutA(tt + 1);
+  (S.pieces || []).forEach(q => { const d = tt < q[0] ? q[3] - c : tt >= q[1] ? c1 - q[4] : 0; r = Math.min(r, q[2] + d); });
   return isFinite(r) ? r : +O.vPassage;
 }
 /** The sound heard here: the pass shown's recording, where the time runs in real time (as the video: never sped up nor slowed), the sound asked. */
@@ -1520,13 +1534,15 @@ let zoomsAffiches = [];
 function montreZooms() { zoomsAffiches = zoomsAffiches.filter(z => document.body.contains(z)); zoomsAffiches.forEach(z => z.montre()); }
 /**
  * How much of the pass's zoom at [tt] (1 in a pass, 0 far from it): by the seconds of play still to go to the nearest
- * pass, the speed slowing down as it comes (its speed plus 2 per second away), over 1.5 s — as the files work it out.
+ * pass, the speed slowing down as it comes (its speed plus 10 per second away, « Hors passage » at most), over 1.5 s —
+ * as the files work it out.
  */
 function partPassage(tt, l) {
   let d = Infinity;
   (l || S.ps.map(q => [q.de, q.a])).forEach(q => { d = Math.min(d, tt < q[0] ? q[0] - tt : tt > q[1] ? tt - q[1] : 0); });
   if (!isFinite(d)) return 1;
-  const vp = +O.vPassage, s = Math.log((vp + 2 * d / 1000) / vp) / 2;
+  const vp = Math.max(1, +O.vPassage), vh = +O.vHors, x = d / 1000, rampe = (vh - vp) / 10;
+  const s = vh <= vp ? x / vh : x <= rampe ? Math.log((vp + 10 * x) / vp) / 10 : Math.log(vh / vp) / 10 + (x - rampe) / vh;
   return Math.max(0, Math.min(1, 1 - s / 1.5));
 }
 /** The globe's size now: eased from the zoom outside to the pass's; going from one pass to the next (« passages »), out and back in. */
@@ -1649,11 +1665,12 @@ function panneauOptions(p) {
   const pc = !!window.SATME_PC, seul = S.ps.length === 1;
   p.appendChild(titreBloc(T.marges));
   p.appendChild(el('div', { class: 'commandes' }, [curseurMarge('mAvant', T.marge_avant), curseurMarge('mApres', T.marge_apres)]));
-  // Three paces (outside the passes: continuous time only; passes in a row: the pause between them), in a pass, on a picture or a contact.
+  // Three paces: outside AOS → LOS (the margins, between two passes), from the AOS to the LOS, on a picture or a contact;
+  // passes in a row: the pause between them.
   p.appendChild(titreBloc(T.vitesses));
   const v = el('div', { class: 'commandes' });
   const vHors = curseurVitesse('vHors', T.s_v_hors, 10, 20000), pause = curseurPause();
-  const montre = () => { vHors.style.display = S.mode === 'continu' ? '' : 'none'; pause.style.display = S.mode === 'continu' ? 'none' : ''; };
+  const montre = () => { pause.style.display = S.mode === 'continu' ? 'none' : ''; };
   const mode = el('select', { onchange: ev => { S.mode = O.mode = ev.target.value; garde(); S.trans = 0; montre(); fenetresSession(); maj(); } },
     [['passages', T.s_mode_passages], ['continu', T.s_mode_continu]].map(c => el('option', { value: c[0], text: c[1] })));
   mode.value = S.mode;
@@ -1663,9 +1680,16 @@ function panneauOptions(p) {
   // One pass: nothing to follow on — said rather than hidden, the editor the same.
   if (seul) p.appendChild(el('div', { class: 'aide', text: T.s_mode_seul }));
   p.appendChild(el('div', { class: 'aide', text: T.vitesses_aide }));
-  // Skipping the silences: quick and silent where nothing was logged nor heard, real time with the sound round the rest —
-  // with the speeds, its own (« Silences ») beside them; the page and the files.
-  p.appendChild(titreBloc(T.accel_titre));
+  // The sound, with the speeds it depends on: the recording's, sped up to ×4 (SatMe-PC's timeline), and skipping the
+  // silences — quick and silent where nothing was logged nor heard, real time with the sound round the rest, its own
+  // speed (« Silences ») beside it; the page and the files.
+  p.appendChild(titreBloc(T.son_titre));
+  const sn = el('div', { class: 'colonnes' });
+  sn.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son, () => { piecesAllure(); if (joue) synchro(); })]));
+  if (pc) sn.appendChild(el('div', { title: T.son_accelere_aide }, [caseOpt('sonAccelere', T.son_accelere, () => { if (joue) synchro(); })]));
+  p.appendChild(sn);
+  p.appendChild(el('div', { class: 'aide', text: T.s_son_aide }));
+  if (pc) p.appendChild(el('div', { class: 'aide', text: T.son_accelere_aide }));
   const vSil = curseurVitesse('rapide', T.accel_vitesse, 2, 100, true, chargeSegments);
   const montreSil = () => { vSil.style.display = O.accelere ? '' : 'none'; };
   p.appendChild(el('div', { class: 'commandes' }, [el('div', { title: T.accelere + '. ' + T.accel_aide },
@@ -1738,11 +1762,7 @@ function panneauExports(p) {
     radio('formatF', 'telephone', T.format_portrait, O.format === 'telephone', () => { O.format = 'telephone'; garde(); dessineCadre(); majSstv(); majElements(); })]));
   c.appendChild(caseOpt('ouverture', T.ouverture, rafraichit)); c.appendChild(caseOpt('recap', T.recap, rafraichit));
   if (pc) c.appendChild(curseurBilan());
-  // The sound: where the time runs in real time (a contact heard, the accelerated replay's normal stretches), here and in the video.
-  c.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son, () => { piecesAllure(); if (joue) synchro(); })]));
-  // Sped up to ×4 with its pitch kept, here and in the video (SatMe-PC's timeline).
-  if (pc) c.appendChild(el('div', { title: T.son_accelere_aide }, [caseOpt('sonAccelere', T.son_accelere, () => { if (joue) synchro(); })]));
-  c.appendChild(el('div', { title: T.accelere + '. ' + T.accel_aide }, [caseOpt('accelere', T.accelere_video, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); })]));
+  // The sound and skipping the silences: in « Options » (« Son »), with the speeds; the files follow them.
   c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
   p.appendChild(c);
   p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: n > 1 ? T.s_video : T.video, onclick: () => fabrique('video') }),
@@ -1752,7 +1772,6 @@ function panneauExports(p) {
   if (pc) { p.appendChild(el('div', { class: 'duree-video', style: 'margin:4px 0;font-weight:600' })); majDuree(); }
   if (pc) p.appendChild(el('div', { class: 'aide', text: T.exp_unique }));
   if (n > 1) p.appendChild(el('div', { class: 'aide', text: T.exp_plusieurs }));
-  p.appendChild(el('div', { class: 'aide', text: T.s_son_aide }));
   p.appendChild(el('div', { id: 'fabrication' }));
   // The pass shown's SSTV pictures and report panels (each pass keeps its own).
   if (n > 1) p.appendChild(titreBloc(tf('s_passage', S.i + 1, n) + ' · ' + jour(P.de)));

@@ -68,6 +68,12 @@ object SessionRenduPc {
      * pass's ×20 to a picture's ×3 in about 1 s, from ×1000 outside to ×20 in about 2 s.
      */
     const val EASE = 2.0
+    /**
+     * The same outside the passes (before the AOS, after the LOS, between two — the time where I am not under the
+     * satellite): much quicker, so a few minutes of margin reach « Hors passage » (from ×20 to ×1000 in about 100 s of
+     * real time); inside AOS → LOS the gentle [EASE] keeps, so nothing there is jumped over.
+     */
+    const val EASE_HORS = 10.0
     /** The zooms by default (the globe's size, 1: 85 % of the view's height): outside the passes, in a pass. */
     const val Z_HORS = 0.9
     const val Z_PASSAGE = 1.8
@@ -245,13 +251,14 @@ object SessionRenduPc {
     }
 
     /**
-     * The pace at each moment: the timeline cut into stretches each with its pace (outside
-     * the passes — « continu » only —, in a pass, a picture or a contact coming), and the
-     * pace at [t] the lowest of each stretch's plus [EASE] × its distance (s): it slows down
-     * before reaching a slower stretch and speeds up after it, by e every 1/[EASE] s of video.
+     * The pace at each moment: the timeline cut into stretches each with its pace (« Hors passage » outside AOS → LOS —
+     * the margins before the AOS and after the LOS, between two passes in « continu » —, « Pendant le passage » from
+     * the AOS to the LOS, a picture or a contact coming), and the pace at [t] the lowest of each stretch's plus its
+     * distance weighed by [EASE] per second inside the passes, [EASE_HORS] outside: it slows down before reaching a
+     * slower stretch and speeds up after it, gently in a pass, quickly outside.
      */
     class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses, ecoute: List<LongRange> = emptyList(),
-                 /** Imposed in the windows: each stretch's pace (the accelerated replay, a stretch in real time); the margins round them at [Vitesses.passage]. */
+                 /** Imposed in the windows: each stretch's pace (the accelerated replay, a stretch in real time); elsewhere « Pendant le passage » in a pass, « Hors passage » in the margins. */
                  imposes: List<JournalPassage.Segment>? = null,
                  /** Every pace times this (the page's « Vitesse »): above 1, nothing runs in real time. */
                  val lecture: Double = 1.0,
@@ -259,12 +266,33 @@ object SessionRenduPc {
                   * Where the pace is held to [SON_MAX] with the « Vitesse » ([Session.plafonds]: a recording heard sped up):
                   * at most [SON_MAX] / [lecture] there — none when the « Vitesse » itself goes past [SON_MAX].
                   */
-                 plafonds: List<LongRange> = emptyList()) {
+                 plafonds: List<LongRange> = emptyList(),
+                 /**
+                  * The passes themselves, AOS to LOS ([Session.passages]): « Pendant le passage » and the gentle [EASE]
+                  * inside, « Hors passage » and [EASE_HORS] outside; the heard sound held to [SON_MAX] only inside.
+                  * Null: the windows themselves (each a pass without margins).
+                  */
+                 passages: List<LongRange>? = null) {
+        /** The passes merged (from, to exclusive), sorted, and the length of passes before each. */
+        private val pDe: LongArray; private val pA: LongArray; private val pAvant: LongArray
+        /** Where the distances are counted from (precision). */
+        private val origine: Long = fenetres.minOfOrNull { it.first } ?: 0L
         /** The stretches (from, to, pace before [lecture]): the page shades them on its timeline. */
         val morceaux: List<Triple<Long, Long, Double>>
+        /** Each stretch's ends on the weighed scale ([cout]). */
+        private val cDe: DoubleArray; private val cA: DoubleArray
         init {
+            val fusion = ArrayList<LongArray>()
+            (passages ?: fenetres).filter { it.last >= it.first }.sortedBy { it.first }.forEach { r ->
+                val d = fusion.lastOrNull()
+                if (d != null && r.first <= d[1]) d[1] = maxOf(d[1], r.last + 1) else fusion += longArrayOf(r.first, r.last + 1)
+            }
+            pDe = LongArray(fusion.size) { fusion[it][0] }; pA = LongArray(fusion.size) { fusion[it][1] }
+            pAvant = LongArray(fusion.size); for (k in 1 until fusion.size) pAvant[k] = pAvant[k - 1] + (pA[k - 1] - pDe[k - 1])
             val bornes = sortedSetOf<Long>()
             fenetres.forEach { bornes += it.first; bornes += it.last + 1 }
+            // AOS and LOS: « Hors passage » before, « Pendant le passage » from one to the other.
+            for (k in pDe.indices) for (x in longArrayOf(pDe[k], pA[k])) if (fenetres.any { x > it.first && x <= it.last }) bornes += x
             val dedans = (if (imposes != null) imposes.map { it.deMs..it.aMs } else actifs + ecoute)
             (dedans + plafonds).forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
             val plafond = if (plafonds.isEmpty() || lecture > SON_MAX) Double.MAX_VALUE else SON_MAX / lecture
@@ -273,23 +301,44 @@ object SessionRenduPc {
             for (k in 0 until b.size - 1) {
                 val m = (b[k] + b[k + 1]) / 2
                 val dans = fenetres.any { m in it }
+                val passe = dansPasse(m)
+                val base = if (passe) v.passage else v.hors
                 val r = when {
                     !dans -> if (continu) v.hors else continue
-                    imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.vitesse?.let { if (it <= 0) v.image else it.toDouble().coerceAtLeast(1.0) } ?: v.passage
+                    // The silences skipped run at their speed in the pass; in the margins « Hors passage » (what is heard there keeps its real time).
+                    imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.takeIf { passe || it.vitesse <= 1 }?.vitesse?.let { if (it <= 0) v.image else it.toDouble().coerceAtLeast(1.0) } ?: base
                     // A contact heard: in real time (its sound only plays there, never slowed nor sped up).
-                    ecoute.any { m in it } -> 1.0; actifs.any { m in it } -> v.image; else -> v.passage }.let { r0 ->
-                        if (dans && plafonds.any { m in it }) minOf(r0, plafond) else r0 }
+                    ecoute.any { m in it } -> 1.0; actifs.any { m in it } -> v.image; else -> base }.let { r0 ->
+                        // The sound held to ×4 only from the AOS to the LOS: in the margins « Hors passage » wins.
+                        if (dans && passe && plafonds.any { m in it }) minOf(r0, plafond) else r0 }
                 val der = l.lastOrNull()
                 if (der != null && der.third == r && der.second == b[k]) l[l.size - 1] = Triple(der.first, b[k + 1], r) else l += Triple(b[k], b[k + 1], r)
             }
             morceaux = l
+            cDe = DoubleArray(l.size) { cout(l[it].first) }; cA = DoubleArray(l.size) { cout(l[it].second) }
         }
+        /** Is [t] in a pass (AOS to LOS)? */
+        fun dansPasse(t: Long): Boolean {
+            var lo = 0; var hi = pDe.size - 1
+            while (lo <= hi) { val k = (lo + hi) ushr 1; if (t < pDe[k]) hi = k - 1 else if (t >= pA[k]) lo = k + 1 else return true }
+            return false
+        }
+        /** How long of the passes lies before [t] (ms). */
+        private fun avantDans(t: Long): Long {
+            var lo = 0; var hi = pDe.size - 1; var k = -1
+            while (lo <= hi) { val m = (lo + hi) ushr 1; if (pDe[m] <= t) { k = m; lo = m + 1 } else hi = m - 1 }
+            return if (k < 0) 0L else pAvant[k] + (minOf(t, pA[k]) - pDe[k])
+        }
+        /** [t] on the weighed scale: [EASE] per second inside the passes, [EASE_HORS] outside (the pace's change from there to here). */
+        fun cout(t: Long): Double { val dedans = avantDans(t); return (EASE * dedans + EASE_HORS * (t - origine - dedans)) / 1000.0 }
         /** Real time per video time at [t]. */
         fun a(t: Long): Double {
             var r = Double.MAX_VALUE
-            for ((de, a, v) in morceaux) {
-                val d = if (t < de) de - t else if (t >= a) t - a + 1 else 0L
-                r = minOf(r, v + EASE * d / 1000.0)
+            val c = cout(t); val c1 = cout(t + 1)
+            for (k in morceaux.indices) {
+                val (de, a, v) = morceaux[k]
+                val d = if (t < de) cDe[k] - c else if (t >= a) c1 - cA[k] else 0.0
+                r = minOf(r, v + d)
             }
             return (if (r == Double.MAX_VALUE) v.passage else r) * lecture
         }
@@ -302,10 +351,19 @@ object SessionRenduPc {
     /** Every frame of the session's passes, [fps] a second, each moment at its pace ([Allure]). */
     fun plan(fenetres: List<LongRange>, actifs: List<LongRange>, mode: String, v: Vitesses, fps: Int = FPS, transition: Double = TRANSITION_S,
              ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null, lecture: Double = 1.0,
-             plafonds: List<LongRange> = emptyList()): List<Trame> {
+             plafonds: List<LongRange> = emptyList(), passages: List<LongRange>? = null): List<Trame> {
         if (fenetres.isEmpty()) return emptyList()
-        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes, lecture, plafonds)
-        fun pas(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
+        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes, lecture, plafonds, passages)
+        fun pas0(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
+        // Outside the passes the pace changes quicker than a frame ([EASE_HORS]): a frame's step never more than twice the
+        // step where it lands — slowing down before the AOS, it never jumps into the pass (nor over a slower stretch).
+        fun pas(t: Long): Long {
+            val p = pas0(t)
+            if (2 * pas0(t + p) >= p) return p
+            var lo = 1L; var hi = p
+            while (hi - lo > 1) { val m = (lo + hi) / 2; if (2 * pas0(t + m) >= m) lo = m else hi = m }
+            return lo
+        }
         val l = ArrayList<Trame>()
         if (mode == "continu") {
             val fin = fenetres.maxOf { it.last }
@@ -332,8 +390,8 @@ object SessionRenduPc {
         return l
     }
 
-    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes, s.lecture, s.plafonds)
-    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes, s.lecture, s.plafonds)
+    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes, s.lecture, s.plafonds, s.passages)
+    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes, s.lecture, s.plafonds, s.passages)
 
     // ---------------------------------------------------------------- the timeline, the page's and the video's
 
@@ -402,16 +460,22 @@ object SessionRenduPc {
 
     /**
      * How much of the pass's zoom at [t] (1 in a pass, AOS to LOS — [Session.passages] —, 0 far from it): by the
-     * video's seconds still to go to the nearest pass at its pace slowing down ([Allure]: its
-     * pace plus [EASE] per second away, ln((p + 2d) / p) / 2 s), over [ZOOM_S] — the camera comes
-     * near before the AOS, goes away after the LOS, however fast the time runs between. The
-     * journal page works it out the same way.
+     * video's seconds still to go to the nearest pass at its pace slowing down ([Allure]: outside the passes its pace
+     * plus [EASE_HORS] per second away, « Hors passage » at most), over [ZOOM_S] — the camera comes near before the
+     * AOS, goes away after the LOS, however fast the time runs between. The journal page works it out the same way.
      */
-    fun partPassage(fenetres: List<LongRange>, t: Long, vPassage: Double): Double {
+    fun partPassage(fenetres: List<LongRange>, t: Long, vPassage: Double, vHors: Double = Double.MAX_VALUE): Double {
         if (fenetres.isEmpty()) return 1.0
         val d = fenetres.minOf { f -> if (t < f.first) f.first - t else if (t > f.last) t - f.last else 0L } / 1000.0
-        val s = kotlin.math.ln((vPassage + EASE * d) / vPassage) / EASE
-        return (1 - s / ZOOM_S).coerceIn(0.0, 1.0)
+        return (1 - secondesJusquA(d, vPassage, vHors) / ZOOM_S).coerceIn(0.0, 1.0)
+    }
+
+    /** The video's seconds over [d] s of real time before a pass at [vPassage], the pace rising by [EASE_HORS] a second, [vHors] at most. */
+    fun secondesJusquA(d: Double, vPassage: Double, vHors: Double): Double {
+        if (vHors <= vPassage) return d / vHors
+        val rampe = (vHors - vPassage) / EASE_HORS
+        return if (d <= rampe) kotlin.math.ln((vPassage + EASE_HORS * d) / vPassage) / EASE_HORS
+        else kotlin.math.ln(vHors / vPassage) / EASE_HORS + (d - rampe) / vHors
     }
 
     /** The globe's size from the part of the pass's zoom [k]: eased, from [zHors] to [zPassage] (geometrically, as a camera comes nearer). */
@@ -423,8 +487,8 @@ object SessionRenduPc {
      */
     fun zoom(s: Session, tr: Trame): Double = zoom(s.zHors, s.zPassage, when (tr) {
         is Trame.Tourne -> (1 - sin(PI * tr.k)) * partPassage(s.passages,
-            if (tr.k < 0.5) s.fenetres[tr.i - 1].last else s.fenetres[tr.i].first, s.v.passage)
-        else -> partPassage(s.passages, tr.t, s.v.passage)
+            if (tr.k < 0.5) s.fenetres[tr.i - 1].last else s.fenetres[tr.i].first, s.v.passage, s.v.hors)
+        else -> partPassage(s.passages, tr.t, s.v.passage, s.v.hors)
     })
 
     // ---------------------------------------------------------------- frames

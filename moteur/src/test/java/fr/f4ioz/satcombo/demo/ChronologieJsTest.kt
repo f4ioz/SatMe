@@ -121,4 +121,54 @@ class ChronologieJsTest {
         // The timeline's code is in the page.
         assertTrue(h.contains("function chEtat(c, s)"))
     }
+    /** A function of the page, whole (its braces counted). */
+    private fun fonction(h: String, nom: String): String {
+        val i = h.indexOf("function $nom(")
+        assertTrue(nom, i >= 0)
+        var k = h.indexOf('{', i); var n = 0
+        while (true) { if (h[k] == '{') n++ else if (h[k] == '}') { n--; if (n == 0) break }; k++ }
+        return h.substring(i, k + 1)
+    }
+
+    @Test
+    fun la_page_du_telephone_hors_passage_et_pendant_le_passage() {
+        val h = PageJournal.html()
+        val code = listOf("piecesAllure", "coutA", "allureA", "partPassage").joinToString("\n") { fonction(h, it) }
+        lance(code + """
+            // One pass, AOS 1 000 000 → LOS 1 360 000, 5 minutes before and after; a picture 60 s after the AOS.
+            const aos = 1000000, los = 1360000;
+            globalThis.O = { vHors: 2000, vPassage: 20, vImage: 3, accelere: false, avecSon: false };
+            globalThis.S = { segs: [[aos - 300000, los + 300000]], ps: [{ de: aos, a: los }], mode: 'passages', actifs: [[aos + 57000, aos + 99000]], ecoute: [] };
+            piecesAllure();
+            // The margins at « Hors passage », AOS → LOS at « Pendant le passage », the picture slower.
+            assert.ok(Math.abs(allureA(aos - 250000) - 2000) < 1e-9); assert.ok(Math.abs(allureA(los + 250000) - 2000) < 1e-9);
+            assert.ok(Math.abs(allureA(aos + 250000) - 20) < 1e-9); assert.ok(Math.abs(allureA(aos + 70000) - 3) < 1e-9);
+            // Quickly reached outside (10 a second), gently inside (2 a second).
+            assert.ok(Math.abs(allureA(aos - 50000) - (20 + 10 * 50)) < 1e-6);
+            assert.ok(Math.abs(allureA(aos + 52000) - (3 + 2 * 5)) < 1e-6);
+            // « Pendant le passage » ×1: real time from the AOS to the LOS (the sound), the margins still quick.
+            O.vPassage = 1; O.vImage = 1; piecesAllure();
+            for (let t = aos; t < los; t += 10000) assert.ok(allureA(t) <= 1.0001, t);
+            assert.ok(allureA(aos - 100000) > 900);
+            // « Continu »: between two passes « Hors passage » too.
+            O.vPassage = 20; O.vImage = 3;
+            S.segs.push([5000000, 5400000]); S.ps.push({ de: 5030000, a: 5370000 }); S.mode = 'continu'; piecesAllure();
+            assert.ok(Math.abs(allureA(3000000) - 2000) < 1e-9);
+            // The zoom: in a pass, near; far between two.
+            assert.strictEqual(partPassage(aos + 1000), 1); assert.strictEqual(partPassage(20000000), 0);
+        """)
+    }
+
+    @Test
+    fun les_options_rangent_les_vitesses_et_le_son() {
+        val h = PageJournal.html()
+        // The three speeds named for where they apply, « Hors passage » always shown.
+        for (k in listOf("pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image", "pj_son_titre")) assertTrue(k, h.contains(fr.f4ioz.satcombo.i18n.I18n.t(k)))
+        val options = fonction(h, "panneauOptions"); val fabriquer = fonction(h, "panneauExports")
+        assertTrue(options.contains("curseurVitesse('vHors'") && !options.contains("vHors.style.display"))
+        // The sound in « Options », with the speeds and the silences skipped; « Fabriquer » only making files.
+        for (x in listOf("caseOpt('avecSon'", "caseOpt('sonAccelere'", "caseOpt('accelere'", "T.son_titre")) {
+            assertTrue(x, options.contains(x)); assertTrue(x, !fabriquer.contains(x))
+        }
+    }
 }
