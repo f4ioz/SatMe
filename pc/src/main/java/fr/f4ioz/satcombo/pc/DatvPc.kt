@@ -541,6 +541,7 @@ class DatvPc(
             }
             for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
             versSite?.let { f -> runCatching { f(bloc) } }
+            versFluide?.let { f -> runCatching { f(bloc) } }
             val t = horloge()
             if (t - t0 >= 1000) { etat = etat.copy(kbps = (octets * 8 / (t - t0)).toInt()); octets = 0; t0 = t }
         }
@@ -555,6 +556,9 @@ class DatvPc(
 
     /** The site's live video ([VideoSitePc]) taking each block while it runs (it only queues them); null: nobody. */
     @Volatile var versSite: ((ByteArray) -> Unit)? = null
+
+    /** « Lecture fluide » ([LecteurFluideDatvPc]) taking each block while a page watches; null: nobody. */
+    @Volatile var versFluide: ((ByteArray) -> Unit)? = null
 
     /** Network clients reading the stream now. */
     val clients: Int get() = abonnes.size
@@ -741,7 +745,7 @@ class DatvPc(
         ffmpeg = p
         lecteursDepuisMs = horloge()
         thread(isDaemon = true, name = "satme-datv-images") { litImages(p.inputStream, gen) }
-        if (reglage.son && !sonReglable) demarreSon(ff)
+        if (reglage.son && !sonReglable && !sonNavigateurIci) demarreSon(ff)
     }
 
     /** The players' input options: low delay; with [decodageTolerant], damaged packets dropped and errors concealed rather than stopped on. */
@@ -761,8 +765,8 @@ class DatvPc(
     fun coupeSon(on: Boolean) {
         regleSon(on)
         if (!on) { arreteFfplay(); if (!sonLocalVoulu()) arreteSonLocal(); return }
-        // Played here with its levels: the next block starts it.
-        if (sonReglable) return
+        // Played here with its levels: the next block starts it; played by a page on this PC: not twice.
+        if (sonReglable || sonNavigateurIci) return
         if (ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
     }
 
@@ -779,8 +783,8 @@ class DatvPc(
      * it (its level cannot be lowered while a voice speaks).
      */
     fun sorties(): Set<String> = buildSet {
-        if (reglage.son && lecteursLocaux) { add("pc"); if (!sonReglable) add("pcFixe") }
-        if (diffusion?.ecoute("datv") == true) add("navigateur")
+        if (reglage.son && lecteursLocaux && !sonNavigateurIci) { add("pc"); if (!sonReglable) add("pcFixe") }
+        if (diffusion?.ecoute("datv") == true || sonPage) add("navigateur")
     }
 
     /** The browsers listening to the DATV sound (« Écouter ici »), fed by the decoder here. */
@@ -803,9 +807,25 @@ class DatvPc(
         if (reglable) arreteFfplay()
         else {
             if (!sonLocalVoulu()) arreteSonLocal()
-            if (reglage.son && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+            if (reglage.son && !sonNavigateurIci && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
         }
     }
+
+    /**
+     * « Lecture fluide »: a page on this PC plays the picture's sound itself ([ici]), or any page does ([page]).
+     * Meanwhile the PC's own players are quiet (ffplay stopped, « Vumètre et volume » measures without playing),
+     * the setting « Son sur ce PC » kept as it is; back as before once no page plays it.
+     */
+    @Synchronized
+    fun sonNavigateur(ici: Boolean, page: Boolean) {
+        sonPage = page
+        if (ici == sonNavigateurIci) return
+        sonNavigateurIci = ici
+        if (ici) arreteFfplay()
+        else if (reglage.son && !sonReglable && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+    }
+    @Volatile var sonNavigateurIci = false; private set
+    @Volatile private var sonPage = false
 
     /** Played here with its levels, or a browser listens to it. */
     private fun sonLocalVoulu(): Boolean = lecteursLocaux && ((sonReglable && reglage.son) || diffusion?.ecoute("datv") == true)
@@ -821,7 +841,7 @@ class DatvPc(
         essaiSonLocalMs = t
         sonLocal?.arrete()
         val ff = RenduPc.ffmpeg() ?: return
-        sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son }, diffusion, horloge) { gainParole() }.takeIf { it.demarre() }
+        sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son && !sonNavigateurIci }, diffusion, horloge) { gainParole() }.takeIf { it.demarre() }
     }
 
     private fun arreteSonLocal() { sonLocal?.arrete(); sonLocal = null; essaiSonLocalMs = 0L }

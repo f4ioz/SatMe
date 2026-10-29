@@ -673,6 +673,25 @@ fun main(args: Array<String>) {
     parole.versSiteDatv = { pcm, r -> videoSite.parle(pcm, r) }
     directSite.video = videoSite
     videoSite.demarre()
+    // « Lecture fluide » of the DATV tab: the picture and its sound together in the browser (fragmented MP4); the
+    // demonstration's test picture in the demonstration.
+    val fluide = LecteurFluideDatvPc()
+    fluide.demo = ModeDemo.actif
+    fluide.source = if (ModeDemo.actif) SourceTsDemo().let { d -> object : VideoSitePc.SourceTs {
+        override fun branche(f: ((ByteArray) -> Unit)?) { d.voulue = f != null; d.branche(f) }
+        override fun verrouille(): Boolean = d.verrouille()
+        override fun service(): String = d.service()
+        override fun kbps(): Int = d.kbps()
+    } } else object : VideoSitePc.SourceTs {
+        override fun branche(f: ((ByteArray) -> Unit)?) { datv.versFluide = f }
+        override fun verrouille(): Boolean = datv.etat.actif && datv.etat.verrouille
+        override fun service(): String = datv.etat.service
+        override fun kbps(): Int = datv.etat.kbps
+    }
+    fluide.tolerant = { datv.decodageTolerant }
+    fluide.sonNavigateur = { ici, page -> datv.sonNavigateur(ici, page) }
+    serveur.fluideDatv = fluide
+    fluide.demarre()
     // « FT8/FT4 » (off by default): each slot decoded sent live (direct-ft8), a journal's pass with its messages (ft8-passage).
     val ft8Site = Ft8SitePc()
     ft8Site.entendus = { son.ft8.entendus }

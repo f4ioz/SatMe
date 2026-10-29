@@ -16,6 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **DATV : lecture fluide, l'image et le son ensemble.** Case **Lecture fluide (vidéo et son)** sous « Son sur ce PC », dans l'onglet DATV : l'image reçue se joue dans le navigateur comme une vraie vidéo (25 images par seconde, son synchronisé, environ une seconde de retard) au lieu des images JPEG une à une et du son à part. Le H.264 reçu passe tel quel ; le H.265 et le MPEG-2 sont réencodés en H.264 par SatMe-PC. Le son se coupe ou se règle avec le bouton 🔊 en bas à gauche de l'image ; sur ce PC, le son de « Son sur ce PC » se tait pendant ce temps pour ne pas l'entendre deux fois (vumètre, sous-titres, traduction et enregistrements continuent). Marche aussi par un SatMe-Node et depuis une autre machine (accès à distance avec le mot de passe, HTTPS compris). Un navigateur qui ne sait pas la lire, ou un échec : les images JPEG, comme avant. Dans la démonstration, la mire de démonstration.
+
+### en
+- **DATV: smooth playback, picture and sound together.** Tick **Lecture fluide (vidéo et son)** under "Son sur ce PC" in the DATV tab: the received picture plays in the browser as a real video (25 frames per second, sound in sync, about one second behind) instead of JPEG pictures one by one with the sound apart. Received H.264 is passed as is; H.265 and MPEG-2 are re-encoded to H.264 by SatMe-PC. Mute or set the volume with the 🔊 button at the picture's bottom left; on this PC, the "Son sur ce PC" sound goes quiet meanwhile so it is not heard twice (level meter, subtitles, translation and recordings carry on). Also works through a SatMe-Node and from another machine (remote access with the password, HTTPS included). A browser that cannot play it, or a failure: the JPEG pictures, as before. In the demonstration, the demonstration test picture.
+
+### fr
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
 
 ### en

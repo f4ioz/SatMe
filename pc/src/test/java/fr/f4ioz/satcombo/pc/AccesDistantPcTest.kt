@@ -211,7 +211,7 @@ class AccesDistantPcTest {
 
     /** Routes of every kind: page, API, streams (SSE, sound, MJPEG), files, uploads, gestures. */
     private val ROUTES = listOf("GET" to "/api/etat", "GET" to "/api/flux?t=etat", "GET" to "/api/son/flux?source=sdr",
-        "GET" to "/api/datv/video.mjpeg", "GET" to "/api/reglages", "GET" to "/sstv/x.png", "GET" to "/enregistrements/x.wav",
+        "GET" to "/api/datv/video.mjpeg", "GET" to "/api/datv/fluide.mp4", "POST" to "/api/datv/fluide/son?id=x&on=1", "GET" to "/api/reglages", "GET" to "/sstv/x.png", "GET" to "/enregistrements/x.wav",
         "GET" to "/sauvegarde.zip", "GET" to "/carnet.adi", "GET" to "/api/acces", "GET" to "/api/montage",
         "POST" to "/api/cat/connecter?modele=SIM", "POST" to "/api/import", "POST" to "/api/sauvegarde/restaure",
         "POST" to "/api/acces/mdp", "POST" to "/api/datv/emission/demarre", "GET" to "/planche/api/modeles", "GET" to "/journal/api/passages",
