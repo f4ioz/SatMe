@@ -343,7 +343,7 @@ password or a key.
 
 | Type | Body | Pace |
 |---|---|---|
-| `direct` | JSON `{"type","version","t": <UTC ms>, "pilote": {…} \| null}` or `{…, "datv": {…} \| null}`: each part present replaces the previous one, `null` clears it | Auto-pilot: 10 s (once a minute when unchanged); DATV: 3 to 30 s |
+| `direct` | JSON `{"type","version","t": <UTC ms>, "pilote": {…} \| null}` or `{…, "datv": {…} \| null}` or `{…, "balises": {…} \| null}`: each part present replaces the previous one, `null` clears it | Auto-pilot: 10 s (once a minute when unchanged); DATV: 3 to 30 s; QO-100 beacons: as soon as a state changes, otherwise every 5 min |
 | `direct-spectre` | JSON `{"type","version","centreHz","largeurHz","minDb","maxDb","bins"}`: `bins` = 1024 bytes in base64, 0 = `minDb`, 255 = `maxDb` | 1 to 10 s, while the SDR is on QO-100 |
 | `direct-datv-image` | multipart, `fichier` = JPEG ≤ 190 KB, 640 px | while the DATV receiver is locked |
 | `direct-sstv-image` | multipart, `fichier` = JPEG | every 5 s during an auto-pilot pass, when the picture changed |
@@ -363,6 +363,31 @@ its QRZ.com record when found (QRZ account in SatMe-PC), else there is the
 callsign alone; `km` and `azimut` (°) from the station, worked out from the
 locator. Never the QRZ photo (it belongs to its author), the e-mail address,
 the street or the coordinates. A site that does not know `station` ignores it.
+
+`balises` (optional, the **Balises QO-100** line, unticked by default; only
+while the beacon watch is ticked in the DATV tab): QO-100's beacons as the
+station sees them,
+`{"large": {"statut","cause","texte","depuis","mer","niveauDb"}, "etroites": {"statut","cause","texte","depuis"}}`.
+`large` is the DATV beacon (10,491.500 MHz), `etroites` the narrow band
+beacons (absent when no SDR listens to them). `statut` is `ok`, `absente`
+(absent), `flux-abime` (stream damaged at the source), `faible` (weak
+signal), `pertes-ici` (packets lost by the PC or the network) or `inconnu`
+(unknown); `cause` is `source` (the beacon itself: off, its encoder at fault —
+not the station's end), `ici` (the station's reception), `inconnue` (unknown)
+or empty; `texte` is the sentence SatMe-PC shows (in French, 200 characters at
+most); `depuis` the time (UTC ms) this state began; `mer` the beacon's MER
+as received (dB) and `niveauDb` its level over the noise on the ground
+station's spectrum, when measured. Nothing else: no station frequency, no
+setting. Example:
+
+```json
+{"type":"direct","version":1,"t":1798000000000,
+ "balises":{"large":{"statut":"flux-abime","cause":"source","depuis":1797999400000,"mer":8.1,"niveauDb":8.4,
+   "texte":"Flux abîmé à la source (le codeur de la balise) — pas chez vous : …"},
+  "etroites":{"statut":"ok","cause":"","texte":"Balises bande étroite entendues (3/3)","depuis":1797990000000}}}
+```
+
+For a script: `POST /api/site/direct?on_balises=1` (or `0`), `&periode_balises=300` (60 to 3600 s, the pace when nothing changes).
 
 A receiver that does not want live data answers `403` (or `404`) to these
 types.

@@ -526,6 +526,8 @@ class DatvPc(
         }
 
         fun bloc(bloc: ByteArray) {
+            // A block read just before a new start (the node's stream ends a read later): not mixed into the new reception.
+            if (generation != gen) return
             octets += bloc.size
             analyse.ajoute(bloc)
             runCatching { carte.bloc(bloc) }
@@ -960,6 +962,10 @@ class DatvPc(
 
     /** The sound on this PC, or not (from the next start). */
     fun regleSon(on: Boolean) { reglage = reglage.copy(son = on); garde(reglage) }
+
+    /** [r] kept as the settings, nothing started: what the beacons' check ([BalisesQo100Pc]) puts back after it. */
+    @Synchronized
+    fun retiens(r: ReglageDatv) { reglage = r; garde(r) }
 
     /** The stream in VLC too (full quality, its own window), fed as the others. */
     @Synchronized

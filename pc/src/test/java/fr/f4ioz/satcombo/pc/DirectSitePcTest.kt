@@ -165,6 +165,39 @@ class DirectSitePcTest {
         assertTrue(site.json().getJSONObject("direct").getJSONArray("canaux").getJSONObject(0).getBoolean("on"))
     }
 
+    @Test fun `the beacons - in direct as balises, on a verdict's change, else every period, null once when off`() {
+        val (site, d) = direct()
+        var b: JSONObject? = JSONObject().put("large", JSONObject().put("statut", "ok").put("cause", "").put("texte", "Balise reçue (MER 8,0 dB)").put("mer", 8.0))
+        d.balises = { b }
+        d.tic()
+        assertTrue(envois.isEmpty())
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_balises") "1" else "" }
+        d.tic()
+        assertEquals(1, envois.size)
+        val o = JSONObject(String(envois[0].corps!!))
+        assertEquals("direct", envois[0].entetes["X-SatMe-Type"])
+        assertEquals("ok", o.getJSONObject("balises").getJSONObject("large").getString("statut"))
+        // The words change (another MER), the verdict does not: not before the period (5 min).
+        b = JSONObject().put("large", JSONObject().put("statut", "ok").put("cause", "").put("texte", "Balise reçue (MER 8,2 dB)").put("mer", 8.2))
+        repeat(20) { t += 10_000L; d.tic() }
+        assertEquals(1, envois.size)
+        // The verdict changes: at once (within 10 s).
+        b = JSONObject().put("large", JSONObject().put("statut", "flux-abime").put("cause", "source").put("texte", "Flux abîmé à la source"))
+        t += 10_000L; d.tic()
+        assertEquals(2, envois.size)
+        // Unchanged: again after the period.
+        t += 300_000L; d.tic()
+        assertEquals(3, envois.size)
+        // The watch switched off: null once, then nothing.
+        b = null
+        t += 10_000L; d.tic()
+        assertEquals(4, envois.size)
+        assertTrue(JSONObject(String(envois[3].corps!!)).isNull("balises"))
+        t += 400_000L; d.tic()
+        assertEquals(4, envois.size)
+        assertTrue(d.json().toString().contains("Balises QO-100"))
+    }
+
     @Test fun `nothing at all while Mon site web is switched off, even the parts chosen`() {
         val (site, d) = direct()
         d.pilote = { ap() }
