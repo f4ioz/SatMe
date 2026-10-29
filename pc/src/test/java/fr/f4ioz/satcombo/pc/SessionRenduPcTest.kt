@@ -592,6 +592,24 @@ class SessionRenduPcTest {
             lecture = lecture, accelere = accelere, son = son, sonAccelere = sonAccelere)
 
     @Test
+    fun seul_ce_qui_est_entendu_est_ralenti() {
+        val e = scenes(avecSon = true)[1].e
+        val v = SessionRenduPc.Vitesses(hors = 20.0, passage = 20.0, image = 3.0)
+        // A recording whose activity is only one minute in the middle: ×4 (heard) there, the pace chosen (×20, silent) elsewhere.
+        val voix = (e.debutMs + 60_000L)..(e.debutMs + 120_000L)
+        val s = SessionRenduPc.Session(scenes(avecSon = true).drop(1).take(1), "continu", v, ouverture = false, recap = false, avant = 30_000L, apres = 30_000L,
+            son = true, entendus = listOf(voix))
+        val c = SessionRenduPc.chronologie(s)
+        assertEquals(SessionRenduPc.SON_MAX, c.allure.a(e.debutMs + 90_000L), 1e-9); assertTrue(c.allure.entendu(e.debutMs + 90_000L, true))
+        assertEquals(20.0, c.allure.a(e.debutMs + 300_000L), 1e-9); assertTrue(!c.allure.entendu(e.debutMs + 300_000L, true))
+        // Nothing heard at all: the recording plays at the paces chosen.
+        val rien = SessionRenduPc.chronologie(SessionRenduPc.Session(scenes(avecSon = true).drop(1).take(1), "continu", v, ouverture = false, recap = false,
+            avant = 30_000L, apres = 30_000L, son = true, entendus = emptyList()))
+        assertEquals(20.0, rien.allure.a(e.debutMs + 60_000L), 1e-9)
+        assertTrue(rien.secondes < c.secondes)
+    }
+
+    @Test
     fun le_son_accelere_jusqu_a_4_la_hauteur_gardee() {
         val e = scenes(avecSon = true)[1].e
         val v = SessionRenduPc.Vitesses(hors = 20.0, passage = 20.0, image = 3.0)

@@ -163,7 +163,9 @@ object SessionRenduPc {
                   /** « Son accéléré »: the recordings heard sped up to [SON_MAX], their pitch kept; the passes recorded slowed to it. */
                   val sonAccelere: Boolean = true,
                   /** Where a recording is (real time); null: each pass with recordings, AOS to LOS. */
-                  enregistres: List<LongRange>? = null) {
+                  enregistres: List<LongRange>? = null,
+                  /** Where something is heard in the recordings (their measured activity); null: the whole recordings. */
+                  val entendus: List<LongRange>? = null) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
             .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
         /**
@@ -180,9 +182,10 @@ object SessionRenduPc {
             else enregistres ?: scenes.filter { it.e.enregistrements.isNotEmpty() }.map { it.e.debutMs..it.e.finMs }
         /**
          * Where the pace is held down to [SON_MAX] to be heard (« Son accéléré », no stretch imposed: the silences skipped
-         * keep their own paces, a stretch chosen runs in real time): the recordings' spans.
+         * keep their own paces, a stretch chosen runs in real time): where something is heard in them (a recording's
+         * silence keeps the paces chosen, unheard), else, the heard parts unknown, the recordings' spans.
          */
-        val plafonds: List<LongRange> get() = if (sonAccelere && imposes == null) enregistres else emptyList()
+        val plafonds: List<LongRange> get() = if (sonAccelere && imposes == null) entendus ?: enregistres else emptyList()
         /** The passes themselves, AOS to LOS: the zoom comes near around them (the satellite seen coming from afar in the margin). */
         val passages: List<LongRange> = scenes.map { it.e.debutMs..it.e.finMs }
         /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */

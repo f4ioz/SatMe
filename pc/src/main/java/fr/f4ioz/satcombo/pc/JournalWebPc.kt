@@ -91,6 +91,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
+    /** Around a heard stretch, kept at the heard pace too (ms): a voice not cut at its first syllable. */
+    private val ENTENDU_AUTOUR_MS = 2_000L
     private fun d(v: Double) = "%.2f".format(Locale.US, v)
 
     private class Travail(@Volatile var progres: Float = 0f, @Volatile var fichier: File? = null, @Volatile var fini: Boolean = false,
@@ -474,7 +476,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace", bilan = q.bilan,
             // Where each pass's recordings are: heard there, sped up to ×4 at most (« Son accéléré »).
             sonAccelere = q.sonAccelere, enregistres = if (!avecSon) emptyList() else es.flatMap { e ->
-                j.morceaux(e).map { m -> (m.origine + m.annonce)..(m.origine + m.dureeMs) } })
+                j.morceaux(e).map { m -> (m.origine + m.annonce)..(m.origine + m.dureeMs) } },
+            // Held down to ×4 only where something is heard (the recordings' activity, a little around it): elsewhere the paces chosen.
+            entendus = if (!avecSon || !q.sonAccelere) null else es.flatMap { e -> j.activite(e).map { (it.first - ENTENDU_AUTOUR_MS)..(it.last + ENTENDU_AUTOUR_MS) } })
     }
 
     /**
