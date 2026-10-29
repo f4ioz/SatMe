@@ -1639,7 +1639,34 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The SDR calibration assistant (receive only). */
     private val calibration by lazy { CalibrationSdrPc(station) { sdr } }
 
+    /**
+     * The DATV presets: one applied (its parameters through the settings
+     * route, never a gain, never while transmitting), the form kept as one,
+     * one removed. Nothing here starts a transmission.
+     */
+    private fun prereglageDatv(chemin: String, q: Map<String, String>): JSONObject {
+        val e = emission ?: return JSONObject().put("ok", false)
+        val P = fr.f4ioz.satcombo.datv.PrereglagesDatv
+        q["prereglage"]?.let { nom ->
+            if (e.etat.emet) return JSONObject().put("ok", false).put("erreur", "préréglage : arrêter l'émission d'abord")
+            val p = P.de(e.prereglagesPerso, nom) ?: return JSONObject().put("ok", false).put("erreur", "préréglage inconnu : $nom")
+            P.refus(p)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            return action(chemin, p.parametres()).put("prereglage", p.nom)
+        }
+        q["prereglageGarde"]?.let { nom ->
+            if (nom.isBlank()) return JSONObject().put("ok", false).put("erreur", "un nom pour le préréglage")
+            if (P.INTEGRES.any { it.nom.equals(nom.trim(), true) }) return JSONObject().put("ok", false).put("erreur", "nom d'un préréglage d'origine : en choisir un autre")
+            val p = e.prereglageActuel(nom, q["avecFreq"] == "1")
+            P.refus(p)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            e.prereglagesPerso = P.range(e.prereglagesPerso, p)
+            return JSONObject().put("ok", true).put("prereglage", p.nom)
+        }
+        q["prereglageRetire"]?.let { nom -> e.prereglagesPerso = e.prereglagesPerso.filter { !it.nom.equals(nom.trim(), true) } }
+        return JSONObject().put("ok", true)
+    }
+
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
+        if (chemin == "/api/datv/emission/reglage" && listOf("prereglage", "prereglageGarde", "prereglageRetire").any { it in q }) return prereglageDatv(chemin, q)
         val ok = JSONObject().put("ok", true)
         val rotor = station.stationRotor
         fun entier(k: String) = q[k]?.trim()?.toIntOrNull()

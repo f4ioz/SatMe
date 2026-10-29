@@ -3222,6 +3222,10 @@ ${OngletSked.HTML}
         <div class="avert" id="e-hackrf-note"></div>
       </div>
       <div class="petit" id="e-bladerf-l" hidden></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Préréglage</span><select id="e-pre" style="max-width:230px" aria-label="Préréglage DATV" title="Remplit la norme, le MODCOD, le débit de symboles, le roll-off (et pour certains le canal) : rien n’est émis, le gain n’est jamais touché" onchange="ePre(this.value)"></select>
+        <button type="button" id="e-pre-garde" onclick="ePreGarde()" title="Garder les réglages actuels (norme, MODCOD, débit, roll-off, trames, pilotes, et la fréquence si voulu) sous un nom ; jamais le gain">Garder…</button>
+        <button type="button" id="e-pre-x" onclick="ePreRetire()" title="Retirer ce préréglage (les préréglages d’origine restent)" hidden>✕</button>
+        <span class="petit" id="e-pre-info"></span></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Norme</span><select id="e-norme" onchange="eNorme()" style="max-width:120px"><option value="DVB-S2">DVB-S2</option><option value="DVB-S">DVB-S</option></select>
         <span class="petit" id="e-norme-info"></span></div>
       <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
@@ -9444,7 +9448,7 @@ async function ticEmission() {
   if (g('v-datv').hidden && !(EM && EM.emet)) return;
   let j; try { j = await (await fetch('api/datv/emission')).json(); } catch (x) { return; }
   if (!j.ok) { g('e-carte').hidden = true; return; }
-  EM = j; eVie(j.emet); dDuo();
+  EM = j; eVie(j.emet); dDuo(); ePreRend(j);
   const libre = !document.activeElement || !document.activeElement.id.startsWith('e-');
   if (ePremier || libre) {
     if (ePremier) {
@@ -9683,6 +9687,41 @@ async function eDetecte() {
   const bl = EM && EM.emetteur === 'bladerf';
   txt('e-hackrf-info', bl ? 'lecture (bladeRF-cli -e info)…' : 'lecture (hackrf_info)…');
   try { await fetch('api/datv/emission/' + (bl ? 'bladerf' : 'hackrf'), { method: 'POST' }); } catch (x) {}
+  setTimeout(ticEmission, 100);
+}
+// The presets: the form filled (never a gain, never while transmitting, nothing started).
+function ePreRend(j) {
+  const s = g('e-pre'), l = j.prereglages || [];
+  const h = '<option value="">—</option>' + l.map(p => '<option value="' + esc(p.nom) + '">' + esc(p.nom) + (p.integre ? '' : ' ★') + '</option>').join('');
+  if (s.dataset.h !== h) { s.innerHTML = h; s.dataset.h = h; }
+  // The one matching the form, if any.
+  const m = l.find(p => p.sr === j.sr && p.norme === (j.norme === 'DVB-S' ? 'S' : 'S2') && (p.norme === 'S' ? p.modcod === j.modcodDvbs : p.modcod === j.modcod) &&
+    (p.khz == null || p.khz === j.khz));
+  if (document.activeElement !== s) s.value = m ? m.nom : '';
+  const c = l.find(p => p.nom === s.value);
+  g('e-pre-x').hidden = !c || c.integre;
+  txt('e-pre-info', c && c.note ? c.note : '');
+  s.disabled = !!j.emet; g('e-pre-garde').disabled = !!j.emet;
+}
+async function ePre(nom) {
+  if (!nom) return;
+  let r = null;
+  try { r = await (await fetch('api/datv/emission/reglage?prereglage=' + enc(nom), { method: 'POST' })).json(); } catch (x) {}
+  if (r && r.ok === false) txt('e-pre-info', 'Refusé : ' + (r.erreur || '?'));
+  ePremier = true; g('e-pre').blur(); setTimeout(ticEmission, 100);
+}
+async function ePreGarde() {
+  const nom = prompt('Nom du préréglage (norme, MODCOD, débit, roll-off, trames, pilotes ; jamais le gain) :', '');
+  if (!nom) return;
+  const f = confirm('Garder aussi la fréquence (' + v('e-mhz') + ' MHz) dans ce préréglage ?\n\nOK : oui · Annuler : la fréquence restera celle du moment');
+  let r = null;
+  try { r = await (await fetch('api/datv/emission/reglage?prereglageGarde=' + enc(nom) + '&avecFreq=' + (f ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  txt('e-pre-info', r ? (r.ok === false ? 'Refusé : ' + r.erreur : 'préréglage « ' + nom + ' » gardé') : 'pas de réponse');
+  setTimeout(ticEmission, 100);
+}
+async function ePreRetire() {
+  const nom = v('e-pre'); if (!nom || !confirm('Retirer le préréglage « ' + nom + ' » ?')) return;
+  try { await fetch('api/datv/emission/reglage?prereglageRetire=' + enc(nom), { method: 'POST' }); } catch (x) {}
   setTimeout(ticEmission, 100);
 }
 // The standard alone first: the MODCOD list then follows it.
