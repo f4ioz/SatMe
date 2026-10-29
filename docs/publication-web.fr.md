@@ -271,6 +271,8 @@ Content-Type: image/png
 | `favoris` | JSON | — | les [satellites favoris](#les-satellites-favoris), seulement si coché |
 | `diplomes` | JSON | — | les [diplômes](#les-diplômes) suivis et votre progression, seulement si coché |
 | `diplome-image` | multipart | PNG, JPEG, PDF | l'image d'un [diplôme reçu](#les-diplômes), seulement sur un clic |
+| `direct-ft8` | JSON | — | chaque créneau [FT8 / FT4](#ft8--ft4) décodé, seulement si coché |
+| `ft8-passage` | multipart | JSON | un passage du journal avec ses messages [FT8 / FT4](#ft8--ft4) (sur clic, ou chaque passage en Automatique) |
 
 **`ping`** : `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types` : ceux qui ne sont pas à « Jamais »). Le récepteur répond **n'importe
@@ -462,6 +464,62 @@ site », sans erreur, et réessaie dix minutes plus tard.
 L'appel de réglage, pour un script (`POST /api/site/direct`, comme la case de
 la ligne), paramètres dans l'adresse : `POST /api/site/direct?on_station=1` (ou `0`), `&periode_station=2` (2 à 10 s).
 
+### FT8 / FT4
+
+Sous **En direct**, la ligne **FT8/FT4** (décochée d'origine) envoie, tant que
+l'écoute FT8 / FT4 est en marche, **chaque créneau une fois décodé** (FT8
+15 s, FT4 7,5 s ; environ 9 s, resp. 4,5 s, après sa fin, le temps du
+décodeur) : type `direct-ft8`, JSON, 1 à 10 Ko. Chaque créneau part une fois,
+les vides aussi (pour qu'une cascade en direct continue) ; ce que le site ne
+prend pas est perdu.
+
+```json
+{"type":"direct-ft8","version":1,"t":1798000005000,"mode":"FT8","duree":15000,
+ "satellite":{"nom":"RS-44","norad":44909,"geo":false,"aos":1797999700000,"los":1798000600000,"elMax":54.4},
+ "dialHz":435640000,"transpondeur":"Mode V/U linear",
+ "decodes":[{"df":1210,"dt":0.3,"snr":-8,"msg":"CQ EA4XYZ IM79","de":"EA4XYZ","grid":"IM79","cq":true,"toMe":false},
+            {"df":1530,"dt":0.2,"snr":-12,"msg":"F4IOZ DL1ABC JO62","de":"DL1ABC","grid":"JO62","cq":false,"toMe":true}],
+ "n":2,
+ "cascade":{"basHz":200,"hautHz":3000,"bins":256,"lignes":8,"data":"<base64, 2048 octets>"}}
+```
+
+| Clé | Sens |
+|---|---|
+| `t`, `mode`, `duree` | le début du créneau (UTC ms), `FT8` ou `FT4`, sa durée (ms) |
+| `satellite` | le passage en cours (d'une minute avant l'AOS à une minute après le LOS), ou QO-100 au poste (`geo`, sans `aos`/`los`) ; absent entre les passages |
+| `bande` | sans satellite, la bande de la fréquence (`2 m`, `70 cm`, `20 m`…), si connue |
+| `dialHz`, `transpondeur` | la fréquence (Hz ciel) lue au poste ; l'émetteur choisi du satellite |
+| `decodes` | 60 au plus, les plus forts, triés par fréquence audio : `df` fréquence audio (Hz), `dt` décalage (s), `snr` report (dB), `msg` le message (les caractères de FT8, 40 au plus), `de` l'indicatif qui l'envoie (quand on le sait), `grid` le carré qu'il donne (4 caractères), `cq` un CQ, `toMe` adressé à l'indicatif de la station |
+| `n` | combien de messages avait le créneau (avant la limite de 60) |
+| `cascade` | quand la cascade tourne : `lignes` rangées de `bins` octets (0 calme … 255 fort), la plus ancienne d'abord, de `basHz` à `hautHz` en travers |
+
+Seulement des messages entendus sur l'air : aucun réglage, adresse, chemin,
+carte son ni rien d'autre de la station. Vers un dossier : `direct/ft8.json`
+(le dernier créneau). Un récepteur qui ne connaît pas le type répond `400`,
+`404` ou `415` : laissé tranquille dix minutes, sans erreur. L'appel de
+réglage : `POST /api/site/direct?on_ft8=1` (ou `0`).
+
+**Un passage entier** (`ft8-passage`, un genre de la file : Sur clic
+d'origine, Automatique envoie chaque passage du journal à sa fin s'il a des
+messages) : le 🌐 de la carte « Passages FT8/FT4 sur le site » de l'onglet FT8
+(SatMe-PC y liste les derniers passages du journal avec des messages).
+Multipart comme les médias : `meta` (`titre`, `satellite`, `utc` = AOS,
+`mode`, `stations`, `carres`, `cle` = `ft8:<catnum>_<AOS ms>`) et `fichier`,
+un JSON (`application/json`, jusqu'à quelques centaines de Ko) :
+
+```json
+{"version":1,"satellite":{"nom":"RS-44","norad":44909},"aos":1797999700000,"los":1798000600000,"elMax":54.4,
+ "transpondeur":"Mode V/U linear","dialHz":435640000,"modes":["FT4"],
+ "tranches":[{"t":1797999707500,"mode":"FT4","decodes":[…],"n":3,"cascade":{…}}, …],
+ "decodes":148,"stations":23,"carres":17,"dxcc":9}
+```
+
+`tranches` : chaque créneau avec des messages (480 au plus), ses `decodes`
+comme plus haut (60 au plus), `cascade` seulement pour les créneaux que
+SatMe-PC avait encore en mémoire (les trois dernières heures). `stations`,
+`carres`, `dxcc` : combien d'indicatifs (pas celui de la station), de carrés
+et d'entités DXCC ont été entendus.
+
 ---
 
 ## Sécurité
@@ -573,6 +631,8 @@ fiches que l'API :
 - `flux.xml` : un flux Atom des 50 derniers (liens relatifs au dossier) ;
 - `direct/direct.json` (réécrit sur place), `direct/station.json`,
   `direct/datv.jpg`, `direct/sstv.jpg` si le direct est coché — pas de spectre vers un dossier ;
+- `direct/ft8.json` (le dernier créneau) si **FT8/FT4** est coché ; un
+  passage (`ft8-passage`) comme tout élément, `ft8-passage/<année>/<id>.data.json` (sa fiche `<id>.json`) ;
 - `favoris.json` si **Satellites favoris** est coché ;
 - `diplomes.json` si **Diplômes** est coché, `diplomes/<id>.<ext>` pour
   chaque image envoyée par **Envoyer le diplôme reçu**.

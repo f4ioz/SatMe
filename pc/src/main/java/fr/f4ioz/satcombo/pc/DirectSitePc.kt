@@ -35,7 +35,9 @@ import javax.imageio.ImageWriteParam
  * hour; to a folder, `favoris.json`; a receiver that does not know the type — 400, 404 or 415 — is left alone for
  * the day, without an error), **Station** (type `direct-station`: the satellite followed, where the antennas
  * really point, the receivers and the rig in use, as [stationJson] builds it; when it changes, at most every
- * [periode] seconds, and every [BATTEMENT_STATION_MS] unchanged; to a folder, `direct/station.json`).
+ * [periode] seconds, and every [BATTEMENT_STATION_MS] unchanged; to a folder, `direct/station.json`), **FT8/FT4**
+ * (type `direct-ft8`: each slot once decoded, its messages and a strip of the waterfall, [Ft8SitePc]; to a folder,
+ * `direct/ft8.json`).
  *
  * SatMe-PC pushes; the site never connects to the station. Nothing is
  * queued: what the site does not take is dropped and the next try waits
@@ -58,7 +60,9 @@ class DirectSitePc(
         /** The station now: on change, at most every [periode] s, else every [BATTEMENT_STATION_MS]. */
         STATION("station", "Station", 2, 2, 10),
         /** The awards followed (« Agenda › Diplômes »): on change, else once a day ([PERIODE_DIPLOMES_MS]). */
-        DIPLOMES("diplomes", "Diplômes", 86400, 86400, 86400);
+        DIPLOMES("diplomes", "Diplômes", 86400, 86400, 86400),
+        /** FT8 / FT4: each slot once decoded ([Ft8SitePc], type `direct-ft8`). */
+        FT8("ft8", "FT8/FT4", 15, 15, 15);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -89,6 +93,8 @@ class DirectSitePc(
     @Volatile var diplomes: () -> JSONObject? = { null }
     /** The station now ([Station]), null when it cannot be told. */
     @Volatile var station: () -> Station? = { null }
+    /** FT8 / FT4's slots and strips ([Ft8SitePc]), null when not set. */
+    @Volatile var ft8: Ft8SitePc? = null
 
     /**
      * The station as the site's live page shows it: the satellite it works ([Sat]), the antennas ([Rotor], and
@@ -138,6 +144,8 @@ class DirectSitePc(
     fun tic() {
         if (!site.actif) return
         val t = horloge()
+        // The waterfall's strip of each slot kept while listening (the live and the passes published later).
+        ft8?.let { f -> runCatching { f.capture(t) } }
         for (c in Canal.values()) {
             val s = suivis.getValue(c)
             if (!on(c)) { s.envoye = false; continue }
@@ -145,6 +153,7 @@ class DirectSitePc(
             if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.STATION) { runCatching { station(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.FT8) { runCatching { ft8(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -183,6 +192,7 @@ class DirectSitePc(
             Canal.FAVORIS -> favoris(s, t)
             Canal.STATION -> station(s, t)
             Canal.DIPLOMES -> diplomes(s, t)
+            Canal.FT8 -> ft8(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -257,6 +267,23 @@ class DirectSitePc(
         }
     }
 
+    /**
+     * FT8 / FT4: each slot once over and decoded ([Ft8SitePc.prete]), sent once (dropped when the site does not take
+     * it: live data). A site that does not know `direct-ft8` is asked again after [NON_PRIS_STATION_MS].
+     */
+    private fun ft8(s: Suivi, t: Long) {
+        val f = ft8 ?: return
+        if (t < s.prochainMs) return
+        val o = f.prete(t) ?: return
+        f.envoyee(o.optLong("t"))
+        val r = site.envoieDirect("direct-ft8", o) ?: run { s.erreur = "site non réglé"; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.envoye = true }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_STATION_MS }
+            else -> echec(s, t, r.first, raison(r.second))
+        }
+    }
+
     /** Sends [o] as [type]: true when taken, false when not (the next try put off), null when the target is not set. */
     private fun poste(s: Suivi, t: Long, type: String, o: JSONObject): Boolean? {
         val r = site.envoieDirect(type, o) ?: run { s.erreur = "site non réglé"; return null }
@@ -287,6 +314,7 @@ class DirectSitePc(
             .also { o -> if (c == Canal.FAVORIS) o.put("cadence", "à chaque changement, sinon 1 h").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
+            .also { o -> if (c == Canal.FT8) o.put("cadence", "chaque créneau décodé (15 s, FT4 7,5 s)").put("nonPris", on(c) && s.nonPris) }
     }))
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */

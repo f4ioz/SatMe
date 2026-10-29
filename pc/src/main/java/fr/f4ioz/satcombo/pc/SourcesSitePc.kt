@@ -39,6 +39,9 @@ class SourcesSitePc(
     private val ssdv: fr.f4ioz.satcombo.telemesure.AssemblageSsdv? = null,
     private val dossierSsdv: File? = null,
 ) {
+    /** A journal's pass with its FT8 / FT4 messages, by its id ([Ft8SitePc.contenu]), set by Main. */
+    @Volatile var ft8: (String) -> SitePc.Contenu? = { null }
+
     private fun ici(): String = listOf(station.settings.callsign, station.settings.manualLocator).filter { it.isNotBlank() }.joinToString(" · ")
     private fun iso(ms: Long) = Instant.ofEpochMilli(ms).toString()
 
@@ -71,6 +74,7 @@ class SourcesSitePc(
                 .put("titre", "QSO " + e.callsign + " · " + e.satName).put("indicatif", e.callsign).put("locator", e.theirLocator).put("satellite", e.satName).put("utc", iso(e.timeMs)).put("mode", e.mode).put("station", ici()))
         }
         SitePc.Genre.SSDV -> contenuSsdv(ref)
+        SitePc.Genre.FT8 -> ft8(ref)
         SitePc.Genre.VIDEO -> File(exports, ref).takeIf { File(ref).name == ref && ref.endsWith(".mp4") && it.isFile }?.let { f ->
             // « SatMe_ISS_20261003_135119Z_passage.mp4 »: its satellite and its time.
             val p = ref.removeSuffix(".mp4").split('_')

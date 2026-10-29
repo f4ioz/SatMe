@@ -61,7 +61,10 @@ class JournalPc(
     /** The pass under way kept now (the program stopping). */
     @Synchronized fun ferme() { collecte.ferme()?.let { garde(it) } }
 
-    private fun garde(e: JournalPassage.Entree) { runCatching { rangement.enregistre(e) }; ft.fige(e) }
+    /** A pass just closed and kept (« Publication web › Passages FT8/FT4 » in Automatique), set by Main. */
+    @Volatile var apresPassage: ((JournalPassage.Entree) -> Unit)? = null
+
+    private fun garde(e: JournalPassage.Entree) { runCatching { rangement.enregistre(e) }; ft.fige(e); apresPassage?.let { f -> runCatching { f(e) } } }
 
     fun passages(): List<JournalPassage.Entree> = runCatching { rangement.passages() }.getOrDefault(emptyList())
 

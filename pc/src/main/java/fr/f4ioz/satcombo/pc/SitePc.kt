@@ -117,7 +117,9 @@ class SitePc(
         RAPPORT("rapport", "Rapports", Mode.CLIC, "rapport"),
         QSO("qso", "Contacts (QSO)", Mode.CLIC, "qso"),
         VIDEO("journal-video", "Vidéos du journal", Mode.CLIC, "journal"),
-        SSDV("ssdv-image", "Images SSDV", Mode.CLIC, "ssdv");
+        SSDV("ssdv-image", "Images SSDV", Mode.CLIC, "ssdv"),
+        /** A journal's pass with its FT8 / FT4 messages ([Ft8SitePc]). */
+        FT8("ft8-passage", "Passages FT8/FT4", Mode.CLIC, "ft8");
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -139,6 +141,9 @@ class SitePc(
 
     /** The live parts (set by Main), sent beside the publications. */
     @Volatile var direct: DirectSitePc? = null
+
+    /** FT8 / FT4's passes for the FT8 tab's list (`GET api/site/ft8`), set by Main. */
+    @Volatile var ft8: Ft8SitePc? = null
 
     // ------------------------------------------------------------------ settings
 
@@ -542,7 +547,9 @@ class SitePc(
         val route = chemin.removePrefix("/api/site")
         fun rep(o: JSONObject) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8), "Cache-Control: no-store\r\n")
         fun dit(err: String?, ok: String) = rep(if (err == null) JSONObject().put("ok", true).put("message", ok) else JSONObject().put("ok", false).put("erreur", err))
-        if (methode != "POST") return if (route == "" || route == "/") rep(json()) else rep(JSONObject().put("ok", false).put("erreur", "inconnu"))
+        if (methode != "POST") return if (route == "" || route == "/") rep(json())
+            else if (route == "/ft8") rep(ft8?.liste({ publication(Genre.FT8, it) }, configure, mode(Genre.FT8).nom) ?: JSONObject().put("ok", false))
+            else rep(JSONObject().put("ok", false).put("erreur", "inconnu"))
         // Switched off in Réglages › Modules: nothing set, tested or sent from here.
         if (!actif) return rep(JSONObject().put("ok", false).put("module", ModulesStation.SITE).put("erreur", MODULE_COUPE))
         return when (route) {

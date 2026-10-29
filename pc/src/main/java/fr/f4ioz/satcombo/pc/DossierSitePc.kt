@@ -45,7 +45,8 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
         val nomId = sur(id)
         val rel = sur(type) + "/" + annee + "/" + nomId
         val d = File(r, sur(type) + "/" + annee); d.mkdirs()
-        val chemin = "$rel.${sur(ext)}"
+        // A JSON item (an FT8 pass) beside its own card: « .data.json ».
+        val chemin = rel + (if (sur(ext) == "json") ".data" else "") + ".${sur(ext)}"
         copieAtomique(source, File(r, chemin))
         val m = JSONObject(meta.toString())
         m.optJSONObject("fichier")?.put("chemin", chemin)
@@ -100,6 +101,11 @@ class DossierSitePc(private val racine: () -> File, private val horloge: () -> L
                 val f = JSONObject()
                 o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
                 d.mkdirs(); ecritAtomique(File(d, "station.json"), f.toString(2).toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
+            }
+            "direct-ft8" -> {
+                val f = JSONObject()
+                o?.keySet()?.filter { it != "type" && it != "version" }?.forEach { k -> f.put(k, o.get(k)) }
+                d.mkdirs(); ecritAtomique(File(d, "ft8.json"), f.toString().toByteArray(Charsets.UTF_8)); 200 to "{\"ok\":true}"
             }
             "direct-efface" -> { direct.keySet().toList().forEach { direct.remove(it) }; d.deleteRecursively(); 200 to "{\"ok\":true}" }
             else -> 415 to "{\"ok\":false,\"erreur\":\"pas de spectre vers un dossier\"}"
