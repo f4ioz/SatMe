@@ -84,6 +84,41 @@ class DirectSitePcTest {
         assertFalse(hors.getBoolean("verrouille")); assertFalse(hors.has("service"))
     }
 
+    private val fiche = fr.f4ioz.satcombo.domain.QrzReponse.Fiche(indicatif = "G4ABC", carre = "IO93FS", nom = "John Smith", prenom = "John", qth = "Leeds",
+        courriel = "john@example.org", pays = "England", image = "https://cdn-xml.qrz.com/c/g4abc/photo.jpg", lat = 53.80123, lon = -1.55456,
+        adresse = "1 Example Street", etat = "West Yorkshire")
+    private val paris = fr.f4ioz.satcombo.data.Observer(48.85, 2.35)
+
+    @Test fun `the DATV station watched - its card, never its photo, mail or street`() {
+        val o = DirectSitePc.stationDatvJson(DirectSitePc.StationDatv("G4ABC", true, fiche, paris))!!
+        assertTrue(DirectSitePc.CLES_STATION_DATV.containsAll(o.keySet()))
+        assertEquals("G4ABC", o.getString("indicatif")); assertTrue(o.getBoolean("selection"))
+        assertEquals("John Smith", o.getString("nom")); assertEquals("Leeds", o.getString("qth"))
+        assertEquals("IO93fs", o.getString("carre")); assertEquals("England", o.getString("pays"))
+        // Paris to Leeds: some 600 km, to the north-west.
+        assertTrue(o.getLong("km") in 550..700); assertTrue(o.getLong("azimut") in 300..350)
+        val texte = o.toString()
+        for (secret in listOf("qrz.com", "photo", "example.org", "Street", "53.8", "1.55", "48.85", "Yorkshire")) assertFalse(secret, texte.contains(secret))
+        // Not found in QRZ (or no account): the callsign alone; not a callsign: nothing.
+        assertEquals(setOf("indicatif", "selection"), DirectSitePc.stationDatvJson(DirectSitePc.StationDatv("F4XYZ", false, null, paris))!!.keySet())
+        assertNull(DirectSitePc.stationDatvJson(DirectSitePc.StationDatv("QO-100", true, null, null)))
+        // A wrong square is left out, and the distance with it (no coordinates either way without our place).
+        val sans = DirectSitePc.stationDatvJson(DirectSitePc.StationDatv("G4ABC", false, fiche.copy(carre = "ZZ99"), null))!!
+        assertFalse(sans.has("carre")); assertFalse(sans.has("km"))
+    }
+
+    @Test fun `the DATV figures carry the station - selected before the lock, confirmed once locked`() {
+        val st = DirectSitePc.StationDatv("G4ABC", true, fiche, paris)
+        val avant = DirectSitePc.datv(EtatDatv(actif = true, etat = 1), ReglageDatv(cielKhz = 10_494_750L, srKs = 333), null, st)
+        assertEquals("G4ABC", avant.getJSONObject("station").getString("indicatif"))
+        // Confirmed by the reception (not selected): only once locked.
+        val nonSel = DirectSitePc.StationDatv("G4ABC", false, fiche, paris)
+        assertFalse(DirectSitePc.datv(EtatDatv(actif = true, etat = 1), ReglageDatv(), null, nonSel).has("station"))
+        val e = EtatDatv(actif = true, etat = 4, merDb = 7.4, modcod = "QPSK 4/5", service = "G4ABC", srTrouveKs = 333)
+        assertTrue(DirectSitePc.datv(e, ReglageDatv(), 2.0, nonSel).has("station"))
+        assertFalse(DirectSitePc.datv(e, ReglageDatv(), 2.0).has("station"))
+    }
+
     @Test fun `a spectrum line is small, scaled and the right way round`() {
         val db = FloatArray(16384) { -100f }.also { it[100] = -40f }
         val l = DirectSitePc.ligneSpectre(db, 10_489_750_000.0, -1_058_400.0)!!

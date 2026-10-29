@@ -8,8 +8,11 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.data.Observer
 import fr.f4ioz.satcombo.datv.EtatDatv
+import fr.f4ioz.satcombo.datv.QrzDatv
 import fr.f4ioz.satcombo.datv.ReglageDatv
+import fr.f4ioz.satcombo.domain.QrzReponse
 import fr.f4ioz.satcombo.plateforme.Stockage
 import org.json.JSONArray
 import org.json.JSONObject
@@ -30,7 +33,7 @@ import javax.imageio.ImageWriteParam
  * picture, the last picture received; during a pass, the picture arriving
  * every few seconds, which the site's live block shows instead of QO-100), **Spectre QO-100** (the narrow band
  * as the SDR sees it, one compact line a second), **Image DATV** (a small
- * JPEG every few seconds while the receiver is locked, with its figures),
+ * JPEG every few seconds while the receiver is locked, with its figures and the station watched, [stationDatvJson]),
  * **Satellites favoris** (the list of the satellites marked ★, type `favoris`: as soon as it changes, else once an
  * hour; to a folder, `favoris.json`; a receiver that does not know the type — 400, 404 or 415 — is left alone for
  * the day, without an error), **Description du montage** (type `montage`: the station's hardware and the paths a signal
@@ -72,8 +75,15 @@ class DirectSitePc(
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
 
-    /** The DATV receiver now, as [DatvPc] has it. */
-    class Datv(val etat: EtatDatv, val reglage: ReglageDatv, val marge: Double?, val image: ByteArray?)
+    /** The DATV receiver now, as [DatvPc] has it; [station]: the station watched, when one is known. */
+    class Datv(val etat: EtatDatv, val reglage: ReglageDatv, val marge: Double?, val image: ByteArray?, val station: StationDatv? = null)
+
+    /**
+     * The DATV station watched: its callsign, [selection] when it is the signal selected on the wide band
+     * spectrum (else confirmed by the reception: card, service name, picture), its QRZ record when found,
+     * where we are (for the distance and bearing). [stationDatvJson] keeps only what may be public.
+     */
+    class StationDatv(val indicatif: String, val selection: Boolean, val fiche: QrzReponse.Fiche?, val moi: Observer?)
 
     /** The SDR's panorama while on QO-100: its bins (dB) and its axis (sky Hz; a negative width is turned over). */
     class Panorama(val db: FloatArray, val centreHz: Double, val largeurHz: Double)
@@ -214,7 +224,7 @@ class DirectSitePc(
                     if (s.envoye) poste(s, t, "direct", JSONObject().put("t", t).put("datv", JSONObject.NULL))?.let { if (it) s.envoye = false }
                     return
                 }
-                if (poste(s, t, "direct", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge))) != true) return
+                if (poste(s, t, "direct", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge, d.station))) != true) return
                 s.envoye = true
                 val img = d.image
                 if (d.etat.verrouille && img != null && img !== imageEnvoyee) {
@@ -492,13 +502,43 @@ class DirectSitePc(
             return o
         }
 
-        /** The receiver's figures for the site: lock, the station received (its service), MER, margin, MODCOD, frequency, rate. */
-        fun datv(e: EtatDatv, r: ReglageDatv, marge: Double?): JSONObject {
+        /**
+         * The receiver's figures for the site: lock, the station received (its service), MER, margin, MODCOD, frequency,
+         * rate; [station] ([stationDatvJson]) while locked, or before when it is the signal selected on the spectrum.
+         */
+        fun datv(e: EtatDatv, r: ReglageDatv, marge: Double?, station: StationDatv? = null): JSONObject {
             val o = JSONObject().put("verrouille", e.verrouille).put("cielKhz", r.cielKhz).put("srKs", if (e.verrouille && e.srTrouveKs > 0) e.srTrouveKs else r.srKs)
             if (e.verrouille) {
                 o.put("service", e.service.take(40)).put("fournisseur", e.fournisseur.take(40)).put("modcod", e.modcod.take(24))
                 e.merDb?.let { o.put("mer", Math.round(it * 10) / 10.0) }
                 marge?.let { o.put("marge", it) }
+            }
+            if (station != null && (e.verrouille || station.selection)) stationDatvJson(station)?.let { o.put("station", it) }
+            return o
+        }
+
+        /** The keys [stationDatvJson] may write: what a test checks, what the documentation lists. */
+        val CLES_STATION_DATV = setOf("indicatif", "selection", "nom", "qth", "carre", "pays", "km", "azimut")
+
+        /**
+         * The DATV station watched, for a public page: its callsign and, from its QRZ record when found, name, town,
+         * square, country, distance (km) and bearing (°) from the station (from the square when known). Never the photo (its author's), the e-mail,
+         * the street or the coordinates. Null when [s] is not a callsign.
+         */
+        fun stationDatvJson(s: StationDatv): JSONObject? {
+            val c = QrzDatv.cle(s.indicatif)
+            if (c.isEmpty()) return null
+            val o = JSONObject().put("indicatif", mot(s.indicatif.uppercase(), 16)).put("selection", s.selection)
+            val f = s.fiche?.takeIf { QrzDatv.sorte(it) == QrzDatv.Sorte.TROUVE } ?: return o
+            val carre = f.carre.trim().takeIf { Regex("(?i)[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?").matches(it) }
+                ?.let { it.take(4).uppercase() + it.drop(4).lowercase() }
+            o.met("nom", mot(f.nom, 60)).met("qth", mot(f.qth, 60)).met("carre", carre).met("pays", mot(f.pays, 40))
+            if (s.moi != null) {
+                val ou = JSONObject()
+                // From the square when there is one (a few km): no closer than the record's own coordinates.
+                if (carre != null) fr.f4ioz.satcombo.demo.ApiStation.ouEstIl(ou, s.moi, null, null, carre)
+                else fr.f4ioz.satcombo.demo.ApiStation.ouEstIl(ou, s.moi, f.lat, f.lon, "")
+                if (ou.has("km")) o.put("km", ou.getLong("km")).put("azimut", ((ou.getLong("azimut") % 360) + 360) % 360)
             }
             return o
         }

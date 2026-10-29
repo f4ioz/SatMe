@@ -17,20 +17,14 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ### fr
 - **Publication web : la description du montage** — une nouvelle ligne **Description du montage** sous *Réglages › Services en ligne › Envoyer vers un site web › En direct* (décochée d'origine) envoie à votre site le matériel de l'onglet **Montage** (parabole, LNB, convertisseurs, MiniTiouner, SDR, poste, ampli…) et les chemins du signal, de l'antenne aux récepteurs et de l'émetteur à l'antenne, pour qu'il dessine votre chaîne QO-100 (type `montage` ; vers un dossier, `montage.json`). Seulement des noms et des caractéristiques, jamais une adresse ni un numéro de série ; dès qu'elle change, sinon une fois par heure.
-
-### en
-- **Web publishing: the station's hardware** — a new **Description du montage** line under *Réglages › Services en ligne › Envoyer vers un site web › En direct* (unticked by default) sends your site the hardware of the **Montage** tab (dish, LNB, converters, MiniTiouner, SDR, rig, amplifier…) and the signal's paths, from the antenna to the receivers and from the transmitter to the antenna, so that it can draw your QO-100 chain (type `montage`; to a folder, `montage.json`). Names and characteristics only, never an address or a serial number; as soon as it changes, otherwise once an hour.
-
-### fr
+- **DATV : la fiche de la station sélectionnée sur le spectre.** L'indicatif écrit sur le signal sélectionné du spectre de la bande large (celui sur lequel le récepteur est accordé) est cherché sur QRZ.com : sa fiche s'affiche en tête, *Station sélectionnée sur le spectre*, même avant l'accrochage. Avec *Réglages › Services en ligne › Envoyer vers un site web › En direct › Image DATV*, le site reçoit aussi la station regardée : indicatif, nom, ville, locator, pays, distance et azimut (jamais la photo QRZ, l'adresse électronique ni la rue).
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
-
-### en
-- **DATV through a SatMe-Node: reception resumes by itself after the node restarts** (service restarted or Pi rebooted). SatMe-PC starts reception there again with the same settings and takes the stream up again; "node silent" clears as soon as the node answers. A stream silent for 20 s is reopened: it no longer stays stuck after a cut.
-
-### fr
 - **Phonie → texte : 15 langues de plus à traduire** — danois, suédois, norvégien, finnois, estonien, letton, lituanien, slovaque, hongrois, roumain, bulgare, slovène, grec, turc et catalan, en passant par l'anglais comme les autres. Les cocher dans *Réglages › Phonie → texte*, puis **Installer la traduction** (environ 65 à 150 Mo par langue).
 
 ### en
+- **Web publishing: the station's hardware** — a new **Description du montage** line under *Réglages › Services en ligne › Envoyer vers un site web › En direct* (unticked by default) sends your site the hardware of the **Montage** tab (dish, LNB, converters, MiniTiouner, SDR, rig, amplifier…) and the signal's paths, from the antenna to the receivers and from the transmitter to the antenna, so that it can draw your QO-100 chain (type `montage`; to a folder, `montage.json`). Names and characteristics only, never an address or a serial number; as soon as it changes, otherwise once an hour.
+- **DATV: the record of the station selected on the spectrum.** The callsign written on the selected signal of the wide band spectrum (the one the receiver is tuned to) is looked up on QRZ.com: its record shows first, *Station sélectionnée sur le spectre*, even before the lock. With *Réglages › Services en ligne › Envoyer vers un site web › En direct › Image DATV*, the site also gets the station watched: callsign, name, town, locator, country, distance and bearing (never the QRZ photo, the e-mail address or the street).
+- **DATV through a SatMe-Node: reception resumes by itself after the node restarts** (service restarted or Pi rebooted). SatMe-PC starts reception there again with the same settings and takes the stream up again; "node silent" clears as soon as the node answers. A stream silent for 20 s is reopened: it no longer stays stuck after a cut.
 - **Speech to text: 15 more languages can be translated** — Danish, Swedish, Norwegian, Finnish, Estonian, Latvian, Lithuanian, Slovak, Hungarian, Romanian, Bulgarian, Slovenian, Greek, Turkish and Catalan, through English like the others. Tick them in *Settings › Speech to text*, then **Install translation** (about 65 to 150 MB per language).
 
 ## 2026.10.34

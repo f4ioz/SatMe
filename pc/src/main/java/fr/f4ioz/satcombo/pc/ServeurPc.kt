@@ -1180,14 +1180,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 d?.retrouveDeTempsEnTemps()
                 val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d)).put("verrouDepuis", d.verrouDepuisMs).also { o ->
                     qrzDatv?.let { z ->
-                        // The callsigns confirmed: the card's, the service name's, those the picture's reading confirmed.
-                        val t = textesDatv
-                        val carteActuelle = d.carte.carte?.takeIf { d.carte.carteMs >= d.verrouDepuisMs }?.indicatif.orEmpty()
-                        val l = fr.f4ioz.satcombo.datv.QrzDatv.candidats(carteActuelle, d.etat.service,
-                            if (t != null && t.ocr) t.confirmes().filter { it.dernierMs >= d.verrouDepuisMs }.map { it.indicatif } else emptyList())
+                        val (l, sp) = indicatifsDatv(d)
                         z.suit(l)
+                        // « spectre »: the station selected on the wide band spectrum (as the list writes it), locked or not.
                         o.put("qrz", z.json(l, station.etat.value.observateur)
-                            .put("service", fr.f4ioz.satcombo.datv.QrzDatv.candidats("", d.etat.service, emptyList()).firstOrNull().orEmpty()))
+                            .put("service", fr.f4ioz.satcombo.datv.QrzDatv.indicatifDans(d.etat.service))
+                            .put("spectre", sp))
                     }
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
@@ -2513,6 +2511,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (!e.actif || !e.verrouille) return ""
         val marge = d.qualite()?.opt("marge")?.let { (it as? Number)?.toDouble() }
         return fr.f4ioz.satcombo.datv.ChatLarge.rapport(large?.nomRecu() ?: e.service, marge, e.merDb, d.reglage.debitAccroche(e.srTrouveKs), d.reglage.cielKhz)
+    }
+
+    /**
+     * The DATV station's callsigns, best first ([fr.f4ioz.satcombo.datv.QrzDatv.candidats]): the card's, the
+     * service name's, the one of the signal selected on the wide band spectrum, those the picture's reading
+     * confirmed; and the selected one as the list writes it (empty when none).
+     */
+    fun indicatifsDatv(d: DatvPc): Pair<List<String>, String> {
+        val t = textesDatv
+        val carteActuelle = d.carte.carte?.takeIf { d.carte.carteMs >= d.verrouDepuisMs }?.indicatif.orEmpty()
+        val sel = large?.indicatifSelection().orEmpty()
+        val l = fr.f4ioz.satcombo.datv.QrzDatv.candidats(carteActuelle, d.etat.service,
+            if (t != null && t.ocr) t.confirmes().filter { it.dernierMs >= d.verrouDepuisMs }.map { it.indicatif } else emptyList(), spectre = sel)
+        return l to fr.f4ioz.satcombo.datv.QrzDatv.parmi(l, sel)
     }
 
     private fun carteDatv(d: DatvPc): JSONObject = d.carte.json(System.currentTimeMillis(), station.etat.value.observateur,
