@@ -15,6 +15,8 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+## 2026.10.34
+
 ### fr
 - **Publication web : SatMe-PC envoie vers un site web extérieur**, quel qu'il soit (module facultatif, désactivé d'origine, qu'aucun profil n'active ; *Réglages › Modules*). Tant qu'il est décoché, rien ne part (ni file, ni essai, ni direct) et aucun bouton 🌐 n'apparaît. Coché, *Réglages › Services en ligne › Envoyer vers un site web* : SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV, planches, rapports, contacts, vidéos du journal — à **une adresse de votre site** (avec `{type}`, ou une seule adresse pour tout), un jeton facultatif ; votre site les reçoit comme il veut (PHP, WordPress, un petit serveur Python…). **Tester** (obligatoire : prêt seulement après un essai réussi), puis pour chaque genre **Sur clic** (d'origine), **Automatique** ou **Jamais**. Le format est une **API documentée et versionnée** (en-têtes `X-SatMe-…`, `multipart/form-data` avec une fiche JSON, un identifiant par envoi pour ne rien publier deux fois), avec des récepteurs prêts à l'emploi en PHP et en Python et une page qui affiche ce qui est reçu : voir `docs/publication-web.fr.md`. Un jeton refusé arrête tout jusqu'au prochain test ; un type refusé s'affiche « refusé (403) » dans l'historique.
 - **Publication web vers un dossier** : sans serveur, SatMe-PC écrit chaque élément dans un dossier de ce PC (`type/année/id.ext` et sa fiche `.json`, un `index.json`, un flux Atom `flux.xml`, écrits sans jamais laisser un fichier à moitié), pour un site statique ou un outil de synchronisation que vous avez déjà (Nextcloud, Syncthing, miroir rsync ou FTP).
