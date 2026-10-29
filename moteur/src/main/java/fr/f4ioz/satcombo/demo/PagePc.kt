@@ -5463,7 +5463,7 @@ function paRecoit(a) {
   while (paFile.length > 2) paFile.shift();
   paSuivante();
 }
-function paEcouteDatv() { return !!(ecCtx || ecWs) && ecSource() === 'datv'; }
+function paEcouteDatv() { return (!!(ecCtx || ecWs) && ecSource() === 'datv') || dFlSonJoue(); }
 function paSuivante() {
   if (paJoue || !paFile.length) return;
   const a = paFile.shift();
@@ -5487,6 +5487,7 @@ function paSuivante() {
 }
 /** The receiver heard here (« Écouter ici ») lowered while the voice speaks. */
 function paBaisse(on, k) {
+  dFlBaisse(on, k);
   if (!ecGain) return;
   const x = v('ec-vol') / 100 * (on ? (k != null ? k : 0.25) : 1);
   // Glided (about 150 ms), not switched: no click.
@@ -8261,6 +8262,8 @@ async function ticDatv(premier) {
   }
   // The video: asked once the stream runs, dropped when it stops.
   const v = g('d-video');
+  // « Lecture fluide »: the picture and its sound in a <video> (LecteurFluideJs); the JPEG stream otherwise.
+  if (dFlTic(D, v)) { dessineConstellation(); qualiteDatv(); dDuo(); return; }
   // « Mode distant »: a picture every 2 s, the video only when asked.
   const vign = MD && !dDirect && D.actif && D.images;
   g('d-direct').hidden = !(MD && D.actif && D.images); txt('d-direct', dDirect ? 'Vignettes' : '▶ Vidéo en direct');
@@ -8320,6 +8323,8 @@ function dReduit() {
   const fs = document.fullscreenElement;
   if (fs && fs.classList.contains('d-cadre')) document.exitFullscreen().catch(() => {});
 }
+// ------------------------------------------------------------------ DATV: « Lecture fluide », the picture and its sound together in a <video>
+${LecteurFluideJs.CODE}
 // ------------------------------------------------------------------ DATV reception quality
 let qEm = null, qEmPs = null;
 const fr1 = x => x == null ? '—' : x.toFixed(1).replace('.', ',');

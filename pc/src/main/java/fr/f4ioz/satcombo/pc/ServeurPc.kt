@@ -68,6 +68,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
 
+    /** « Lecture fluide » of the DATV tab: the picture and its sound as fragmented MP4 (set before [demarre]). */
+    @Volatile var fluideDatv: LecteurFluideDatvPc? = null
+
     /** The IC-9700 by the network: settings, status, scope (set before [demarre]). */
     @Volatile var icomReseau: IcomReseauPc? = null
 
@@ -544,6 +547,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             diffusion.sert(when (q["source"]) { "carte" -> "carte"; "datv" -> "datv"; else -> "sdr" }, sortie)
             return
         }
+        fluideDatv?.takeIf { chemin.startsWith("/api/datv/fluide") }?.let { f -> fluideDatv(c, r, chemin, q, sortie, local, f); return }
         if (chemin == "/api/datv/video.mjpeg" && datv != null) {
             // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video).
             c.soTimeout = 0
@@ -1402,6 +1406,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
      * the login page for anyone; everything else for this PC or a session
      * only. True when the request was answered here.
      */
+    /**
+     * « Lecture fluide »: the stream (`fluide.mp4`, held open while the page plays), its state, a page's sound on
+     * or off (POST, from this page's own origin). Behind [garde] like every route.
+     */
+    private fun fluideDatv(c: Socket, r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, local: Boolean, f: LecteurFluideDatvPc) {
+        val json = "application/json; charset=utf-8"
+        when {
+            chemin == "/api/datv/fluide.mp4" && r.methode == "GET" -> { c.soTimeout = 0; f.sert(sortie, q["id"].orEmpty(), local, q["son"] == "1") }
+            chemin == "/api/datv/fluide/son" && r.methode == "POST" -> {
+                val o = if (!SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"])) JSONObject().put("ok", false).put("erreur", "origine refusée")
+                    else JSONObject().put("ok", f.son(q["id"].orEmpty(), q["on"] == "1"))
+                envoie(sortie, "200 OK", json, o.toString().toByteArray())
+            }
+            chemin == "/api/datv/fluide" -> envoie(sortie, "200 OK", json, f.json().toString().toByteArray())
+            else -> envoie(sortie, "404 Not Found", json, JSONObject().put("ok", false).toString().toByteArray())
+        }
+    }
+
     private fun garde(c: Socket, r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, local: Boolean): Boolean {
         when (chemin) {
             "/manifest.webmanifest" -> { envoie(sortie, "200 OK", "application/manifest+json; charset=utf-8", PagesAccesPc.MANIFESTE.toByteArray()); return true }
