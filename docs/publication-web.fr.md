@@ -119,12 +119,12 @@ Selon le type, quand SatMe-PC les connaît :
 | `satellite` | texte | `"ISS"` | sstv-image, qso, journal-video |
 | `utc` | texte ISO 8601 | `"2026-10-03T13:51:19Z"` | tous (pour une planche ou un rapport : l'heure de l'envoi) |
 | `mode` | texte | `"PD120"`, `"FM"` | sstv-image, qso |
-| `station` | texte | `"F4XYZ · JN18FS"` | votre indicatif et carré |
+| `station` | texte | `"F4XYZ · JN18FS"` | votre indicatif et locator |
 | `evenement` | texte | `"ARISS octobre 2026"` | sstv-image (campagne), planche, rapport |
 | `description` | texte | `"Diapo 3/12"` | sstv-image |
 | `incomplete` | booléen | `true` | sstv-image reçue en partie |
 | `indicatif` | texte | `"EA4ABC"` | qso : la station contactée |
-| `locator` | texte | `"IN80DD"` | qso : son carré |
+| `locator` | texte | `"IN80DD"` | qso : son locator |
 
 #### SSTV : passages, auto-pilote, planches (facultatif)
 
@@ -347,7 +347,7 @@ activé et la cible testée.
 ```json
 {"type":"diplomes","version":1,"t":1798000000000,"diplomes":[
  {"id":"cat:vucc","nom":"VUCC Satellite","emetteur":"ARRL","sorte":"permanent","statut":"en_cours",
-  "libelle":"En cours : 37/100 carrés","progression":{"actuel":37,"objectif":100,"unite":"carrés"},
+  "libelle":"En cours : 37/100 locators","progression":{"actuel":37,"objectif":100,"unite":"locators"},
   "reglement":"https://www.arrl.org/vucc"},
  {"id":"cat:amsat-scc","nom":"AMSAT Satellite Communicators Club","emetteur":"AMSAT","sorte":"permanent",
   "statut":"recu","recu":1790000000000,"progression":{"actuel":1,"objectif":1,"unite":"contacts"},"image":true},
@@ -367,7 +367,7 @@ carnet ; `evenement` : des images reçues pendant une fenêtre), `statut`
 (`true` quand l'image du diplôme reçu a été envoyée). Un champ inconnu est à
 ignorer ; un champ absent n'a pas de valeur.
 
-**Jamais envoyé** : ce qui a été compté (carrés, entités, États, indicatifs
+**Jamais envoyé** : ce qui a été compté (locators, entités, États, indicatifs
 contactés), les noms des images, les notes, le nom et le courriel de « Pour
 les demandes », les formulaires, et les diplômes masqués, manqués, expirés ou
 « à vérifier ».

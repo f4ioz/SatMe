@@ -101,7 +101,7 @@ SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own eng
 <img src="docs/images/pc-carnet.webp" width="49%" alt="SatMe-PC log: a new contact, and beside it the station live, where you are in the passband">
 </p>
 <p align="center">
-<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal: RS-44 replayed on the map, the predicted track dashed, the footprint, F5RRO in its place on the track and at its square">
+<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal: RS-44 replayed on the map, the predicted track dashed, the footprint, F5RRO in its place on the track and at its locator">
 <img src="docs/images/pc-agenda-auto.webp" width="49%" alt="The automatic mode: the satellites chosen, the 24 h passes to keep or set aside">
 </p>
 <p align="center">
@@ -128,7 +128,7 @@ In the journal's pictures and videos, each SSTV picture as received, corrected o
 <img src="docs/images/passes.webp" width="24%" alt="Passes">
 <img src="docs/images/tracking.webp" width="24%" alt="Live tracking">
 <img src="docs/images/compass.webp" width="24%" alt="Bluetooth compass">
-<img src="docs/images/grid.webp" width="24%" alt="Grid squares">
+<img src="docs/images/grid.webp" width="24%" alt="Locators">
 </p>
 <p align="center">
 <img src="docs/images/qrv-photo.webp" width="24%" alt="QRV photo">
@@ -227,7 +227,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **✈ Aircraft, ships, space weather** — **ADS-B** at 1090 MHz with **aircraft scatter** windows, **AIS** at 162 MHz, both on a shared **offline map** with the forecast aurora; **space weather** (Kp, flux, X-rays, solar wind, aurora, alerts), downloaded only when ticked.
 
-**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the square of the callsign as typed, the map following the entry; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
+**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the locator of the callsign as typed, the map following the entry; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
 
 **🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
@@ -290,9 +290,9 @@ Older versions: [the wiki's release notes](https://github.com/f4ioz/SatMe/wiki/R
 - QO-100: the geostationary narrowband transponder with your converters, and the error of each oscillator measured against a reference.
 
 ### Logging
-- One-handed callsign keypad, QRZ.com lookup, new grid square and duplicate flagged while typing.
+- One-handed callsign keypad, QRZ.com lookup, new locator and duplicate flagged while typing.
 - Wavelog and Cloudlog: contacts uploaded, optionally by themselves a minute after entry, with your station profiles. SatMe also shows up as a radio in Wavelog and Cloudlog: satellite, mode and Doppler-corrected frequencies are filled in.
-- LoTW confirmations, grid squares map, ADIF export, PDF QSL cards and activation sheets.
+- LoTW confirmations, locator map, ADIF export, PDF QSL cards and activation sheets.
 
 ### Recording and decoding
 - Every pass recorded to MP3 — phone microphone, Bluetooth hands-free or the rig's USB sound card — with a spoken header (satellite, UTC time, locator) and a copy in the folder of your choice.
@@ -375,7 +375,7 @@ Release signing reads `keystore.properties` at the root (not committed): `storeF
 - Peter Goodhall MM9SQL — Cloudlog
 - The Wavelog team — Wavelog, a Cloudlog fork
 - IS0GRB — QO-100 WebSDR (frequency reference)
-- John Morris G4ANB — Maidenhead locator squares
+- John Morris G4ANB — Maidenhead locators
 - AMSAT and SatNOGS — satellite status; SatNOGS DB — orbital elements
 - Bob Bruninga WB4APR (SK) — APRS
 - Stephen Smith WA8LMF — TNC test CD (APRS decoder testing)

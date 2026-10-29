@@ -152,7 +152,7 @@ object DiplomesJs {
 // ------------------------------------------------------------------ Agenda › Diplômes (DiplomesJs)
 let DP = null, dpVu = '', dpNVu = 0, dpNonLues = 0, dpCertId = '', dpDlg = null, dpProp = null;
 try { dpNVu = +(localStorage.getItem('dp-vu') || 0); } catch (x) {}
-const DP_GENRE = { IMAGE: 'image', GRILLES: 'carrés', MES_GRILLES: 'carrés activés', DXCC: 'entités', ETATS: 'États', OSCAR: 'États / entités / zones', CONTACTS: 'contacts', STATIONS: 'stations', LIBRE: '' };
+const DP_GENRE = { IMAGE: 'image', GRILLES: 'locators', MES_GRILLES: 'locators activés', DXCC: 'entités', ETATS: 'États', OSCAR: 'États / entités / zones', CONTACTS: 'contacts', STATIONS: 'stations', LIBRE: '' };
 async function dpCharge() {
   try { DP = await (await fetch('api/diplomes')).json(); } catch (x) { DP = null; }
   // A server without awards (the phone's page): no tab.

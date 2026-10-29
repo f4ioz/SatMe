@@ -32,7 +32,7 @@ object ApiRadio {
         val b = fr.f4ioz.satcombo.aprs.AprsJeu.bilan(paquets, minuit, moi, obs?.latDeg, obs?.lonDeg, pays)
         fun ev(x: fr.f4ioz.satcombo.aprs.Trophees.Evenement): String = when (x) {
             is fr.f4ioz.satcombo.aprs.Trophees.Evenement.RepeteIss -> "🔁 Ta trame est revenue par l'ISS" + (if (x.autres.isNotEmpty()) " (avec " + x.autres.take(5).joinToString(", ") + ")" else "")
-            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauCarre -> "🟩 Nouveau carré " + x.carre + " (" + x.indicatif + ")"
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauCarre -> "🟩 Nouveau locator " + x.carre + " (" + x.indicatif + ")"
             is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauPays -> "🌍 Nouveau pays : " + x.pays + " (" + x.indicatif + ")"
             is fr.f4ioz.satcombo.aprs.Trophees.Evenement.Record -> "📏 Record : " + x.km + " km (" + x.indicatif + ")"
             is fr.f4ioz.satcombo.aprs.Trophees.Evenement.Contact -> "🤝 Contact avec " + x.contact.indicatif + (if (x.contact.viaIss) " par l'ISS" else "")

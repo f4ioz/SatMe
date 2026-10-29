@@ -41,7 +41,7 @@ object PagePc {
         Onglet("station", "Suivi", "explore", "Passages, satellite suivi, Doppler, poste et rotor"),
         Onglet("carnet", "Carnet", "menu_book", "Le carnet de trafic et les fiches des indicatifs"),
         Onglet("agenda", "Agenda", "calendar_month", "Veille : les passages choisis suivis tout seuls"),
-        Onglet("carres", "Carrés", "grid_on", "Les carrés couverts par un passage"),
+        Onglet("carres", "Locators", "grid_on", "Les locators couverts par un passage"),
         Onglet("frise", "Frise", "timeline", "Les passages des prochaines heures sur une frise"),
         Onglet("sked", "Sked", "handshake", "Les fenêtres communes avec un correspondant"),
         Onglet("qo100", "QO-100", "satellite_alt", "Le cockpit du transpondeur étroit"),
@@ -49,7 +49,7 @@ object PagePc {
         Onglet("montage", "Montage", "montage", "La chaîne de la station : antennes, convertisseurs, postes, câbles, ce qui reçoit et ce qui émet"),
         Onglet("sdr", "SDR", "settings_input_antenna", "Le récepteur SDR : écoute, spectre, cascade"),
         Onglet("sondes", "Sondes", "air", "Les radiosondes"),
-        Onglet("carte", "Carte", "map", "La carte commune : satellites, APRS, sondes, avions, DATV, carrés, jour et nuit"),
+        Onglet("carte", "Carte", "map", "La carte commune : satellites, APRS, sondes, avions, DATV, locators, jour et nuit"),
         Onglet("orbites", "Orbites", "orbit", "Le globe 3D et la carte des satellites choisis, leurs empreintes, un passage animé"),
         Onglet("avions", "Avions", "flight", "ADS-B 1090 MHz et la diffusion par avions"),
         Onglet("ais", "Navires", "navire", "AIS 162 MHz : les navires et les balises entendus"),
@@ -2202,7 +2202,7 @@ ${rail()}
     <span>Texte CW</span><span class="sp-l"><input id="gen-cwTexte" data-gen="cwTexte" maxlength="60" style="flex:1"><input type="number" id="gen-cwWpm" data-gen="cwWpm" min="5" max="40" style="width:56px" title="Mots par minute"><span class="petit">mots/min</span></span>
     <span>Ton FM</span><span class="sp-l"><input type="number" id="gen-fmTon" data-gen="fmTon" min="100" max="3000" step="50" style="width:80px"><span class="petit">Hz</span>
       <select id="gen-fmCtcss" data-gen="fmCtcss" title="Un sous-ton CTCSS sous le ton FM (déviation 500 Hz)" aria-label="Sous-ton CTCSS du signal FM"></select></span>
-    <span>Message FT8</span><input id="gen-ft8Message" data-gen="ft8Message" maxlength="40" placeholder="CQ Q0SAT JN18" title="« CQ INDICATIF CARRÉ » ou « INDICATIF INDICATIF CARRÉ »">
+    <span>Message FT8</span><input id="gen-ft8Message" data-gen="ft8Message" maxlength="40" placeholder="CQ Q0SAT JN18" title="« CQ INDICATIF LOCATOR » ou « INDICATIF INDICATIF LOCATOR »">
     <span>Mode SSTV</span><select id="gen-sstvMode" data-gen="sstvMode"></select>
     <span>Texte PSK31</span><input id="gen-psk31Texte" data-gen="psk31Texte" maxlength="80" title="Entendu à 1 000 Hz en USB">
     <span>Texte RTTY</span><input id="gen-rttyTexte" data-gen="rttyTexte" maxlength="80" title="45,45 Bd, écart 170 Hz, centré à 1 500 Hz en USB">
@@ -2379,7 +2379,7 @@ ${rail()}
       <div id="c-props" class="c-props"></div>
       <div class="petit c-quiligne"><span id="c-pays" class="c-pays"></span><span id="c-qui"></span></div>
       <div class="ligne">
-        <input id="c-loc" placeholder="Carré" style="text-transform:uppercase;max-width:120px">
+        <input id="c-loc" placeholder="Locator" style="text-transform:uppercase;max-width:120px">
         <span class="petit">RS ↑</span><input id="c-rs" value="59" style="max-width:60px">
         <span class="petit">↓</span><input id="c-rr" value="59" style="max-width:60px">
       </div>
@@ -2394,7 +2394,7 @@ ${rail()}
         <div class="ligne"><input id="ca-heure" type="datetime-local" step="60"><span class="petit" id="ca-utc"></span></div>
       </div>
       <div class="ligne"><button class="primaire" onclick="enregistreContact()">Enregistrer (Entrée)</button><span class="petit" id="c-etat"></span></div>
-      <div class="petit" style="margin-top:6px" id="c-aide">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
+      <div class="petit" style="margin-top:6px" id="c-aide">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton locator, le mode et les fréquences au repos.</div>
     </div></div>
     <div id="cw-slot-carnet"><div class="carte" id="cw-carte" hidden>
       <div class="ligne" style="margin:0"><label><input type="checkbox" id="cw-on" onchange="post('api/cw?on=' + (this.checked ? 1 : 0)).then(ticCw)"> <b>Décodeur CW</b></label>
@@ -2433,13 +2433,13 @@ ${rail()}
           <button style="padding:3px 9px" onclick="paRegle('essai=1')" title="Une phrase dans la voix choisie">Essayer</button></span>
           <span class="petit" id="ph-pa-etat" style="flex-basis:100%" hidden></span></div>
         <div id="ph-fil" class="ph-fil"></div>
-        <div class="petit aide" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
+        <div class="petit aide" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le locator et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
       </div>
     </div></div>
     <div class="carte">
       <div class="t">Carnet</div>
       <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
-        <span><span class="val" id="c-carres">0</span> <span class="petit">carrés</span></span>
+        <span><span class="val" id="c-carres">0</span> <span class="petit">locators</span></span>
         <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span></div>
       <div class="ligne"><a href="carnet.adi" download><button>Exporter en ADIF</button></a>
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
@@ -2516,14 +2516,14 @@ ${rail()}
         <div class="cr-carte" title="Sa trace au sol : glisser, molette, double-clic pour recadrer"><canvas id="cr-carte"></canvas></div>
       </div>
       <div id="cr-contacts" hidden>
-      <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…">
+      <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, locator, satellite…">
         <span id="c-sel" hidden style="display:flex;gap:6px;align-items:center">
           <span class="petit" id="c-sel-n"></span>
           <a class="bouton" id="c-sel-adif" href="#" download title="Les contacts cochés en ADIF (Wavelog, LoTW, un autre carnet)">⤓ ADIF</a>
           <a class="bouton" id="c-sel-lot" href="#" download title="Les contacts cochés pour SatMe sur un téléphone : Réglages › Sauvegarde › Fusionner un lot reçu">⤓ Lot pour le téléphone</a>
           <button class="rouge" id="c-suppr" onclick="supprimeSelection()">Supprimer</button></span></div>
       <div style="max-height:calc(100vh - 170px);overflow:auto;margin-top:6px">
-        <table><thead><tr><th><input type="checkbox" id="c-tout" title="Tout cocher (ce que le filtre montre)" onchange="cocheTout(this.checked)"></th><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th></th></tr></thead>
+        <table><thead><tr><th><input type="checkbox" id="c-tout" title="Tout cocher (ce que le filtre montre)" onchange="cocheTout(this.checked)"></th><th>Date (UTC)</th><th>Indicatif</th><th>Locator</th><th>Satellite</th><th>Mode</th><th>RS</th><th></th></tr></thead>
         <tbody id="c-liste"></tbody></table>
       </div>
       </div>
@@ -2558,7 +2558,7 @@ ${rail()}
 </dialog>
 <dialog id="c-edit" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;min-width:360px">
   <div class="t">Modifier le contact <span class="petit" id="e-quand"></span></div>
-  <div class="ligne"><span id="e-dr" class="c-pays" style="font-size:20px"></span><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
+  <div class="ligne"><span id="e-dr" class="c-pays" style="font-size:20px"></span><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Locator" style="text-transform:uppercase;max-width:110px"></div>
   <div class="edc-carte" id="edc-boite" hidden><canvas id="edc-carte"></canvas></div>
   <div class="petit" id="e-ou"></div>
   <div class="ligne"><span class="petit">Satellite</span><input id="e-sat" list="e-sats" placeholder="Satellite, QO-100, terrestre…" autocomplete="off" style="flex:1"
@@ -2820,7 +2820,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
   </details>
   <details class="carte" id="tr-carte" open>
     <summary class="t" style="cursor:pointer">🏆 Trophées APRS <span class="petit" id="tr-resume"></span></summary>
-    <div class="petit aide">Le jeu du téléphone : chaque station entendue, chaque carré, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
+    <div class="petit aide">Le jeu du téléphone : chaque station entendue, chaque locator, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
     <div class="paire" style="margin-top:8px" id="tr-jour"></div>
     <div class="t" style="margin-top:12px">Records</div>
     <div class="paire" id="tr-records"></div>
@@ -2833,14 +2833,14 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
   </details>
   <div class="carte">
     <div style="max-height:calc(100vh - 250px);overflow:auto">
-      <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Carré</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
+      <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Locator</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
     </div>
   </div>
 </div>
 </div>
 <div class="vue" id="v-agenda" hidden>
 <div class="st ag-st" data-st="agenda">
-  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button><button data-p="ag-p-dip" title="Les diplômes à obtenir : ceux des événements SSTV (images reçues) et du carnet (carrés, entités, États) ; la demande préparée, rien n'est envoyé">${IconesPc.svg("medaille", "st-ico")}<span>Diplômes</span><span class="ac-n" id="dp-nb" hidden></span></button></div>
+  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button><button data-p="ag-p-dip" title="Les diplômes à obtenir : ceux des événements SSTV (images reçues) et du carnet (locators, entités, États) ; la demande préparée, rien n'est envoyé">${IconesPc.svg("medaille", "st-ico")}<span>Diplômes</span><span class="ac-n" id="dp-nb" hidden></span></button></div>
   <div class="st-pan" id="ag-p-rdv">
 <div class="grille2">
   <div>
@@ -2979,13 +2979,13 @@ ${DiplomesJs.HTML}</div>
   <div>
     <div class="carte">
       <div class="paire">
-        <span><span class="val" id="q-n">0</span> <span class="petit">carrés</span></span>
-        <span><span class="val" id="q-champs">0</span> <span class="petit">champs</span></span>
+        <span><span class="val" id="q-n">0</span> <span class="petit">locators</span></span>
+        <span><span class="val" id="q-champs">0</span> <span class="petit">locators à 2 lettres</span></span>
         <span><span class="val ambre" id="q-loin">—</span> <span class="petit">km au plus loin</span></span>
       </div>
-      <div class="ligne"><input id="q-filtre" placeholder="Filtrer : carré, indicatif, satellite…"></div>
+      <div class="ligne"><input id="q-filtre" placeholder="Filtrer : locator, indicatif, satellite…"></div>
       <div style="max-height:calc(100vh - 230px);overflow:auto;margin-top:6px">
-        <table><thead><tr><th>Carré</th><th>QSO</th><th>km</th><th>Stations</th></tr></thead><tbody id="q-liste"></tbody></table>
+        <table><thead><tr><th>Locator</th><th>QSO</th><th>km</th><th>Stations</th></tr></thead><tbody id="q-liste"></tbody></table>
       </div>
     </div>
   </div>
@@ -2993,7 +2993,7 @@ ${DiplomesJs.HTML}</div>
     <div class="carte" style="padding:0;overflow:hidden;position:relative">
       <canvas id="q-carte" style="width:100%;height:calc(100vh - 110px);display:block;cursor:grab"></canvas>
       <div class="petit" style="position:absolute;right:6px;bottom:4px;background:rgba(255,255,255,.75);color:#333;padding:0 4px;border-radius:3px">© OpenStreetMap</div>
-      <div class="petit" style="position:absolute;left:8px;top:6px;background:rgba(11,16,22,.75);padding:2px 8px;border-radius:6px">glisser, molette ; double-clic : recadrer · <span style="color:#3FE0C8">■</span> contacté · <span style="color:#FFB454">■</span> mon carré</div>
+      <div class="petit" style="position:absolute;left:8px;top:6px;background:rgba(11,16,22,.75);padding:2px 8px;border-radius:6px">glisser, molette ; double-clic : recadrer · <span style="color:#3FE0C8">■</span> contacté · <span style="color:#FFB454">■</span> mon locator</div>
     </div>
   </div>
 </div>
@@ -4083,14 +4083,14 @@ ${OngletSked.HTML}
     <label><input type="checkbox" data-cg="avions" checked> Avions (ADS-B)</label>
     <label><input type="checkbox" data-cg="navires" checked> Navires (AIS)</label>
     <label><input type="checkbox" data-cg="datv" checked> Stations DATV</label>
-    <label><input type="checkbox" data-cg="carres"> Carrés contactés</label>
+    <label><input type="checkbox" data-cg="carres"> Locators contactés</label>
     <label><input type="checkbox" data-cg="moi" checked> Ma station</label>
     <label><input type="checkbox" data-cg="nuit" checked> Jour et nuit</label>
     <label><input type="checkbox" data-cg="aurore" checked> Aurore prévue</label>
     <label><input type="checkbox" data-cg="diff" checked> Diffusion par avions</label>
     <label class="cg-l">Cercles <select id="cg-cercles"><option value="0">aucun</option><option value="100">100 km</option><option value="250">250 km</option><option value="500" selected>500 km</option><option value="1000">1000 km</option></select></label>
     <label class="cg-osm"><input type="checkbox" id="cg-osm"> Fond OpenStreetMap (Internet)</label>
-    <div class="petit aide">Le fond est le trait de côte que SatMe porte (Natural Earth, domaine public) : la carte marche sans Internet. « Fond OpenStreetMap » charge les tuiles dans ce navigateur, directement depuis tile.openstreetmap.org (rien ne passe par SatMe-PC) ; décoché, aucune requête ne part. Les couches : satellites favoris et suivi (empreinte, trace au sol), stations APRS entendues, la sonde suivie, les avions de l'onglet Avions, les navires de l'onglet Navires, les stations DATV dont la carte ou la fiche QRZ donne le locator, les carrés du carnet, la ligne jour/nuit, l'ovale d'aurore prévu (la dernière météo spatiale reçue).</div>
+    <div class="petit aide">Le fond est le trait de côte que SatMe porte (Natural Earth, domaine public) : la carte marche sans Internet. « Fond OpenStreetMap » charge les tuiles dans ce navigateur, directement depuis tile.openstreetmap.org (rien ne passe par SatMe-PC) ; décoché, aucune requête ne part. Les couches : satellites favoris et suivi (empreinte, trace au sol), stations APRS entendues, la sonde suivie, les avions de l'onglet Avions, les navires de l'onglet Navires, les stations DATV dont la carte ou la fiche QRZ donne le locator, les locators du carnet, la ligne jour/nuit, l'ovale d'aurore prévu (la dernière météo spatiale reçue).</div>
     <div class="petit" id="cg-compte"></div>
   </div>
   <div id="cg-bulle" class="cg-bulle" hidden></div>
@@ -4252,7 +4252,7 @@ ${Ft8EmissionJs.BANDEAU}
         <button class="arret" data-arret="8" hidden onclick="ft8Marche()">Arrêter</button>
         <select id="8-mode" onchange="post('api/ft8?mode=' + this.value)" style="max-width:90px" title="Le mode décodé (et émis)"><option>FT8</option><option>FT4</option></select>
         <button onclick="post('api/ft8?vide=1').then(() => { f8Lignes = []; f8Total = 0; })">Effacer</button>
-        <input id="8-filtre" placeholder="Filtrer : indicatif, pays, carré…" style="max-width:200px">
+        <input id="8-filtre" placeholder="Filtrer : indicatif, pays, locator…" style="max-width:200px">
         <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
         <span class="bascule-c" style="margin-left:auto"><button id="8-b-tableau" class="actif" onclick="f8Montre('tableau')">📊 Tableau</button><button id="8-b-messages" onclick="f8Montre('messages')">💬 Messages</button></span>
         <span class="petit" id="8-etat"></span>
@@ -4641,7 +4641,7 @@ ${DemarragePagePc.CARTES}
     </div>
     <div class="carte" id="phr-carte" hidden>
       <div class="t">Phonie → texte</div>
-      <div class="petit aide">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
+      <div class="petit aide">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, locators et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
       <div class="ligne"><span class="petit" style="min-width:80px">Modèle</span><select id="phr-modele" onchange="phrRegle('modele=' + this.value)"></select></div>
       <div class="ligne"><span class="petit" style="min-width:80px">Calcul</span><select id="phr-calcul" onchange="phrRegle('calcul=' + this.value)"><option value="auto">carte NVIDIA si elle répond, sinon processeur</option><option value="cuda">carte NVIDIA (CUDA)</option><option value="cpu">processeur</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:80px">Python</span><input id="phr-python" placeholder="celui de SatMe (stt/)"><button onclick="phrRegle('python=' + enc(g('phr-python').value.trim()))">Enregistrer</button></div>
@@ -4761,13 +4761,13 @@ ${DemarragePagePc.CARTES}
     <div class="carte">
       <div class="t">AMSAT Live OSCAR Status</div>
       <label class="petit" style="display:block"><input type="checkbox" id="amsatAuto" onchange="post('api/reglages?amsatAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
-        Signaler tout seul chaque passage où j'ai fait un contact : « Heard » sur la page publique d'amsat.org, à mon indicatif et mon carré, à l'heure du premier contact, une fois le passage fini</label>
+        Signaler tout seul chaque passage où j'ai fait un contact : « Heard » sur la page publique d'amsat.org, à mon indicatif et mon locator, à l'heure du premier contact, une fois le passage fini</label>
       <div class="petit" id="amsatEtat" style="margin-top:6px"></div>
     </div>
     <div class="carte">
       <div class="t">PSK Reporter</div>
       <label class="petit" style="display:block"><input type="checkbox" id="pskReporter" onchange="post('api/reglages?pskReporter=' + (this.checked ? 1 : 0)).then(chargeReglages)">
-        Envoyer à PSK Reporter les stations FT8 / FT4 entendues, toutes les 5 minutes : leur indicatif, leur carré, la fréquence et le satellite, avec mon indicatif et mon carré. Seulement quand la fréquence est sûre (poste relié en CAT)</label>
+        Envoyer à PSK Reporter les stations FT8 / FT4 entendues, toutes les 5 minutes : leur indicatif, leur locator, la fréquence et le satellite, avec mon indicatif et mon locator. Seulement quand la fréquence est sûre (poste relié en CAT)</label>
       <div class="petit" id="pskEtat" style="margin-top:6px"></div>
     </div>
     <div class="carte">
@@ -4779,7 +4779,7 @@ ${DemarragePagePc.CARTES}
         <div class="ligne" style="margin-top:0"><span>Ici <b class="cyan" id="wl-ici"></b></span><span class="petit">→</span>
           <select id="carnetProfils" onchange="choisitProfil(this.value)" style="flex:1"></select></div>
         <div class="avert" id="wl-sans" hidden></div>
-        <div class="petit" style="margin-top:8px">Chaque contact part au profil de l'endroit d'où il a été fait (un carré, ou les deux d'une ligne de carrés), comme sur le téléphone :</div>
+        <div class="petit" style="margin-top:8px">Chaque contact part au profil de l'endroit d'où il a été fait (un locator, ou les deux d'une ligne de locators), comme sur le téléphone :</div>
         <table style="margin-top:4px"><tbody id="wl-table"></tbody></table>
         <div id="wl-creation" hidden style="margin-top:6px">
           <div class="ligne"><span class="petit">Pour créer : DXCC</span><input id="wl-dxcc" style="max-width:64px"><input id="wl-pays" placeholder="Pays" style="max-width:110px">
@@ -5164,7 +5164,7 @@ async function chargeRecords() {
   let h = '<div class="paire" style="margin-top:8px"><span><span class="gros cyan">' + (t ? t.km.toLocaleString() + ' km' : '—') + '</span> <span class="petit">au plus loin' +
     (t ? ' : <b>' + esc(t.call) + '</b> ' + esc(t.carre) + ' · ' + esc(t.sat) + ' · ' + quand(t.quand) : '') + '</span></span></div>';
   h += '<div class="paire" style="margin-top:6px"><span><span class="val">' + R.contacts + '</span> <span class="petit">contacts</span></span><span><span class="val">' + R.carres +
-    '</span> <span class="petit">carrés</span></span><span><span class="val">' + R.pays + '</span> <span class="petit">pays</span></span><span><span class="val">' + R.satellites +
+    '</span> <span class="petit">locators</span></span><span><span class="val">' + R.pays + '</span> <span class="petit">pays</span></span><span><span class="val">' + R.satellites +
     '</span> <span class="petit">satellites</span></span><span><span class="val ambre">' + R.continents.filter(c => c.fait).length + ' / 6</span> <span class="petit">continents (WAC)</span></span></div>';
   h += '<div class="t" style="margin-top:12px">Continents</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-top:4px">' +
     R.continents.map(c => '<div style="padding:8px 10px;border-radius:10px;border:1px solid var(--bord);' + (c.fait ? 'background:rgba(91,214,138,.10)' : 'opacity:.45') + '"><b>' +
@@ -5172,9 +5172,9 @@ async function chargeRecords() {
   h += '<div class="t" style="margin-top:12px">Distances franchies</div><div class="ligne" style="margin-top:4px">' + R.paliers.map(p => '<span class="pastille" style="padding:4px 10px;' +
     (p.call ? 'background:rgba(63,224,200,.16);color:var(--cyan)' : 'opacity:.4') + '" title="' + (p.call ? esc(p.call) + ' · ' + quand(p.quand) : 'pas encore') + '">' +
     (p.call ? '🏅 ' : '') + p.km.toLocaleString() + ' km</span>').join('') + '</div>';
-  const table = (titre, l) => '<div class="t" style="margin-top:12px">' + titre + '</div><table><tbody>' + (l.map(x => ligne(x, x.nom)).join('') || '<tr><td class="petit">aucun contact avec deux carrés</td></tr>') + '</tbody></table>';
+  const table = (titre, l) => '<div class="t" style="margin-top:12px">' + titre + '</div><table><tbody>' + (l.map(x => ligne(x, x.nom)).join('') || '<tr><td class="petit">aucun contact avec deux locators</td></tr>') + '</tbody></table>';
   h += table('Par satellite', R.parSatellite) + table('Par mode', R.parMode) + table('Par pays', R.parPays.slice(0, 40));
-  h += '<div class="petit" style="margin-top:8px">' + R.avecDistance + ' contact(s) sur ' + R.contacts + ' ont les deux carrés (le tien au moment du contact, le sien) : les autres comptent, sans distance.</div>';
+  h += '<div class="petit" style="margin-top:8px">' + R.avecDistance + ' contact(s) sur ' + R.contacts + ' ont les deux locators (le tien au moment du contact, le sien) : les autres comptent, sans distance.</div>';
   g('cr-records').innerHTML = h;
 }
 // The CW decoder: its window in the Carnet; a callsign in the text, clicked, goes into the entry.
@@ -5201,7 +5201,7 @@ function rendCw() {
     const m = esc(w.m);
     if (w.g === 'INDICATIF' && w.c) return '<a href="#" title="Indicatif plausible (' + w.s + '/4) : un clic le met dans la saisie" style="color:var(--cyan);font-weight:800;' +
       (w.s >= 3 ? 'background:rgba(63,224,200,.16);border-radius:4px;padding:0 3px;' : '') + '" onclick="' + vers('c-call', m) + '">' + m + '</a>';
-    if (w.g === 'CARRE') return '<a href="#" title="Carré : un clic le met dans la saisie" style="color:var(--ambre)" onclick="' + vers('c-loc', m) + '">' + m + '</a>';
+    if (w.g === 'CARRE') return '<a href="#" title="Locator : un clic le met dans la saisie" style="color:var(--ambre)" onclick="' + vers('c-loc', m) + '">' + m + '</a>';
     if (w.g === 'REPORT') return '<span style="color:var(--vert)">' + m + '</span>';
     if (w.g === 'PROCEDURE') return '<span style="color:var(--gris)">' + m + '</span>';
     return m;
@@ -5516,9 +5516,9 @@ async function ticTrophees() {
   const j = TR.jour, r = TR.records, n = (v, l, c) => '<span><span class="val ' + (c || '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
   const gagnes = TR.badges.filter(b => b.quand).length;
   txt('tr-resume', ' · ' + gagnes + ' / ' + TR.badges.length + ' badges');
-  g('tr-jour').innerHTML = '<span class="petit">Aujourd’hui</span>' + n(j.stations, 'stations') + n(j.pays, 'pays') + n(j.carres, 'carrés') + n(j.viaIss, 'par l’ISS', 'ambre') +
+  g('tr-jour').innerHTML = '<span class="petit">Aujourd’hui</span>' + n(j.stations, 'stations') + n(j.pays, 'pays') + n(j.carres, 'locators') + n(j.viaIss, 'par l’ISS', 'ambre') +
     n(j.contacts, 'contacts') + n(j.repetes, 'répétées') + (j.plusLoin ? n(j.plusLoin.km, 'km (' + esc(j.plusLoin.call) + ')', 'cyan') : '');
-  g('tr-records').innerHTML = n(r.km ? r.km : '—', 'km au plus loin' + (r.kmCall ? ' (' + esc(r.kmCall) + ')' : ''), 'cyan') + n(r.carres, 'carrés') + n(r.pays, 'pays') +
+  g('tr-records').innerHTML = n(r.km ? r.km : '—', 'km au plus loin' + (r.kmCall ? ' (' + esc(r.kmCall) + ')' : ''), 'cyan') + n(r.carres, 'locators') + n(r.pays, 'pays') +
     n(r.repetes, 'répétées par l’ISS', 'ambre') + n(r.contacts, 'contacts');
   g('tr-badges').innerHTML = TR.badges.map(b => '<div title="' + esc(b.desc) + '" style="display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;border:1px solid var(--bord);' +
     (b.quand ? 'background:rgba(91,214,138,.10)' : 'opacity:.45') + '"><span style="font-size:24px">' + b.emoji + '</span><span><b>' + esc(b.nom) + '</b><br><span class="petit">' +
@@ -5677,7 +5677,7 @@ ${ConversionPagePc.JS}
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
-  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, locator, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'modules', nom: 'Modules', ico: 'view_quilt', desc: 'Ce qui t’intéresse : QO-100, DATV, SSTV, SDR, avions, navires… et les profils', cartes: ['Modules'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, polarisation d’antenne, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Polarisation', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
@@ -5958,7 +5958,7 @@ function pointsDuPassage(m) {
 }
 async function rapportAmsat(entendu) {
   if (!E || !E.suivi) return;
-  if (!confirm((entendu ? 'Entendu' : 'Pas entendu') + ' : envoyer ce rapport sur la page publique d’amsat.org pour ' + E.suivi.nom + ', avec ton indicatif et ton carré ?')) return;
+  if (!confirm((entendu ? 'Entendu' : 'Pas entendu') + ' : envoyer ce rapport sur la page publique d’amsat.org pour ' + E.suivi.nom + ', avec ton indicatif et ton locator ?')) return;
   const j = await post('api/amsat/rapport?entendu=' + entendu);
   if (j && j.ok) alert('Rapport envoyé à amsat.org (' + j.nom + ').');
 }
@@ -7344,7 +7344,7 @@ function dessineStation() {
   // The log: how many, since when, on which satellites; each contact and its note.
   const jour = t => new Date(t).toISOString().slice(0, 10);
   txt('cs-resume', h.total ? h.total + ' contact' + (h.total > 1 ? 's' : '') + ' · premier ' + jour(h.premier) + ' · dernier ' + jour(h.dernier) +
-    (h.sats.length ? ' · ' + h.sats.join(', ') : '') + (h.carres.length ? ' · carrés ' + h.carres.join(' ') : '') : 'Jamais contacté : un nouveau !');
+    (h.sats.length ? ' · ' + h.sats.join(', ') : '') + (h.carres.length ? ' · locators ' + h.carres.join(' ') : '') : 'Jamais contacté : un nouveau !');
   g('cs-resume').style.color = h.total ? '' : 'var(--vert)';
   g('cs-hist').innerHTML = h.contacts.map(e => '<tr><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + esc(e.sat) +
     '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.l) + (e.c !== csPour ? ' <span class="petit">' + esc(e.c) + '</span>' : '') +
@@ -7499,8 +7499,8 @@ g('c-call').addEventListener('input', () => {
 let apresListe = [];
 async function apresBascule() {
   const on = g('ca-on').checked; g('ca').hidden = !on;
-  txt('c-aide', on ? 'Daté à l’heure choisie, sur ce satellite, avec son az/el d’alors, ton carré et le mode choisi (sans fréquences).' :
-    'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  txt('c-aide', on ? 'Daté à l’heure choisie, sur ce satellite, avec son az/el d’alors, ton locator et le mode choisi (sans fréquences).' :
+    'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton locator, le mode et les fréquences au repos.');
   carnetRend();
   if (!on) return;
   if (!tous.length) await chargeSatellites();
@@ -7584,8 +7584,8 @@ function dessineEditCarte() {
   if (ct && moi) ou = versLui(moi, ct);
   else if (!lt && el && el.clat != null && moi) { ou = versLui(moi, { lat: el.clat, lon: el.clon }); faible = true; }
   g('edc-boite').hidden = !ou;
-  txt('e-ou', ou ? (faible ? '≈ ' : '') + ou.km.toLocaleString('fr-FR') + ' km · ' + ou.azimut + '° ' + ou.rose + (faible ? ' (centre de ' + el.py + ', sans carré)' : '') :
-    lt && !ct ? 'carré incomplet ou invalide' : '');
+  txt('e-ou', ou ? (faible ? '≈ ' : '') + ou.km.toLocaleString('fr-FR') + ' km · ' + ou.azimut + '° ' + ou.rose + (faible ? ' (centre de ' + el.py + ', sans locator)' : '') :
+    lt && !ct ? 'locator incomplet ou invalide' : '');
   if (ou) requestAnimationFrame(() => dessineCarteStation2(ou, faible, g('edc-carte'), EV, plein(v('e-call'))));
 }
 g('e-call').addEventListener('input', editLieu);
@@ -9885,14 +9885,14 @@ async function essaiCarnet() {
   const pIci = j.profils.find(x => x.id === j.pourIci);
   const sans = g('wl-sans'); sans.hidden = j.iciCouvert;
   sans.textContent = !j.pourIci ? 'Aucun profil Wavelog ne couvre ' + j.ici + ' : en choisir un ci-dessus, ou le créer ci-dessous.'
-    : 'Le profil choisi est en ' + (pIci ? pIci.carre : '?') + ', pas en ' + j.ici + ' : Wavelog rangerait les contacts d’ici sous son carré. Créer le profil de ' + j.ici + ' ci-dessous ?';
+    : 'Le profil choisi est en ' + (pIci ? pIci.carre : '?') + ', pas en ' + j.ici + ' : Wavelog rangerait les contacts d’ici sous son locator. Créer le profil de ' + j.ici + ' ci-dessous ?';
   const manquants = j.lieux.filter(l => !l.couvert).map(l => l.lieu);
   if (!j.iciCouvert && manquants.indexOf(j.ici) < 0) manquants.unshift(j.ici);
   g('wl-table').innerHTML = j.lieux.map(l => {
     const p = j.profils.find(x => x.id === l.profil);
     return '<tr><td><b>' + esc(l.lieu) + '</b></td><td class="petit">' + l.n + ' contact(s)</td><td>' +
       (p && l.couvert ? '<span class="vert">→ ' + esc(nomP(p)) + '</span>'
-        : p ? '<span class="ambre">→ ' + esc(nomP(p)) + ' (choisi à la main, son carré est ' + esc(p.carre) + ')</span>'
+        : p ? '<span class="ambre">→ ' + esc(nomP(p)) + ' (choisi à la main, son locator est ' + esc(p.carre) + ')</span>'
         : '<span class="ambre">aucun profil</span>') + '</td></tr>';
   }).join('') || '<tr><td class="petit">aucun contact au carnet</td></tr>';
   g('wl-creation').hidden = manquants.length === 0;
@@ -10634,7 +10634,7 @@ function dessineListeCarres() {
   g('q-liste').innerHTML = Q.carres.filter(c => !f || [c.c, c.indicatifs.join(' '), c.sats.join(' ')].join(' ').toUpperCase().includes(f))
     .sort((a, b) => b.dernier - a.dernier).map(c => '<tr class="p" onclick="centreSur(\'' + c.c + '\')"><td><b>' + c.c + '</b></td><td>' + c.n +
     '</td><td>' + (c.km == null ? '' : c.km) + '</td><td class="petit">' + esc(c.indicatifs.join(', ')) + '<br>' + esc(c.sats.join(', ')) + '</td></tr>').join('') ||
-    '<tr><td colspan="4" class="petit">aucun carré dans le carnet</td></tr>';
+    '<tr><td colspan="4" class="petit">aucun locator dans le carnet</td></tr>';
 }
 g('q-filtre').oninput = () => Q && dessineListeCarres();
 function cadreCarres() {
@@ -11416,7 +11416,7 @@ function dessineCg() {
     x.fillStyle = 'rgba(63,224,200,.22)'; x.strokeStyle = 'rgba(63,224,200,.7)'; x.lineWidth = 1;
     cgCarres.carres.forEach(q => { const [lo, la] = coin(q.c), l = m.L(lo + 1) - 1, xa = m.px(l), xb = m.px(l + 2), ya = m.py(la + 1), yb = m.py(la);
       x.fillRect(xa, ya, xb - xa, yb - ya); x.strokeRect(xa, ya, xb - xa, yb - ya); });
-    nb.push(cgCarres.carres.length + ' carrés');
+    nb.push(cgCarres.carres.length + ' locators');
   }
   // Range rings around the station.
   const moi = C.moi, anneau = +v('cg-cercles');
@@ -11929,8 +11929,8 @@ function carnetRend() {
     g('c-vers-auto').hidden = !carnetChoix;
   }
   const qo = !!(c && c.qo100);
-  if (!apres && !g('c-aide').dataset.avant) txt('c-aide', qo ? 'Daté à l’enregistrement, sur QO-100, avec la fréquence du ciel, ton carré et le mode du signal accordé.'
-    : 'Daté à l\'enregistrement, sur le satellite noté, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  if (!apres && !g('c-aide').dataset.avant) txt('c-aide', qo ? 'Daté à l’enregistrement, sur QO-100, avec la fréquence du ciel, ton locator et le mode du signal accordé.'
+    : 'Daté à l\'enregistrement, sur le satellite noté, avec son az/el, ton locator, le mode et les fréquences au repos.');
   if (qo) txt('c-sat', '· ' + (tqQo() ? TQ.contexte.libelle : 'QO-100'));
   else if (E) txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
 }
@@ -14247,7 +14247,7 @@ function f8Marques(e) {
   if (e.moi) m.push(['m’appelle', 'm’appelle', '#FF5FA2', 'Ce message contient ton indicatif']);
   if (e.guettee) m.push(['👁 guettée', '👁', '#3FE0C8', 'Une station que tu guettes']);
   if (e.nouveauPays) m.push(['nouveau pays', 'pays', '#FFB454', 'Aucun contact de ce pays au carnet']);
-  if (e.nouveauCarre) m.push(['nouvelle grille', 'grille', '#FFB454', 'Aucun contact dans ce carré au carnet']);
+  if (e.nouveauCarre) m.push(['nouveau locator', 'locator', '#FFB454', 'Aucun contact dans ce locator au carnet']);
   if (e.fait) m.push(['déjà contacté', '✓', '#6B7C8F', 'Déjà au carnet']);
   return m;
 }
@@ -14322,7 +14322,7 @@ function puces() {
 function valeur(e) {
   let s = 0; const r = [];
   if (e.nouveauPays) { s += 50; r.push(['nouveau pays', '#FFB454']); }
-  if (e.nouveauCarre) { s += 20; r.push(['nouvelle grille', '#FFB454']); }
+  if (e.nouveauCarre) { s += 20; r.push(['nouveau locator', '#FFB454']); }
   if (e.guettee) { s += 30; r.push(['👁 guettée', '#3FE0C8']); }
   if (e.km != null) { s += Math.min(30, e.km / 300); if (e.km > 3000) r.push(['DX ' + e.km.toLocaleString() + ' km', '#3FE0C8']); }
   s += Math.max(0, e.db + 24) / 2;
@@ -14496,7 +14496,7 @@ function f8Genre(e) {
   if (fin === 'RRR') return ['✅', 'bien reçu', 'fin'];
   if (/^R[+-]\d+$/.test(fin)) return ['✅', 'report reçu ' + fin.slice(1) + ' dB', 'r'];
   if (/^[+-]\d+$/.test(fin)) return ['📶', 'report ' + fin + ' dB', 'rapport'];
-  if (e.loc) return ['📍', 'carré ' + e.loc, 'carre'];
+  if (e.loc) return ['📍', 'locator ' + e.loc, 'carre'];
   return ['💬', '', 'autre'];
 }
 function f8Paire(e) { return e.de && e.a ? [e.de, e.a].sort().join('|') : null; }
@@ -18213,7 +18213,7 @@ function palSources() {
     if (AP.enCours) A('■ Arrêter le passage de l’auto-pilote', AP.enCours.nom, apStop, 'arret');
   }
   if (modOn('activites')) A('Agenda › Activités à venir', 'SSTV, contacts ARISS, SSDV, METEOR annoncés en ligne', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-act"]'); if (b) b.click(); acVu = ''; acCharge(); });
-  A('Agenda › Diplômes', 'Diplômes à obtenir : images d’événements SSTV, carrés et entités du carnet', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-dip"]'); if (b) b.click(); });
+  A('Agenda › Diplômes', 'Diplômes à obtenir : images d’événements SSTV, locators et entités du carnet', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-dip"]'); if (b) b.click(); });
   if (modOn('sdr')) A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (modOn('sdr')) A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);

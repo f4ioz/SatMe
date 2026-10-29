@@ -241,7 +241,7 @@ class DiplomesTest {
     private fun qso(call: String, loc: String = "", sat: String = "SO-50", catnum: Int = 27607, qth: String = "", mine: String = "JN18") =
         LogEntry(timeMs = 1L, satName = sat, catnum = catnum, azimuthDeg = 0.0, elevationDeg = 0.0, myLocator = mine, callsign = call, theirLocator = loc, qth = qth)
 
-    @Test fun `les carrés, entités, États et stations comptés dans le carnet`() {
+    @Test fun `les locators, entités, États et stations comptés dans le carnet`() {
         val log = listOf(qso("EA4ABC", "IN80do"), qso("EA4ABC", "in80"), qso("DL1XYZ", "JO62"), qso("W5XX", "EM12", qth = "Dallas, TX"),
             qso("KL7AA", "BP51"), qso("K1ABC", "FN42", qth = "Boston"), qso("VE3ABC", "FN03"), qso("VA3XYZ", "FN04"), qso("F4XYZ", "JN19", sat = "QO-100", catnum = 43700),
             qso("ON4ZZ", "", mine = "JN19"), qso("F5AAA", "JN18", sat = "", catnum = 0))
@@ -255,7 +255,7 @@ class DiplomesTest {
         val vucc = Diplomes.CATALOGUE.first { it.id == "cat:vucc" }
         val b = Diplomes.bilan(vucc, emptyList(), log, "JN18fs", null, 0L)
         assertEquals(Statut.EN_COURS, b.statut)
-        assertEquals("En cours : 8/100 carrés", b.libelle)
+        assertEquals("En cours : 8/100 locators", b.libelle)
         val scc = Diplomes.bilan(Diplomes.CATALOGUE.first { it.id == "cat:amsat-scc" }, emptyList(), log, "JN18fs", null, 0L)
         assertEquals(Statut.OBTENABLE, scc.statut)
     }

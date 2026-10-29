@@ -76,7 +76,7 @@ object ApiCalculs {
     }
 
     fun skedJson(f: List<FenetreSked>?): JSONObject =
-        if (f == null) JSONObject().put("ok", false).put("erreur", "carré non reconnu")
+        if (f == null) JSONObject().put("ok", false).put("erreur", "locator non reconnu")
         else JSONObject().put("ok", true).put("fenetres", JSONArray(f.map { w -> JSONObject().put("de", w.deMs).put("a", w.aMs)
             .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre))
             .put("debutTrace", w.debutTrace).put("finTrace", w.finTrace) }))

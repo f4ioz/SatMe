@@ -101,7 +101,7 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 <img src="docs/images/pc-carnet.webp" width="49%" alt="Carnet de SatMe-PC : un nouveau contact, et à côté la station en direct, où l'on est dans la bande passante">
 </p>
 <p align="center">
-<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal : RS-44 rejoué sur la carte, la trace prévue en pointillés, l'empreinte, F5RRO à sa place sur la trace et à son carré">
+<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal : RS-44 rejoué sur la carte, la trace prévue en pointillés, l'empreinte, F5RRO à sa place sur la trace et à son locator">
 <img src="docs/images/pc-agenda-auto.webp" width="49%" alt="Le mode automatique : les satellites choisis, les passages des 24 h à garder ou écarter">
 </p>
 <p align="center">
@@ -128,7 +128,7 @@ Dans les images et vidéos du journal, chaque image SSTV brute, corrigée ou fus
 <img src="docs/images/passes.webp" width="24%" alt="Passages">
 <img src="docs/images/tracking.webp" width="24%" alt="Suivi en temps réel">
 <img src="docs/images/compass.webp" width="24%" alt="Boussole Bluetooth">
-<img src="docs/images/grid.webp" width="24%" alt="Carrés locator">
+<img src="docs/images/grid.webp" width="24%" alt="Locators">
 </p>
 <p align="center">
 <img src="docs/images/qrv-photo.webp" width="24%" alt="Photo QRV">
@@ -227,7 +227,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **✈ Avions, navires, météo spatiale** — l'**ADS-B** à 1090 MHz avec les fenêtres de **diffusion par avions**, l'**AIS** à 162 MHz, sur une **carte commune sans Internet** avec l'aurore prévue ; la **météo spatiale** (Kp, flux, rayons X, vent solaire, aurore, alertes), téléchargée seulement si on le coche.
 
-**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le carré propre à l'indicatif tapé, la carte qui suit la saisie ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
+**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le locator propre à l'indicatif tapé, la carte qui suit la saisie ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
 
 **🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
@@ -290,9 +290,9 @@ Les versions précédentes : [les nouveautés du wiki](https://github.com/f4ioz/
 - QO-100 : le transpondeur géostationnaire à bande étroite avec vos convertisseurs, et l'erreur de chaque oscillateur mesurée sur une référence.
 
 ### Carnet
-- Clavier d'indicatifs à une main, recherche QRZ.com, nouveau carré et doublon signalés pendant la saisie.
+- Clavier d'indicatifs à une main, recherche QRZ.com, nouveau locator et doublon signalés pendant la saisie.
 - Wavelog et Cloudlog : contacts envoyés, au besoin tout seuls une minute après la saisie, avec vos profils de station. SatMe apparaît aussi comme une radio dans Wavelog et Cloudlog : satellite, mode et fréquences corrigées du Doppler se remplissent.
-- Confirmations LoTW, carte des carrés locator, export ADIF, QSL et fiches d'activation en PDF.
+- Confirmations LoTW, carte des locators, export ADIF, QSL et fiches d'activation en PDF.
 
 ### Enregistrement et décodage
 - Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.
@@ -375,7 +375,7 @@ La signature de publication lit `keystore.properties` à la racine (non versionn
 - Peter Goodhall MM9SQL — Cloudlog
 - L'équipe Wavelog — Wavelog, fork de Cloudlog
 - IS0GRB — WebSDR QO-100 (référence de fréquence)
-- John Morris G4ANB — carrés locateurs Maidenhead
+- John Morris G4ANB — locators Maidenhead
 - AMSAT et SatNOGS — état des satellites ; SatNOGS DB — éléments orbitaux
 - Bob Bruninga WB4APR (SK) — APRS
 - Stephen Smith WA8LMF — CD de test des TNC (essais du décodeur APRS)

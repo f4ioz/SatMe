@@ -82,7 +82,7 @@ object DemarragePagePc {
   </div>
   <div class="cfr-etape" data-e="1" hidden>
     <h3>Où est la station</h3>
-    <label class="cfr-l" for="cfr-locator">Locator (carré Maidenhead)</label><input id="cfr-locator" placeholder="JN18FS" style="text-transform:uppercase" autocomplete="off" oninput="cfrValide()">
+    <label class="cfr-l" for="cfr-locator">Locator (Maidenhead)</label><input id="cfr-locator" placeholder="JN18FS" style="text-transform:uppercase" autocomplete="off" oninput="cfrValide()">
     <div class="petit" id="cfr-loc-etat"></div>
     <details id="cfr-pos" style="margin-top:8px"><summary class="petit">ou le calculer depuis la latitude et la longitude (plus précis)</summary>
       <div class="ligne"><input id="cfr-lat" placeholder="latitude (48.85)" oninput="cfrLatLon()"><input id="cfr-lon" placeholder="longitude (2.35, ouest négatif)" oninput="cfrLatLon()"></div>
@@ -345,7 +345,7 @@ function cfrValide() {
   if (la || lo) { const a = cfrNombre('cfr-lat'), b = cfrNombre('cfr-lon'); const ok = a != null && b != null && Math.abs(a) <= 90 && Math.abs(b) <= 180;
     e.className = 'petit ' + (ok ? 'cfr-ok' : 'cfr-ko'); e.textContent = ok ? '✓ ' + cfrLocDe(a, b) + ' d’après la latitude et la longitude' : 'latitude de -90 à 90, longitude de -180 à 180'; return ok; }
   const ok = !l || MAIDENHEAD.test(l);
-  e.className = 'petit ' + (ok ? 'cfr-ok' : 'cfr-ko'); e.textContent = !l ? '' : ok ? '✓ carré reconnu' : 'pas un locator (2 lettres A–R, 2 chiffres, puis 2 lettres A–X : JN18FS)';
+  e.className = 'petit ' + (ok ? 'cfr-ok' : 'cfr-ko'); e.textContent = !l ? '' : ok ? '✓ locator reconnu' : 'pas un locator (2 lettres A–R, 2 chiffres, puis 2 lettres A–X : JN18FS)';
   return ok;
 }
 async function cfrOuvre() {

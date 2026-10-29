@@ -160,7 +160,7 @@ object PageCommande {
            radio, et le chercher dans une ligne de détails coûte le temps qu'on
            n'a pas pendant un passage. -->
       <div id="qui"></div>
-      <!-- Nouveau carré, doublon : ce qu'il faut savoir avant d'enregistrer. -->
+      <!-- Nouveau locator, doublon : ce qu'il faut savoir avant d'enregistrer. -->
       <div id="infos"></div>
       <div id="props"></div>
       <div class="ligne">
@@ -394,7 +394,7 @@ async function chargeStation() {
     : 'Prochain contact → profil <b>' + echappe(st.ici) + '</b>' +
       (ici ? ' · ' + echappe(ici.nom) + ' · <b>' + echappe(ici.indicatif) + '</b> · ' + echappe(ici.carre)
            : ' (liste des profils non chargée)') +
-      (st.ici !== st.defaut ? ' <span class="info">— choisi d\'après votre carré, le défaut est ' + echappe(st.defaut) + '</span>' : '');
+      (st.ici !== st.defaut ? ' <span class="info">— choisi d\'après votre locator, le défaut est ' + echappe(st.defaut) + '</span>' : '');
   g('profils').querySelector('tbody').innerHTML = (st.profils || []).map(p =>
     '<tr data-id="' + echappe(p.id) + '" class="' + (p.id === st.defaut ? 'defaut' : '') + '">' +
     '<td>' + echappe(p.id) + '</td><td>' + echappe(p.nom) + '</td>' +
@@ -561,7 +561,7 @@ function planifieInfos() {
     if (g('call').value.trim().toUpperCase() !== call) return;
     const k = loc.slice(0, 4);
     const morceaux = [];
-    if (i.carre === 'nouveau') morceaux.push('<span class="nouveau">NOUVEAU CARRÉ ' + k + '</span>');
+    if (i.carre === 'nouveau') morceaux.push('<span class="nouveau">NOUVEAU LOCATOR ' + k + '</span>');
     else if (i.carre === 'nouveau_journal') morceaux.push(k + ' : absent du journal SatMe');
     else if (i.carre === 'travaille') morceaux.push(k + ' déjà travaillé');
     else if (i.carre === 'confirme') morceaux.push(k + ' confirmé');

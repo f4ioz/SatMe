@@ -113,7 +113,7 @@ object Ft8EmissionJs {
     <div><b>QSO terminé</b> <span class="petit" id="f8tx-n-titre"></span></div>
     <div class="ligne" style="flex-wrap:wrap">
       <input id="f8tx-nc" placeholder="INDICATIF" style="text-transform:uppercase" aria-label="Indicatif">
-      <input id="f8tx-nl" placeholder="Carré" style="text-transform:uppercase" aria-label="Carré">
+      <input id="f8tx-nl" placeholder="Locator" style="text-transform:uppercase" aria-label="Locator">
       <span class="petit">envoyé</span><input id="f8tx-nrs" style="max-width:60px" aria-label="Rapport envoyé">
       <span class="petit">reçu</span><input id="f8tx-nrr" style="max-width:60px" aria-label="Rapport reçu">
       <input id="f8tx-nn" placeholder="Note" style="max-width:200px" aria-label="Note">

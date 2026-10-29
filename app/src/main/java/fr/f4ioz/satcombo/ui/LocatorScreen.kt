@@ -84,7 +84,7 @@ fun LocatorScreen(ui: UiState, vm: MainViewModel) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         LevelChip(t("grid_field"), field, Cyan)
                         LevelChip(t("grid_square"), square, Aurora)
-                        LevelChip("Subsquare", subsquare.lowercase(), TextLo)
+                        LevelChip(t("grid_subsquare"), subsquare.lowercase(), TextLo)
                     }
                 }
             }
