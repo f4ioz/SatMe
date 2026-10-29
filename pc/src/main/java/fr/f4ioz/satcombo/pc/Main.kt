@@ -631,6 +631,25 @@ fun main(args: Array<String>) {
             passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
     }
     site.direct = directSite
+    // « FT8/FT4 » (off by default): each slot decoded sent live (direct-ft8), a journal's pass with its messages (ft8-passage).
+    val ft8Site = Ft8SitePc()
+    ft8Site.entendus = { son.ft8.entendus }
+    ft8Site.ecoute = { son.ft8.enMarche }
+    ft8Site.mode = { son.ft8.mode }
+    ft8Site.cascade = { son.ft8.cascade }
+    ft8Site.derniereLigneMs = { son.ft8.derniereLigneMs }
+    ft8Site.moi = { station.settings.callsign }
+    ft8Site.contexte = { contexteFt8Site(station, sdr) }
+    ft8Site.passages = { journal.passages() }
+    ft8Site.decodesDe = { e -> journal.ft.duPassage(e) }
+    directSite.ft8 = ft8Site
+    site.ft8 = ft8Site
+    sourcesSite.ft8 = { ref -> ft8Site.contenu(ref) }
+    // A pass closed with messages: published by itself when « Passages FT8/FT4 » is Automatique.
+    journal.apresPassage = { e ->
+        if (site.actif && site.mode(SitePc.Genre.FT8) == SitePc.Mode.AUTO)
+            Thread({ runCatching { if (journal.ft.duPassage(e).isNotEmpty()) site.publie(SitePc.Genre.FT8, e.id, false) } }, "satme-site-ft8").apply { isDaemon = true; start() }
+    }
     directSite.demarre()
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
     val diplomes = DiplomesPc(station, dossier,
@@ -767,6 +786,21 @@ private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair
         if (q.auPoste) q.descenteHz to "QO-100"
         else (if (e.catConnecte) station.stationCat.etat.value.descenteHz else null) to (e.suivi?.name ?: "")
     }
+}
+
+/**
+ * What FT8 / FT4 is heard through, for the site ([Ft8SitePc.Contexte]): QO-100 at the rig, else the satellite followed
+ * while its pass is under way (AOS, LOS, highest elevation, the transponder chosen), else nothing but the dial.
+ */
+internal fun contexteFt8Site(station: StationPc, sdr: SdrPc): Ft8SitePc.Contexte {
+    val e = station.etat.value
+    val t = System.currentTimeMillis()
+    val dial = runCatching { contextePhonie(station, sdr, "son").first }.getOrNull()
+    if (station.qo100.etat.value.auPoste) return Ft8SitePc.Contexte("QO-100", fr.f4ioz.satcombo.domain.Qo100.NORAD, true, dialHz = dial)
+    val s = e.suivi ?: return Ft8SitePc.Contexte(dialHz = dial)
+    val p = e.passage?.takeIf { it.catalogNumber == s.catalogNumber && t in (it.aosEpochMs - 60_000L)..(it.losEpochMs + 60_000L) }
+        ?: return Ft8SitePc.Contexte(dialHz = dial)
+    return Ft8SitePc.Contexte(s.name, s.catalogNumber, false, p.aosEpochMs, p.losEpochMs, p.maxElevationDeg, dial, station.emetteurChoisi()?.description)
 }
 
 /** The satellite an SSTV picture's sound came from, by [source] (see [SstvPc.satelliteDuSon]). */

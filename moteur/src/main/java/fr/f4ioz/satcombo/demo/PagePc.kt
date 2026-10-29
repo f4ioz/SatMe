@@ -4301,7 +4301,7 @@ ${Ft8EmissionJs.HTML}
         <canvas id="8-radar" class="f8-radar"></canvas>
         <div class="petit aide">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
       </div>
-    </div>
+${Ft8SiteJs.HTML}    </div>
   </div>
 </div>
 </div>
@@ -14550,6 +14550,7 @@ g('8-filtre').oninput = () => { ft8Vu = ''; ticFt8(); };
 g('8-cq').onchange = () => { ft8Vu = ''; ticFt8(); };
 setInterval(ticFt8, 1000);
 ${Ft8EmissionJs.CODE}
+${Ft8SiteJs.JS}
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
 // The KISS radio: its port, its state, where it listens.

@@ -237,6 +237,8 @@ Content-Type: image/png
 | `favoris` | JSON | — | the [favourite satellites](#favourite-satellites), only when ticked |
 | `diplomes` | JSON | — | the [awards](#awards) followed and your progress, only when ticked |
 | `diplome-image` | multipart | PNG, JPEG, PDF | the picture of an [award received](#awards), only on a click |
+| `direct-ft8` | JSON | — | each [FT8 / FT4](#ft8--ft4) slot decoded, only when ticked |
+| `ft8-passage` | multipart | JSON | a journal's pass with its [FT8 / FT4](#ft8--ft4) messages (at a click, or each pass in Automatique) |
 
 **`ping`**: `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
 (`types`: those not set to « Jamais »). The receiver answers **any 2xx**. If
@@ -421,6 +423,60 @@ le site », without an error, and tries again ten minutes later.
 The settings call, for a script (`POST /api/site/direct`, the same as the
 line's box), parameters in the query string: `POST /api/site/direct?on_station=1` (or `0`), `&periode_station=2` (2 to 10 s).
 
+### FT8 / FT4
+
+Under **En direct**, the **FT8/FT4** line (unticked by default) sends, while
+FT8 / FT4 listening is on, **each slot once decoded** (FT8 15 s, FT4 7.5 s;
+about 9 s, resp. 4.5 s, after its end, the decoder's time): type `direct-ft8`,
+JSON, 1 to 10 KB. Each slot goes once, empty ones too (so a live waterfall goes
+on); what the site does not take is dropped.
+
+```json
+{"type":"direct-ft8","version":1,"t":1798000005000,"mode":"FT8","duree":15000,
+ "satellite":{"nom":"RS-44","norad":44909,"geo":false,"aos":1797999700000,"los":1798000600000,"elMax":54.4},
+ "dialHz":435640000,"transpondeur":"Mode V/U linear",
+ "decodes":[{"df":1210,"dt":0.3,"snr":-8,"msg":"CQ EA4XYZ IM79","de":"EA4XYZ","grid":"IM79","cq":true,"toMe":false},
+            {"df":1530,"dt":0.2,"snr":-12,"msg":"F4IOZ DL1ABC JO62","de":"DL1ABC","grid":"JO62","cq":false,"toMe":true}],
+ "n":2,
+ "cascade":{"basHz":200,"hautHz":3000,"bins":256,"lignes":8,"data":"<base64, 2048 bytes>"}}
+```
+
+| Key | Meaning |
+|---|---|
+| `t`, `mode`, `duree` | the slot's start (UTC ms), `FT8` or `FT4`, its length (ms) |
+| `satellite` | the pass under way (from a minute before AOS to a minute after LOS), or QO-100 at the rig (`geo`, no `aos`/`los`); absent between passes |
+| `bande` | without a satellite, the band of the dial (`2 m`, `70 cm`, `20 m`…), when known |
+| `dialHz`, `transpondeur` | the dial (sky Hz) as read from the rig; the satellite's transmitter chosen |
+| `decodes` | at most 60, the strongest, sorted by audio frequency: `df` audio offset (Hz), `dt` time offset (s), `snr` report (dB), `msg` the message (FT8's characters, 40 at most), `de` the callsign that sent it (when it can be told), `grid` the square it gives (4 characters), `cq` a CQ, `toMe` addressed to the station's callsign |
+| `n` | how many messages the slot had (before the cap of 60) |
+| `cascade` | when the waterfall ran: `lignes` rows of `bins` bytes (0 quiet … 255 loud), oldest row first, from `basHz` to `hautHz` across |
+
+Only messages heard over the air: no setting, address, path, sound card or
+anything else of the station. To a folder: `direct/ft8.json` (the last slot).
+A receiver that does not know the type answers `400`, `404` or `415`: left
+alone ten minutes, without an error. The settings call:
+`POST /api/site/direct?on_ft8=1` (or `0`).
+
+**A whole pass** (`ft8-passage`, a kind of the queue: Sur clic by default,
+Automatique sends each pass of the journal when it ends, if it has messages):
+the 🌐 of the FT8 tab's card « Passages FT8/FT4 sur le site » (SatMe-PC lists
+the journal's last passes with messages). Multipart like the media: `meta`
+(`titre`, `satellite`, `utc` = AOS, `mode`, `stations`, `carres`, `cle` =
+`ft8:<catnum>_<AOS ms>`) and `fichier`, a JSON (`application/json`, up to a
+few hundred KB):
+
+```json
+{"version":1,"satellite":{"nom":"RS-44","norad":44909},"aos":1797999700000,"los":1798000600000,"elMax":54.4,
+ "transpondeur":"Mode V/U linear","dialHz":435640000,"modes":["FT4"],
+ "tranches":[{"t":1797999707500,"mode":"FT4","decodes":[…],"n":3,"cascade":{…}}, …],
+ "decodes":148,"stations":23,"carres":17,"dxcc":9}
+```
+
+`tranches`: each slot with messages (480 at most), its `decodes` as above
+(60 at most), `cascade` only for the slots SatMe-PC still had in memory (the
+last three hours). `stations`, `carres`, `dxcc`: how many callsigns (not the
+station's own), squares and DXCC entities were heard.
+
 ---
 
 ## Security
@@ -532,6 +588,8 @@ as the API:
 - `direct/direct.json` (rewritten in place), `direct/station.json`,
   `direct/datv.jpg`, `direct/sstv.jpg` when live data is ticked — no spectrum
   to a folder;
+- `direct/ft8.json` (the last slot) when **FT8/FT4** is ticked; a pass
+  (`ft8-passage`) like any item, `ft8-passage/<year>/<id>.data.json` (its card `<id>.json`);
 - `favoris.json` when **Satellites favoris** is ticked;
 - `diplomes.json` when **Diplômes** is ticked, `diplomes/<id>.<ext>` for each
   picture sent with **Envoyer le diplôme reçu**.
