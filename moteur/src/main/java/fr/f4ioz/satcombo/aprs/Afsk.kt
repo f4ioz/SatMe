@@ -63,6 +63,12 @@ class AfskDemodulateur(
 ) {
     private val parBit = frequence.toDouble() / Afsk.BAUD
 
+    /**
+     * Every HDLC frame with a right FCS (the FCS removed), AX.25 or not: an
+     * SSDV packet sent bare through an FM repeater (IO-86) has no address.
+     */
+    @Volatile var surOctets: ((ByteArray) -> Unit)? = null
+
     // Band-pass: windowed-sinc low-pass 2500 Hz minus low-pass 900 Hz.
     private val filtre: FloatArray = run {
         val m = ((frequence / 1000.0) * 3.2).roundToInt().let { if (it % 2 == 0) it + 1 else it }.coerceAtLeast(15)
@@ -159,6 +165,11 @@ class AfskDemodulateur(
         if (deja != null && echantillon - deja < frequence) return
         recents[cle] = echantillon
         if (recents.size > 64) recents.remove(recents.keys.first())
+        surOctets?.let { f ->
+            val n = octets.size
+            if (n > 2 && Ax25.crc(octets, n - 2) == ((octets[n - 2].toInt() and 0xFF) or ((octets[n - 1].toInt() and 0xFF) shl 8)))
+                runCatching { f(octets.copyOf(n - 2)) }
+        }
         val t = Ax25.decode(octets) ?: return
         nombre++
         surTrame(t)

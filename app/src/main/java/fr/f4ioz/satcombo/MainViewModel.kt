@@ -7485,6 +7485,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             rxFromAgendaHz = null)
     }
 
+    /**
+     * « Autre fréquence… »: [r] typed for the satellite followed, kept for it
+     * and chosen; null forgets it. False without a satellite followed.
+     */
+    fun emetteurPerso(r: fr.f4ioz.satcombo.data.EmetteurPerso.Reglage?): Boolean {
+        val sat = _ui.value.selected ?: return false
+        satConfigStore.savePerso(sat.catalogNumber, r)
+        val tx = fr.f4ioz.satcombo.data.EmetteurPerso.ajoute(_ui.value.transmitters, r)
+        _ui.value = _ui.value.copy(transmitters = tx)
+        val actifs = activeTransmitters()
+        selectTransmitter(if (r != null) actifs.indexOfFirst { fr.f4ioz.satcombo.data.EmetteurPerso.estPerso(it) }.coerceAtLeast(0) else 0)
+        return true
+    }
+
     fun openSatConfig() { _ui.value = _ui.value.copy(showSatConfig = true) }
     fun closeSatConfig() { _ui.value = _ui.value.copy(showSatConfig = false) }
 
@@ -9088,11 +9102,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // The SSTV tuning's share belonged to the old satellite.
         sstvAfcHz = 0L
         viewModelScope.launch {
-            val tx = txRepo.forSatellite(sat.catalogNumber)
+            val cfg0 = satConfigStore.load(sat.catalogNumber)
+            // « Autre fréquence… » typed for this satellite: one more entry at the end.
+            val tx = fr.f4ioz.satcombo.data.EmetteurPerso.ajoute(txRepo.forSatellite(sat.catalogNumber), cfg0.perso)
             val status = txRepo.statusOf(sat.catalogNumber)
             if (_ui.value.selected?.catalogNumber == sat.catalogNumber) {
                 val active = tx.filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
-                val cfg = satConfigStore.load(sat.catalogNumber)
+                val cfg = cfg0
                 // Without a saved choice, take the first transmitter with **both
                 // uplink and downlink** — something you can work. Index zero
                 // was the CW beacon on FO-29: listen-only.

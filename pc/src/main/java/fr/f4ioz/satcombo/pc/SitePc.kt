@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * « Publication web » (Réglages › Services en ligne › Envoyer vers un site
  * web): what SatMe-PC sends to a web site of the owner's — the SSTV
- * pictures, the planches, the reports, the contacts, the journal's videos,
+ * pictures, the SSDV pictures (sent again as more packets come), the planches, the reports, the contacts, the journal's videos,
  * and as an option live data ([DirectSitePc]). Each kind **Sur clic** (the
  * 🌐 button of each item; the default), **Automatique** (as it comes) or
  * **Jamais**.
@@ -116,7 +116,8 @@ class SitePc(
         PLANCHE("planche", "Planches", Mode.CLIC, "planche"),
         RAPPORT("rapport", "Rapports", Mode.CLIC, "rapport"),
         QSO("qso", "Contacts (QSO)", Mode.CLIC, "qso"),
-        VIDEO("journal-video", "Vidéos du journal", Mode.CLIC, "journal");
+        VIDEO("journal-video", "Vidéos du journal", Mode.CLIC, "journal"),
+        SSDV("ssdv-image", "Images SSDV", Mode.CLIC, "ssdv");
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -306,7 +307,7 @@ class SitePc(
     fun demarre() {
         chargeDisque()
         if (fil != null) return
-        fil = Thread({ while (true) { runCatching { envoieDus() }; synchronized(verrou) { verrou.wait(5_000L) } } }, "satme-site").apply { isDaemon = true; start() }
+        fil = Thread({ while (true) { runCatching { ticSsdv() }; runCatching { envoieDus() }; synchronized(verrou) { verrou.wait(5_000L) } } }, "satme-site").apply { isDaemon = true; start() }
     }
 
     private fun reveille() = synchronized(verrou) { verrou.notifyAll() }
@@ -472,6 +473,40 @@ class SitePc(
         }
     }
 
+    /** SSDV pictures that grew (their key → the last packet's time), sent again once quiet ([ticSsdv]). */
+    private val ssdvChanges = ConcurrentHashMap<String, Pair<Long, Boolean>>()
+
+    /**
+     * A packet added to the SSDV picture [cle] ([complete]: it is whole now).
+     * The picture goes once no packet came for [SSDV_CALME_MS] (or at once
+     * when it is complete): with « Automatique », and with « Sur clic » when
+     * the owner sent it before — the same `cle`, the site replaces it.
+     */
+    fun nouveauPaquetSsdv(cle: String, complete: Boolean) {
+        if (!actif || mode(Genre.SSDV) == Mode.JAMAIS) return
+        ssdvChanges[cle] = horloge() to complete
+        if (complete) reveille()
+    }
+
+    /** The SSDV pictures quiet long enough (or complete) put in the queue; returns those queued. */
+    fun ticSsdv(): List<String> {
+        if (ssdvChanges.isEmpty()) return emptyList()
+        val t = horloge()
+        val l = ArrayList<String>()
+        for ((cle, v) in ssdvChanges.entries.toList()) {
+            if (!v.second && t - v.first < SSDV_CALME_MS) continue
+            ssdvChanges.remove(cle)
+            val m = mode(Genre.SSDV)
+            val err = when {
+                m == Mode.AUTO -> publie(Genre.SSDV, cle, false)
+                m == Mode.CLIC && publication(Genre.SSDV, cle) != null -> publie(Genre.SSDV, cle, true)
+                else -> continue
+            }
+            if (err == null) l += cle
+        }
+        return l
+    }
+
     fun nouveauContact(t: Long) { publie(Genre.QSO, t.toString(), false) }
     fun nouvelleVideo(nom: String) { publie(Genre.VIDEO, nom, false) }
 
@@ -541,6 +576,8 @@ class SitePc(
     companion object {
         const val MAX_FILE = 300
         const val APRES_IMAGE_MS = 120_000L
+        /** An SSDV picture growing is sent again a minute after its last packet. */
+        const val SSDV_CALME_MS = 60_000L
         /** The wire format's version (`X-SatMe-Version`, `version` in every meta). */
         const val VERSION_API = 1
         const val TYPE = "{type}"

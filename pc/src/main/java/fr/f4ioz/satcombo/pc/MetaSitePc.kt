@@ -82,6 +82,53 @@ object MetaSitePc {
         return o
     }
 
+    /** An SSDV picture as the site is told of it (from [fr.f4ioz.satcombo.telemesure.AssemblageSsdv.Photo]). */
+    data class ImageSsdv(
+        val cle: String, val satellite: String, val indicatif: String, val numero: Int,
+        val premierMs: Long, val dernierMs: Long, val recus: Int, val attendus: Int, val estime: Boolean, val manquants: Int,
+        val complete: Boolean, val largeur: Int, val hauteur: Int,
+        /** Each share: first and last packet (ms), packets, where from (« radio », a recording, an import). */
+        val passages: List<PartSsdv>,
+    )
+    data class PartSsdv(val debutMs: Long, val finMs: Long, val paquets: Int, val source: String)
+
+    /**
+     * An SSDV picture's words: its satellite and NORAD number, the first and
+     * last packet (UTC), its number on board and the callsign field, the
+     * packets received / expected (`attendusEstime` while the last is
+     * missing) and missing, complete or not, each pass that brought packets
+     * (its id as everywhere, AOS, LOS, the packets, the auto-pilot and its
+     * campaign), and whether the auto-pilot received any of it.
+     */
+    fun ssdv(o: JSONObject, i: ImageSsdv, catnum: Int, passes: List<SatPass>, traces: List<CampagneSstv.Trace>): JSONObject {
+        if (i.satellite.isNotBlank()) o.put("satellite", i.satellite)
+        if (catnum > 0) o.put("catnum", catnum)
+        if (i.premierMs > 0) o.put("utc", iso(i.premierMs)).put("premier", iso(i.premierMs))
+        if (i.dernierMs > 0) o.put("dernier", iso(i.dernierMs))
+        o.put("image", i.numero).put("indicatif", i.indicatif).put("paquetsRecus", i.recus).put("paquetsAttendus", i.attendus)
+            .put("manquants", i.manquants).put("complete", i.complete).put("largeur", i.largeur).put("hauteur", i.hauteur)
+        if (i.estime) o.put("attendusEstime", true)
+        var pilote = false
+        val campagnes = LinkedHashSet<String>()
+        val ps = i.passages.map { part ->
+            val p = passageDe(passes, part.debutMs)
+            val j = JSONObject().put("paquets", part.paquets).put("premier", iso(part.debutMs)).put("dernier", iso(part.finMs)).put("source", part.source)
+            if (p != null) {
+                j.put("id", idPassage(catnum.takeIf { it > 0 } ?: p.catalogNumber, p.aosEpochMs)).put("aos", iso(p.aosEpochMs)).put("los", iso(p.losEpochMs))
+                    .put("elMax", el(p.maxElevationDeg))
+                traceDe(traces, catnum.takeIf { it > 0 } ?: p.catalogNumber, p.aosEpochMs)?.let { tr ->
+                    pilote = true; j.put("autopilote", true)
+                    tr.nom.trim().take(80).takeIf { it.isNotEmpty() }?.let { j.put("campagne", it); campagnes += it }
+                }
+            }
+            j
+        }
+        o.put("passages", JSONArray(ps))
+        o.put("autopilote", pilote)
+        campagnes.lastOrNull()?.let { o.put("campagne", it) }
+        return o
+    }
+
     /** A video of the journal's editor, as its file's name says: its satellite, its start (UTC ms), one pass or more. */
     data class Video(val fichier: String, val satellite: String, val debutMs: Long, val sorte: String)
 

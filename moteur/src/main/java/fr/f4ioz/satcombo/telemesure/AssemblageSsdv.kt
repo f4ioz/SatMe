@@ -111,6 +111,9 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
     @Synchronized
     fun photo(id: String): Photo? = photos[id]
 
+    /** Each new packet kept in a real picture (not a test's): its picture, for the « Publication web ». */
+    @Volatile var surAjout: ((Photo) -> Unit)? = null
+
     /** Adds a packet received at [t] ([source]: « radio », or what it was imported from). */
     @Synchronized
     fun ajoute(p: Ssdv.Paquet, t: Long = horloge(), satellite: String = "", source: String = SOURCE_RADIO, essai: Boolean = false): Ajout {
@@ -136,6 +139,7 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         val finie = !avant && photo.complete
         if (finie && !essai) termine(photo)
         limite()
+        if (!essai) runCatching { surAjout?.invoke(photo) }
         return Ajout(photo, Resultat.NOUVEAU, finie)
     }
 
@@ -165,7 +169,7 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
 
     private fun ecrit(ph: Photo, p: Ssdv.Paquet, t: Long, satellite: String, source: String) {
         val d = repertoire ?: return
-        if (p.brut.size != Ssdv.TAILLE) return
+        if (p.brut.size !in Ssdv.TAILLE_MIN..Ssdv.TAILLE) return
         runCatching {
             d.mkdirs()
             val o = JSONObject().put("t", t).put("src", source).put("sat", satellite).put("hex", hex(p.brut))
@@ -217,7 +221,7 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
                 val o = runCatching { JSONObject(ligne) }.getOrNull() ?: return@forEachLine
                 val b = deHex(o.optString("hex")) ?: return@forEachLine
                 // The CRC checked again: a damaged line is left out.
-                val p = Ssdv.lis(b) ?: return@forEachLine
+                val p = (if (b.size == Ssdv.TAILLE) Ssdv.lis(b) else Ssdv.lisCourt(b, 0, b.size)) ?: return@forEachLine
                 val t = o.optLong("t")
                 val x = ph ?: Photo(id, p.indicatif, p.image, t, false).also { ph = it }
                 if (x.indicatif != p.indicatif || x.numero != p.image) return@forEachLine

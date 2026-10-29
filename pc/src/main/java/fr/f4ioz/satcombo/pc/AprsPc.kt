@@ -96,11 +96,17 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     @Volatile var essais = 0
         private set
 
+    /** Each HDLC frame heard on the air (AX.25 or bare, FCS removed): the SSDV packets looked for in them. */
+    @Volatile var surOctets: ((ByteArray) -> Unit)? = null
+
     /** A block of the card's sound. */
     fun ecoute(pcm: ShortArray, n: Int, rate: Int) {
         val d = demod?.takeIf { rateDemod == rate } ?: AfskDemodulateur(rate) { t ->
             if (runCatching { horsAntenne() }.getOrDefault(false)) essais++ else ajoute(t, horloge())
-        }.also { demod = it; rateDemod = rate }
+        }.also { a ->
+            a.surOctets = { o -> if (!runCatching { horsAntenne() }.getOrDefault(false)) surOctets?.invoke(o) }
+            demod = a; rateDemod = rate
+        }
         runCatching { d.traite(pcm, n) }
     }
 

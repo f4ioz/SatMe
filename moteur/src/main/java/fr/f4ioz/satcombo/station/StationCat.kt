@@ -280,7 +280,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
     private fun isFmMode(t: Transmitter): Boolean {
         if (t.isTransponder) return false
-        return ModeRadio.surFm(t.mode)
+        return ModeRadio.surFm(t.mode, t.baud)
     }
 
     /** Effective inversion: manual override if set, else the transmitter's flag. */
@@ -301,7 +301,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         val m = t.mode?.uppercase() ?: ""
         return when {
             // FM, and the digital modes heard in FM (ISS APRS is "AFSK").
-            ModeRadio.surFm(m) -> 0x05
+            ModeRadio.surFm(m, t.baud) -> 0x05
             // Linear in CW op-mode: use CW both sides.
             t.isTransponder && monde.modeCw() -> 0x03
             m.contains("CW") -> 0x03
@@ -316,7 +316,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     private fun ft817ModeFor(t: Transmitter, isUplink: Boolean): String {
         val m = (t.mode ?: "").uppercase()
         return when {
-            ModeRadio.surFm(m) -> "FM"
+            ModeRadio.surFm(m, t.baud) -> "FM"
             m.contains("CW") && !isUplink -> "CW"
             t.isTransponder && effectiveInvert(t) -> if (isUplink) "LSB" else "USB"
             m.contains("LSB") -> "LSB"
@@ -326,7 +326,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
 
     private fun mode(t: Transmitter, isUplink: Boolean): ModePoste {
         val civ = civModeFor(t, isUplink)
-        return ModePoste(civ, ft817ModeFor(t, isUplink), donnees = monde.donnees() && civ in fr.f4ioz.satcombo.cat.CivController.MODES_DONNEES)
+        return ModePoste(civ, ft817ModeFor(t, isUplink), donnees = (monde.donnees() || (!t.isTransponder && ModeRadio.donnees(t.mode, t.baud))) && civ in fr.f4ioz.satcombo.cat.CivController.MODES_DONNEES)
     }
 
     /**

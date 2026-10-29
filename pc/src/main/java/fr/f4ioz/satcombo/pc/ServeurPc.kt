@@ -808,6 +808,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
+        // A recording (WAV of the USB audio, or a capture of bits) sent from the page, read by the GENESIS receiver (SO-127).
+        if (chemin == "/api/telemesure/genesis/fichier" && r.methode == "POST") {
+            val t = telemesure
+            val b = RequeteHttp.corps(c.getInputStream(), r, TelemesurePc.MAX_RELECTURE)
+            val o = when {
+                t == null -> JSONObject().put("ok", false).put("erreur", "absent")
+                b == null -> JSONObject().put("ok", false).put("erreur", "fichier trop gros ou illisible")
+                else -> runCatching { t.relitGenesis(b, q["nom"].orEmpty()) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (chemin == "/api/telemesure" || chemin.startsWith("/api/telemesure/")) {
             val k = telemesure
             val o = when {
@@ -1613,6 +1624,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         when (chemin) {
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
             "/api/emetteur" -> station.choisitEmetteur(entier("i") ?: 0)
+            // « Autre fréquence… » for the satellite followed: downlink MHz, optional uplink, the rig's mode; efface=1 forgets it.
+            "/api/emetteur/perso" -> {
+                val r = if (q["efface"] == "1") null else {
+                    val (r, err) = fr.f4ioz.satcombo.data.EmetteurPerso.lis(q["dl"], q["ul"], q["mode"])
+                    r ?: return JSONObject().put("ok", false).put("erreur", err)
+                }
+                if (!station.emetteurPerso(r)) return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
+            }
             "/api/favori" -> entier("catnum")?.let { station.favori(it, q["on"] == "1") }
             "/api/sat/reglage" -> {
                 val e = station.etat.value

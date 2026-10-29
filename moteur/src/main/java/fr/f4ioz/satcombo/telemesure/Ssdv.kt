@@ -147,21 +147,70 @@ object Ssdv {
             u(12), (u(13) shl 8) or u(14), p.copyOfRange(ENTETE, ENTETE + n), corriges, p.copyOf())
     }
 
-    /** The SSDV packets inside a frame's bytes (an AX.25 information field, or a frame of its own). */
+    /** The shortest packet a sender may choose (fsphil's ssdv « -l »): a header, a few bytes, the CRC. */
+    const val TAILLE_MIN = 26
+
+    /**
+     * A **shorter** packet ([longueur] bytes from the sync at [debut], as
+     * fsphil's ssdv makes them with « -l », and ssdv2sat sends them through
+     * an FM repeater): the data shrinks, the header and the CRC-32 stay;
+     * with FEC its 32 Reed-Solomon bytes end it. Only the CRC is checked
+     * (no repair); null when it is wrong.
+     */
+    fun lisCourt(octets: ByteArray, debut: Int, longueur: Int): Paquet? {
+        if (longueur !in TAILLE_MIN until TAILLE || debut + longueur > octets.size) return null
+        if ((octets[debut].toInt() and 0xFF) != SYNC) return null
+        val p = octets.copyOfRange(debut, debut + longueur)
+        val type = p[1].toInt() and 0xFF
+        val n = when (type) { TYPE_FEC -> longueur - ENTETE - 4 - 32; TYPE_SANS_FEC -> longueur - ENTETE - 4; else -> return null }
+        if (n <= 0) return null
+        val fin = ENTETE + n
+        val lu = ((p[fin].toLong() and 0xFF) shl 24) or ((p[fin + 1].toLong() and 0xFF) shl 16) or
+            ((p[fin + 2].toLong() and 0xFF) shl 8) or (p[fin + 3].toLong() and 0xFF)
+        if (crc32(p, 1, fin - 1) != lu) return null
+        fun u(i: Int) = p[i].toInt() and 0xFF
+        val drapeaux = u(11)
+        return Paquet(type, indicatif((u(2).toLong() shl 24) or (u(3).toLong() shl 16) or (u(4).toLong() shl 8) or u(5).toLong()),
+            u(6), (u(7) shl 8) or u(8), u(9), u(10), ((drapeaux ushr 3) and 7) xor 4, drapeaux and 4 != 0, drapeaux and 3,
+            u(12), (u(13) shl 8) or u(14), p.copyOfRange(ENTETE, fin), 0, p)
+    }
+
+    /**
+     * The SSDV packets inside a frame's bytes (an AX.25 information field, or
+     * a frame of its own): whole 256-byte packets (or 255 without their
+     * sync), and a shorter one filling the rest of the frame ([lisCourt]).
+     */
     fun cherche(octets: ByteArray): List<Paquet> {
         val l = ArrayList<Paquet>()
         var i = 0
-        while (i + TAILLE - 1 <= octets.size) {
+        while (i + TAILLE_MIN <= octets.size) {
             val b0 = octets[i].toInt() and 0xFF
             val b1 = if (i + 1 < octets.size) octets[i + 1].toInt() and 0xFF else -1
+            val entier = i + TAILLE - 1 <= octets.size
             val p = when {
-                b0 == SYNC && (b1 == TYPE_FEC || b1 == TYPE_SANS_FEC) -> lis(octets, i)
-                (b0 == TYPE_FEC || b0 == TYPE_SANS_FEC) && (i == 0 || octets[i - 1].toInt() and 0xFF != SYNC) -> lis(octets, i)
+                b0 == SYNC && (b1 == TYPE_FEC || b1 == TYPE_SANS_FEC) ->
+                    (if (entier) lis(octets, i) else null) ?: lisCourt(octets, i, minOf(octets.size - i, TAILLE - 1))
+                entier && (b0 == TYPE_FEC || b0 == TYPE_SANS_FEC) && (i == 0 || octets[i - 1].toInt() and 0xFF != SYNC) -> lis(octets, i)
                 else -> null
             }
-            if (p != null) { l += p; i += if (b0 == SYNC) TAILLE else TAILLE - 1 } else i++
+            if (p != null) { l += p; i += if (p.brut.size < TAILLE) p.brut.size else if (b0 == SYNC) TAILLE else TAILLE - 1 } else i++
         }
         return l
+    }
+
+    /**
+     * [paquet] (256 bytes, FEC) with its four callsign bytes set to [code]
+     * and its CRC and Reed-Solomon made again — as a satellite sending
+     * fixed bytes there does (HADES-SA's « BF 35 FB A3 »): the generator, the tests.
+     */
+    fun recachete(paquet: ByteArray, code: Long): ByteArray {
+        val p = paquet.copyOf()
+        for (k in 0 until 4) p[2 + k] = (code ushr (24 - 8 * k)).toByte()
+        val crc = crc32(p, 1, ENTETE + DONNEES_FEC - 1)
+        for (k in 0 until 4) p[ENTETE + DONNEES_FEC + k] = (crc ushr (24 - 8 * k)).toByte()
+        val par = ReedSolomon.code(IntArray(223) { p[it + 1].toInt() and 0xFF })
+        for (k in 0 until 32) p[224 + k] = par[k].toByte()
+        return p
     }
 
     // ---------------------------------------------------------------- coding

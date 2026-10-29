@@ -64,6 +64,10 @@ class RecepteurPaquets(
         val essai: Boolean,
         /** The SSDV packets inside: picture key, packet number. */
         val ssdv: List<Pair<String, Int>>,
+        /** « HDLC », or « Geoscan » (sync word, PN9, CRC-16: [Geoscan]). */
+        val format: String = FORMAT_HDLC,
+        /** A Geoscan picture's chunk inside: the picture's key. */
+        val geoscan: String? = null,
     ) {
         fun hex(): String = octets.joinToString("") { String.format("%02X", it.toInt() and 0xFF) }
     }
@@ -96,6 +100,8 @@ class RecepteurPaquets(
     val trames: List<TramePaquet> get() = synchronized(liste) { liste.toList() }
     /** The SSDV pictures, put together over the passes (kept in `telemesure/ssdv` with a [dossier]). */
     val assemblage = AssemblageSsdv(dossier, horloge)
+    /** The Geoscan satellites' pictures (JPEG chunks, not SSDV), kept in `telemesure/geoscan`. */
+    val geoscan = Geoscan.Images(dossier, horloge)
 
     // ---------------------------------------------------------------- the chain (one thread)
 
@@ -104,9 +110,12 @@ class RecepteurPaquets(
         val n = DeframeurHdlc { t -> trame(t, false) }
         val desembrouille = G3ruh.Desembrouilleur()
         val nrziG = G3ruh.Nrzi(); val nrziN = G3ruh.Nrzi()
+        // The Geoscan satellites' frames (CC1125-like: sync word, PN9, CRC-16) in the same bits, NRZ.
+        val geo = Geoscan.Deframeur { o -> trameGeoscan(o) }
         val demod = DemodFsk(fs, debit) { b ->
             g.bit(nrziG.bit(desembrouille.bit(b)))
             n.bit(nrziN.bit(b))
+            geo.bit(b)
         }
         fun traite(re: FloatArray, im: FloatArray, k: Int) {
             var i = 0
@@ -233,6 +242,25 @@ class RecepteurPaquets(
         runCatching { surTrame?.invoke(t) }
     }
 
+    /** A Geoscan frame (72 bytes, CRC right): kept as a frame, its picture chunk put in its picture. */
+    private fun trameGeoscan(o: ByteArray) {
+        val now = horloge()
+        val cx = runCatching { contexte() }.getOrDefault(Contexte())
+        val c = chaine
+        val afc = c?.demod?.afcHz ?: 0.0
+        val ecart = Math.round(decalageHz + afc)
+        val m = Geoscan.morceau(o)
+        val im = m?.let { geoscan.takeIf { _ -> !cx.essai }?.ajoute(it, now, cx.satellite) ?: geoscanEssai.ajoute(it, now, cx.satellite) }
+        val t = TramePaquet(now, o, Ax25.entete(o), false, afc, if (cx.cielHz > 0) cx.cielHz + ecart else 0L,
+            if (cx.reposHz > 0) cx.reposHz + ecart else 0L, cx.satellite, cx.norad, cx.essai, emptyList(), FORMAT_GEOSCAN, im?.id)
+        synchronized(liste) { liste.addFirst(t); while (liste.size > MAX_TRAMES) liste.pollLast() }
+        etat = etat.copy(trames = etat.trames + 1, derniereMs = now)
+        if (!cx.essai) runCatching { ecrit(t) }
+        runCatching { surTrame?.invoke(t) }
+    }
+    /** The test signals' Geoscan pictures: shown, never written. */
+    val geoscanEssai = Geoscan.Images(null, horloge)
+
     private fun image(p: Ssdv.Paquet, cx: Contexte, now: Long): Pair<String, Int> {
         val a = assemblage.ajoute(p, now, cx.satellite, AssemblageSsdv.SOURCE_RADIO, cx.essai)
         return (a.photo?.id ?: (p.indicatif + "-" + p.image)) to p.numero
@@ -247,6 +275,7 @@ class RecepteurPaquets(
         synchronized(liste) { liste.clear(); recents.clear() }
         // The pictures under way are the station's (on disk): only the test ones go.
         assemblage.videEssais()
+        geoscanEssai.vide()
         etat = etat.copy(trames = 0)
     }
 
@@ -271,6 +300,8 @@ class RecepteurPaquets(
         /** About 9 samples a bit at 9600 bit/s. */
         const val FS_CIBLE = 88_200.0
         const val MAX_TRAMES = 300
+        const val FORMAT_HDLC = "HDLC"
+        const val FORMAT_GEOSCAN = "Geoscan"
         const val NOUVEAU_PASSAGE_MS = 20 * 60_000L
         val DEBITS = listOf(1200, 2400, 4800, 9600)
 
@@ -296,6 +327,7 @@ class RecepteurPaquets(
         fun noteMode(mode: String?): String? {
             val m = mode?.uppercase() ?: return null
             return when {
+                m.contains("GEOSCAN") -> "trames Geoscan (mot de synchro, PN9, CRC-16) lues avec les HDLC ; leurs images (morceaux de JPEG) rejoignent la galerie"
                 m.contains("MODE 5") -> "trames ASM + Golay (« mode 5 ») : non décodées ici, seules les trames HDLC le sont"
                 m.contains("USP") -> "protocole propre au satellite : seules les trames HDLC sont lues"
                 else -> null
@@ -305,6 +337,8 @@ class RecepteurPaquets(
         fun json(t: TramePaquet): JSONObject {
             val o = JSONObject().put("t", t.t).put("n", t.octets.size).put("g3ruh", t.g3ruh).put("afc", Math.round(t.afcHz))
                 .put("f", t.frequenceHz).put("fc", t.frequenceCorrigeeHz).put("sat", t.satellite).put("norad", t.norad).put("essai", t.essai)
+                .put("format", t.format)
+            t.geoscan?.let { o.put("geoscan", it) }
             t.ax25?.let { a ->
                 o.put("ax25", JSONObject().put("de", a.source.toString()).put("vers", a.destination.toString())
                     .put("relais", JSONArray(a.relais.map { it.toString() })).put("ctl", a.controle).put("pid", a.pid ?: -1)

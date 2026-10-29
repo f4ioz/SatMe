@@ -61,10 +61,10 @@ interface RigDriver {
 }
 
 /** Maps a transmitter mode string to a normalized mode label. */
-fun normalizeMode(mode: String?, isUplink: Boolean, invert: Boolean, isTransponder: Boolean): String {
+fun normalizeMode(mode: String?, isUplink: Boolean, invert: Boolean, isTransponder: Boolean, baud: Double? = null): String {
     val m = mode?.uppercase() ?: ""
     return when {
-        fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> "FM"
+        fr.f4ioz.satcombo.domain.ModeRadio.surFm(m, baud) -> "FM"
         m.contains("CW") -> "CW"
         isTransponder && invert -> if (isUplink) "LSB" else "USB"
         m.contains("LSB") -> "LSB"

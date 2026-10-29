@@ -387,6 +387,13 @@ object PagesPcTelephone {
                 OK
             }
             "/api/emetteur" -> { vm.selectTransmitter(p("i").toIntOrNull() ?: 0); OK }
+            "/api/emetteur/perso" -> {
+                val r = if (p("efface") == "1") null else {
+                    val (r, err) = fr.f4ioz.satcombo.data.EmetteurPerso.lis(p("dl"), p("ul"), p("mode"))
+                    r ?: return JSONObject().put("ok", false).put("erreur", err)
+                }
+                if (vm.emetteurPerso(r)) OK else JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
+            }
             // The satellite's two shifts: nudged, kept as its reference, or back to it.
             "/api/sat/reglage" -> {
                 if (u.selected == null) return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
@@ -1102,7 +1109,8 @@ object PagesPcTelephone {
         val passage = siens.firstOrNull()
         passage?.let { o.put("passage", ApiStation.passage(it, fav = it.catalogNumber in u.favorites)) }
         o.put("arc", JSONArray(passage?.track.orEmpty().map { JSONArray().put(it.first).put(it.second) }))
-        o.put("emetteurs", ApiStation.emetteurs(u.transmitters))
+        // The list selectedTxIndex counts in: the live ones (dead ones shifted the choice).
+        o.put("emetteurs", ApiStation.emetteurs(vm.activeTransmitters()))
         o.put("emetteur", u.selectedTxIndex)
         o.put("reglageSat", JSONObject().put("calib", u.calibShiftHz).put("tx", u.txShiftHz)
             .put("refCalib", u.catUi.refCalibShiftHz ?: JSONObject.NULL).put("refTx", u.catUi.refTxShiftHz ?: JSONObject.NULL))

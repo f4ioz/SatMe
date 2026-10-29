@@ -105,6 +105,9 @@ object ApiStation {
             .put("dlBas", t.downlinkLowHz ?: JSONObject.NULL).put("dlHaut", t.downlinkHighHz ?: JSONObject.NULL)
             .put("ulBas", t.uplinkLowHz ?: JSONObject.NULL).put("ulHaut", t.uplinkHighHz ?: JSONObject.NULL)
             .put("inverse", t.invert).put("lineaire", t.isTransponder)
+            .put("baud", t.baud ?: JSONObject.NULL).put("perso", fr.f4ioz.satcombo.data.EmetteurPerso.estPerso(t))
+            // The rig's mode for it (« USB-D » for SSDV / GENESIS FSK / slow FSK), as the Doppler loop sets it.
+            .put("poste", if (t.isTransponder) "" else fr.f4ioz.satcombo.domain.ModeRadio.libelle(t.mode, t.baud))
     })
 
     /** The rig, as the Doppler loop sees it ([modele], [port]… what the server knows of the link). */

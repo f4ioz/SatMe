@@ -62,6 +62,8 @@ class AutoPiloteSstvPc(
     @Volatile var son: SonStation? = null
     @Volatile var sdr: SdrPc? = null
     @Volatile var montage: MontagePc? = null
+    /** The SSDV-in-USB receiver (SO-127), turned on for a campaign's pass that asks for it. */
+    @Volatile var telemesure: TelemesurePc? = null
     /** The decoders' source in one gesture (the page's own): null when done, else why not. */
     @Volatile var prendSource: ((String) -> String?)? = null
     /** A sentence said by the announcements (when they are on). */
@@ -345,7 +347,7 @@ class AutoPiloteSstvPc(
             avantMin = p("avant").toIntOrNull() ?: 2, notes = p("notes"), lien = p("lien"), active = b("active", true),
             chaine = CampagneSstv.Chaine(profil = p("profil"), poste = b("poste", true), connecterPoste = b("cposte", false),
                 source = p("source"), rotor = b("rotor", true), connecterRotor = b("crotor", false), enregistrer = b("enreg", true),
-                sstv = b("sstv", true), annonce = b("annonce", true), parquer = b("parquer", false)))
+                sstv = b("sstv", true), annonce = b("annonce", true), parquer = b("parquer", false), ssdv = b("ssdv", false)))
     }
 
     private fun emetteurs(catnum: Int): JSONObject = JSONObject().put("ok", true).put("emetteurs", JSONArray(
@@ -461,6 +463,7 @@ class AutoPiloteSstvPc(
             m["rotorSuit"] = if (r.rotorEnabled) "1" else "0"
             m["rotorConnecte"] = if (r.rotorConnected) "1" else "0"
             son?.let { s -> m["sstvForce"] = s.sstv.force?.name.orEmpty(); m["sstvActif"] = if (s.sstvActif) "1" else "0" }
+            telemesure?.let { t -> m["genesisSource"] = t.genesisSource; m["genesisSsdv"] = t.genesis.etat.ssdv.toString() }
             montage?.reglagesActuels()?.forEach { (k, v) -> m["r:$k"] = v }
             return m
         }
@@ -509,6 +512,12 @@ class AutoPiloteSstvPc(
                 s.sstvActif = true
                 s.sstv.force = c.modeForce
                 faits += "SSTV prêt (" + (c.modeForce?.name ?: "mode auto") + ")"
+            }
+            // 7. SSDV in USB (SO-127's GENESIS FSK), from the same sound — receive only.
+            if (c.chaine.ssdv) telemesure?.let { t ->
+                t.genesisSource = if (c.chaine.source == CampagneSstv.SDR) TelemesurePc.SOURCE_SDR else TelemesurePc.SOURCE_CARTE
+                t.genesisPourPassage = true
+                faits += "SSDV en BLU prêt (" + t.genesisProfil().nom + ", son " + (if (t.genesisSource == TelemesurePc.SOURCE_SDR) "du récepteur SDR" else "de la carte") + ")"
             }
             return PiloteSstv.Preparation(faits)
         }
@@ -607,6 +616,14 @@ class AutoPiloteSstvPc(
                 e.suivi?.let { sat -> station.suis(sat) { l -> l to l.indexOfFirst { it.description == d }.coerceAtLeast(0) } }
             }
             son?.noteSstv = ""
+            telemesure?.let { t ->
+                if (t.genesisPourPassage) {
+                    val n = t.genesis.etat.ssdv - (avant["genesisSsdv"]?.toIntOrNull() ?: 0)
+                    faits += "SSDV en BLU : " + (if (n > 0) "$n paquet" + (if (n > 1) "s" else "") + " reçu" + (if (n > 1) "s" else "") else "aucun paquet")
+                }
+                t.genesisPourPassage = false
+                avant["genesisSource"]?.let { t.genesisSource = it }
+            }
             return faits
         }
 
