@@ -499,7 +499,8 @@ fun main(args: Array<String>) {
         descenteCockpit = { station.qo100.etat.value.descenteHz },
         signauxQo100 = { qo100.signaux.recents() }, leila = { qo100.leilaEntendue() },
         cartes = { son.son.appareils().map { it.nom } },
-        ouvreCarte = { nom, recoit -> son.son.capture(nom, recoit).let { (r, err) -> r?.second to err } })
+        ouvreCarte = { nom, recoit -> son.son.capture(nom, recoit).let { (r, err) -> r?.second to err } },
+        locator = { station.settings.manualLocator }, dossierVoix = java.io.File(dossier, "voix-qo100"))
     beRef = emissionBe
     emissionPoste.autreEmission = { if (emissionBe.emet) beEnCours else null }
     emissionBe.demarre()

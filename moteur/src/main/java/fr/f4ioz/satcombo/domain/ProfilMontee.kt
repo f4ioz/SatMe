@@ -38,6 +38,12 @@ data class ProfilMontee(
     val ampliGainDb: Double = 0.0,
     /** Cable and connector losses between the amplifier and the antenna (dB). */
     val pertesDb: Double = 1.0,
+    /**
+     * The Pluto's highest gain with this profile (dB, ≤ 0), null: none of
+     * its own. The amplifier differs from home to portable: each profile
+     * keeps its own cap, under the transmitter's and the shared one.
+     */
+    val plafondPlutoDb: Double? = null,
 ) {
     /** The antennas a QO-100 uplink commonly uses. */
     enum class Antenne(val cle: String, val libelle: String, val montage: String) {
@@ -102,10 +108,12 @@ data class ProfilMontee(
 
     fun json(): JSONObject = JSONObject().put("nom", nom).put("chaine", chaine.cle).put("antenne", antenne.cle).put("gainAutre", gainAutreDbi)
         .put("ampliW", ampliW).put("ampliGain", ampliGainDb).put("pertes", pertesDb)
+        .put("plafondPluto", plafondPlutoDb ?: JSONObject.NULL)
 
     /** Within what a station can be (NaN and the absurd clamped). */
     fun borne(): ProfilMontee = copy(nom = nom.trim().take(40).ifBlank { "Profil" },
-        gainAutreDbi = b(gainAutreDbi, -10.0, 45.0), ampliW = b(ampliW, 0.0, 2_000.0), ampliGainDb = b(ampliGainDb, 0.0, 80.0), pertesDb = b(pertesDb, 0.0, 20.0))
+        gainAutreDbi = b(gainAutreDbi, -10.0, 45.0), ampliW = b(ampliW, 0.0, 2_000.0), ampliGainDb = b(ampliGainDb, 0.0, 80.0), pertesDb = b(pertesDb, 0.0, 20.0),
+        plafondPlutoDb = plafondPlutoDb?.takeIf { !it.isNaN() }?.coerceIn(-89.0, 0.0))
 
     companion object {
         const val FREQUENCE_HZ = 2_400_250_000L
@@ -146,7 +154,8 @@ data class ProfilMontee(
             val nom = o.optString("nom").trim().ifBlank { return null }
             return ProfilMontee(nom, MonteeQo100.Chaine.de(o.optString("chaine")) ?: MonteeQo100.Chaine.PLUTO,
                 Antenne.de(o.optString("antenne")) ?: Antenne.AUTRE, o.optDouble("gainAutre", 12.0), o.optDouble("ampliW", 0.0),
-                o.optDouble("ampliGain", 0.0), o.optDouble("pertes", 1.0)).borne()
+                o.optDouble("ampliGain", 0.0), o.optDouble("pertes", 1.0),
+                if (o.isNull("plafondPluto") || !o.has("plafondPluto")) null else o.optDouble("plafondPluto").takeIf { !it.isNaN() }).borne()
         }
 
         fun lisListe(texte: String?): List<ProfilMontee> = runCatching {

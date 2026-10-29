@@ -263,7 +263,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
         val b = emissionBe ?: return JSONObject().put("ok", false).put("absent", true)
         return when {
-            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1")?.let { JSONObject().put("ok", false).put("erreur", it) }
+            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1", q["voix"]?.toIntOrNull())?.let { JSONObject().put("ok", false).put("erreur", it) }
                 ?: b.json(cl.id).put("local", !cl.distant)
             chemin.endsWith("/vie") -> if (b.vie(cl.id)) b.json(cl.id).put("local", !cl.distant) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
             else -> { b.relache("relâché"); b.json(cl.id).put("local", !cl.distant) }
@@ -990,6 +990,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
             }
             return
+        }
+        // The narrow band's voice memories: one recorded from the page (POST, 16-bit mono, ?n=&nom=&taux=); never played here.
+        if (chemin == "/api/be/voix" && r.methode == "POST") {
+            val b = emissionBe
+            val o = when {
+                b == null -> JSONObject().put("ok", false).put("absent", true)
+                b.emet -> JSONObject().put("ok", false).put("erreur", "relâcher le PTT d'abord")
+                else -> RequeteHttp.corps(c.getInputStream(), r, 8L * 1024 * 1024 /* 30 s of 16-bit mono up to 96 kHz */)?.let { corps ->
+                    b.voix.enregistre(q["n"]?.toIntOrNull() ?: 0, q["nom"].orEmpty(), corps, q["taux"]?.toIntOrNull() ?: 48_000)
+                        ?.let { JSONObject().put("ok", false).put("erreur", it) } ?: b.json(q["client"].orEmpty().take(40)).put("local", local)
+                } ?: JSONObject().put("ok", false).put("erreur", "enregistrement trop gros ou coupé")
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The narrow band's journal of overs, as CSV.
+        if (chemin == "/api/be/journal.csv") {
+            val t = emissionBe?.journal?.csv() ?: ""
+            envoie(sortie, "200 OK", "text/csv; charset=utf-8", t.toByteArray()); return
         }
         // The Pluto's narrow-band panel: its state, its settings (POST, the guards from this PC only), CW, the measurements.
         if (chemin == "/api/be/emission" || chemin == "/api/be/emission/reglage" || chemin == "/api/be/cw" || chemin == "/api/be/mesure") {

@@ -112,12 +112,22 @@ class ManipulateurCw(
     /** Text still to send (characters queued, roughly). */
     @Volatile var enAttente = 0; private set
 
-    /** Queues [texte] at the current speed; a word gap before it when something is already queued. */
+    /**
+     * Queues [texte] at the current speed; a word gap before it when
+     * something is already queued — unless [enchaine] (typed one key at a
+     * time: the letters run on, a space alone is the word gap).
+     */
     @Synchronized
-    fun envoie(texte: String) {
+    fun envoie(texte: String, enchaine: Boolean = false) {
+        val u = 1200.0 / wpm.coerceIn(5, 50) * debit / 1000
+        if (enchaine && texte.isBlank()) {
+            // Each character already ends with a letter gap (3): 4 more make the word gap (7).
+            if (elements.isNotEmpty() || restant > 0) { elements.addLast(false to (4 * u).roundToInt()); enAttente++ }
+            return
+        }
         val m = DecodeurCw.manipulation(texte, wpm.coerceIn(5, 50))
         if (m.isEmpty()) return
-        if (elements.isNotEmpty() || restant > 0) elements.addLast(false to (7 * 1200.0 / wpm * debit / 1000).roundToInt())
+        if (!enchaine && (elements.isNotEmpty() || restant > 0)) elements.addLast(false to (7 * 1200.0 / wpm * debit / 1000).roundToInt())
         for ((b, ms) in m) elements.addLast(b to (ms * debit / 1000).roundToInt())
         elements.addLast(false to (3 * 1200.0 / wpm * debit / 1000).roundToInt())
         enAttente += texte.length
