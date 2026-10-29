@@ -37,8 +37,8 @@ class ClientNoeud(private val stockage: Stockage) {
     val associe: Boolean get() = adresse.isNotBlank() && cle.isNotBlank()
 
     private val http = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
-    /** For the stream: no read timeout (a search may last). */
-    val httpFlux: OkHttpClient = http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build()
+    /** The stream: a silence of 20 s (the Pi rebooted, the connection never closed) gives up, to be taken up again. */
+    val httpFlux: OkHttpClient = http.newBuilder().readTimeout(20, TimeUnit.SECONDS).build()
 
     fun base(a: String = adresse) = "http://" + a.trim().removePrefix("http://").trimEnd('/').let { if (':' in it) it else "$it:$PORT" }
 

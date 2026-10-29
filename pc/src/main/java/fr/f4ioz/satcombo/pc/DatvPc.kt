@@ -618,11 +618,26 @@ class DatvPc(
         thread(isDaemon = true, name = "satme-datv-noeud-retrouve") { runCatching { retrouveNoeud() } }
     }
 
-    /** The node's status, twice a second: its words become ours (the stream's rate and the recording stay ours). */
+    /**
+     * The node's status, twice a second: its words become ours (the stream's rate and the recording stay ours).
+     * Back after a silence (SatMe-Node or the Pi restarted) and no longer receiving: started again there with
+     * the same settings, the stream taken up by [litTsNoeud].
+     */
     private fun suisNoeud(gen: Int) {
         var echecs = 0
+        var relanceMs = 0L
         while (generation == gen) {
             runCatching { client.etat() }.onSuccess { j ->
+                if (echecs > 0 && !j.optBoolean("actif") && j.optString("erreur").isBlank()) {
+                    if (horloge() - relanceMs >= 5_000L && generation == gen) {
+                        relanceMs = horloge()
+                        val e = client.demarre(reglage, recepteur)
+                        etat = etat.copy(erreur = e?.let { "node revenu, réception pas relancée : $it" } ?: "")
+                        if (e == null) echecs = 0
+                    }
+                    return@onSuccess
+                }
+                if (etat.erreur.startsWith("node silencieux") || etat.erreur.startsWith("node revenu")) etat = etat.copy(erreur = "")
                 echecs = 0
                 synchronized(points) { points.clear(); Datv.points(j).forEach { points.addLast(it) } }
                 val avant = etat

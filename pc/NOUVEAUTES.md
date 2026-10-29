@@ -16,6 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
+
+### en
+- **DATV through a SatMe-Node: reception resumes by itself after the node restarts** (service restarted or Pi rebooted). SatMe-PC starts reception there again with the same settings and takes the stream up again; "node silent" clears as soon as the node answers. A stream silent for 20 s is reopened: it no longer stays stuck after a cut.
+
+### fr
 - **Phonie → texte : 15 langues de plus à traduire** — danois, suédois, norvégien, finnois, estonien, letton, lituanien, slovaque, hongrois, roumain, bulgare, slovène, grec, turc et catalan, en passant par l'anglais comme les autres. Les cocher dans *Réglages › Phonie → texte*, puis **Installer la traduction** (environ 65 à 150 Mo par langue).
 
 ### en

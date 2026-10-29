@@ -144,4 +144,42 @@ class DatvPcTest {
             assertEquals(1L, d.udpDatagrammes)
         }
     }
+
+    @Test
+    fun le_node_redemarre_la_reception_reprend() {
+        // A node that receives, goes silent (SatMe-Node restarted), then answers again without receiving.
+        val demarrages = java.util.concurrent.atomic.AtomicInteger()
+        val panne = java.util.concurrent.atomic.AtomicBoolean()
+        val actif = java.util.concurrent.atomic.AtomicBoolean()
+        val serveur = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        fun repond(x: com.sun.net.httpserver.HttpExchange, code: Int, corps: String) {
+            val b = corps.toByteArray(); x.sendResponseHeaders(code, if (b.isEmpty()) -1 else b.size.toLong()); x.responseBody.use { it.write(b) }
+        }
+        serveur.createContext("/") { x ->
+            val p = x.requestURI.path
+            when {
+                panne.get() -> repond(x, 503, "")
+                p == "/noeud/api" -> repond(x, 200, "{\"noeud\":true,\"nom\":\"essai\"}")
+                p == "/noeud/entrer" -> repond(x, 200, "{\"ok\":true,\"cle\":\"k\"}")
+                p == "/noeud/datv/demarre" -> { demarrages.incrementAndGet(); actif.set(true); repond(x, 200, "{\"ok\":true}") }
+                p == "/noeud/datv" -> repond(x, 200, "{\"actif\":${actif.get()}}")
+                else -> repond(x, 404, "")
+            }
+        }
+        serveur.start()
+        val d = DatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir")))
+        try {
+            assertEquals(null, d.rejoins("127.0.0.1:" + serveur.address.port, "1234"))
+            assertEquals(null, d.demarre(ReglageDatv(cielKhz = 10_491_500, srKs = 1500, olKhz = 9_750_000)))
+            assertEquals(1, demarrages.get())
+            panne.set(true); actif.set(false)
+            Thread.sleep(1500)
+            panne.set(false)
+            val fin = System.currentTimeMillis() + 8000
+            while (demarrages.get() < 2 && System.currentTimeMillis() < fin) Thread.sleep(100)
+            assertEquals(2, demarrages.get())
+            assertTrue(d.etat.actif)
+            assertEquals("", d.etat.erreur)
+        } finally { d.arrete(); serveur.stop(0) }
+    }
 }
