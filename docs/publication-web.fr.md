@@ -594,6 +594,50 @@ seule (« seule ») ; le visiteur choisit la piste son dans son lecteur.
 Seules les voix que SatMe-PC rend lui-même (Piper, eSpeak NG) y passent, pas
 celle de speech-dispatcher.
 
+### Commandes à distance (facultatif)
+
+Pour qu'une skill Alexa ou une page de votre site pose des questions à la
+station et demande quelques gestes **sans jamais s'y connecter** :
+*Réglages › Assistant et domotique › Commandes à distance*, deux cases
+décochées d'origine. C'est toujours SatMe-PC qui envoie, à la même adresse
+(`{type}`) et avec le même jeton que le reste.
+
+> **Jamais d'émission.** Seules huit actions existent, toutes de réception
+> ou de son : `autopilote_on`, `autopilote_off`, `sstv_on`, `sstv_off`,
+> `datv_on`, `datv_off`, `son_muet`, `son_remet`. SatMe-PC refuse tout le
+> reste (PTT, CAT, émission DATV / SSTV / FT8 / ADALM-PLUTO, rotor) et
+> répond « à faire à l'écran », quoi que le site envoie.
+
+| Type | Corps envoyé | Réponse attendue | Quand |
+|---|---|---|---|
+| `commandes-etat` | JSON `{"type","version","t","reponses","passages","actions"}` | `{"ok":true}` | toutes les minutes (case **Questions** ou **Actions**), et juste après une action faite |
+| `commandes-attente` | JSON `{"type","version","attente":25}` | `{"ok":true,"commandes":[{"id","intention","t","source"}]}` dès qu'une commande attend, sinon la liste vide au bout de `attente` secondes au plus | en boucle, case **Actions** cochée |
+| `commandes-resultat` | JSON `{"type","version","id","ok","fr","en"}` | `{"ok":true}` | après chaque commande reçue |
+
+- `reponses` : pour chaque question, la phrase prête à dire, en français et
+  en anglais, à l'heure de la station — `prochain_passage` (vos favoris),
+  `visibles`, `autopilote_etat`, `derniere_sstv`, `datv_etat`, `balise`,
+  `rotor`, `prochain_aos`, `dernier_qso`, `aide` — chacune
+  `{"fr","en"}` et, quand elle annonce un passage à venir, `"aos"` (ms UTC)
+  pour que le site ajoute « dans 25 minutes » à l'heure où il répond.
+- `passages` : le prochain passage (au-dessus de l'élévation minimale) des
+  favoris, du satellite suivi, de ceux des campagnes et de quelques
+  satellites courants (ISS, SO-50, AO-91, RS-44…), 40 au plus :
+  `{"nom","catnum","cles","aos","los","el","fr","en"}`. `cles` : les noms du
+  satellite normalisés (NFD sans accents, minuscules, lettres et chiffres
+  seulement : « AO-91 » → `ao91`, « ISS (ZARYA) » → `isszarya`, `iss`,
+  `stationspatiale`…) pour retrouver un nom dit.
+- `actions` : les actions que la station accepte maintenant (vide quand la
+  case **Actions** est décochée).
+- Une commande : `intention` est l'une des huit actions ; une commande déjà
+  vue (même `id`) n'est pas refaite. SatMe-PC garde la requête
+  `commandes-attente` ouverte jusqu'à 25 s : votre site la tient tant qu'il
+  n'a rien, et répond dès qu'une commande arrive (un délai côté proxy de
+  60 s suffit).
+- Un site qui ne connaît pas ces types répond `404` : SatMe-PC réessaie de
+  moins en moins souvent (jusqu'à 5 min) et le dit sur la carte.
+
+
 ---
 
 ## Sécurité

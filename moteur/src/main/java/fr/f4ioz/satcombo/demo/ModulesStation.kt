@@ -85,6 +85,10 @@ object ModulesStation {
             avis = "Un boîtier ESP32 et un WiMo ; ne fait rien tant qu’aucun port n’est choisi (l’ESP32 virtuel pour essayer)"),
         Module(SITE, "Publication web", "Envoyer images SSTV, planches, rapports, contacts et vidéos (et en option des données en direct) vers votre site web, par HTTPS, ou dans un dossier. Votre site les reçoit comme il veut (API documentée). Rien n’est envoyé tant que ce module n’est pas activé et testé.",
             masques = listOf("#site-carte", ".site-b"), avis = "Désactivé par défaut ; aucun profil ne l’active", surDemande = true),
+        Module(ASSISTANT, "Assistant vocal", "Poser une question à la station au micro de ce PC (« SatMe, prochain passage de l’ISS »), réponse dite et affichée ; reconnaissance Whisper sur ce PC, rien n’est envoyé. Jamais d’émission à la voix.",
+            masques = listOf("#asv-carte", "#asv-flottant"), avis = "Désactivé par défaut ; installe un petit modèle Whisper (75 à 485 Mo)", surDemande = true),
+        Module(DOMOTIQUE, "Home Assistant", "L’état de la station et quelques gestes sans émission (auto-pilote, réception SSTV et DATV, son) dans Home Assistant par MQTT, puis Alexa ou Google Home par Home Assistant",
+            masques = listOf("#ha-carte"), avis = "Désactivé par défaut ; un broker MQTT sur votre réseau", surDemande = true),
     )
 
     private val PAR_ID = MODULES.associateBy { it.id }
@@ -112,6 +116,12 @@ object ModulesStation {
 
     /** « Publication web », sending to the owner's web site (SitePc): off until switched on. Its id stays « site » (the stations' settings). */
     const val SITE = "site"
+
+    /** « Assistant vocal » (AssistantVocalPc): the PC's microphone, off until switched on. */
+    const val ASSISTANT = "assistant"
+
+    /** « Home Assistant » (DomotiquePc): the station's state to an MQTT broker, off until switched on. */
+    const val DOMOTIQUE = "domotique"
 
     fun module(id: String): Module? = PAR_ID[id]
 

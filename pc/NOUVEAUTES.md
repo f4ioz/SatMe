@@ -16,6 +16,18 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Assistant vocal** (module facultatif, désactivé d'origine, *Réglages › Modules*) : dites « **SatMe**, prochain passage de l'ISS » au micro du PC — prochain passage d'un satellite ou de vos favoris, satellites visibles, prochain AOS, auto-pilote, dernière image SSTV, DATV, balise QO-100, position du rotor, dernier QSO ; et quelques gestes : auto-pilote, réception SSTV ou DATV, couper le son. Whisper écrit la phrase **sur ce PC** (un petit modèle, 75 à 485 Mo, bouton **Installer** dans *Réglages › Assistant et domotique*), la voix de « Traduction parlée » répond, une bulle l'affiche en bas à droite ; le bouton 🎙 évite le mot « SatMe ». Rien n'est envoyé nulle part.
+- **Home Assistant** (module facultatif, désactivé d'origine) : l'état de la station publié vers votre broker MQTT, les entités trouvées toutes seules par Home Assistant (prochain passage et AOS, satellites visibles, auto-pilote, SSTV, DATV, balise, rotor, dernier QSO) ; avec **Actions**, des interrupteurs et un champ « Commande SatMe ». Alexa ou Google Home les reprennent par Home Assistant. Le mot de passe MQTT reste sur ce PC, jamais réaffiché.
+- **Publication web › Commandes à distance** (deux cases décochées d'origine) : pour une skill Alexa sur votre site — le site ne se connecte jamais à la station, SatMe-PC lui envoie les réponses et relève les commandes. Voir `docs/assistant-domotique.fr.md`.
+- **Jamais d'émission par la voix ni à distance** : PTT, CAT, émission DATV, SSTV, FT8, ADALM-PLUTO et mouvements du rotor sont toujours refusés (« à faire à l'écran ») ; seules huit actions de réception ou de son existent.
+
+### en
+- **Voice assistant** (optional module, off by default, *Settings › Modules*): say "**SatMe**, next ISS pass" to the PC's microphone — next pass of a satellite or of your favourites, satellites in view, next AOS, autopilot, last SSTV picture, DATV, QO-100 beacon, rotator position, last QSO; and a few gestures: autopilot, SSTV or DATV reception, mute. Whisper writes the sentence **on this PC** (a small model, 75 to 485 MB, **Install** button in *Settings › Assistant and home automation*), the "Spoken translation" voice answers, a bubble shows it at the bottom right; the 🎙 button skips the word "SatMe". Nothing is sent anywhere.
+- **Home Assistant** (optional module, off by default): the station's state published to your MQTT broker, the entities found by Home Assistant by themselves (next pass and AOS, satellites in view, autopilot, SSTV, DATV, beacon, rotator, last QSO); with **Actions**, switches and a "Commande SatMe" field. Alexa or Google Home take them up through Home Assistant. The MQTT password stays on this PC, never shown again.
+- **Publication web › Remote commands** (two boxes, unticked by default): for an Alexa skill on your own site — the site never connects to the station, SatMe-PC sends it the answers and fetches the commands. See `docs/assistant-domotique.md`.
+- **Never any transmission by voice or remotely**: PTT, CAT, DATV, SSTV, FT8, ADALM-PLUTO transmission and rotator moves are always refused ("do it on the screen"); only eight receive or sound actions exist.
+
+### fr
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
 
 ### en
