@@ -25,6 +25,8 @@ package fr.f4ioz.satcombo.demo
  * chCle(q): those words as one text (a timeline asked again only when it changed).
  * chDuree(s): « 1 min 42 s » (« 42 s » under a minute; the same in English).
  * chReel(allure): a pace that runs in real time (its sound heard), the video's rule.
+ * chSon(c, allure): the sound heard at that pace: in real time, or sped up to c.sonMax (×4) with « Son accéléré ».
+ * chAudio(a, allure): the audio element played at that pace, its pitch kept (preservesPitch and its old names).
  */
 object ChronologieJs {
 
@@ -76,5 +78,12 @@ function chDuree(s) {
   return r < 60 ? r + ' s' : Math.floor(r / 60) + ' min ' + String(r % 60).padStart(2, '0') + ' s';
 }
 function chReel(allure) { return Math.abs(allure - 1) < 1e-3; }
+function chSon(c, allure) { return chReel(allure) || (!!c && !!c.sonAccelere && allure > 0 && allure <= (c.sonMax || 4) + 1e-3); }
+function chAudio(a, allure) {
+  const r = chReel(allure) ? 1 : Math.max(.25, Math.min(4, allure));
+  a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
+  if (Math.abs((a.playbackRate || 1) - r) > 1e-3) a.playbackRate = r;
+  return r;
+}
 """
 }

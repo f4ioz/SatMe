@@ -52,7 +52,7 @@ object PageJournal {
         "pj_el_evenement", "pj_el_sans_evenement", "pj_el_simple",
         "pj_vue_globe", "pj_globe_aide", "pj_cam_poursuite", "pj_cam_station", "pj_cam_ensemble", "pj_cam_satellite",
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
-        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
+        "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_son_accelere", "pj_son_accelere_aide", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
         "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_duree_bilan", "pj_frise_legende", "pj_vitesse_aide",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
@@ -298,7 +298,7 @@ function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
     smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, paquetQsos: false, format: 'paysage', vignettes: true,
     entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3, zHors: .9, zPassage: 1.8, autres: [], tachesAutres: false,
-    mAvant: .5, mApres: .5, mode: 'passages', dureeBilan: 7 });
+    mAvant: .5, mApres: .5, mode: 'passages', dureeBilan: 7, sonAccelere: true });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -1266,7 +1266,12 @@ function dessineFrise() {
   P.sons.forEach(s => { x.fillStyle = 'rgba(63,224,200,.12)'; x.fillRect(tx(s.o + s.an, w), 4, tx(s.o + s.du, w) - tx(s.o + s.an, w), h - 20); });
   // The silences skipped: hatched (fast, silent); where the video runs in real time with the sound: a green line under it.
   if (O.accelere) segments.forEach(s => { if (s[2] > 1) hachure(x, tx(s[0], w), 4, tx(s[1], w) - tx(s[0], w), h - 20); });
-  if (C && O.avecSon) { x.fillStyle = '#5BD68A'; (C.pieces || []).forEach(q => { if (chReel(q[2])) x.fillRect(tx(q[0], w), h - 17, Math.max(2, tx(q[1], w) - tx(q[0], w)), 3); }); }
+  if (C && O.avecSon) (C.pieces || []).forEach(q => {
+    if (chReel(q[2])) { x.fillStyle = '#5BD68A'; x.fillRect(tx(q[0], w), h - 17, Math.max(2, tx(q[1], w) - tx(q[0], w)), 3); }
+    // Sped-up sound (« Son accéléré »): lighter, where a recording is.
+    else if (chSon(C, q[2])) P.sons.forEach(s => { const a = Math.max(q[0], s.o + s.an), b = Math.min(q[1], s.o + s.du);
+      if (b > a) { x.fillStyle = '#A8EBC0'; x.fillRect(tx(a, w), h - 17, Math.max(2, tx(b, w) - tx(a, w)), 3); } });
+  });
   const lg = g('friseLegende'); if (lg) lg.style.display = O.accelere || (C && O.avecSon) ? '' : 'none';
   x.fillStyle = 'rgba(205,215,230,.45)'; activite.forEach(r => x.fillRect(tx(r[0], w), 36, Math.max(2, tx(r[1], w) - tx(r[0], w)), 7));
   if (P.sig.length) { x.strokeStyle = 'rgba(235,240,245,.8)'; x.lineWidth = 1.3; x.beginPath();
@@ -1339,14 +1344,16 @@ function allureA(tt) {
   return isFinite(r) ? r : +O.vPassage;
 }
 /** The sound heard here: the pass shown's recording, where the time runs in real time (as the video: never sped up nor slowed), the sound asked. */
-function ecouteIci(tt) { return !!(O.avecSon && P && !S.trans && morceauA(tt) >= 0 && (C ? chReel(allureVue) : allureA(tt) <= 1.0001)); }
+function ecouteIci(tt) { return !!(O.avecSon && P && !S.trans && morceauA(tt) >= 0 && (C ? chSon(C, allureVue) : allureA(tt) <= 1.0001)); }
 function synchro() {
   const a = g('son'), i = morceauA(t);
   if (!joue || !ecouteIci(t)) { if (!a.paused) a.pause(); return; }
   const s = P.sons[i], pos = (t - s.o) / 1000, cle = P.id + '#' + i;
-  if (morceauJoue !== cle) { morceauJoue = cle; a.src = url('/son', { id: P.id, n: s.n }); a.playbackRate = C ? 1 : vitesse;
-    a.addEventListener('loadedmetadata', () => { a.currentTime = (t - s.o) / 1000; a.play().catch(() => {}); }, { once: true }); return; }
-  if (Math.abs(a.currentTime - pos) > 0.6) a.currentTime = pos;
+  // On the timeline: at the frames' pace (real time, or sped up to ×4 with its pitch kept), as the video plays it.
+  if (C) chAudio(a, allureVue);
+  if (morceauJoue !== cle) { morceauJoue = cle; a.src = url('/son', { id: P.id, n: s.n }); if (C) chAudio(a, allureVue); else a.playbackRate = vitesse;
+    a.addEventListener('loadedmetadata', () => { a.currentTime = (t - s.o) / 1000; if (C) chAudio(a, allureVue); a.play().catch(() => {}); }, { once: true }); return; }
+  if (Math.abs(a.currentTime - pos) > (C ? 0.6 * Math.max(1, allureVue) : 0.6)) a.currentTime = pos;
   if (a.paused) a.play().catch(() => {});
 }
 /**
@@ -1733,6 +1740,8 @@ function panneauExports(p) {
   if (pc) c.appendChild(curseurBilan());
   // The sound: where the time runs in real time (a contact heard, the accelerated replay's normal stretches), here and in the video.
   c.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son, () => { piecesAllure(); if (joue) synchro(); })]));
+  // Sped up to ×4 with its pitch kept, here and in the video (SatMe-PC's timeline).
+  if (pc) c.appendChild(el('div', { title: T.son_accelere_aide }, [caseOpt('sonAccelere', T.son_accelere, () => { if (joue) synchro(); })]));
   c.appendChild(el('div', { title: T.accelere + '. ' + T.accel_aide }, [caseOpt('accelere', T.accelere_video, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); })]));
   c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
   p.appendChild(c);
@@ -1767,7 +1776,7 @@ function parametresRendu(quoi) {
     res: O.res, format: O.format === 'telephone' ? 'telephone' : 'paysage', vue: O.vue, sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq),
     locator: b(O.locator), ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
     etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), accelere: b(O.accelere), rapide: O.rapide, accAvant: O.avant, accApres: O.apres,
-    surActivite: b(O.surActivite), contacts: b(O.paquetQsos), lecture: vitesse, cam: Orbites.cameraActive(), dureeBilan: O.dureeBilan }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
+    surActivite: b(O.surActivite), contacts: b(O.paquetQsos), lecture: vitesse, cam: Orbites.cameraActive(), dureeBilan: O.dureeBilan, sonAccelere: b(O.sonAccelere) }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { q.de = Math.round(sel[0]); q.a = Math.round(sel[1]); }
   return q;
 }

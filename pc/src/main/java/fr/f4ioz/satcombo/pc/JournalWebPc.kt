@@ -471,7 +471,10 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         return SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
             ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap) && morceau == null, transition = q.transition,
             zHors = q.zHors, zPassage = q.zPassage, autres = autres, tachesAutres = q.tachesAutres, son = avecSon, avant = q.avant, apres = q.apres,
-            morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace", bilan = q.bilan)
+            morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace", bilan = q.bilan,
+            // Where each pass's recordings are: heard there, sped up to ×4 at most (« Son accéléré »).
+            sonAccelere = q.sonAccelere, enregistres = if (!avecSon) emptyList() else es.flatMap { e ->
+                j.morceaux(e).map { m -> (m.origine + m.annonce)..(m.origine + m.dureeMs) } })
     }
 
     /**

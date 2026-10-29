@@ -74,6 +74,12 @@ object SessionRenduPc {
     /** From one zoom to the other in about this many seconds of video, before and after a pass. */
     const val ZOOM_S = 1.5
 
+    /**
+     * « Son accéléré »: a recording is heard up to this pace (×4, the page's « Vitesse » included), sped up with its pitch
+     * kept (the page: playbackRate with preservesPitch; the video: ffmpeg's atempo); faster, it is muted.
+     */
+    const val SON_MAX = 4.0
+
     /** The turn's frames for [secondes]. */
     fun tourne(secondes: Double) = Math.round(secondes * FPS).toInt().coerceAtLeast(1)
 
@@ -97,7 +103,9 @@ object SessionRenduPc {
                           /** The globe's camera chosen on the page ([GlobeRenduPc.CAMERAS_SKED]: « espace » by default). */
                           val camera: String = "espace",
                           /** « Durée du bilan »: how long the closing card stays (s, [BilanPc.duree]). */
-                          val bilan: Double = BilanPc.DUREE_S)
+                          val bilan: Double = BilanPc.DUREE_S,
+                          /** « Son accéléré » ([SON_MAX]): on unless refused. */
+                          val sonAccelere: Boolean = true)
 
     /** The page's « Vitesse » at most (and 1/[LECTURE_MAX] at least). */
     const val LECTURE_MAX = 16.0
@@ -129,7 +137,8 @@ object SessionRenduPc {
             instant = p("t").trim().toLongOrNull(), son = p("avecSon").trim() == "1",
             avant = marge(p, "margeAvant", "avant"), apres = marge(p, "margeApres", "apres"),
             lecture = p("lecture").trim().toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }?.coerceIn(1 / LECTURE_MAX, LECTURE_MAX) ?: 1.0,
-            camera = GlobeRenduPc.cameraDemandee(p("cam")), bilan = BilanPc.duree(p))
+            camera = GlobeRenduPc.cameraDemandee(p("cam")), bilan = BilanPc.duree(p),
+            sonAccelere = p("sonAccelere").trim() != "0")
     }
 
     /** What a session's video shows: its passes' scenes (sorted by time), how it plays, the cards asked. */
@@ -150,7 +159,11 @@ object SessionRenduPc {
                   /** The globe's camera ([GlobeRenduPc.centreCamera]). */
                   val camera: String = "espace",
                   /** How long the closing card stays (s): « Durée du bilan ». */
-                  val bilan: Double = BilanPc.DUREE_S) {
+                  val bilan: Double = BilanPc.DUREE_S,
+                  /** « Son accéléré »: the recordings heard sped up to [SON_MAX], their pitch kept; the passes recorded slowed to it. */
+                  val sonAccelere: Boolean = true,
+                  /** Where a recording is (real time); null: each pass with recordings, AOS to LOS. */
+                  enregistres: List<LongRange>? = null) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
             .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
         /**
@@ -162,6 +175,14 @@ object SessionRenduPc {
             val entendu = son && scenes.any { sc -> sc.e.enregistrements.isNotEmpty() && g.deMs <= sc.e.finMs + apres && g.aMs >= sc.e.debutMs - avant }
             if (g.vitesse <= 1 && !entendu) JournalPassage.Segment(g.deMs, g.aMs, 0) else g
         }?.sortedBy { it.deMs }
+        /** Where a recording can be heard: the sound asked, the recordings' spans. */
+        val enregistres: List<LongRange> = if (!son) emptyList()
+            else enregistres ?: scenes.filter { it.e.enregistrements.isNotEmpty() }.map { it.e.debutMs..it.e.finMs }
+        /**
+         * Where the pace is held down to [SON_MAX] to be heard (« Son accéléré », no stretch imposed: the silences skipped
+         * keep their own paces, a stretch chosen runs in real time): the recordings' spans.
+         */
+        val plafonds: List<LongRange> get() = if (sonAccelere && imposes == null) enregistres else emptyList()
         /** The passes themselves, AOS to LOS: the zoom comes near around them (the satellite seen coming from afar in the margin). */
         val passages: List<LongRange> = scenes.map { it.e.debutMs..it.e.finMs }
         /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */
@@ -229,15 +250,21 @@ object SessionRenduPc {
     class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses, ecoute: List<LongRange> = emptyList(),
                  /** Imposed in the windows: each stretch's pace (the accelerated replay, a stretch in real time); the margins round them at [Vitesses.passage]. */
                  imposes: List<JournalPassage.Segment>? = null,
-                 /** Every pace times this (the page's « Vitesse »): above 1, nothing runs in real time, nothing is heard. */
-                 val lecture: Double = 1.0) {
+                 /** Every pace times this (the page's « Vitesse »): above 1, nothing runs in real time. */
+                 val lecture: Double = 1.0,
+                 /**
+                  * Where the pace is held to [SON_MAX] with the « Vitesse » ([Session.plafonds]: a recording heard sped up):
+                  * at most [SON_MAX] / [lecture] there — none when the « Vitesse » itself goes past [SON_MAX].
+                  */
+                 plafonds: List<LongRange> = emptyList()) {
         /** The stretches (from, to, pace before [lecture]): the page shades them on its timeline. */
         val morceaux: List<Triple<Long, Long, Double>>
         init {
             val bornes = sortedSetOf<Long>()
             fenetres.forEach { bornes += it.first; bornes += it.last + 1 }
             val dedans = (if (imposes != null) imposes.map { it.deMs..it.aMs } else actifs + ecoute)
-            dedans.forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
+            (dedans + plafonds).forEach { a -> if (fenetres.any { a.first <= it.last && a.last >= it.first }) { bornes += a.first; bornes += a.last + 1 } }
+            val plafond = if (plafonds.isEmpty() || lecture > SON_MAX) Double.MAX_VALUE else SON_MAX / lecture
             val l = ArrayList<Triple<Long, Long, Double>>()
             val b = bornes.toList()
             for (k in 0 until b.size - 1) {
@@ -247,7 +274,8 @@ object SessionRenduPc {
                     !dans -> if (continu) v.hors else continue
                     imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.vitesse?.let { if (it <= 0) v.image else it.toDouble().coerceAtLeast(1.0) } ?: v.passage
                     // A contact heard: in real time (its sound only plays there, never slowed nor sped up).
-                    ecoute.any { m in it } -> 1.0; actifs.any { m in it } -> v.image; else -> v.passage }
+                    ecoute.any { m in it } -> 1.0; actifs.any { m in it } -> v.image; else -> v.passage }.let { r0 ->
+                        if (dans && plafonds.any { m in it }) minOf(r0, plafond) else r0 }
                 val der = l.lastOrNull()
                 if (der != null && der.third == r && der.second == b[k]) l[l.size - 1] = Triple(der.first, b[k + 1], r) else l += Triple(b[k], b[k + 1], r)
             }
@@ -264,13 +292,16 @@ object SessionRenduPc {
         }
         /** Real time there: its sound is heard (the page and the video, the same rule). */
         fun reel(t: Long): Boolean = kotlin.math.abs(a(t) - 1.0) < 1e-4
+        /** Its sound heard at [t]: in real time, or sped up to [SON_MAX] with « Son accéléré » ([accelere]). */
+        fun entendu(t: Long, accelere: Boolean): Boolean = if (accelere) a(t) <= SON_MAX + 1e-4 else reel(t)
     }
 
     /** Every frame of the session's passes, [fps] a second, each moment at its pace ([Allure]). */
     fun plan(fenetres: List<LongRange>, actifs: List<LongRange>, mode: String, v: Vitesses, fps: Int = FPS, transition: Double = TRANSITION_S,
-             ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null, lecture: Double = 1.0): List<Trame> {
+             ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null, lecture: Double = 1.0,
+             plafonds: List<LongRange> = emptyList()): List<Trame> {
         if (fenetres.isEmpty()) return emptyList()
-        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes, lecture)
+        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes, lecture, plafonds)
         fun pas(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
         val l = ArrayList<Trame>()
         if (mode == "continu") {
@@ -298,8 +329,8 @@ object SessionRenduPc {
         return l
     }
 
-    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes, s.lecture)
-    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes, s.lecture)
+    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes, s.lecture, s.plafonds)
+    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes, s.lecture, s.plafonds)
 
     // ---------------------------------------------------------------- the timeline, the page's and the video's
 
@@ -347,6 +378,7 @@ object SessionRenduPc {
         append("{\"ok\":true,\"fps\":").append(c.fps).append(",\"debut\":").append(c.debut).append(",\"fin\":").append(c.fin)
         append(",\"secondes\":").append("%.3f".format(Locale.US, c.secondes)).append(",\"lecture\":").append(s.lecture)
         append(",\"camera\":\"").append(s.camera.filter { it.isLetter() }).append("\",\"son\":").append(s.son)
+        append(",\"sonAccelere\":").append(s.sonAccelere).append(",\"sonMax\":").append(SON_MAX)
         append(",\"t0\":").append(l.firstOrNull()?.t ?: 0)
         append(",\"dt\":[")
         for (k in 1 until l.size) { if (k > 1) append(','); append(l[k].t - l[k - 1].t) }
@@ -569,33 +601,24 @@ object SessionRenduPc {
     class Son(val sons: Map<Int, fr.f4ioz.satcombo.domain.SonPassage>, val debuts: Map<Int, Long>, val rate: Int)
 
     /**
-     * The session's sound as its video plays it: silence for its card, then, frame by frame,
-     * the pass's sound where the time runs in real time (its pace 1: a contact heard, the
-     * accelerated replay's normal stretches, a stretch chosen), silence elsewhere (the time
-     * running faster), the closing card silent.
+     * The session's sound as its video plays it: silence for its card, then, frame by frame, the pass's sound where it
+     * is heard ([Allure.entendu]): in real time as it was (a contact heard, the accelerated replay's normal stretches,
+     * a stretch chosen), sped up to [SON_MAX] with its pitch kept (« Son accéléré », ffmpeg's atempo — [atempo]),
+     * silence elsewhere (the time running faster) and on the closing card. The frames heard are taken in runs of
+     * one pass at about one pace (within [PAS_TEMPO]), each run's sound made to its exact length.
      */
-    fun source(s: Session, plan: List<Trame>, son: Son): fr.f4ioz.satcombo.domain.SourcePcm {
-        val allure = allure(s)
+    fun source(s: Session, plan: List<Trame>, son: Son, ff: String? = RenduPc.ffmpeg()): fr.f4ioz.satcombo.domain.SourcePcm {
         val nTitre = debut(s, 1, 1).sumOf { it.second }
+        val pistes = pistes(s, plan, son, ff)
         val r = son.rate.toLong()
         fun debut(n: Int) = n * r / FPS
+        val nb = nTitre + plan.size
         var n = 0; var dans = 0
         var cur = ShortArray(0)
         fun prepare(k: Int) {
             val l = (debut(k + 1) - debut(k)).toInt()
-            cur = ShortArray(l)
-            val tr = plan.getOrNull(k - nTitre) as? Trame.Passe ?: return
-            // Only where the time runs in real time: never sped up nor slowed down (no pitch changed).
-            if (!s.son || !allure.reel(tr.t)) return
-            val sp = son.sons[tr.i] ?: return
-            val de = son.debuts[tr.i] ?: return
-            // The pass's own rate: its samples taken to the video's (the nearest one).
-            val pos = (tr.t - de) * sp.rate / 1000
-            val m = (l.toLong() * sp.rate / r).toInt().coerceAtLeast(1)
-            val src = ShortArray(m); sp.lis(maxOf(0L, pos), src, m)
-            for (i in 0 until l) cur[i] = src[(i.toLong() * m / l).toInt().coerceIn(0, m - 1)]
+            cur = pistes[k - nTitre]?.takeIf { it.size == l } ?: ShortArray(l)
         }
-        val nb = nTitre + plan.size
         prepare(0)
         return fr.f4ioz.satcombo.domain.SourcePcm { buf ->
             var k = 0
@@ -606,6 +629,101 @@ object SessionRenduPc {
             }
             k
         }
+    }
+
+    /** Frames heard together, at about one pace: their sound made at once (the pace easing in and out cut in steps this fine). */
+    const val PAS_TEMPO = 0.04
+
+    /** Which frames of [plan] are heard, and each run of them: the pass, the frames (plan's indices), its pace (real per video time). */
+    data class Course(val i: Int, val de: Int, val a: Int, val allure: Double)
+
+    /** The frame [k]'s real span (ms): to the next frame of the same pass, else one frame at its pace. */
+    private fun duree(plan: List<Trame>, k: Int, allure: Allure): Long {
+        val tr = plan[k]; val nx = plan.getOrNull(k + 1)
+        return if (nx is Trame.Passe && tr is Trame.Passe && nx.i == tr.i && nx.t > tr.t) nx.t - tr.t
+        else Math.round(1000.0 / FPS * allure.a(tr.t)).coerceAtLeast(1)
+    }
+
+    /** The runs of frames heard ([source]): only in a pass with its sound, where [Allure.entendu] says so. */
+    fun courses(s: Session, plan: List<Trame>, avecSon: (Int) -> Boolean): List<Course> {
+        if (!s.son) return emptyList()
+        val allure = allure(s)
+        val l = ArrayList<Course>()
+        var c: Course? = null
+        for (k in plan.indices) {
+            val tr = plan[k] as? Trame.Passe
+            val ok = tr != null && avecSon(tr.i) && s.enregistres.any { tr.t in it } && allure.entendu(tr.t, s.sonAccelere)
+            if (!ok) { c?.let { l += it }; c = null; continue }
+            val p = duree(plan, k, allure) * FPS / 1000.0
+            val cc = c
+            c = if (cc != null && cc.i == tr!!.i && cc.a == k - 1 && kotlin.math.abs(p / cc.allure - 1) <= PAS_TEMPO) cc.copy(a = k)
+            else { cc?.let { l += it }; Course(tr!!.i, k, k, p) }
+        }
+        c?.let { l += it }
+        return l
+    }
+
+    /** Each frame heard's samples at the video's rate (plan's index → samples), as [source] hands them out. */
+    private fun pistes(s: Session, plan: List<Trame>, son: Son, ff: String?): Map<Int, ShortArray> {
+        val nTitre = debut(s, 1, 1).sumOf { it.second }
+        val r = son.rate.toLong()
+        fun debut(n: Int) = n * r / FPS
+        val allure = allure(s)
+        val out = HashMap<Int, ShortArray>()
+        for (c in courses(s, plan) { son.sons.containsKey(it) && son.debuts.containsKey(it) }) {
+            val sp = son.sons[c.i] ?: continue; val de = son.debuts[c.i] ?: continue
+            val t0 = plan[c.de].t; val t1 = plan[c.a].t + duree(plan, c.a, allure)
+            val l = (debut(nTitre + c.a + 1) - debut(nTitre + c.de)).toInt()
+            val m = ((t1 - t0) * sp.rate / 1000).toInt().coerceAtLeast(1)
+            val src = ShortArray(m); sp.lis(maxOf(0L, (t0 - de) * sp.rate / 1000), src, m)
+            // As long as the frames: in real time the nearest sample (no pitch changed); faster, atempo's.
+            val tempo = (m.toDouble() / sp.rate) / (l.toDouble() / r)
+            val piste = when {
+                kotlin.math.abs(tempo - 1) < 0.02 -> ShortArray(l) { src[(it.toLong() * m / l).toInt().coerceIn(0, m - 1)] }
+                ff == null -> ShortArray(l)
+                else -> tempo(ff, src, sp.rate, son.rate, tempo, l)
+            }
+            var pos = 0
+            for (k in c.de..c.a) {
+                val n = (debut(nTitre + k + 1) - debut(nTitre + k)).toInt()
+                out[k] = piste.copyOfRange(pos, minOf(pos + n, piste.size)).let { if (it.size == n) it else it.copyOf(n) }
+                pos += n
+            }
+        }
+        return out
+    }
+
+    /**
+     * ffmpeg's atempo filters for [tempo] (each takes 0.5 to 2): 3 → « atempo=2.0,atempo=1.5 », 4 →
+     * « atempo=2.0,atempo=2.0 », 0.3 → « atempo=0.5,atempo=0.6 ».
+     */
+    fun atempo(tempo: Double): String {
+        val l = ArrayList<Double>()
+        var t = tempo.coerceIn(0.01, 100.0)
+        while (t > 2.0 + 1e-9) { l += 2.0; t /= 2.0 }
+        while (t < 0.5 - 1e-9) { l += 0.5; t /= 0.5 }
+        l += t
+        return l.joinToString(",") { "atempo=" + String.format(Locale.US, "%.6f", it).trimEnd('0').let { s -> if (s.endsWith('.')) s + "0" else s } }
+    }
+
+    /** [src] ([de] samples a second) sped up by [tempo] with its pitch kept (ffmpeg), at [vers] samples a second, [l] long. */
+    fun tempo(ff: String, src: ShortArray, de: Int, vers: Int, tempo: Double, l: Int): ShortArray {
+        val p = ProcessBuilder(ff, "-loglevel", "error", "-f", "s16le", "-ar", "$de", "-ac", "1", "-i", "-",
+            "-af", atempo(tempo) + ",aresample=$vers", "-f", "s16le", "-ar", "$vers", "-ac", "1", "-").start()
+        val ecrit = Thread {
+            runCatching {
+                val b = java.nio.ByteBuffer.allocate(src.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                src.forEach { b.putShort(it) }
+                p.outputStream.use { it.write(b.array()) }
+            }
+        }.apply { isDaemon = true; start() }
+        Thread { runCatching { p.errorStream.readBytes() } }.apply { isDaemon = true; start() }
+        val lu = runCatching { p.inputStream.readBytes() }.getOrDefault(ByteArray(0))
+        ecrit.join(2000); p.waitFor()
+        val r = ShortArray(l)
+        val bb = java.nio.ByteBuffer.wrap(lu).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until minOf(l, lu.size / 2)) r[i] = bb.getShort(i * 2)
+        return r
     }
 
     /** [a], then [b] once [a] has ended. */

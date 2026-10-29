@@ -73,6 +73,23 @@ class ChronologieJsTest {
     }
 
     @Test
+    fun le_son_accelere_dans_l_apercu() {
+        lance("""
+            // « Son accéléré »: heard in real time, and sped up to ×4 (sonMax); faster, silent; off: real time only.
+            const c = { sonAccelere: true, sonMax: 4 };
+            assert.ok(chSon(c, 1)); assert.ok(chSon(c, 2.5)); assert.ok(chSon(c, 4)); assert.ok(!chSon(c, 4.5)); assert.ok(!chSon(c, 20));
+            assert.ok(chSon({ sonAccelere: false, sonMax: 4 }, 1)); assert.ok(!chSon({ sonAccelere: false, sonMax: 4 }, 2));
+            // The audio element at the frames' pace, its pitch kept (each browser's name for it).
+            const a = { playbackRate: 1 };
+            assert.strictEqual(chAudio(a, 3), 3);
+            assert.strictEqual(a.playbackRate, 3); assert.strictEqual(a.preservesPitch, true);
+            assert.strictEqual(a.webkitPreservesPitch, true); assert.strictEqual(a.mozPreservesPitch, true);
+            chAudio(a, 1.00001); assert.strictEqual(a.playbackRate, 1);
+            chAudio(a, 9); assert.strictEqual(a.playbackRate, 4);
+        """)
+    }
+
+    @Test
     fun l_apercu_demande_ce_que_la_video_demande() {
         lance("""
             const fichier = { quoi: 'video', t: 123, de: 5, a: 9, ids: 'a,b', mode: 'continu', vHors: 20, vPassage: 4, vImage: 3, lecture: 2,

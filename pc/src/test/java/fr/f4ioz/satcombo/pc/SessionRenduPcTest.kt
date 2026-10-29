@@ -499,7 +499,8 @@ class SessionRenduPcTest {
 
     @Test
     fun avec_le_son_un_contact_passe_en_temps_reel() {
-        val s = SessionRenduPc.Session(scenes(avecSon = true), "passages", SessionRenduPc.Vitesses(passage = 50.0, image = 3.0), son = true)
+        // Without « Son accéléré »: only in real time (the sped-up sound: [le_son_accelere_dans_la_video]).
+        val s = SessionRenduPc.Session(scenes(avecSon = true), "passages", SessionRenduPc.Vitesses(passage = 50.0, image = 3.0), son = true, sonAccelere = false)
         val q = s.scenes[1].marques.single()
         val plan = SessionRenduPc.plan(s)
         val pendant = plan.filter { it is SessionRenduPc.Trame.Passe && it.t in q.debutMs - 9_000..q.debutMs + 9_000 }
@@ -530,6 +531,35 @@ class SessionRenduPcTest {
     }
 
     @Test
+    fun le_son_accelere_dans_la_video() {
+        val ff = RenduPc.ffmpeg() ?: return
+        // The same recording (30 s, from 10 s before the contact), « Son accéléré »: the pass held to ×4 there, the contact
+        // at ×1; the 30 s all heard — the contact's 20 s in real time, the 10 s after it sped up (about 2.5 s more).
+        val sc = scenes(avecSon = true)
+        val q = sc[1].marques.single()
+        val rate = 22_050
+        val wav = File(echantillons, "qso-accelere.wav")
+        val pcm = ShortArray(30 * rate) { i -> (8000 * Math.sin(2 * Math.PI * 440 * i / rate)).toInt().toShort() }
+        RenduPc.ecritWav(fr.f4ioz.satcombo.domain.SourcePcm.de(pcm), rate, wav)
+        val s = SessionRenduPc.Session(sc, "passages", SessionRenduPc.Vitesses(passage = 50.0, image = 3.0), son = true, ouverture = false, recap = false,
+            enregistres = listOf((q.debutMs - 10_000)..(q.debutMs + 20_000)))
+        val plan = SessionRenduPc.plan(s)
+        val c = SessionRenduPc.allure(s)
+        assertEquals(SessionRenduPc.SON_MAX, c.a(q.debutMs + 16_000), 1e-9)
+        val de = s.fenetres[1].first
+        val sp = fr.f4ioz.satcombo.domain.SonPassage.fabrique(listOf(fr.f4ioz.satcombo.domain.SonPassage.Morceau(wav, q.debutMs - 10_000, 0L, 30_000L)),
+            de, s.fenetres[1].last, echantillons, JournalPc.decodeur)!!
+        sp.use {
+            val src = SessionRenduPc.source(s, plan, SessionRenduPc.Son(mapOf(1 to sp), mapOf(1 to de), rate), ff)
+            val buf = ShortArray(4096); var total = 0L; var sonore = 0L
+            while (true) { val n = src.lis(buf); if (n <= 0) break; total += n; for (i in 0 until n) if (buf[i].toInt() != 0) sonore++ }
+            assertTrue("$total", Math.abs(total - plan.size.toLong() * rate / SessionRenduPc.FPS) <= rate / SessionRenduPc.FPS + 1)
+            val heard = sonore / rate.toDouble()
+            assertTrue("$heard s", heard > 20.5 && heard < 25.0)
+        }
+    }
+
+    @Test
     fun la_session_en_gif_et_en_image() {
         val s = SessionRenduPc.Session(scenes(), "continu", SessionRenduPc.Vitesses(10_000.0, 300.0, 30.0), titre = "Essai")
         val gif = SessionRenduPc.gif(s, File(echantillons, "session.gif")) {}!!
@@ -556,9 +586,77 @@ class SessionRenduPcTest {
     }
 
     /** One pass of 6 min, 30 s margins, no picture nor contact: the paces alone. */
-    private fun seul(v: SessionRenduPc.Vitesses, lecture: Double = 1.0, mode: String = "continu", accelere: List<JournalPassage.Segment>? = null, son: Boolean = false) =
+    private fun seul(v: SessionRenduPc.Vitesses, lecture: Double = 1.0, mode: String = "continu", accelere: List<JournalPassage.Segment>? = null, son: Boolean = false,
+                     sonAccelere: Boolean = true) =
         SessionRenduPc.Session(scenes(avecSon = son).drop(1).take(1), mode, v, ouverture = false, recap = false, avant = 30_000L, apres = 30_000L,
-            lecture = lecture, accelere = accelere, son = son)
+            lecture = lecture, accelere = accelere, son = son, sonAccelere = sonAccelere)
+
+    @Test
+    fun le_son_accelere_jusqu_a_4_la_hauteur_gardee() {
+        val e = scenes(avecSon = true)[1].e
+        val v = SessionRenduPc.Vitesses(hors = 20.0, passage = 20.0, image = 3.0)
+        // A pass recorded, « Pendant le passage » ×20: held to ×4 over its recording, heard all along (sped up), the contact at ×1.
+        val s = seul(v, son = true)
+        val c = SessionRenduPc.chronologie(s)
+        assertEquals(listOf(e.debutMs..e.finMs), s.enregistres)
+        for (t in e.debutMs..e.finMs step 5_000L) {
+            assertTrue("$t ${c.allure.a(t)}", c.allure.a(t) <= SessionRenduPc.SON_MAX + 1e-9)
+            assertTrue(c.allure.entendu(t, true))
+        }
+        assertEquals(1.0, c.allure.a(e.debutMs + 150_000L), 1e-9)
+        // The margins (not recorded) at ×20, silent.
+        assertTrue(!c.allure.entendu(e.debutMs - 25_000L, true))
+        // The announced length says so: longer than at ×20 without the sound, about 360 s / 4 + the contact.
+        val sans = SessionRenduPc.chronologie(seul(v, son = true, sonAccelere = false))
+        assertTrue("${c.secondes} ${sans.secondes}", c.secondes > sans.secondes + 40)
+        assertTrue("${c.secondes}", c.secondes in 100.0..140.0)
+        // Without « Son accéléré »: ×20, only the contact heard (in real time).
+        assertTrue(!sans.allure.entendu(e.debutMs + 60_000L, false)); assertTrue(sans.allure.entendu(e.debutMs + 150_000L, false))
+        assertEquals(20.0, sans.allure.a(e.debutMs + 60_000L), 1e-9)
+        // « Vitesse » ×2: the pace there held to ×2 so ×4 in all, still heard; ×8: as asked, silent.
+        val x2 = SessionRenduPc.chronologie(seul(v, lecture = 2.0, son = true))
+        assertEquals(4.0, x2.allure.a(e.debutMs + 60_000L), 1e-9); assertTrue(x2.allure.entendu(e.debutMs + 60_000L, true))
+        val x8 = SessionRenduPc.chronologie(seul(v, lecture = 8.0, son = true))
+        assertEquals(160.0, x8.allure.a(e.debutMs + 60_000L), 1e-9); assertTrue(!x8.allure.entendu(e.debutMs + 60_000L, true))
+        // Skipping the silences keeps its paces (×10 silent), the normal stretch heard in real time.
+        val segs = listOf(JournalPassage.Segment(e.debutMs, e.debutMs + 140_000L, 10), JournalPassage.Segment(e.debutMs + 140_000L, e.debutMs + 170_000L, 1),
+            JournalPassage.Segment(e.debutMs + 170_000L, e.finMs, 10))
+        val saute = SessionRenduPc.chronologie(seul(v, accelere = segs, son = true))
+        assertEquals(10.0, saute.allure.a(e.debutMs + 60_000L), 1e-9); assertTrue(saute.allure.reel(e.debutMs + 155_000L))
+        // No sound asked: nothing held, nothing heard.
+        val muet = seul(v, son = false)
+        assertTrue(muet.enregistres.isEmpty()); assertEquals(20.0, SessionRenduPc.chronologie(muet).allure.a(e.debutMs + 60_000L), 1e-9)
+        // The runs of frames heard: in the pass with its sound, each at about one pace (×4, ×1, the easing between).
+        val courses = SessionRenduPc.courses(s, c.plan) { true }
+        assertTrue(courses.isNotEmpty())
+        assertTrue(courses.any { kotlin.math.abs(it.allure - 4) < 0.05 } && courses.any { kotlin.math.abs(it.allure - 1) < 0.05 })
+        courses.forEach { k -> for (n in k.de..k.a) assertTrue(c.plan[n] is SessionRenduPc.Trame.Passe && c.plan[n].t in e.debutMs..e.finMs) }
+        assertTrue(SessionRenduPc.courses(s, c.plan) { false }.isEmpty())
+        // The page is told.
+        val j = org.json.JSONObject(SessionRenduPc.json(c, s))
+        assertTrue(j.getBoolean("sonAccelere")); assertEquals(4.0, j.getDouble("sonMax"), 0.0)
+        assertTrue(!SessionRenduPc.parametres { k -> if (k == "sonAccelere") "0" else "" }.sonAccelere)
+        assertTrue(SessionRenduPc.parametres { "" }.sonAccelere)
+    }
+
+    @Test
+    fun atempo_par_etages_de_0_5_a_2() {
+        assertEquals("atempo=1.5", SessionRenduPc.atempo(1.5))
+        assertEquals("atempo=2.0", SessionRenduPc.atempo(2.0))
+        assertEquals("atempo=2.0,atempo=1.5", SessionRenduPc.atempo(3.0))
+        assertEquals("atempo=2.0,atempo=2.0", SessionRenduPc.atempo(4.0))
+        assertEquals("atempo=0.5,atempo=0.6", SessionRenduPc.atempo(0.3))
+        // Through ffmpeg: 4 s of a tone at ×4 → 1 s, its pitch kept (the same number of zero crossings a second).
+        val ff = RenduPc.ffmpeg() ?: return
+        val rate = 8000
+        val src = ShortArray(4 * rate) { (8000 * Math.sin(2 * Math.PI * 440.0 * it / rate)).toInt().toShort() }
+        val r = SessionRenduPc.tempo(ff, src, rate, rate, 4.0, rate)
+        assertEquals(rate, r.size)
+        val milieu = r.copyOfRange(rate / 4, 3 * rate / 4)
+        val passages = milieu.toList().zipWithNext().count { (a, b) -> (a < 0) != (b < 0) }
+        assertEquals(440.0, passages / 2.0 / 0.5, 25.0)
+        assertTrue(milieu.maxOf { kotlin.math.abs(it.toInt()) } > 4000)
+    }
 
     @Test
     fun la_chronologie_vitesses_duree_et_ordre() {
