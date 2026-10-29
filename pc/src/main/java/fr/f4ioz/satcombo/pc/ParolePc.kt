@@ -332,6 +332,8 @@ class ParolePc(
 
     private val dites = ArrayDeque<Dite>()
     @Volatile var dernierSeq = 0L; private set
+    /** The DATV's sentences said (their sound, its rate), for the site's translated track ([VideoSitePc.parle]); null: nowhere. */
+    @Volatile var versSiteDatv: ((ShortArray, Int) -> Unit)? = null
 
     private fun publie(e: Entendu?, texte: String, langue: String, r: Rendu, essai: Boolean = false, datv: Boolean = false) {
         val wav = r.pcm?.let { ParoleTraduite.wav(it, r.rate) }
@@ -343,6 +345,7 @@ class ParolePc(
             while (dites.size > 6) dites.removeFirst()
         }
         erreur = ""
+        if (datv && !essai && r.pcm != null) versSiteDatv?.let { f -> runCatching { f(r.pcm, r.rate) } }
         if (surPc && r.pcm != null && !r.dejaDit) {
             etat = "parle"
             parleSurPc(datv) { lecteur.joue(r.pcm, r.rate) }

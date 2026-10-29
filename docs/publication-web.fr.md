@@ -276,6 +276,7 @@ Content-Type: image/png
 | `diplomes` | JSON | — | les [diplômes](#les-diplômes) suivis et votre progression, seulement si coché |
 | `diplome-image` | multipart | PNG, JPEG, PDF | l'image d'un [diplôme reçu](#les-diplômes), seulement sur un clic |
 | `direct-ft8` | JSON | — | chaque créneau [FT8 / FT4](#ft8--ft4) décodé, seulement si coché |
+| `direct-video`, `direct-soustitres` (+ `PUT …/direct-video/<qualité>/<n>.ts`, et le WebSocket `/ws/direct/station`) | JSON, MPEG-TS | `video/mp2t` | le [direct rapide](#direct-rapide-facultatif-pour-une-connexion-à-haut-débit), seulement si coché |
 | `ft8-passage` | multipart | JSON | un passage du journal avec ses messages [FT8 / FT4](#ft8--ft4) (sur clic, ou chaque passage en Automatique) |
 
 **`ping`** : `{"type":"ping","version":1,"logiciel":"SatMe-PC/…","types":["sstv-image","planche",…]}`
@@ -523,6 +524,75 @@ comme plus haut (60 au plus), `cascade` seulement pour les créneaux que
 SatMe-PC avait encore en mémoire (les trois dernières heures). `stations`,
 `carres`, `dxcc` : combien d'indicatifs (pas celui de la station), de locators
 et d'entités DXCC ont été entendus.
+
+### Direct rapide (facultatif, pour une connexion à haut débit)
+
+Sous **Direct rapide**, deux parties de plus, désactivées par défaut, pour une
+station reliée en haut débit (fibre). Seul le signal reçu part : le spectre,
+l'image et le son DATV, le texte de la parole entendue — jamais un réglage ni
+une adresse. Le site ne se connecte jamais à la station. Vers une adresse web
+seulement (pas vers un dossier).
+
+**Spectre rapide** — le transpondeur étroit de QO-100 à 1, 2, 5, 10 ou 20
+lignes par seconde (512, 1024 ou 2048 points), par **un WebSocket gardé
+ouvert** vers l'hôte de votre site : `wss://<hôte de votre adresse>/ws/direct/station`
+(`ws://` seulement sur le réseau local), avec `Authorization: Bearer <jeton>`,
+`User-Agent` et `X-SatMe-Version: 1` dans la poignée de main. Chaque message
+texte est une ligne, le JSON de `direct-spectre` plus `"t"` (ms UTC).
+SatMe-PC envoie un ping toutes les 20 s. Le serveur répond `401` (jeton
+refusé : nouvel essai après 10 min), `403` (refus : 2 min) ou `101` ; après
+une coupure, SatMe-PC rouvre après 1 s, 2 s, 5 s, 10 s, 30 s, puis chaque
+minute. Un site sans rien à cette adresse (`404`, ou pas de réponse trois
+fois avant toute ouverture) reçoit les lignes **par HTTP**, une seconde par
+requête `direct-spectre` `{"type","version","lignes":[{ligne}, …]}` (25 lignes
+au plus), et le WebSocket est retenté toutes les 5 minutes. Un proxy inverse
+doit laisser passer le WebSocket pour `/ws/direct/` (nginx :
+`proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";` et un `proxy_read_timeout` de plus de
+60 s). Envoi : environ 60 kbit/s à 5 lignes de 1024 points, 470 kbit/s à 20
+lignes de 2048.
+
+**Vidéo DATV en direct** — tant que le récepteur DATV est verrouillé, le flux
+reçu en **HLS** : ffmpeg le découpe en segments de 1 ou 2 s (MPEG-TS, une
+image clé au début de chacun), dans les qualités cochées — *Source* (l'image
+copiée telle que reçue, H.264 ou H.265, le son en AAC), *720p* (~2 Mbit/s),
+*480p* (~1 Mbit/s), *360p* (~500 kbit/s), réencodées en H.264 Main avec le
+préréglage `veryfast`, `superfast` ou `ultrafast`. La page affiche le débit
+montant nécessaire et prévient pour le processeur (chaque réencodage prend
+environ un cœur).
+
+- `direct-video`, JSON, au début puis toutes les 30 s :
+  `{"type","version","t","actif":true,"segmentS":2,"service":"F4XYZ","rendus":[{"nom":"720p","libelle":"720p","debit":2305600,"largeur":1280,"hauteur":720,"codecs":"avc1.4d4020,mp4a.40.2"}, …],"audio":[{"nom":"trad","langue":"fr","libelle":"Traduction (fr)"}],"soustitres":[{"nom":"orig","langue":"","libelle":"Original"},{"nom":"trad","langue":"fr","libelle":"Traduction (fr)"}]}`
+  (`debit` en bit/s ; `source` sans taille et `"codecs":""` ; `audio` et
+  `soustitres` seulement s'ils sont choisis) ; `{"type","version","t","actif":false}`
+  à l'arrêt (verrouillage perdu, option décochée) : le site affiche « hors ligne ».
+- Chaque segment : `PUT <adresse de direct-video>/<qualité>/<n>.ts` (la forme
+  `{type}` de l'adresse est nécessaire), corps `video/mp2t`, en-têtes
+  `X-SatMe-Duree` (s), `X-SatMe-Debut` (ms UTC de sa première image),
+  `X-SatMe-Discontinuite: 1` sur le premier segment après un redémarrage de
+  ffmpeg ; `<n>` croît pour chaque qualité, y compris d'un redémarrage à
+  l'autre. Tailles : un segment de 2 s fait environ 250 Ko à 1 Mbit/s ;
+  autoriser 4 Mo par requête au proxy. Un `409` fait renvoyer l'état ; `401`
+  et `403` arrêtent comme plus haut.
+- Le récepteur fait lui-même les listes de lecture (liste maîtresse des
+  qualités, courte fenêtre glissante) et les sert à ses visiteurs.
+
+**Sous-titres** (avec la vidéo, ou avec « Image DATV » seule) : chaque
+réplique que les sous-titres DATV écrivent (DATV › Sous-titres, parole → texte,
+et sa traduction si elle est choisie), envoyée dès qu'elle est écrite :
+`direct-soustitres`,
+`{"type","version","t","service","repliques":[{"id":12,"debut":<ms UTC>,"fin":<ms UTC>,"texte":"…","langue":"en","traduction":"…","langueCible":"fr"}]}`
+(texte brut, 500 caractères au plus, 20 répliques au plus par message).
+`debut` et `fin` sont l'heure où elle a été dite, à l'horloge — la même que
+`X-SatMe-Debut`, pour que le site la place sur la vidéo ; elle arrive
+quelques secondes après (le temps de la transcription).
+
+**Audio traduit** — quand « Traduction parlée » parle la DATV : une qualité de
+plus, `trad`, son seul (AAC en MPEG-TS), annoncée dans `audio` : la voix de
+synthèse sur le son reçu baissé pendant qu'elle parle (« mix »), ou la voix
+seule (« seule ») ; le visiteur choisit la piste son dans son lecteur.
+Seules les voix que SatMe-PC rend lui-même (Piper, eSpeak NG) y passent, pas
+celle de speech-dispatcher.
 
 ---
 

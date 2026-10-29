@@ -95,6 +95,10 @@ class DirectSitePc(
     @Volatile var station: () -> Station? = { null }
     /** FT8 / FT4's slots and strips ([Ft8SitePc]), null when not set. */
     @Volatile var ft8: Ft8SitePc? = null
+    /** « Spectre rapide »: the spectrum streamed ([SpectreRapidePc]), null when not set. */
+    @Volatile var rapide: SpectreRapidePc? = null
+    /** « Vidéo DATV en direct »: the DATV as HLS, its subtitles and translated track ([VideoSitePc]), null when not set. */
+    @Volatile var video: VideoSitePc? = null
 
     /**
      * The station as the site's live page shows it: the satellite it works ([Sat]), the antennas ([Rotor], and
@@ -150,6 +154,8 @@ class DirectSitePc(
             val s = suivis.getValue(c)
             if (!on(c)) { s.envoye = false; continue }
             if (c == Canal.SPECTRE) runCatching { demandePanorama() }
+            // The fast spectrum carries the lines: the slow one would only repeat them.
+            if (c == Canal.SPECTRE && rapide?.on == true) { s.envoye = false; continue }
             if (c == Canal.FAVORIS) { runCatching { favoris(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.STATION) { runCatching { station(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
@@ -315,7 +321,7 @@ class DirectSitePc(
             .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.FT8) o.put("cadence", "chaque créneau décodé (15 s, FT4 7,5 s)").put("nonPris", on(c) && s.nonPris) }
-    }))
+    })).also { o -> rapide?.let { o.put("rapide", it.json()) }; video?.let { o.put("video", it.json()) } }
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
     fun regle(p: (String) -> String) {
@@ -331,6 +337,8 @@ class DirectSitePc(
         suivis.getValue(Canal.FAVORIS).dernierMs = 0L
         suivis.getValue(Canal.STATION).dernierMs = 0L; stationTexte = ""
         suivis.getValue(Canal.DIPLOMES).dernierMs = 0L
+        rapide?.regle(p)
+        video?.regle(p)
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }
     }
 

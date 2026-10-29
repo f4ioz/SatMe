@@ -57,6 +57,10 @@ object SiteWebJs {
       <div class="t" style="margin-top:12px">En direct (facultatif)</div>
       <div class="petit aide">Envoyé en direct, chaque partie seulement si elle est cochée (rien par défaut) : le site ne se connecte jamais à la station, c'est SatMe-PC qui envoie, avec le même jeton. Seulement ce qui s'affiche : noms, heures, mesures, spectre, image — jamais une adresse, un code d'appairage, un mot de passe ou une clé. Ce que le site ne prend pas est perdu (pas de file). Vers un dossier : <code>direct/direct.json</code>, <code>direct/station.json</code> et les images seulement, pas le spectre ; les satellites favoris dans <code>favoris.json</code>, les diplômes dans <code>diplomes.json</code> et <code>diplomes/</code>.</div>
       <table style="margin-top:6px"><thead><tr><th>Quoi</th><th>Envoyer</th><th>Cadence</th><th>État</th></tr></thead><tbody id="site-direct"></tbody></table>
+      <div class="t" style="margin-top:12px">Direct rapide (facultatif, pour une connexion à haut débit)</div>
+      <div class="petit aide">Rien par défaut. Le spectre en continu et la vidéo DATV partent par votre connexion vers votre site, qui les redistribue à ses visiteurs : seulement le signal reçu (spectre, image et son DATV, texte de la parole entendue), jamais un réglage ni une adresse de la station. Le site doit aussi les accepter (sur le site SatMe : Admin › Paramètres › En direct). Voir la documentation pour le proxy (WebSocket <code>/ws/direct/</code>, taille des envois).</div>
+      <div id="site-rapide"></div>
+      <div id="site-video"></div>
       <div class="ligne"><button onclick="sitePost('direct', 'efface=1')" title="Demande au site (type direct-efface) d'oublier tout de suite ce qu'il montre en direct">Effacer le direct</button></div>
       </div>
     </div>"""
@@ -97,7 +101,44 @@ async function siteCharge() {
     (c.cadence ? esc(c.cadence) : c.min === c.max ? c.min + ' s' : '<select onchange="sitePost(\'direct\', \'periode_' + c.nom + '=\' + this.value)">' + [1, 2, 3, 5, 10, 15, 30].filter(x => x >= c.min && x <= c.max).map(x => '<option value="' + x + '"' + (x === c.periode ? ' selected' : '') + '>' + x + ' s</option>').join('') + '</select>') +
     '</td><td>' + (!c.on ? '<span class="petit">—</span>' : c.nonPris ? '<span class="petit">non pris en charge par le site</span>' : c.erreur ? '<span class="ambre">' + esc(c.erreur) + '</span>' : c.ok ? '<span class="vert">envoyé ' + hm(c.ok) + '</span>' : '<span class="petit">en attente de données</span>') + '</td></tr>').join('');
   if (g('site-direct') && g('site-direct').dataset.vu !== dl && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#site-direct'))) { g('site-direct').dataset.vu = dl; g('site-direct').innerHTML = dl; }
+  const rv = siteRapide(SITE.direct && SITE.direct.rapide), vv = siteVideo(SITE.direct && SITE.direct.video);
+  [['site-rapide', rv], ['site-video', vv]].forEach(x => { const e = g(x[0]); if (e && e.dataset.vu !== x[1] && !(document.activeElement && e.contains(document.activeElement) && document.activeElement.tagName === 'SELECT')) { e.dataset.vu = x[1]; e.innerHTML = x[1]; } });
   document.querySelectorAll('.site-b').forEach(b => { const k = b.dataset.site; b.hidden = !SITE.configure || (k && SITE.modes[k] === 'jamais'); });
+}
+/** « Spectre rapide »: on/off, lines a second, bins, its state. */
+function siteRapide(r) {
+  if (!r) return '';
+  const opt = (l, v, f) => l.map(x => '<option value="' + x + '"' + (x === v ? ' selected' : '') + '>' + f(x) + '</option>').join('');
+  const etat = !r.on ? '<span class="petit">—</span>' : r.erreur && r.mode !== 'http' ? '<span class="ambre">' + esc(r.erreur) + '</span>' :
+    r.mode === 'ws' ? '<span class="vert">connecté · ' + r.lignesS + ' ligne(s)/s</span>' : r.mode === 'http' ? '<span class="ambre">par HTTP (WebSocket absent) · ' + r.lignesS + ' ligne(s)/s</span>' : '<span class="petit">en attente (le SDR doit être sur QO-100)</span>';
+  return '<div class="ligne" style="margin-top:6px"><label title="Le spectre QO-100 envoyé en continu par une connexion ouverte vers votre site (WebSocket sur son adresse, même jeton) ; le site le redistribue à ses visiteurs"><input type="checkbox"' + (r.on ? ' checked' : '') +
+    ' onchange="sitePost(\'direct\', \'rapide=\' + (this.checked ? 1 : 0))"> <b>Spectre rapide</b></label>' +
+    '<select onchange="sitePost(\'direct\', \'rapide_cadence=\' + this.value)">' + opt(r.cadences, r.cadence, x => x + (x > 1 ? ' lignes/s' : ' ligne/s')) + '</select>' +
+    '<select onchange="sitePost(\'direct\', \'rapide_points=\' + this.value)">' + opt(r.pointsPossibles, r.points, x => x + ' points') + '</select> ' + etat + '</div>' +
+    '<div class="petit">Envoi estimé : ~' + r.debitKbps + ' kb/s en continu. Remplace l’envoi « Spectre QO-100 » une fois par seconde tant qu’il est coché.</div>';
+}
+/** « Vidéo DATV en direct »: renditions, segments, preset, subtitles, translated sound; the CPU and upload it takes. */
+function siteVideo(v) {
+  if (!v) return '';
+  const coche = (k, on, t, titre) => '<label' + (titre ? ' title="' + esc(titre) + '"' : '') + '><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="sitePost(\'direct\', \'' + k + '=\' + (this.checked ? 1 : 0))"> ' + t + '</label>';
+  const opt = (l, val) => l.map(x => '<option value="' + x[0] + '"' + (x[0] === val ? ' selected' : '') + '>' + x[1] + '</option>').join('');
+  const rendus = v.possibles.map(p => '<label><input type="checkbox" class="site-rendu" value="' + p.nom + '"' + (v.rendus.indexOf(p.nom) >= 0 ? ' checked' : '') + ' onchange="siteRendus()"> ' + esc(p.libelle) + '</label>').join(' ');
+  const etat = !v.on ? '' : v.erreur ? '<span class="ambre">' + esc(v.erreur) + '</span>' : v.etat === 'en cours' ? '<span class="vert">en direct · ' + v.segments + ' segment(s) envoyé(s) · ' + v.debitMesureKbps + ' kb/s</span>' : '<span class="petit">' + esc(v.etat) + '</span>';
+  const cpu = v.reencodages === 0 ? 'Copie seule : presque pas de calcul.' : v.reencodages + ' réencodage(s) H.264 en continu (préréglage ' + esc(v.preset) + ') : un cœur de processeur ou plus chacun ; « ultrafast » en demande moins (image un peu moins nette).';
+  return '<div class="ligne" style="margin-top:8px">' + coche('video', v.on, '<b>Vidéo DATV en direct</b>', 'L’image et le son DATV reçus envoyés en HLS (segments courts) à votre site, seulement tant que le récepteur est verrouillé') + (v.demo ? ' <span class="petit">(démonstration : mire de test)</span>' : '') + '</div>' +
+    '<div class="ligne petit">Qualités envoyées : ' + rendus + '</div>' +
+    '<div class="ligne petit">Segments <select onchange="sitePost(\'direct\', \'video_segment=\' + this.value)">' + opt([['1', '1 s (moins de retard)'], ['2', '2 s']], String(v.segment)) + '</select>' +
+    ' Réencodage <select onchange="sitePost(\'direct\', \'video_preset=\' + this.value)">' + opt([['veryfast', 'veryfast (équilibré)'], ['superfast', 'superfast'], ['ultrafast', 'ultrafast (moins de calcul)']], v.preset) + '</select></div>' +
+    '<div class="ligne petit">' + coche('video_st', v.soustitres, 'Sous-titres', 'Le texte de la parole reçue (DATV › Sous-titres) et sa traduction, envoyés avec la vidéo — ou avec « Image DATV » seule') +
+    (v.soustitres && !v.traduction ? ' <span class="petit">(traduction : à activer dans DATV › Sous-titres)</span>' : '') +
+    ' Audio traduit <select onchange="sitePost(\'direct\', \'video_audio=\' + this.value)">' + opt([['non', 'non'], ['mix', 'voix traduite sur le son reçu baissé'], ['seule', 'voix traduite seule']], v.audio) + '</select>' +
+    (v.audio !== 'non' && !v.parole && !v.demo ? ' <span class="petit">(seulement quand « Traduction parlée » parle la DATV)</span>' : '') + '</div>' +
+    '<div class="petit ' + (v.on ? 'ambre' : '') + '">Envoi estimé : ~' + v.debitEstimeKbps + ' kb/s vers votre site, tant que la DATV est verrouillée — à comparer au débit montant de votre connexion. ' + cpu + '</div>' +
+    (etat ? '<div class="petit">' + etat + (v.repliques ? ' · ' + v.repliques + ' réplique(s) sous-titrée(s)' : '') + '</div>' : '');
+}
+function siteRendus() {
+  const l = Array.prototype.filter.call(document.querySelectorAll('.site-rendu'), c => c.checked).map(c => c.value);
+  if (l.length) sitePost('direct', 'video_rendus=' + enc(l.join(',')));
 }
 async function sitePost(route, corps) {
   let j = null;

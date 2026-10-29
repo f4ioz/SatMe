@@ -62,6 +62,12 @@ class ClientWebSocketPc private constructor(private val socket: Socket, private 
     /** A text message (a chat's protocol packets, its messages). */
     fun envoieTexte(t: String) = envoie(WebSocketPc.TEXTE, t.toByteArray(Charsets.UTF_8))
 
+    /** A ping (a connection kept alive through proxies that close quiet ones). */
+    fun ping() = envoie(WebSocketPc.PING, ByteArray(0))
+
+    /** Open (not closed by either side). */
+    val ouvert: Boolean get() = !ferme
+
     @Synchronized
     private fun envoie(opcode: Int, donnees: ByteArray) {
         if (ferme) return
@@ -77,6 +83,9 @@ class ClientWebSocketPc private constructor(private val socket: Socket, private 
 
     override fun close() { ferme = true; runCatching { socket.close() } }
 
+    /** The server answered the opening handshake with [code] instead of 101 (401: a token refused, 403, 404…). */
+    class Refus(val code: Int) : IOException("refusé (HTTP $code)")
+
     companion object {
         private val ALEA = SecureRandom()
 
@@ -86,7 +95,9 @@ class ClientWebSocketPc private constructor(private val socket: Socket, private 
          * connection). Throws when refused.
          */
         fun ouvre(hote: String, port: Int, chemin: String, protocole: String, agent: String, tls: Boolean = true,
-                  delaiMs: Int = 10_000, delaiLectureMs: Int = 30_000, max: Int = 1 shl 20): ClientWebSocketPc {
+                  delaiMs: Int = 10_000, delaiLectureMs: Int = 30_000, max: Int = 1 shl 20,
+                  /** More headers of the handshake (`Authorization: Bearer …`); never logged. */
+                  entetes: Map<String, String> = emptyMap()): ClientWebSocketPc {
             val brut = Socket()
             brut.connect(InetSocketAddress(hote, port), delaiMs)
             val s: Socket = if (!tls) brut else {
@@ -103,12 +114,14 @@ class ClientWebSocketPc private constructor(private val socket: Socket, private 
                 val hoteEntete = if ((tls && port == 443) || (!tls && port == 80)) hote else "$hote:$port"
                 val demande = "GET " + chemin + " HTTP/1.1\r\nHost: " + hoteEntete + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
                     "Sec-WebSocket-Key: " + cle + "\r\nSec-WebSocket-Version: 13\r\n" +
-                    (if (protocole.isNotEmpty()) "Sec-WebSocket-Protocol: $protocole\r\n" else "") + "User-Agent: " + agent + "\r\n\r\n"
+                    (if (protocole.isNotEmpty()) "Sec-WebSocket-Protocol: $protocole\r\n" else "") + "User-Agent: " + agent + "\r\n" +
+                    entetes.entries.filter { (k, v) -> k.none { it == '\r' || it == '\n' || it == ':' } && v.none { it == '\r' || it == '\n' } }
+                        .joinToString("") { (k, v) -> "$k: $v\r\n" } + "\r\n"
                 s.getOutputStream().apply { write(demande.toByteArray(Charsets.US_ASCII)); flush() }
                 val c = ClientWebSocketPc(s, max)
                 // The answer's lines read as a request's: « HTTP/1.1 101 … ».
                 val r = WebSocketPc.litDemande(c.entree) ?: throw IOException("pas de réponse")
-                if (r.chemin != "101") throw IOException("refusé (HTTP " + r.chemin + ")")
+                if (r.chemin != "101") throw r.chemin.toIntOrNull()?.let { Refus(it) } ?: IOException("refusé (HTTP " + r.chemin + ")")
                 if (r.entetes["sec-websocket-accept"]?.trim() != WebSocketPc.cleAcceptation(cle)) throw IOException("réponse WebSocket invalide")
                 val p = r.entetes["sec-websocket-protocol"]?.trim().orEmpty()
                 if (protocole.isNotEmpty() && p.isNotEmpty() && p != protocole) throw IOException("autre protocole : $p")

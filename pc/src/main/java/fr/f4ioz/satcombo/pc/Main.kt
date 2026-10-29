@@ -650,6 +650,29 @@ fun main(args: Array<String>) {
             passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
     }
     site.direct = directSite
+    // « Spectre rapide » (off by default): QO-100's spectrum streamed to the site, 1 to 20 lines a second, over one connection.
+    val spectreRapide = SpectreRapidePc(station.stockage, site)
+    spectreRapide.panorama = directSite.panorama
+    spectreRapide.trames = { sdr.panoramaTrames }
+    spectreRapide.demandePanorama = { ms -> if (sdr.surQo100) sdr.demandePanorama(ms) }
+    directSite.rapide = spectreRapide
+    spectreRapide.demarre()
+    // « Vidéo DATV en direct » (off by default): the received DATV as HLS, its subtitles and the translated voice's track.
+    val videoSite = VideoSitePc(station.stockage, site)
+    videoSite.source = if (ModeDemo.actif) SourceTsDemo().also { d -> d.voix = { pcm, r -> videoSite.parle(pcm, r) } } else object : VideoSitePc.SourceTs {
+        override fun branche(f: ((ByteArray) -> Unit)?) { datv.versSite = f }
+        override fun verrouille(): Boolean = datv.etat.actif && datv.etat.verrouille
+        override fun service(): String = datv.etat.service
+        override fun kbps(): Int = datv.etat.kbps
+    }
+    videoSite.repliques = { depuis -> phonie.bulles(depuis).filter { it.source == "datv" } }
+    videoSite.derniereReplique = { phonie.dernierId() }
+    videoSite.paroleDatv = { if (parole.datvActif) (if (phonie.cible == PhoniePc.WHISPER) "en" else phonie.cible) else "" }
+    videoSite.traductionDatv = { if (phonie.traduire) (if (phonie.cible == PhoniePc.WHISPER) "en" else phonie.cible) else "" }
+    videoSite.imageDatv = { directSite.on(DirectSitePc.Canal.DATV) }
+    parole.versSiteDatv = { pcm, r -> videoSite.parle(pcm, r) }
+    directSite.video = videoSite
+    videoSite.demarre()
     // « FT8/FT4 » (off by default): each slot decoded sent live (direct-ft8), a journal's pass with its messages (ft8-passage).
     val ft8Site = Ft8SitePc()
     ft8Site.entendus = { son.ft8.entendus }

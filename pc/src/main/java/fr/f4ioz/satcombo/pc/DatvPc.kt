@@ -540,6 +540,7 @@ class DatvPc(
                 if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
             }
             for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
+            versSite?.let { f -> runCatching { f(bloc) } }
             val t = horloge()
             if (t - t0 >= 1000) { etat = etat.copy(kbps = (octets * 8 / (t - t0)).toInt()); octets = 0; t0 = t }
         }
@@ -551,6 +552,9 @@ class DatvPc(
     private val abonnes = java.util.concurrent.CopyOnWriteArrayList<ArrayBlockingQueue<ByteArray>>()
 
     fun abonne(): ArrayBlockingQueue<ByteArray> = ArrayBlockingQueue<ByteArray>(1024).also { abonnes += it }
+
+    /** The site's live video ([VideoSitePc]) taking each block while it runs (it only queues them); null: nobody. */
+    @Volatile var versSite: ((ByteArray) -> Unit)? = null
 
     /** Network clients reading the stream now. */
     val clients: Int get() = abonnes.size

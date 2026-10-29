@@ -460,6 +460,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var panoramaTrames = 0L; private set
     @Volatile private var panoramaDemandeMs = 0L
     fun demandePanorama() { panoramaDemandeMs = horloge() }
+    /** The panorama asked faster (the site's fast spectrum, [SpectreRapidePc]): one every [intervalleMs] (40 ms at least) for 3 s. */
+    fun demandePanorama(intervalleMs: Long) {
+        val t = horloge()
+        panoramaRapideMs = intervalleMs.coerceIn(40L, 300L); panoramaDemandeMs = t; panoramaRapideJusqueMs = t + 3000L
+    }
+    @Volatile private var panoramaRapideMs = 300L
+    @Volatile private var panoramaRapideJusqueMs = 0L
+    private fun intervallePanorama(t: Long): Long = if (t < panoramaRapideJusqueMs) panoramaRapideMs else 300L
     /** The dongle's sound while on QO-100 ([Dsp.AUDIO_RATE]): LEILA listened for. */
     @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
     /** The PC speaker's level (1 as received): lowered while a spoken announcement plays. */
@@ -909,7 +917,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val veutSpectre = maintenant - dernierSpectre >= 90L
                 cibles = if (cp0 != null && !sonde && !pourMeteor && pll > 0 && pourQo100()) cp0.cibles(axeQo100(pll)) else emptyList()
                 cp0?.tourne = cibles.isNotEmpty()
-                val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
+                val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= intervallePanorama(maintenant)
                 // Locked on the middle beacon when chosen: QO-100 on the dongle, its axis known.
                 val vb = chaine.verrou
                 val verrouVoulu = settings.qo100VerrouBalise && !sonde && !pourMeteor && pll > 0 && pourQo100() && fi == null

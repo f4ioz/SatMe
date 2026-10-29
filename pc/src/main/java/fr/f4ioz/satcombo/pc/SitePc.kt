@@ -446,6 +446,37 @@ class SitePc(
         return transport.envoie("POST", adresse(type), entetes(type, id, ct), corps)
     }
 
+    /** The live streams may go: a web target set and tested, nothing refusing (the module on; the demonstration to this machine only). */
+    val fluxPossible: Boolean get() = refus() == null && cible == Cible.WEB
+
+    /**
+     * The handshake headers of the live spectrum's WebSocket ([SpectreRapidePc]): the same `User-Agent`, version and token as
+     * every request (the token only when there is one).
+     */
+    fun entetesFlux(): Map<String, String> {
+        val e = LinkedHashMap<String, String>()
+        e["X-SatMe-Version"] = VERSION_API.toString()
+        if (jeton.isNotEmpty()) e["Authorization"] = "Bearer $jeton"
+        return e
+    }
+
+    /** `User-Agent` of every request. */
+    val agentHttp: String get() = agent
+
+    /**
+     * One HLS segment of the DATV live ([VideoSitePc]): `PUT …/direct-video/<rendu>/<seq>.ts`, [duree] s, its first frame
+     * at [debutMs] (wall clock). Its answer, or null when the target is not set. Never queued.
+     */
+    fun envoieSegment(rendu: String, seq: Long, duree: Double, debutMs: Long, discontinuite: Boolean, octets: ByteArray): Pair<Int, String>? {
+        if (!fluxPossible) return null
+        val type = "direct-video"
+        val e = LinkedHashMap(entetes(type, UUID.randomUUID().toString(), "video/mp2t"))
+        e["X-SatMe-Duree"] = String.format(java.util.Locale.ROOT, "%.3f", duree)
+        e["X-SatMe-Debut"] = debutMs.toString()
+        if (discontinuite) e["X-SatMe-Discontinuite"] = "1"
+        return transport.envoie("PUT", adresse(type) + "/" + rendu + "/" + seq + ".ts", e, Corps(listOf(octets)))
+    }
+
     /** Withdraws [ref] from the site (`retrait`). */
     fun retire(g: Genre, ref: String): String? {
         chargeDisque()
