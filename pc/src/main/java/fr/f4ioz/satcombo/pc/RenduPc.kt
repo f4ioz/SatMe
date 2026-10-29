@@ -641,65 +641,8 @@ object RenduPc {
         return b
     }
 
-    /** One SSTV picture of the pass, full frame. */
-    fun imagePleine(w: Int, h: Int, sc: Scene, m: Marque, bm: BufferedImage): BufferedImage {
-        val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-        val g = g2(b)
-        val dp = echelle(w, h)
-        g.color = FOND; g.fillRect(0, 0, w, h)
-        // As large as it goes above its caption, centred.
-        val ih = minOf(w * bm.height.toFloat() / bm.width, h - 80 * dp)
-        val iw = ih * bm.width / bm.height
-        val top = (h - 70 * dp - ih) / 2
-        g.drawImage(bm, ((w - iw) / 2).toInt(), top.toInt(), iw.toInt(), ih.toInt(), null)
-        g.texte(sc.e.satName + " · " + m.texte + (m.fichier?.let { sc.etiquettes[it] }?.let { " · $it" } ?: ""), 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
-        g.texte(fmt("yyyy-MM-dd HH:mm:ss", sc).format(Date(m.finMs)) + " " + zone(sc, m.finMs) + "  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
-            14 * dp, h - 22 * dp, Color(160, 175, 195), police(13 * dp))
-        // The mark, as on the other frames.
-        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
-        g.dispose()
-        return b
-    }
-
-    /** The pass summed up: pictures, stations worked and heard. */
-    fun resume(w: Int, h: Int, sc: Scene): BufferedImage {
-        val e = sc.e
-        val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-        val g = g2(b)
-        val dp = echelle(w, h)
-        g.color = FOND; g.fillRect(0, 0, w, h)
-        val gris = Color(160, 175, 195)
-        var y = 40f * dp
-        g.texte(e.satName, 16 * dp, y, Color.WHITE, police(24 * dp, true)); y += 22 * dp
-        g.texte(fmt("yyyy-MM-dd HH:mm", sc).format(Date(e.debutMs)) + " " + zone(sc, e.debutMs) + " · " + "%.0f° · %d min".format(e.elMax, (e.dureeMs / 60_000).toInt()), 16 * dp, y, gris, police(13 * dp)); y += 18 * dp
-        g.texte(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 16 * dp, y, CYAN, police(13 * dp, true)); y += 16 * dp
-        val photos = sc.marques.filter { it.type == TypeMarque.SSTV }.mapNotNull { m -> m.fichier?.let { sc.images[it] } }.take(6)
-        if (photos.isNotEmpty()) {
-            val col = if (photos.size == 1) 1 else 2
-            val pw = minOf((w - 16 * dp * 2 - 8 * dp * (col - 1)) / col, h * 0.22f * 4 / 3); val ph = pw * 3 / 4
-            photos.forEachIndexed { i, bm ->
-                val x = 16 * dp + (i % col) * (pw + 8 * dp); val yy = y + (i / col) * (ph + 8 * dp)
-                g.drawImage(bm, x.toInt(), yy.toInt(), pw.toInt(), ph.toInt(), null)
-                g.color = SSTV; g.stroke = BasicStroke(2f * dp); g.draw(java.awt.geom.Rectangle2D.Float(x, yy, pw, ph))
-            }
-            y += ((photos.size + col - 1) / col) * (ph + 8 * dp) + 8 * dp
-        }
-        fun bloc(titre: String, c: Color, l: List<String>) {
-            if (l.isEmpty() || y > h - 30 * dp) return
-            g.texte(titre, 16 * dp, y + 14 * dp, c, police(14 * dp, true)); y += 22 * dp
-            for (s in l) { if (y > h - 24 * dp) break; g.texte(s, 24 * dp, y + 12 * dp, Color.WHITE, police(14 * dp)); y += 18 * dp }
-            y += 6 * dp
-        }
-        val qsos = sc.marques.filter { it.type == TypeMarque.QSO }.distinctBy { it.texte }
-        bloc(t("journal_recap_qso").format(qsos.size), QSO, qsos.map { m ->
-            listOfNotNull(m.texte, sc.fiches[m.texte]?.locator?.ifBlank { null }, sc.fiches[m.texte]?.nom?.ifBlank { null }).joinToString(" · ") })
-        val aprs = sc.marques.filter { it.type == TypeMarque.APRS }.distinctBy { it.texte }
-        bloc(t("journal_recap_aprs").format(aprs.size), APRS, aprs.map { m ->
-            if (JournalPassage.estLeSatellite(m.texte)) m.texte + " — " + t("journal_digi_iss_court") else m.texte })
-        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
-        g.dispose()
-        return b
-    }
+    /** The closing card ([BilanPc]): the pass, its figures, its track in the sky, its pictures near their own size. */
+    fun bilan(w: Int, h: Int, sc: Scene): BufferedImage = BilanPc.image(w, h, BilanPc.donnees(listOf(sc), null))
 
     /** A report panel alone on a frame: its name, the pass, the panel as large as it goes, the mark. */
     fun carte(w: Int, h: Int, sc: Scene, k: OptionsJournal.Element): BufferedImage {
@@ -718,15 +661,10 @@ object RenduPc {
     internal fun ouvertureVideo(w: Int, h: Int, sc: Scene, n: Int): List<Pair<() -> BufferedImage, Int>> =
         sc.cartesOuverture.map { k -> { carte(w, h, sc, k) } to n }
 
-    internal fun finVideo(w: Int, h: Int, sc: Scene, parImage: Int, resumeN: Int, parCarte: Int = resumeN * 2 / 3, recap: Boolean = sc.recap): List<Pair<() -> BufferedImage, Int>> {
+    /** After the pass: the closing card [bilanN] frames when asked, then the report's cards [parCarte] each. */
+    internal fun finVideo(w: Int, h: Int, sc: Scene, bilanN: Int, parCarte: Int, recap: Boolean = sc.recap): List<Pair<() -> BufferedImage, Int>> {
         val l = ArrayList<Pair<() -> BufferedImage, Int>>()
-        if (recap) {
-            sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
-                val bm = m.fichier?.let { sc.images[it] } ?: return@forEach
-                l += { imagePleine(w, h, sc, m, bm) } to parImage
-            }
-            l += { resume(w, h, sc) } to resumeN
-        }
+        if (recap) l += { bilan(w, h, sc) } to bilanN
         // The report's panels asked as cards, after the summary.
         sc.cartesFin.forEach { k -> l += { carte(w, h, sc, k) } to parCarte }
         return l
@@ -759,7 +697,7 @@ object RenduPc {
         fun px(img: BufferedImage) = img.getRGB(0, 0, w, h, null, 0, w)
         val fin = px(image(w, h, sc, a))
         val titrePx = if (sc.ouverture) px(titre(w, h, sc)) else null
-        var pourPalette = if (sc.recap) fin + px(resume(w, h, sc)) else fin
+        var pourPalette = if (sc.recap) fin + px(bilan(w, h, sc)) else fin
         // The cards' colours too (the report's light cards).
         (sc.cartesOuverture + sc.cartesFin).firstOrNull()?.let { pourPalette += px(carte(w, h, sc, it)) }
         if (titrePx != null) pourPalette += titrePx
@@ -783,7 +721,7 @@ object RenduPc {
                 avant = cur
                 progres((i + 1f) / (n + 1))
             }
-            for ((dessin, n2) in finVideo(w, h, sc, 200, 400)) g.trame(px(dessin()), 0, h, n2)
+            for ((dessin, n2) in finVideo(w, h, sc, 700, 400)) g.trame(px(dessin()), 0, h, n2)
             g.fin()
         }
         return sortie
@@ -797,7 +735,7 @@ object RenduPc {
      * The replay as an MP4 (H.264 + AAC) through ffmpeg: 5 frames a second,
      * the opening title 3 s (the montage's card 4 s after it when asked), the
      * pass (real time with its sound, accelerated by its stretches, else ×10
-     * and silent), then each picture 3 s, the summary 6 s and the report's
+     * and silent), then the closing card ([BilanPc], 7 s) and the report's
      * cards 4 s each. [son]: the sound of the pass as the video plays it
      * (its silence before the pass included, [secondesAvantPassage]), at
      * [rate]; null: silent.
@@ -813,7 +751,7 @@ object RenduPc {
         val nbTitre = if (sc.ouverture) 3 * fps else 0
         sc.flashMs = sc.flashS * 1000L * vitesse
         val ouverture = ouvertureVideo(w, h, sc, 4 * fps)
-        val fin = finVideo(w, h, sc, 3 * fps, 6 * fps)
+        val fin = finVideo(w, h, sc, Math.round(BilanPc.DUREE_S * fps).toInt(), 4 * fps)
         val total = nbTitre + ouverture.sumOf { it.second } + nb + fin.sumOf { it.second }
         // The sound first, into a WAV file ffmpeg reads beside the frames.
         val wav = son?.let { s -> File(travail, "son-" + System.nanoTime() + ".wav").also { ecritWav(s, rate, it) } }

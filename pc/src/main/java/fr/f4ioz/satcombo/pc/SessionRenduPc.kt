@@ -42,7 +42,7 @@ import kotlin.math.sqrt
  * next: outside, in a pass, and slow while a picture is being received (it
  * is seen being drawn) or a contact is going on. Under the caption the pass
  * and the pictures received so far, a strip of them when asked; the
- * session's card first, the mosaic of its pictures last. Two zooms, eased
+ * session's card first, its closing card last ([BilanPc]). Two zooms, eased
  * from one to the other as the pace is: from afar outside the passes, near
  * in a pass ([zoom]). Other satellites going round too when chosen. With
  * the sound asked, a contact heard is played in real time with its sound,
@@ -95,7 +95,9 @@ object SessionRenduPc {
                           /** The page's « Vitesse » (×1, ×2, ×4): every pace times this, as the preview plays it ([LECTURE_MAX] at most). */
                           val lecture: Double = 1.0,
                           /** The globe's camera chosen on the page ([GlobeRenduPc.CAMERAS_SKED]: « espace » by default). */
-                          val camera: String = "espace")
+                          val camera: String = "espace",
+                          /** « Durée du bilan »: how long the closing card stays (s, [BilanPc.duree]). */
+                          val bilan: Double = BilanPc.DUREE_S)
 
     /** The page's « Vitesse » at most (and 1/[LECTURE_MAX] at least). */
     const val LECTURE_MAX = 16.0
@@ -127,7 +129,7 @@ object SessionRenduPc {
             instant = p("t").trim().toLongOrNull(), son = p("avecSon").trim() == "1",
             avant = marge(p, "margeAvant", "avant"), apres = marge(p, "margeApres", "apres"),
             lecture = p("lecture").trim().toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }?.coerceIn(1 / LECTURE_MAX, LECTURE_MAX) ?: 1.0,
-            camera = GlobeRenduPc.cameraDemandee(p("cam")))
+            camera = GlobeRenduPc.cameraDemandee(p("cam")), bilan = BilanPc.duree(p))
     }
 
     /** What a session's video shows: its passes' scenes (sorted by time), how it plays, the cards asked. */
@@ -146,7 +148,9 @@ object SessionRenduPc {
                   /** Every pace times this (the page's « Vitesse »). */
                   val lecture: Double = 1.0,
                   /** The globe's camera ([GlobeRenduPc.centreCamera]). */
-                  val camera: String = "espace") {
+                  val camera: String = "espace",
+                  /** How long the closing card stays (s): « Durée du bilan ». */
+                  val bilan: Double = BilanPc.DUREE_S) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
             .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
         /**
@@ -436,18 +440,20 @@ object SessionRenduPc {
 
     /** The pictures received so far, small, along the bottom of the view, the newest on the right. */
     private fun vignettes(g: java.awt.Graphics2D, l: List<Pair<Marque, BufferedImage>>, w: Float, y: Float, hv: Float, dp: Float) {
-        val lv = hv * 4 / 3
-        var x = w - 8 * dp - lv
+        var x = w - 8 * dp
         for ((m, bm) in l.asReversed()) {
+            // Its own proportions (320×256, 320×240, 640×496…), never stretched.
+            val lv = hv * bm.width / bm.height.coerceAtLeast(1)
+            x -= lv
             if (x < 8 * dp - lv * 0.5f) break
-            g.drawImage(bm, x.toInt(), y.toInt(), lv.toInt(), hv.toInt(), null)
+            g.drawImage(BilanPc.echelonne(bm, lv.toInt().coerceAtLeast(1), hv.toInt().coerceAtLeast(1)), x.toInt(), y.toInt(), null)
             g.color = RenduPc.SSTV; g.stroke = BasicStroke(1.5f * dp); g.draw(Rectangle2D.Float(x, y, lv, hv))
             val f = RenduPc.police(8 * dp, true); g.font = f
             val s = SimpleDateFormat("HH:mm", Locale.FRENCH).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(m.finMs))
             val lt = g.fontMetrics.stringWidth(s) + 4 * dp
             g.color = Color(10, 15, 24, 190); g.fill(Rectangle2D.Float(x + 1, y + hv - 11 * dp, lt, 10 * dp))
             g.texte(s, x + 2 * dp + 1, y + hv - 3 * dp, Color.WHITE, f)
-            x -= lv + 5 * dp
+            x -= 5 * dp
         }
     }
 
@@ -505,43 +511,8 @@ object SessionRenduPc {
         return b
     }
 
-    /** The session's pictures together, each with when it was received. */
-    fun mosaique(s: Session, w: Int, h: Int): BufferedImage {
-        val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-        val g = RenduPc.g2(b)
-        val dp = RenduPc.echelle(w, h)
-        g.color = RenduPc.FOND; g.fillRect(0, 0, w, h)
-        val e0 = s.scenes.first().e
-        g.texte(s.titre ?: "Session SSTV · ${e0.satName}", 16 * dp, 30 * dp, Color.WHITE, RenduPc.police(20 * dp, true))
-        g.texte(jour(s, e0.debutMs) + " → " + jour(s, s.scenes.last().e.finMs) + " · " + s.scenes.size + " passages · " + recues(s.images.size),
-            16 * dp, 50 * dp, Color(160, 175, 195), RenduPc.police(12 * dp))
-        val n = s.images.size
-        val x0 = 12 * dp; val y0 = 62 * dp; val lw = w - 2 * x0; val lh = h - y0 - 34 * dp
-        val ecart = 6 * dp; val legende = 13 * dp
-        if (n > 0) {
-            // The columns giving the largest pictures that all fit.
-            var mieux = 1; var cote = 0f
-            for (c in 1..n) {
-                val r = ceil(n / c.toDouble()).toInt()
-                val cw = minOf((lw - ecart * (c - 1)) / c, ((lh - r * (legende + ecart)) / r) * 4 / 3)
-                if (cw > cote) { cote = cw; mieux = c }
-            }
-            val ch = cote * 3 / 4
-            val r = ceil(n / mieux.toDouble()).toInt()
-            val ox = x0 + (lw - (mieux * cote + (mieux - 1) * ecart)) / 2
-            val oy = y0 + (lh - r * (ch + legende + ecart)) / 2
-            val f = RenduPc.police(minOf(10 * dp, legende * 0.8f))
-            s.images.forEachIndexed { k, (m, bm) ->
-                val x = ox + (k % mieux) * (cote + ecart); val y = oy + (k / mieux) * (ch + legende + ecart)
-                g.drawImage(bm, x.toInt(), y.toInt(), cote.toInt(), ch.toInt(), null)
-                g.color = RenduPc.SSTV; g.stroke = BasicStroke(maxOf(1f, 1.5f * dp)); g.draw(Rectangle2D.Float(x, y, cote, ch))
-                g.texte(hm(s, m.finMs), x + cote / 2, y + ch + legende * 0.85f, Color(205, 215, 230), f, centre = true)
-            }
-        } else g.texte(recues(0).replaceFirstChar { it.uppercase() }, w / 2f, h / 2f, Color(160, 175, 195), RenduPc.police(18 * dp), centre = true)
-        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = RenduPc.CYAN)
-        g.dispose()
-        return b
-    }
+    /** The closing card ([BilanPc]): the passes, their figures, their track in the sky, their pictures near their own size. */
+    fun bilan(s: Session, w: Int, h: Int): BufferedImage = BilanPc.image(w, h, BilanPc.donnees(s.scenes, s.titre))
 
     /**
      * Before the passes, each drawing with its frames: the session's card 3 s; a single pass, its own title 3 s
@@ -554,12 +525,18 @@ object SessionRenduPc {
         return titre + if (s.seul) RenduPc.ouvertureVideo(w, h, sc, 4 * FPS) else emptyList()
     }
 
-    /** After the passes: the mosaic of the pictures 6 s; a single pass, its pictures 3 s each, its summary 6 s and the report's cards, as its video. */
-    fun fin(s: Session, w: Int, h: Int): List<Pair<() -> BufferedImage, Int>> =
-        if (s.seul) RenduPc.finVideo(w, h, s.scenes[0], 3 * FPS, 6 * FPS, recap = s.recap)
-        else if (s.recap) listOf({ -> mosaique(s, w, h) } to 6 * FPS) else emptyList()
+    /**
+     * After the passes: the closing card ([bilan], « Durée du bilan », 7 s by default) when asked; a single pass, then
+     * the report's cards 4 s each, as its video. In the timeline: its length is the video's.
+     */
+    fun fin(s: Session, w: Int, h: Int): List<Pair<() -> BufferedImage, Int>> {
+        val l = ArrayList<Pair<() -> BufferedImage, Int>>()
+        if (s.recap) l += { -> bilan(s, w, h) } to Math.round(s.bilan.coerceIn(BilanPc.DUREE_MIN_S, BilanPc.DUREE_MAX_S) * FPS).toInt()
+        if (s.seul) s.scenes[0].cartesFin.forEach { k -> l += { -> RenduPc.carte(w, h, s.scenes[0], k) } to 4 * FPS }
+        return l
+    }
 
-    /** How many frames the video holds: the card, the passes, the mosaic. */
+    /** How many frames the video holds: the card, the passes, the closing card. */
     fun trames(s: Session): Int = chronologie(s).trames
 
     /** The session as an MP4 (H.264, with [son]'s sound as AAC when given) through ffmpeg; null without it or when it failed. */
@@ -595,7 +572,7 @@ object SessionRenduPc {
      * The session's sound as its video plays it: silence for its card, then, frame by frame,
      * the pass's sound where the time runs in real time (its pace 1: a contact heard, the
      * accelerated replay's normal stretches, a stretch chosen), silence elsewhere (the time
-     * running faster), the mosaic silent.
+     * running faster), the closing card silent.
      */
     fun source(s: Session, plan: List<Trame>, son: Son): fr.f4ioz.satcombo.domain.SourcePcm {
         val allure = allure(s)

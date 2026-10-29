@@ -54,7 +54,7 @@ object PageJournal {
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
         "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
-        "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_frise_legende", "pj_vitesse_aide",
+        "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_duree_bilan", "pj_frise_legende", "pj_vitesse_aide",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
         "pj_ft_titre", "pj_ft_aide", "pj_ft_visibilite", "pj_ft_ordre", "pj_ft_bas", "pj_ft_haut", "pj_ft_aucun", "pj_ft_redecoder",
         "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher")
@@ -147,7 +147,10 @@ object PageJournal {
   #sCarte b { display:block; font-size:1.7em; } #sCarte .sat { color:#00E5FF; font-weight:700; } #sCarte .sstv { color:var(--sstv); font-weight:700; }
   #sCarte.mosaique { width:86%; max-height:86%; overflow:hidden; border-color:var(--bord); }
   #sCarte .grille { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:6px; }
-  #sCarte figure { margin:0; width:var(--l, 120px); } #sCarte img { width:var(--l, 120px); height:calc(var(--l, 120px) * .75); object-fit:cover; outline:1.5px solid var(--sstv); }
+  #sCarte figure { margin:0; width:var(--l, 120px); display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+  #sCarte .grille img { max-width:min(100%, calc(var(--n, 320px) * 1.5)); max-height:calc(var(--l, 120px) * .8); object-fit:contain; outline:1px solid var(--sstv); }
+  #sCarte.bilan { left:0; top:0; right:0; bottom:0; transform:none; max-width:none; padding:0; border:0; border-radius:0; background:#0A0F18; }
+  #sCarte.bilan img { width:100%; height:100%; object-fit:contain; display:block; }
   #sCarte figcaption { font-size:11px; color:var(--gris); }
   .s-curseur { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gris); }
   .s-curseur input { width:120px; }
@@ -295,7 +298,7 @@ function chargeOptions(defauts) {
   OD = Object.assign({ vue: 'ciel', accelere: false, rapide: 10, avant: 10, apres: 30, surActivite: true, sstv: true, fiches: true,
     smetre: true, freq: true, locator: true, res: 'M', ouverture: true, recap: true, avecSon: true, paquetQsos: false, format: 'paysage', vignettes: true,
     entre: 10, transition: 1.6, police: 1, vHors: 1000, vPassage: 20, vImage: 3, zHors: .9, zPassage: 1.8, autres: [], tachesAutres: false,
-    mAvant: .5, mApres: .5, mode: 'passages' });
+    mAvant: .5, mApres: .5, mode: 'passages', dureeBilan: 7 });
   for (const k in defauts) if (defauts[k] !== undefined) OD[k] = defauts[k];
   OM = {};
   try {
@@ -1573,7 +1576,7 @@ function carteSession() {
   c.style.setProperty('--police', O.police);
   const debut = S.segs[0][0], fin = S.segs[S.segs.length - 1][1], q0 = S.ps[0], qn = S.ps[S.ps.length - 1], seul = S.ps.length === 1;
   const jourSeul = tt => jour(tt).replace(/ \d\d:\d\dZ?$/, '');
-  let cle = '', kids = null, mosaique = false;
+  let cle = '', kids = null, mosaique = false, bilan = false;
   if (O.ouverture && !joue && t <= debut) {
     cle = 'o|' + S.titre + '|' + O.locator;
     kids = [el('b', { text: S.titre || (seul ? q0.sat : 'Session SSTV · ' + S.sat) }), S.titre ? el('div', { class: 'sat', text: S.sat }) : null,
@@ -1584,17 +1587,22 @@ function carteSession() {
     const q = S.ps[S.i + 1], haut = (q.pts || []).reduce((m, x) => x[2] > m ? x[2] : m, 0);
     cle = 't|' + S.i;
     kids = [el('b', { text: tf('s_passage', S.i + 2, S.ps.length) }), el('div', { text: jour(q.de) + ' · ' + Math.round(haut) + '°' })];
+  } else if (O.recap && !joue && t >= fin && window.SATME_PC) {
+    // SatMe-PC: the video's own closing card, drawn by the station with the same words (« /bilan »).
+    const q = chApercu(parametresRendu('video'));
+    cle = 'b|' + chCle(q) + '|' + tourVersion; bilan = true;
+    kids = [el('img', { src: url('/bilan', q), alt: T.recap })];
   } else if (O.recap && !joue && t >= fin && S.images.length) {
     cle = 'm|' + S.images.length; mosaique = true;
     kids = [el('b', { text: S.titre || (seul ? q0.sat : 'Session SSTV · ' + S.sat) }), el('div', { class: 'grille' }, S.images.map(m =>
       el('figure', {}, [el('img', { src: url('/image', { f: m.f, id: m.pid, n: tourVersion }), alt: '' }), el('figcaption', { text: hms(m.a).slice(0, 5) })])))];
   }
   if (c.dataset.cle === cle) return;
-  c.dataset.cle = cle; c.innerHTML = ''; c.className = mosaique ? 'mosaique' : '';
+  c.dataset.cle = cle; c.innerHTML = ''; c.className = bilan ? 'bilan' : mosaique ? 'mosaique' : '';
   c.style.display = kids ? 'block' : 'none';
   if (kids) kids.forEach(k => c.appendChild(k));
   if (mosaique) {
-    // The pictures as large as they can all be (4:3, their time under each), as the files' mosaic.
+    // Without SatMe-PC: the pictures in a grid, their proportions kept, never enlarged more than 1.5× (their time under each).
     const e = g('ecran'), W = e.clientWidth * .86 - 44, H = e.clientHeight * .86 - 70, n = S.images.length;
     let l = 40;
     for (let k = 1; k <= n; k++) { const r = Math.ceil(n / k), x = Math.min((W - 6 * (k - 1)) / k, ((H - r * 20) / r) * 4 / 3); if (x > l) l = x; }
@@ -1616,6 +1624,13 @@ function curseurMarge(cle, lib) {
   r.oninput = () => { O[cle] = pas[+r.value]; garde(); montre(); margesChangees(); };
   montre();
   return el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
+}
+/** « Durée du bilan »: how long the closing card stays at the end of the video (3 to 30 s), counted in its length. */
+function curseurBilan() {
+  const v = el('b'), r = el('input', { type: 'range', min: 3, max: 30, step: 1, value: O.dureeBilan });
+  const montre = () => { v.textContent = Math.round(+O.dureeBilan) + ' s'; };
+  r.oninput = () => { O.dureeBilan = +r.value; garde(); montre(); }; montre();
+  return el('label', { class: 's-curseur' }, [el('span', { text: T.duree_bilan }), r, v]);
 }
 function titreBloc(texte) { return el('div', { class: 'aide titre-bloc', text: texte }); }
 function rafraichit() { if (S) { piecesAllure(); dessineCadre(); maj(); } }
@@ -1715,6 +1730,7 @@ function panneauExports(p) {
     radio('formatF', 'paysage', T.format_paysage, O.format !== 'telephone', () => { O.format = 'paysage'; garde(); dessineCadre(); majSstv(); majElements(); }),
     radio('formatF', 'telephone', T.format_portrait, O.format === 'telephone', () => { O.format = 'telephone'; garde(); dessineCadre(); majSstv(); majElements(); })]));
   c.appendChild(caseOpt('ouverture', T.ouverture, rafraichit)); c.appendChild(caseOpt('recap', T.recap, rafraichit));
+  if (pc) c.appendChild(curseurBilan());
   // The sound: where the time runs in real time (a contact heard, the accelerated replay's normal stretches), here and in the video.
   c.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son, () => { piecesAllure(); if (joue) synchro(); })]));
   c.appendChild(el('div', { title: T.accelere + '. ' + T.accel_aide }, [caseOpt('accelere', T.accelere_video, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); })]));
@@ -1751,7 +1767,7 @@ function parametresRendu(quoi) {
     res: O.res, format: O.format === 'telephone' ? 'telephone' : 'paysage', vue: O.vue, sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq),
     locator: b(O.locator), ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
     etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), accelere: b(O.accelere), rapide: O.rapide, accAvant: O.avant, accApres: O.apres,
-    surActivite: b(O.surActivite), contacts: b(O.paquetQsos), lecture: vitesse, cam: Orbites.cameraActive() }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
+    surActivite: b(O.surActivite), contacts: b(O.paquetQsos), lecture: vitesse, cam: Orbites.cameraActive(), dureeBilan: O.dureeBilan }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { q.de = Math.round(sel[0]); q.a = Math.round(sel[1]); }
   return q;
 }

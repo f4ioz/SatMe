@@ -299,6 +299,16 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 if (es.isEmpty()) return json("{\"ok\":false,\"raison\":\"vide\"}")
                 chronologie(es) { k -> when (k) { "vue" -> vueDemandee(p, "globe"); else -> p(k) } }
             }
+            // The closing card as the video ends on it ([BilanPc]), asked with the same words: the page's preview shows it.
+            "/bilan" -> {
+                val es = SessionRenduPc.parametres(p).ids.mapNotNull { j.passage(it) }.distinctBy { it.id }.sortedBy { it.debutMs }.take(150)
+                if (es.isEmpty()) return NON
+                val session = sessionEditeur(es, SessionRenduPc.parametres(p), "video", null) { k -> when (k) { "vue" -> vueDemandee(p, "globe"); else -> p(k) } }
+                val (w, h) = session.format?.let { RenduPc.tailleVideo(it) } ?: RenduPc.tailleVideo(session.paysage, session.resolution)
+                val o = java.io.ByteArrayOutputStream()
+                javax.imageio.ImageIO.write(SessionRenduPc.bilan(session, w, h), "png", o)
+                ReponseWeb("200 OK", "image/png", o.toByteArray(), "Cache-Control: no-store\r\n")
+            }
             // The FT8/FT4 panel as placed on the page, kept with each pass asked (« ids », else « id »).
             "/ft/choix" -> {
                 val ids = p("ids").split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(p("id")) }
@@ -461,7 +471,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         return SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
             ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap) && morceau == null, transition = q.transition,
             zHors = q.zHors, zPassage = q.zPassage, autres = autres, tachesAutres = q.tachesAutres, son = avecSon, avant = q.avant, apres = q.apres,
-            morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace")
+            morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace", bilan = q.bilan)
     }
 
     /**

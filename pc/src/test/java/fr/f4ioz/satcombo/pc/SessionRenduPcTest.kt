@@ -180,8 +180,8 @@ class SessionRenduPcTest {
         ImageIO.write(SessionRenduPc.image(s2, p2.filterIsInstance<SessionRenduPc.Trame.Tourne>().first { it.i == 2 && it.k >= 0.45 }, w, h), "png",
             File(echantillons, "session-transition-police2-locale.png"))
         ImageIO.write(SessionRenduPc.titre(s2, w, h), "png", File(echantillons, "session-titre-police2.png"))
-        val m = SessionRenduPc.mosaique(s, w, h)
-        ImageIO.write(m, "png", File(echantillons, "session-mosaique.png"))
+        val m = SessionRenduPc.bilan(s, w, h)
+        ImageIO.write(m, "png", File(echantillons, "session-bilan.png"))
         var couleurs = 0
         for (y in 0 until h step 4) for (x in 0 until w step 4) if (Color(m.getRGB(x, y)).let { maxOf(it.red, it.green, it.blue) - minOf(it.red, it.green, it.blue) > 120 }) couleurs++
         assertTrue("mosaic $couleurs", couleurs > 2000)
@@ -587,6 +587,14 @@ class SessionRenduPcTest {
         val avecCartes = SessionRenduPc.Session(s.scenes, "continu", s.v, avant = 30_000L, apres = 30_000L)
         val e = SessionRenduPc.chronologie(avecCartes)
         assertEquals(3 * SessionRenduPc.FPS, e.debut); assertTrue(e.fin >= 6 * SessionRenduPc.FPS)
+        // The closing card: « Durée du bilan » (7 s by default) counted in the video's length, as asked.
+        assertEquals(Math.round(BilanPc.DUREE_S * SessionRenduPc.FPS).toInt(), e.fin)
+        val long = SessionRenduPc.chronologie(SessionRenduPc.Session(s.scenes, "continu", s.v, avant = 30_000L, apres = 30_000L, bilan = 12.0))
+        assertEquals(12 * SessionRenduPc.FPS, long.fin)
+        assertEquals(e.secondes + 5, long.secondes, 1e-9)
+        assertEquals(12.0, SessionRenduPc.parametres { k -> if (k == "dureeBilan") "12" else "" }.bilan, 0.0)
+        assertEquals(BilanPc.DUREE_MAX_S, SessionRenduPc.parametres { k -> if (k == "dureeBilan") "999" else "" }.bilan, 0.0)
+        assertEquals(BilanPc.DUREE_S, SessionRenduPc.parametres { "" }.bilan, 0.0)
         assertEquals(e.trames.toDouble() / SessionRenduPc.FPS, e.secondes, 1e-9)
     }
 
