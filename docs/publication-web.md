@@ -84,7 +84,7 @@ know.**
 
 ### Media: `multipart/form-data`
 
-The types `sstv-image`, `planche`, `rapport`, `qso`, `journal-video` (and the
+The types `sstv-image`, `ssdv-image`, `planche`, `rapport`, `qso`, `journal-video` (and the
 live pictures) arrive like an HTML file-upload form, three fields in this
 order:
 
@@ -178,6 +178,37 @@ estimated from the timetable).
 `passages[]`: `{"id": "25544-20261003T1349Z", "aos": "…", "los": "…", "elMax": 62.4, "images": 5, "diapos": [3, 4],
 "autopilote": true, "campagne": "ARISS série 34", "video": "journal:<file>.mp4"}`.
 
+`ssdv-image` (an SSDV picture: numbered packets of a JPEG, received over
+one pass or several — SO-127 and other satellites):
+
+| Field | Type | Example | Meaning |
+|---|---|---|---|
+| `satellite`, `catnum` | string, number | `"HADES-SA"`, `68446` | the satellite heard, its NORAD number |
+| `utc`, `premier` | string | `"2026-10-30T09:12:04Z"` | its first packet received (both the same) |
+| `dernier` | string | | its last packet received so far |
+| `image` | number | `17` | the picture's number on board (0–255) |
+| `indicatif` | string | `"Q0SAT"` | the SSDV callsign field, as decoded (some satellites put fixed bytes there) |
+| `paquetsRecus` | number | `38` | packets received |
+| `paquetsAttendus` | number | `40` | packets in the picture |
+| `attendusEstime` | boolean | `true` | `paquetsAttendus` is an estimate (the last packet has not come yet) |
+| `manquants` | number | `2` | packets missing |
+| `complete` | boolean | `false` | every packet received |
+| `largeur`, `hauteur` | number | `320`, `240` | pixels |
+| `passages` | list | see below | each pass (or recording, or import) that brought packets, oldest first |
+| `autopilote` | boolean | `true` | at least one of those passes was received by the auto-pilot |
+| `campagne` | string | `"SO-127 octobre"` | the auto-pilot's campaign (the latest) |
+
+`passages[]`: `{"id": "68446-20261030T0910Z", "aos": "…", "los": "…", "elMax": 48.2, "paquets": 21,
+"premier": "…", "dernier": "…", "source": "radio", "autopilote": true, "campagne": "SO-127 octobre"}`
+(`id`, `aos`, `los`, `elMax` when the pass is known; `source`: `radio`, or
+the recording or file the packets were read from).
+
+**An SSDV picture grows**: missing blocks are grey in the JPEG sent. When
+more packets arrive (later in the pass, or on another pass), SatMe-PC sends
+it again with **the same `cle`** (`"ssdv:<key>"`), a minute after its last
+packet or as soon as it is complete — in Automatique, and in Sur clic once
+the owner has sent it by hand. Replace the earlier version.
+
 `rapport`: `planche` (the planche's key), `satellite`, `catnum`,
 `evenementId`, `evenementGenre`, `campagne`, `campagneId`, `premiere`,
 `derniere`, as above.
@@ -228,6 +259,7 @@ Content-Type: image/png
 |---|---|---|---|
 | `ping` | JSON | — | by **Tester** |
 | `sstv-image` | multipart | PNG | an SSTV picture of the gallery (at a click, or each picture received live in Automatique) |
+| `ssdv-image` | multipart | JPEG | an SSDV picture as it stands (at a click, or in Automatique), sent again as more packets come (same `cle`) |
 | `planche` | multipart | JPEG (1600 px) | a planche; in Automatique, those with pictures, 2 min after the last picture received |
 | `rapport` | multipart | PDF | a planche's event report |
 | `qso` | multipart | ADIF (`.adi`, one record) | a contact of the log; in Automatique, each contact added |

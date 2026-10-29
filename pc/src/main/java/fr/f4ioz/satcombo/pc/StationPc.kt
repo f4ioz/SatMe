@@ -386,7 +386,9 @@ class StationPc(
         // Below the horizon nothing is heard: the rest, not a Doppler that means nothing.
         val p = e.position
         val rr = if (p != null && p.elevationDeg >= 0) p.rangeRateKmS else 0.0
-        return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz, t.mode.orEmpty(), e.suivi?.name.orEmpty())
+        // Narrow data heard in SSB (SSDV, GENESIS FSK, FSK under 1200 bit/s): the dongle in USB, as the rig in USB-D.
+        val mode = if (!t.isTransponder && fr.f4ioz.satcombo.domain.ModeRadio.donnees(t.mode, t.baud)) "USB" else t.mode.orEmpty()
+        return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz, mode, e.suivi?.name.orEmpty())
     }
 
     /** The satellite followed is a METEOR-M sending LRPT pictures. */
@@ -989,7 +991,9 @@ class StationPc(
             emetteur = 0, repos = null, passagesSuivi = emptyList(),
             calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) }
         portee.launch(Dispatchers.IO) {
-            val l = catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
+            // Every live transmitter whatever its mode (« SSDV », « GENESIS FSK »…), then the frequency typed for this satellite.
+            val l = fr.f4ioz.satcombo.data.EmetteurPerso.ajoute(
+                catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }, c.perso)
             // The transmitter chosen last time for this satellite, as on the phone.
             val i = c.txDescription?.let { d -> l.indexOfFirst { it.description == d } }?.takeIf { it >= 0 } ?: 0
             val (liste, choisi) = emetteurVoulu?.let { f -> runCatching { f(l) }.getOrNull() } ?: (l to i)
@@ -1073,6 +1077,26 @@ class StationPc(
     }
 
     fun emetteurChoisi(): Transmitter? = _etat.value.let { it.emetteurs.getOrNull(it.emetteur) }
+
+    /**
+     * « Autre fréquence… »: [r] typed for the satellite followed, kept for it,
+     * put at the end of its list and chosen; null forgets it (the first
+     * transmitter chosen again). False without a satellite followed.
+     */
+    fun emetteurPerso(r: fr.f4ioz.satcombo.data.EmetteurPerso.Reglage?): Boolean {
+        val s = _etat.value.suivi ?: return false
+        satConfig.savePerso(s.catalogNumber, r)
+        stationCat.oublieArmement()
+        change {
+            val l = fr.f4ioz.satcombo.data.EmetteurPerso.ajoute(emetteurs, r)
+            copy(emetteurs = l, emetteur = if (r != null) l.size - 1 else 0, repos = null)
+        }
+        _etat.value.let { e -> satConfig.saveTransmitter(s.catalogNumber, e.emetteurs.getOrNull(e.emetteur)?.description) }
+        return true
+    }
+
+    /** The frequency typed for the satellite followed, if any. */
+    fun reglagePerso(): fr.f4ioz.satcombo.data.EmetteurPerso.Reglage? = _etat.value.suivi?.let { satConfig.load(it.catalogNumber).perso }
 
     /** The rest moved by [dHz] in the passband (a linear transponder), from where it is. */
     fun deplaceRepos(dHz: Long) {

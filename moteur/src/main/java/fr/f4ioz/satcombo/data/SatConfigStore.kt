@@ -29,6 +29,8 @@ data class SatConfig(
      */
     val refCalibShiftHz: Long? = null,
     val refTxShiftHz: Long? = null,
+    /** « Autre fréquence… »: the frequency typed for this satellite ([EmetteurPerso]); null: none. */
+    val perso: EmetteurPerso.Reglage? = null,
 )
 
 /** Persists per-satellite config keyed by NORAD catalog number. */
@@ -43,8 +45,22 @@ class SatConfigStore(private val prefs: Stockage) {
         rxOffsetVoiceHz = prefs.getLong("rxoff_voice_$catnum", 0L),
         rxOffsetCwHz = prefs.getLong("rxoff_cw_$catnum", 0L),
         refCalibShiftHz = peutEtre("refshift_$catnum"),
-        refTxShiftHz = peutEtre("reftxshift_$catnum")
+        refTxShiftHz = peutEtre("reftxshift_$catnum"),
+        perso = peutEtre("perso_dl_$catnum")?.let { dl ->
+            EmetteurPerso.mode(prefs.getString("perso_mode_$catnum", null))?.let { m -> EmetteurPerso.Reglage(dl, peutEtre("perso_ul_$catnum"), m) }
+        },
     )
+
+    /** The frequency typed for [catnum] ([EmetteurPerso]); null forgets it. */
+    fun savePerso(catnum: Int, r: EmetteurPerso.Reglage?) {
+        val e = prefs.edit()
+        if (r == null) e.remove("perso_dl_$catnum").remove("perso_ul_$catnum").remove("perso_mode_$catnum")
+        else {
+            e.putLong("perso_dl_$catnum", r.descenteHz).putString("perso_mode_$catnum", r.mode)
+            if (r.monteeHz != null) e.putLong("perso_ul_$catnum", r.monteeHz) else e.remove("perso_ul_$catnum")
+        }
+        e.apply()
+    }
 
     fun saveTransmitter(catnum: Int, description: String?) {
         prefs.edit().putString("tx_$catnum", description).apply()

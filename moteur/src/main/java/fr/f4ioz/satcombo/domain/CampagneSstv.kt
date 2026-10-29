@@ -44,7 +44,8 @@ object CampagneSstv {
     const val POSTE = "poste"
     /** The chain's sound: the SDR receiver. */
     const val SDR = "sdr"
-    val MODULATIONS = listOf("FM", "NFM")
+    /** A frequency of its own: FM for SSTV; USB-D (USB, the rig's data mode) for SSDV sent in narrow FSK (SO-127). */
+    val MODULATIONS = listOf("FM", "NFM", "USB", "USB-D")
 
     /** The SSTV modes offered (« Auto »: the header says it). */
     val MODES: List<String> get() = listOf(AUTO) + SstvMode.ALL.map { it.name }
@@ -66,6 +67,8 @@ object CampagneSstv {
         val annonce: Boolean = true,
         /** The mast parked after LOS. */
         val parquer: Boolean = false,
+        /** SSDV decoded in USB during the pass (SO-127's GENESIS FSK, from the same sound): receive only. */
+        val ssdv: Boolean = false,
     )
 
     data class Campagne(
@@ -188,7 +191,7 @@ object CampagneSstv {
         if (c.finMs - c.debutMs > DUREE_MAX_MS) return Result.failure(IllegalArgumentException("deux mois au plus"))
         if (c.freqHz != 0L && c.freqHz !in 1_000_000L..30_000_000_000L) return Result.failure(IllegalArgumentException("fréquence hors des bandes"))
         if (c.freqHz == 0L && c.emetteur.isBlank()) return Result.failure(IllegalArgumentException("choisir l'émetteur du satellite ou une fréquence"))
-        val nom = propre(c.nom, 60).ifBlank { "SSTV " + propre(c.satNom, 30) }
+        val nom = propre(c.nom, 60).ifBlank { (if (c.chaine.ssdv && !c.chaine.sstv) "SSDV " else "SSTV ") + propre(c.satNom, 30) }
         val ch = c.chaine
         return Result.success(c.copy(
             id = c.id.takeIf { ID.matches(it) } ?: "campagne",
@@ -211,7 +214,7 @@ object CampagneSstv {
         .put("activite", c.activite).put("activiteSuit", c.activiteSuit)
         .put("chaine", c.chaine.let { h -> JSONObject().put("profil", h.profil).put("poste", h.poste).put("connecterPoste", h.connecterPoste)
             .put("source", h.source).put("rotor", h.rotor).put("connecterRotor", h.connecterRotor).put("enregistrer", h.enregistrer)
-            .put("sstv", h.sstv).put("annonce", h.annonce).put("parquer", h.parquer) })
+            .put("sstv", h.sstv).put("annonce", h.annonce).put("parquer", h.parquer).put("ssdv", h.ssdv) })
 
     fun lisCampagne(o: JSONObject): Campagne? = runCatching {
         val h = o.optJSONObject("chaine") ?: JSONObject()
@@ -225,7 +228,7 @@ object CampagneSstv {
             chaine = Chaine(profil = h.optString("profil"), poste = h.optBoolean("poste", d.poste), connecterPoste = h.optBoolean("connecterPoste", false),
                 source = h.optString("source", d.source), rotor = h.optBoolean("rotor", d.rotor), connecterRotor = h.optBoolean("connecterRotor", false),
                 enregistrer = h.optBoolean("enregistrer", d.enregistrer), sstv = h.optBoolean("sstv", d.sstv), annonce = h.optBoolean("annonce", d.annonce),
-                parquer = h.optBoolean("parquer", false)))).getOrNull()
+                parquer = h.optBoolean("parquer", false), ssdv = h.optBoolean("ssdv", false)))).getOrNull()
     }.getOrNull()
 
     private fun lisTrace(o: JSONObject): Trace? = runCatching {

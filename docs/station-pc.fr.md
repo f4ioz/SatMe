@@ -739,7 +739,7 @@ La carte **Émission FT8/FT4** de l'onglet, à droite au-dessus du radar, envoie
 
 ## Télémesure
 
-L'onglet **Télémesure** (espace *Modes*) décode ce que les satellites envoient d'eux-mêmes : paquets FSK / GMSK de 1200 à 9600 bit/s, images SSDV, télémesure BPSK au format FUNcube. Trois sous-onglets : **Paquets**, **Images SSDV**, **BPSK**. Tout est coupé d'origine ; réception seulement. Les trames reçues sont gardées sur le PC (`telemesure/`) ; rien ne part sur Internet sans la case *Partager avec SatNOGS DB*.
+L'onglet **Télémesure** (espace *Modes*) décode ce que les satellites envoient d'eux-mêmes : paquets FSK / GMSK de 1200 à 9600 bit/s, images SSDV, télémesure BPSK au format FUNcube. Quatre sous-onglets : **Paquets**, **SSDV en BLU**, **Images SSDV**, **BPSK**. Tout est coupé d'origine ; réception seulement. Les trames reçues sont gardées sur le PC (`telemesure/`) ; rien ne part sur Internet sans la case *Partager avec SatNOGS DB*.
 
 ### Paquets FSK · GMSK
 
@@ -763,6 +763,28 @@ Le sous-onglet **Images SSDV** reconstitue les images SSDV (JPEG en paquets de 2
 - **⤓ PNG / ⤓ JPEG** exportent une image telle qu'elle est (blocs manquants en gris) ; **Abandonner** oublie une image en cours et ses paquets.
 - **Importer des paquets…** : les paquets d'un passage manqué depuis un fichier — paquets SSDV bruts à la suite, fichier KISS, ou journal de trames de SatMe (`telemesure/paquets/*.jsonl`, avec ses heures). Ils rejoignent les images comme des paquets reçus, en passage à part au nom du fichier. (Les enregistrements I/Q ou WAV rejoués dans le SDR sont traités comme des essais et n'alimentent pas les images.)
 - En démonstration (`--demo`), deux images fictives assemblées sur deux passages : l'une complète, l'autre à quelques paquets près.
+
+- **D'où viennent les paquets**, selon le satellite (la chaîne suit son émetteur dans SatNOGS DB) :
+  - **SO-127 (HADES-SA)** et les autres satellites « GENESIS » d'AMSAT-EA : FSK étroite reçue en **BLU (USB)** — le sous-onglet **SSDV en BLU** ci-dessous ;
+  - **IO-86 (LAPAN-A2)** : SSDV relayé par son répéteur FM en **AFSK 1200** (ssdv2sat) : le décodeur APRS de la carte son entend les trames (poste en FM), nues ou en AX.25, paquets entiers ou plus courts (`ssdv -l` de fsphil) ; elles rejoignent les images, le passage marqué « AFSK 1200 » ;
+  - les cubesats en **FSK / GMSK 1200–9600 bit/s** : le sous-onglet **Paquets** (SDR) ;
+  - **Geoscan-2/4/5, 239Alferov** n'envoient pas de SSDV mais des **morceaux de JPEG** dans leurs trames GFSK 9600 (mot de synchro 0x930B51DE, blanchiment PN9, CRC-16) : le même décodeur de paquets les lit, et leurs images s'affichent ici au fil des morceaux (chaque morceau à sa place en octets ; visible une fois arrivé le morceau qui commence par FF D8). Gardés dans `telemesure/geoscan/` ;
+  - **pas encore lu** : ASRTU-1 (BPSK 9600, codage concaténé CCSDS).
+- **🌐** envoie une image à votre site (*Publication web*, type `ssdv-image`, docs/publication-web.fr.md) ; une fois envoyée, elle repart d'elle-même quand d'autres paquets arrivent (même clé : le site la remplace).
+
+### SSDV en BLU : SO-127 (GENESIS FSK)
+
+SO-127 (HADES-SA, 436,875 MHz) émet en FSK à deux tons **directement sur la porteuse** : 800 bit/s avec 1600 Hz entre les deux tons (200 bit/s avec 1125 Hz certains mois), le ton bas valant 1. Un récepteur FM la perd ; en **USB** ce sont deux tons dans le son. Le sous-onglet **SSDV en BLU** la décode depuis le son, en réception seulement :
+
+- **Le poste** : choisir le satellite, puis son émetteur « SSDV », « GENESIS FSK » ou « FSK 800 » dans *Fréquences (Doppler)* : SatMe met l'IC-9700 en **USB-D** (USB en mode données : le son par l'arrière, le micro coupé) sur la descente, Doppler corrigé. La liste montre maintenant tous les émetteurs actifs avec leur fréquence et le mode du poste ; **Autre fréquence…** en tape une à soi.
+- **Le son** : *carte son* (celle de l'onglet Son — le codec USB de l'IC-9700) ou *récepteur SDR* (le SDR en USB).
+- **La chaîne** : les deux tons cherchés dans toute la bande audio toutes les tiers de seconde (le reste du Doppler suivi), deux filtres adaptés (longs d'un bit), une horloge de Gardner, puis les trames GENESIS (128 bits de 0xAA, synchro 0xBF35, taille, type/adresse, données embrouillées par x¹⁷ + x¹² + 1, CRC-16/CCITT) **et** une recherche SSDV dans les bits bruts (« 55 66 » à n'importe quel bit, dans les deux polarités) : un paquet SSDV sort même si l'emballage était mal lu. Les trames de type 10 sont des paquets SSDV entiers de 256 octets.
+- **Débit** : selon l'émetteur, ou 800 / 200 bit/s à la main.
+- **capturer les bits** : les bits démodulés de chaque passage gardés dans `telemesure/genesis/<passage>.bits` (et les trames en `.jsonl`), pour les relire ou les étudier plus tard.
+- **Relire** : un enregistrement de l'onglet Son (`SatMe_<satellite>_<heure>Z.wav`, son heure lue dans son nom), une capture, ou **Fichier…** — un WAV du son en USB de n'importe quel logiciel (PCM 8/16/24/32 bits ou flottant, mono ou stéréo). Ses paquets rejoignent les images, le passage au nom du fichier.
+- **Essai** : un signal fabriqué (une mire en paquets SSDV, du bruit, une dérive de 3 Hz/s) dans un décodeur à part ; rien n'est gardé.
+- **Pilote automatique** : une campagne *Agenda › SSTV* avec **Décodeur SSDV en BLU (SO-127)** coché (coché de lui-même pour un satellite qui a un tel émetteur) allume ce décodeur pour ses passages, depuis le son de la campagne, puis le remet comme avant ; le compte rendu du passage dit combien de paquets sont arrivés. Réception seulement : la montée du satellite (145,875 MHz) n'est jamais utilisée.
+- Vérifié sur des signaux fabriqués seulement (bruit, dérive, les deux débits). Pour le vérifier sur un vrai passage : enregistrer le son USB du passage (*Son › Enregistrer*, le poste en USB-D sur l'émetteur « SSDV » de SO-127) avec **capturer les bits** coché, puis **Relire** l'enregistrement.
 
 ### BPSK : FUNcube et la balise QO-100
 

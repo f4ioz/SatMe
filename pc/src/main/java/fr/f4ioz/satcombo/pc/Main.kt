@@ -217,6 +217,21 @@ fun main(args: Array<String>) {
             ?: e.emetteurs.firstOrNull { it.alive && fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud) != null }
         t?.let { Triple(fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud)!!, it.description, it.mode.orEmpty()) }
     }
+    // SSDV in USB (SO-127's GENESIS FSK): the card's sound (the rig in USB-D) or the SDR's, off unless chosen.
+    telemesure.emetteurGenesis = {
+        val e = station.etat.value
+        val choisi = station.emetteurChoisi()
+        val t = choisi?.takeIf { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null }
+            ?: e.emetteurs.firstOrNull { it.alive && fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null }
+        t?.let { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud)!! to it.description }
+    }
+    telemesure.suiviGenesis = { station.etat.value.suivi?.let { it.name to it.catalogNumber } }
+    telemesure.sonFictif = { son.horsAntenne() != null }
+    telemesure.enregistrement = { nom -> son.fichierEnregistrement(nom) }
+    telemesure.enregistrements = { son.enregistrements().filter { it.name.endsWith(".wav") }.map { it.name } }
+    son.son.auditeurs += { pcm, n, rate -> runCatching { telemesure.ecouteCarte(pcm, n, rate) } }
+    // SSDV through an FM repeater in AFSK 1200 (IO-86): the APRS decoder's frames searched.
+    son.aprs.surOctets = { o -> runCatching { telemesure.trameAfsk(o) } }
     telemesure.station = {
         val e = station.etat.value
         e.observateur?.let { Triple(e.indicatif, it.latDeg, it.lonDeg) }
@@ -554,6 +569,7 @@ fun main(args: Array<String>) {
     autopilote.son = son
     autopilote.sdr = sdr
     autopilote.montage = serveur.montage
+    autopilote.telemesure = telemesure
     autopilote.prendSource = { nom -> serveur.prendSource(son, nom) }
     autopilote.emissionEnCours = {
         if (emission.etat.emet) "émission DATV" else if (emissionSstv.etat.emet) "émission SSTV" else if (iq.enCours) "correction I/Q"
@@ -593,7 +609,10 @@ fun main(args: Array<String>) {
     // « Réglages › Envoyer vers un site web »: the SSTV pictures, planches, reports, contacts and videos sent to the owner's site (or a folder),
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
     val site = SitePc(station.stockage, dossier)
-    val sourcesSite = SourcesSitePc(son.sstv, planche, carnet, station, File(dossier, "exports"))
+    val sourcesSite = SourcesSitePc(son.sstv, planche, carnet, station, File(dossier, "exports"),
+        telemesure.paquets.assemblage, File(dossier, "telemesure/ssdv"))
+    // An SSDV picture growing: sent again (Automatique, or Sur clic once sent by hand) when quiet or complete.
+    telemesure.paquets.assemblage.surAjout = { ph -> site.nouveauPaquetSsdv(ph.id, ph.complete) }
     site.sources = { g, ref -> sourcesSite.contenu(g, ref) }
     site.planchesRemplies = { planche.planches().filter { it.images.isNotEmpty() }.map { it.id } }
     son.sstv.nouvelleImage = { nom, _ -> site.nouvelleImage(nom) }

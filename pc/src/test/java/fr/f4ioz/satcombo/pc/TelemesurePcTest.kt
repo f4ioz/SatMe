@@ -124,4 +124,75 @@ class TelemesurePcTest {
         assertEquals("QO-100", o.getString("satellite"))
         assertEquals("41".repeat(256), o.getString("hex"))
     }
+
+    /** A WAV of made-up SO-127 audio (USB, GENESIS FSK 800 bit/s): [n] packets of a test picture with HADES-SA's callsign bytes. */
+    private fun wavSo127(n: Int, fs: Int = 48_000): ByteArray {
+        val paquets = fr.f4ioz.satcombo.telemesure.SignalPaquets.paquetsMire(21).take(n)
+            .map { fr.f4ioz.satcombo.telemesure.Ssdv.recachete(it, fr.f4ioz.satcombo.telemesure.Genesis.INDICATIF_SSDV) }
+        val o = paquets.flatMap { fr.f4ioz.satcombo.telemesure.Genesis.codeSsdv(it).toList() }.toByteArray()
+        val pcm = fr.f4ioz.satcombo.telemesure.SignalFskAudio.audio(fr.f4ioz.satcombo.telemesure.Genesis.bits(o), fs, 800.0, 1_600.0, 1_500.0, 13.0, 2.0)
+        val f = File.createTempFile("so127", ".wav").also { it.deleteOnExit() }
+        fr.f4ioz.satcombo.sstv.SstvSon.ecritWav(f, pcm, fs)
+        return f.readBytes()
+    }
+
+    @Test fun `SSDV en BLU - coupe par defaut, un enregistrement relu donne l'image`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val t = TelemesurePc(stockage(), dir, null)
+        t.suiviGenesis = { "HADES-SA" to 68446 }
+        assertFalse(t.genesisActif)
+        val wav = wavSo127(5)
+        // Off: the card's sound is not decoded.
+        val (pcm, rate) = fr.f4ioz.satcombo.telemesure.LectureWav.lis(wav)!!
+        t.ecouteCarte(pcm, pcm.size, rate)
+        assertTrue(t.paquets.assemblage.photos().isEmpty())
+        // A recording read again: its packets into the pictures, the pass named after the file.
+        val r = t.relitGenesis(wav, "SatMe_HADES-SA_20261030_091200Z.wav")
+        assertTrue(r.toString(), r.getBoolean("ok"))
+        assertEquals(5, r.getInt("nouveaux"))
+        val ph = t.paquets.assemblage.photos().single()
+        assertEquals("HADES-SA", ph.satellite)
+        assertEquals(5, ph.recus)
+        assertTrue(ph.passages.single().source.startsWith("enregistrement SatMe_HADES-SA"))
+        // The recording's own time (its name), not now.
+        assertTrue(ph.debut in 1_793_351_520_000L..1_793_351_600_000L)
+        // Switched on: the card's sound decoded live (the duplicates kept once).
+        t.action("/api/telemesure/genesis", mapOf("on" to "1"))
+        t.ecouteCarte(pcm, pcm.size, rate)
+        assertEquals(5, t.paquets.assemblage.photos().single().recus)
+        assertTrue(t.json().getJSONObject("genesis").getInt("ssdv") >= 5)
+    }
+
+    @Test fun `SSDV en BLU - l'essai ne garde rien`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val t = TelemesurePc(stockage(), dir, null)
+        t.genesisProfilChoisi = "800"
+        assertTrue(t.lanceEssaiGenesis())
+        val fin = System.currentTimeMillis() + 120_000
+        while (t.json().getJSONObject("genesis").getBoolean("essaiEnCours") && System.currentTimeMillis() < fin) Thread.sleep(100)
+        val im = t.json().getJSONObject("paquets").getJSONArray("images")
+        assertEquals(1, im.length())
+        assertTrue(im.getJSONObject(0).getBoolean("essai"))
+        assertTrue(im.getJSONObject(0).getBoolean("complete"))
+        assertFalse(File(dir, "telemesure/ssdv").exists() && File(dir, "telemesure/ssdv").listFiles()!!.isNotEmpty())
+    }
+
+    @Test fun `SSDV par un repeteur FM en AFSK 1200 - nu ou dans une trame AX25`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val t = TelemesurePc(stockage(), dir, null)
+        t.suiviGenesis = { "LAPAN-A2" to 40931 }
+        val paquets = fr.f4ioz.satcombo.telemesure.Ssdv.codeImage(fr.f4ioz.satcombo.telemesure.SignalPaquets.mire(), 320, 240, "YB0ABC", 4).take(4)
+        // Two bare (ssdv2sat's default), two in a UI frame (« --ax25 »-like): the FCS after each.
+        fun fcs(b: ByteArray): ByteArray { val c = fr.f4ioz.satcombo.aprs.Ax25.crc(b); return b + byteArrayOf(c.toByte(), (c ushr 8).toByte()) }
+        val trames = paquets.take(2).map { fcs(it) } + paquets.drop(2).map { fr.f4ioz.satcombo.telemesure.SignalPaquets.trameSsdv(it) }
+        val pcm = fr.f4ioz.satcombo.aprs.Afsk.module(trames, 48_000)
+        val d = fr.f4ioz.satcombo.aprs.AfskDemodulateur(48_000) { }
+        d.surOctets = { o -> t.trameAfsk(o) }
+        d.traite(pcm, pcm.size)
+        val ph = t.paquets.assemblage.photos().single()
+        assertEquals(4, ph.recus)
+        assertEquals("YB0ABC", ph.indicatif)
+        assertEquals("LAPAN-A2", ph.satellite)
+        assertEquals("AFSK 1200", ph.passages.single().source)
+    }
 }

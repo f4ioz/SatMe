@@ -429,6 +429,36 @@ class SitePcTest {
         assertEquals(avant, File(d, "index.json").readText())
     }
 
+    @Test fun `an SSDV picture is sent again as it grows - same key, once quiet or complete`() {
+        val s = site(); regle(s)
+        assertEquals(SitePc.Mode.CLIC, s.mode(SitePc.Genre.SSDV))
+        // At a click by default: packets alone send nothing.
+        s.nouveauPaquetSsdv("img-1", false)
+        t += SitePc.SSDV_CALME_MS + 1
+        assertTrue(s.ticSsdv().isEmpty())
+        // Sent by hand once: from then on it goes again by itself when it grows.
+        assertNull(s.publie(SitePc.Genre.SSDV, "img-1", true))
+        assertEquals(1, s.envoieDus())
+        assertEquals("/api/publication/ssdv-image", recus.last().chemin)
+        assertEquals("ssdv:img-1", recus.last().meta.getString("cle"))
+        s.nouveauPaquetSsdv("img-1", false)
+        t += 10_000L
+        assertTrue("not yet: packets still coming", s.ticSsdv().isEmpty())
+        t += SitePc.SSDV_CALME_MS
+        assertEquals(listOf("img-1"), s.ticSsdv())
+        assertEquals(1, s.envoieDus())
+        assertEquals(2, recus.size)
+        assertEquals("ssdv:img-1", recus.last().meta.getString("cle"))
+        // Automatique: a new picture goes; complete, at once.
+        s.regleMode(SitePc.Genre.SSDV, SitePc.Mode.AUTO)
+        s.nouveauPaquetSsdv("img-2", true)
+        assertEquals(listOf("img-2"), s.ticSsdv())
+        // Never: nothing.
+        s.regleMode(SitePc.Genre.SSDV, SitePc.Mode.JAMAIS)
+        s.nouveauPaquetSsdv("img-3", true)
+        assertTrue(s.ticSsdv().isEmpty())
+    }
+
     @Test fun `a folder that cannot be written is not ready`() {
         val s = site()
         val f = tmp.newFile("pas-un-dossier")

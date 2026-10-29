@@ -35,6 +35,9 @@ class SourcesSitePc(
     private val station: StationPc,
     /** The journal's exports (`exports/`), where its videos are. */
     private val exports: File,
+    /** The SSDV pictures (put together over the passes) and the folder of the finished ones. */
+    private val ssdv: fr.f4ioz.satcombo.telemesure.AssemblageSsdv? = null,
+    private val dossierSsdv: File? = null,
 ) {
     private fun ici(): String = listOf(station.settings.callsign, station.settings.manualLocator).filter { it.isNotBlank() }.joinToString(" · ")
     private fun iso(ms: Long) = Instant.ofEpochMilli(ms).toString()
@@ -67,6 +70,7 @@ class SourcesSitePc(
             if (adif.isBlank()) null else SitePc.Contenu(adif.toByteArray(Charsets.UTF_8), null, "text/plain; charset=utf-8", JSONObject()
                 .put("titre", "QSO " + e.callsign + " · " + e.satName).put("indicatif", e.callsign).put("locator", e.theirLocator).put("satellite", e.satName).put("utc", iso(e.timeMs)).put("mode", e.mode).put("station", ici()))
         }
+        SitePc.Genre.SSDV -> contenuSsdv(ref)
         SitePc.Genre.VIDEO -> File(exports, ref).takeIf { File(ref).name == ref && ref.endsWith(".mp4") && it.isFile }?.let { f ->
             // « SatMe_ISS_20261003_135119Z_passage.mp4 »: its satellite and its time.
             val p = ref.removeSuffix(".mp4").split('_')
@@ -110,6 +114,33 @@ class SourcesSitePc(
         val passes = if (catnum > 0) src.passes(catnum, v.debutMs - 3 * 3_600_000L, v.debutMs + 3_600_000L) else emptyList()
         val planches = planche.planches().filter { m -> m.evenement?.let { e -> MetaSitePc.videoDuPassage(v, e.satNom, e.debutMs, e.finMs) } == true }.map { "planche:" + it.id }
         MetaSitePc.video(o, v, catnum, passes, traces(), planches)
+    }
+
+    /**
+     * An SSDV picture by its key: as it stands now (missing blocks grey, JPEG)
+     * with its words ([MetaSitePc.ssdv]); a finished one no longer in memory
+     * from its saved JPEG.
+     */
+    private fun contenuSsdv(ref: String): SitePc.Contenu? {
+        if (!fr.f4ioz.satcombo.telemesure.AssemblageSsdv.idValide(ref)) return null
+        val ph = ssdv?.photo(ref)
+        if (ph == null || ph.essai) {
+            val f = dossierSsdv?.let { File(it, "$ref.jpg") }?.takeIf { it.isFile } ?: return null
+            return SitePc.Contenu(f.readBytes(), null, "image/jpeg", JSONObject().put("titre", "SSDV · $ref").put("complete", true).put("station", ici()))
+        }
+        val jpeg = ph.jpeg() ?: return null
+        val (attendus, estime) = ph.totalEstime()
+        val i = MetaSitePc.ImageSsdv(ph.id, ph.satellite, ph.indicatif, ph.numero, ph.debut, ph.miseAJour, ph.recus, attendus, estime,
+            if (estime) maxOf(0, attendus - ph.recus) else ph.manquants.size, ph.complete, ph.largeur, ph.hauteur,
+            ph.passages.map { MetaSitePc.PartSsdv(it.debut, it.fin, it.paquets, it.source) })
+        val o = JSONObject().put("titre", listOf(ph.satellite.ifBlank { ph.indicatif }, "image " + ph.numero).joinToString(" · ") +
+            if (ph.complete) "" else " (" + ph.recus + "/" + (if (estime) "≈" else "") + attendus + " paquets)").put("station", ici())
+        runCatching {
+            val catnum = src.catnumDe(ph.satellite)
+            val passes = if (catnum > 0) src.passes(catnum, ph.debut - 3 * 3_600_000L, ph.miseAJour + 3_600_000L) else emptyList()
+            MetaSitePc.ssdv(o, i, catnum, passes, traces())
+        }.onFailure { MetaSitePc.ssdv(o, i, 0, emptyList(), emptyList()) }
+        return SitePc.Contenu(jpeg, null, "image/jpeg", o)
     }
 
     private fun metaSstv(s: SstvMeta.SstvShot): JSONObject {

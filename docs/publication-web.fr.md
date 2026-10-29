@@ -83,7 +83,7 @@ que vous ne connaissez pas.**
 
 ### Les médias : `multipart/form-data`
 
-Les types `sstv-image`, `planche`, `rapport`, `qso`, `journal-video` (et les
+Les types `sstv-image`, `ssdv-image`, `planche`, `rapport`, `qso`, `journal-video` (et les
 images du direct) arrivent comme un formulaire HTML d'envoi de fichier, trois
 champs dans cet ordre :
 
@@ -178,6 +178,38 @@ numéro de la diapo a été estimé d'après l'horaire).
 `passages[]` : `{"id": "25544-20261003T1349Z", "aos": "…", "los": "…", "elMax": 62.4, "images": 5, "diapos": [3, 4],
 "autopilote": true, "campagne": "ARISS série 34", "video": "journal:<fichier>.mp4"}`.
 
+`ssdv-image` (une image SSDV : les paquets numérotés d'un JPEG, reçus en
+un passage ou plusieurs — SO-127 et d'autres satellites) :
+
+| Champ | Type | Exemple | Sens |
+|---|---|---|---|
+| `satellite`, `catnum` | texte, nombre | `"HADES-SA"`, `68446` | le satellite entendu, son numéro NORAD |
+| `utc`, `premier` | texte | `"2026-10-30T09:12:04Z"` | son premier paquet reçu (les deux identiques) |
+| `dernier` | texte | | son dernier paquet reçu jusqu'ici |
+| `image` | nombre | `17` | le numéro de l'image à bord (0–255) |
+| `indicatif` | texte | `"Q0SAT"` | le champ indicatif SSDV, tel que décodé (certains satellites y mettent des octets fixes) |
+| `paquetsRecus` | nombre | `38` | paquets reçus |
+| `paquetsAttendus` | nombre | `40` | paquets de l'image |
+| `attendusEstime` | booléen | `true` | `paquetsAttendus` est une estimation (le dernier paquet n'est pas encore arrivé) |
+| `manquants` | nombre | `2` | paquets manquants |
+| `complete` | booléen | `false` | tous les paquets reçus |
+| `largeur`, `hauteur` | nombre | `320`, `240` | pixels |
+| `passages` | liste | voir dessous | chaque passage (ou enregistrement, ou import) qui a apporté des paquets, le plus ancien d'abord |
+| `autopilote` | booléen | `true` | au moins un de ces passages reçu par le pilote automatique |
+| `campagne` | texte | `"SO-127 octobre"` | la campagne du pilote automatique (la dernière) |
+
+`passages[]` : `{"id": "68446-20261030T0910Z", "aos": "…", "los": "…", "elMax": 48.2, "paquets": 21,
+"premier": "…", "dernier": "…", "source": "radio", "autopilote": true, "campagne": "SO-127 octobre"}`
+(`id`, `aos`, `los`, `elMax` quand le passage est connu ; `source` : `radio`,
+ou l'enregistrement ou le fichier d'où les paquets ont été lus).
+
+**Une image SSDV grandit** : les blocs manquants sont gris dans le JPEG
+envoyé. Quand d'autres paquets arrivent (plus tard dans le passage, ou à un
+autre passage), SatMe-PC la renvoie avec **la même `cle`** (`"ssdv:<clé>"`),
+une minute après son dernier paquet ou dès qu'elle est complète — en
+Automatique, et en Sur clic une fois que vous l'avez envoyée à la main.
+Remplacez la version précédente.
+
 `rapport` : `planche` (la clé de la planche), `satellite`, `catnum`,
 `evenementId`, `evenementGenre`, `campagne`, `campagneId`, `premiere`,
 `derniere`, comme plus haut.
@@ -229,6 +261,7 @@ Content-Type: image/png
 |---|---|---|---|
 | `ping` | JSON | — | par **Tester** |
 | `sstv-image` | multipart | PNG | une image SSTV de la galerie (sur clic, ou chaque image reçue en direct en Automatique) |
+| `ssdv-image` | multipart | JPEG | une image SSDV telle qu'elle est (sur clic, ou en Automatique), renvoyée quand d'autres paquets arrivent (même `cle`) |
 | `planche` | multipart | JPEG (1600 px) | une planche ; en Automatique, celles qui ont des images, 2 min après la dernière image reçue |
 | `rapport` | multipart | PDF | le rapport d'événement d'une planche |
 | `qso` | multipart | ADIF (`.adi`, un enregistrement) | un contact du carnet ; en Automatique, chaque contact ajouté |

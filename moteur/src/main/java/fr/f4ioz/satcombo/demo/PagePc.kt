@@ -2270,7 +2270,15 @@ ${rail()}
   <div class="col3" data-pli-col="c3" data-pli-nom="Fréquences, poste et rotor">
     <div class="carte" data-pli="frequences" data-pli-compact data-pli-nom="Fréquences (Doppler)">
       <div class="t">Fréquences (Doppler)</div>
-      <select id="emetteur" style="width:100%"></select>
+      <select id="emetteur" style="width:100%" title="Les émetteurs actifs du satellite (SatNOGS DB), quel que soit leur mode, et « Autre fréquence… » pour en taper une"></select>
+      <div class="ligne" id="perso-l" hidden style="flex-wrap:wrap;gap:4px">
+        <span class="petit">Descente</span><input id="perso-dl" placeholder="436,875" style="width:90px" title="La fréquence du satellite (sans Doppler), en MHz">
+        <span class="petit">Montée</span><input id="perso-ul" placeholder="facultative" style="width:90px" title="Facultative, en MHz : SatMe n'émet jamais de lui-même">
+        <select id="perso-mode" title="Le mode du poste : USB-D pour les données en BLU (SSDV, FSK lente), FM-D pour le packet 1200/9600">
+          <option>USB</option><option>USB-D</option><option>LSB</option><option>LSB-D</option><option>FM</option><option>FM-D</option><option>CW</option></select>
+        <button onclick="persoOk()">OK</button><button class="discret" onclick="persoEfface()" title="Oublier cette fréquence pour ce satellite">Oublier</button>
+        <span class="petit" id="perso-msg"></span>
+      </div>
       <div class="paire" style="margin-top:10px">
         <span>RX <span class="val cyan" id="dl">—</span></span>
         <span>TX <span class="val ambre" id="ul">—</span></span>
@@ -2716,6 +2724,11 @@ ${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
     </div>
     </div>
     <div class="st-pan" id="sx-p-img">
+    <div class="carte" id="sx-ssdv-c" hidden>
+      <div class="t">Images SSDV <span class="petit">— les paquets numériques (SO-127, trames 1200–9600 bit/s), image remplie au fil des paquets, passage après passage</span>
+        <button class="discret" style="margin-left:auto" onclick="vue('tlm'); const b = document.querySelector('#v-tlm .st-nav button[data-p=tl-p-ssdv]'); if (b) b.click()">Toutes ›</button></div>
+      <div id="sx-ssdv" class="ts-galerie" style="max-height:none"></div>
+    </div>
     <div class="carte" id="cl-serie" hidden>
       <div class="t">Diapos de la série <span class="petit" id="cl-nom"></span></div>
       <div class="petit" id="cl-fenetre"></div>
@@ -2881,7 +2894,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
         <label for="ap-nom">Nom</label><input id="ap-nom" maxlength="60" placeholder="ARISS SSTV Series 34">
         <label for="ap-sat">Satellite</label><input id="ap-sat" list="tous" placeholder="ISS, UMKA-1…" onchange="apSatChange()">
         <label for="ap-emetteur">Émetteur</label><select id="ap-emetteur" onchange="apEmetteurChange()"><option value="">Fréquence personnalisée…</option></select>
-        <label for="ap-freq" class="ap-perso">Fréquence</label><div class="ligne ap-perso"><input id="ap-freq" placeholder="437,550" title="MHz (le Doppler est suivi)"><span class="petit">MHz</span><select id="ap-modulation" style="max-width:76px"><option>FM</option><option>NFM</option></select><input id="ap-largeur" type="number" min="3" max="250" value="15" style="max-width:62px" title="Largeur de bande (kHz)"><span class="petit">kHz</span></div>
+        <label for="ap-freq" class="ap-perso">Fréquence</label><div class="ligne ap-perso"><input id="ap-freq" placeholder="437,550" title="MHz (le Doppler est suivi)"><span class="petit">MHz</span><select id="ap-modulation" style="max-width:76px"><option>FM</option><option>NFM</option><option>USB</option><option>USB-D</option></select><input id="ap-largeur" type="number" min="3" max="250" value="15" style="max-width:62px" title="Largeur de bande (kHz)"><span class="petit">kHz</span></div>
         <label for="ap-mode">Mode SSTV</label><select id="ap-mode"></select>
         <label for="ap-de">Début</label><div class="ligne"><input id="ap-de" type="datetime-local"><label class="petit" style="flex:none"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> horaire à confirmer</label></div>
         <label for="ap-a">Fin</label><input id="ap-a" type="datetime-local">
@@ -2903,6 +2916,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
         <label><input type="checkbox" id="ap-enreg" checked> Enregistrer le son</label>
         <label><input type="checkbox" id="ap-parquer"> Parquer le rotor après</label>
         <label><input type="checkbox" id="ap-sstv" checked> Décodeur SSTV prêt</label>
+        <label title="SO-127 (HADES-SA) et la FSK étroite reçue en BLU : les paquets SSDV du passage décodés depuis le même son (le poste en USB-D, ou le SDR), les images avec les autres (Télémesure › Images SSDV). Réception seulement"><input type="checkbox" id="ap-ssdv"> Décodeur SSDV en BLU (SO-127)</label>
         <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
       </div>
       <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
@@ -4307,7 +4321,7 @@ ${Ft8EmissionJs.HTML}
 </div>
 <div class="vue" id="v-tlm" hidden>
 <div class="st tl-st" data-st="tlm">
-  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
+  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-blu" title="SSDV et télémesure en FSK étroite reçue en BLU : SO-127 (HADES-SA), « GENESIS FSK » 800 / 200 bit/s">${IconesPc.svg("radio", "st-ico")}<span>SSDV en BLU</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
   <div class="st-pan" id="tl-p-paq">
 <div class="grille2">
   <div class="carte">
@@ -4335,10 +4349,35 @@ ${Ft8EmissionJs.HTML}
   </div>
 </div>
   </div>
+  <div class="st-pan" id="tl-p-blu">
+<div class="grille2">
+  <div class="carte">
+    <div class="t">SSDV en BLU · GENESIS FSK <span id="bl-pastille" class="pastille coupe">coupé</span></div>
+    <div class="petit aide">SO-127 (HADES-SA) et les satellites GENESIS d’AMSAT-EA émettent en FSK directe sur la porteuse : 800 bit/s avec 1600 Hz entre les deux tons (ou 200 bit/s, 1125 Hz). Un récepteur FM les perd ; en BLU (USB) ce sont deux tons dans le son. SatMe les cherche dans toute la bande audio (le reste du Doppler suivi), les démodule (deux filtres adaptés, horloge), lit les trames GENESIS (synchro 0xBF35, CRC-16, désembrouilleur x¹⁷ + x¹² + 1) et cherche les paquets SSDV dans les bits, quel que soit leur emballage. Les images rejoignent celles du décodeur de paquets (onglet Images SSDV), passage après passage.</div>
+    <div class="petit aide">Le poste : IC-9700 en USB-D sur la descente (SatMe le règle ainsi pour un émetteur GENESIS, SSDV ou FSK lente), le son par sa carte USB (onglet Son). Ou le récepteur SDR en USB. Réception seulement : SatMe n’émet jamais vers le satellite.</div>
+    <label style="display:block"><input type="checkbox" id="bl-on" onchange="tlmPost('genesis?on=' + (this.checked ? 1 : 0))"> <b>Décoder la FSK étroite en BLU</b></label>
+    <div class="ligne"><span class="petit">Son</span><select id="bl-source" style="flex:none" onchange="tlmPost('genesis/source?v=' + this.value)"><option value="carte">carte son (onglet Son : le poste en USB-D)</option><option value="sdr">récepteur SDR (en USB)</option></select></div>
+    <div class="ligne"><span class="petit">Débit</span><select id="bl-profil" style="flex:none" onchange="tlmPost('genesis/profil?v=' + this.value)"><option value="">selon l’émetteur</option><option value="800">800 bit/s · 1600 Hz</option><option value="200">200 bit/s · 1125 Hz</option></select>
+      <label class="petit" title="Les bits démodulés de chaque passage gardés dans telemesure/genesis (.bits, et les trames en .jsonl) : pour relire plus tard, ou étudier un format"><input type="checkbox" id="bl-capture" onchange="tlmPost('genesis/capture?on=' + (this.checked ? 1 : 0))"> capturer les bits</label></div>
+    <div class="petit" id="bl-em"></div>
+    <div class="paire" id="bl-etat" style="margin-top:6px"></div>
+    <div class="ligne"><button id="bl-essai" onclick="tlmPost('genesis/essai')" title="Un signal fabriqué (une mire en paquets SSDV, bruit, dérive de fréquence) passé dans un décodeur à part ; rien n’est gardé">Essai</button><button class="discret" onclick="tlmPost('genesis/vide')">Effacer</button></div>
+    <div class="ligne"><span class="petit">Relire</span><select id="bl-relire" style="flex:1;min-width:160px" title="Un enregistrement de l’onglet Son (le son du poste en USB pendant un passage) ou une capture de bits"></select><button onclick="blRelit()">Relire</button>
+      <input type="file" id="bl-fichier" hidden accept=".wav,.bits" onchange="blFichier(this)"><button class="discret" onclick="g('bl-fichier').click()" title="Un WAV du son en USB (d’un autre logiciel aussi : PCM ou flottant, mono ou stéréo), ou un fichier .bits">⤒ Fichier…</button></div>
+    <div class="petit" id="bl-relu"></div>
+    <div id="bl-derniere" class="tp-derniere"></div>
+  </div>
+  <div class="carte">
+    <div class="t">Trames GENESIS <label class="petit" style="margin-left:auto;font-weight:400"><input type="checkbox" id="bl-brut" onchange="tlmBrutRegle(this.checked)"> octets bruts</label></div>
+    <div id="bl-trames" class="tlm-trames"></div>
+  </div>
+</div>
+  </div>
   <div class="st-pan" id="tl-p-ssdv">
   <div class="carte">
     <div class="t">Images SSDV <span class="petit" id="ts-n"></span></div>
     <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Une image renvoyée à un passage suivant (même indicatif, même numéro, dans les 3 jours) est complétée avec ses nouveaux paquets : la bande sous l’image montre quel passage a apporté quels paquets. Les paquets sont gardés dans telemesure/ssdv/paquets (l’image en cours survit à un redémarrage) ; une image complète rejoint la galerie (telemesure/ssdv).</div>
+    <div class="petit aide">D’où viennent les paquets, selon le satellite (la chaîne se choisit d’après son émetteur dans SatNOGS DB) : <b>SO-127 (HADES-SA)</b>, FSK étroite reçue en BLU, poste en USB-D (onglet <i>SSDV en BLU</i>) ; <b>IO-86 (LAPAN-A2)</b>, AFSK 1200 par son répéteur FM (le décodeur APRS de la carte son, poste en FM) ; les cubesats en <b>FSK/GMSK 1200–9600 bit/s</b> (onglet <i>Paquets</i>, récepteur SDR). Les satellites <b>Geoscan</b> (Geoscan-2/4/5, 239Alferov) n’envoient pas de SSDV mais des morceaux de JPEG dans leurs trames GFSK 9600 : lues par le même décodeur de paquets, leurs images s’affichent ici au fil des morceaux. Pas encore lu : ASRTU-1 (BPSK 9600 codé CCSDS). Rien n’est envoyé sur Internet, sauf par la Publication web si vous la réglez (🌐).</div>
     <div class="ligne"><input type="file" id="ts-fichier" hidden onchange="tsImporte(this)"><button class="discret" onclick="g('ts-fichier').click()" title="Des paquets SSDV d’un passage manqué : paquets bruts à la suite, fichier KISS, ou journal de trames de SatMe (telemesure/paquets/*.jsonl). Les doublons sont écartés.">⤒ Importer des paquets…</button><span class="petit" id="ts-imp"></span></div>
     <div id="ts-galerie" class="ts-galerie"></div>
   </div>
@@ -6242,11 +6281,12 @@ function dessine() {
   const cle = JSON.stringify(E.emetteurs.map(t => t.desc)) + (E.suivi ? E.suivi.catnum : '');
   if (cle !== dernierEmetteurs) {
     dernierEmetteurs = cle;
-    g('emetteur').innerHTML = E.emetteurs.length ? E.emetteurs.map((t, i) =>
-      '<option value="' + i + '">' + (t.desc + (t.mode ? ' · ' + t.mode : '')).replace(/</g, '&lt;') + '</option>').join('')
-      : '<option>' + (E.suivi ? 'aucun émetteur actif connu' : '—') + '</option>';
+    g('emetteur').innerHTML = (E.emetteurs.length ? E.emetteurs.map((t, i) =>
+      '<option value="' + i + '">' + emLibelle(t).replace(/</g, '&lt;') + '</option>').join('')
+      : '<option value="0">' + (E.suivi ? 'aucun émetteur actif connu' : '—') + '</option>') +
+      (E.suivi ? '<option value="perso">Autre fréquence…</option>' : '');
   }
-  if (document.activeElement !== g('emetteur')) g('emetteur').value = String(E.emetteur);
+  if (document.activeElement !== g('emetteur') && g('emetteur').value !== 'perso') g('emetteur').value = String(E.emetteur);
   const t = E.emetteurs[E.emetteur];
   g('repos-ligne').style.display = t && t.lineaire ? '' : 'none';
   // No satellite's frequencies: the rig's dial as the CAT reads it (terrestrial SSB, the wheel tunes it).
@@ -6983,7 +7023,38 @@ function rotConnecte() {
   post('api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
        '&port=' + enc(g('rot-port').value) + '&baud=' + g('rot-baud').value + '&hote=' + enc(v('rot-hote')) + '&tcp=' + enc(v('rot-tcpport')));
 }
-g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
+g('emetteur').onchange = () => {
+  if (g('emetteur').value === 'perso') { persoOuvre(); return; }
+  g('perso-l').hidden = true;
+  post('api/emetteur?i=' + g('emetteur').value);
+};
+/** One transmitter as the list shows it: its name, SatNOGS' mode, its downlink, the rig's mode. */
+function emLibelle(t) {
+  const f = t.dlBas != null ? (t.dlHaut != null && t.dlHaut !== t.dlBas ? mhzVirgule(t.dlBas) + '–' + mhzVirgule(t.dlHaut) : mhzVirgule(t.dlBas)) + ' MHz' : '';
+  const bd = t.baud ? ' ' + Math.round(t.baud) + ' bd' : '';
+  return (t.perso ? 'Autre fréquence' : t.desc) + (t.mode && !t.perso ? ' · ' + t.mode + bd : '') + (f ? ' · ' + f : '') + (t.poste ? ' (' + t.poste + ')' : '');
+}
+function mhzVirgule(hz) { return (hz / 1e6).toFixed(hz % 1000 === 0 ? 3 : 4).replace('.', ','); }
+/** « Autre fréquence… »: the form, filled with the one typed before for this satellite. */
+function persoOuvre() {
+  const p = (E.emetteurs || []).find(x => x.perso);
+  g('perso-l').hidden = false;
+  if (p) { g('perso-dl').value = mhzVirgule(p.dlBas); g('perso-ul').value = p.ulBas ? mhzVirgule(p.ulBas) : ''; g('perso-mode').value = p.mode || 'USB'; }
+  txt('perso-msg', 'corrigée du Doppler comme les autres, gardée pour ce satellite');
+  g('perso-dl').focus();
+}
+async function persoOk() {
+  const q = 'dl=' + encodeURIComponent(g('perso-dl').value) + '&ul=' + encodeURIComponent(g('perso-ul').value) + '&mode=' + encodeURIComponent(g('perso-mode').value);
+  try {
+    const r = await (await fetch('api/emetteur/perso?' + q, { method: 'POST' })).json();
+    if (r.ok === false) { txt('perso-msg', r.erreur || 'refusé'); return; }
+    g('perso-l').hidden = true; dernierEmetteurs = '';
+  } catch (x) { txt('perso-msg', 'pas de réponse'); }
+}
+async function persoEfface() {
+  try { await fetch('api/emetteur/perso?efface=1', { method: 'POST' }); } catch (x) {}
+  g('perso-l').hidden = true; dernierEmetteurs = '';
+}
 // ------------------------------------------------------------------ tabs
 function vue(n) {
   setTimeout(majFlux, 0);
@@ -12348,7 +12419,9 @@ let TLM = null, tlmBrut = false;
 const tlmVu = {};
 async function tlmTic(force) {
   const q = !g('v-qo100').hidden && !g('tq-p-balise').hidden, t = !g('v-tlm').hidden;
-  if (!force && !q && !t) return;
+  // The SSTV pictures' panel shows the SSDV ones under way too.
+  const sx = g('sx-p-img') && !g('sx-p-img').hidden && g('sx-p-img').offsetParent !== null;
+  if (!force && !q && !t && !sx) return;
   let j = null;
   try { j = await (await fetch('api/telemesure')).json(); } catch (x) {}
   if (j) TLM = j;
@@ -12429,13 +12502,21 @@ function tlmRend() {
   const ll = tlmListe(l, es, 'funcube');
   tlmPose('tl-trames', ll.slice(0, 12).map((t, i) => tlmTrameHtml(t, i === 0)).join('') || '<div class="petit">Aucune trame. Accorde le récepteur SDR en BLU sur la descente de télémesure du satellite (AO-73 : 145,935 MHz) et coche la case.</div>');
   if (j.paquets) tpRend(j.paquets);
+  if (j.genesis) blRend(j.genesis, j.paquets);
+  if (j.paquets) {
+    // The SSTV area: the SSDV pictures of the last three days, under way or finished.
+    const im = (j.paquets.images || []).filter(i => !i.essai && Date.now() - i.t < 3 * 86400000).slice(0, 6);
+    g('sx-ssdv-c').hidden = !im.length;
+    tlmPose('sx-ssdv', im.map(tsImageHtml).join(''));
+  }
 }
 // ---- 1200–9600 bit/s packets (FSK, GMSK, G3RUH), SSDV pictures, SiDS sharing (receive only; sharing off unless ticked)
 const tpMhz = f => f ? (f / 1e6).toFixed(4).replace('.', ',') + ' MHz' : '—';
 function tpTrameHtml(t) {
   const a = t.ax25;
   let b = t.essai ? '<span class="tlm-b essai">essai</span>' : '';
-  b += a ? '<span class="tlm-b ax">AX.25</span>' : '<span class="tlm-b ok">HDLC</span>';
+  b += a ? '<span class="tlm-b ax">AX.25</span>' : '<span class="tlm-b ok">' + esc(t.format || 'HDLC') + '</span>';
+  if (t.geoscan) b += '<span class="tlm-b ssdv">image</span>';
   if (t.ssdv) b += '<span class="tlm-b ssdv">SSDV</span>';
   const qui = a ? '<b>' + esc(a.de) + ' › ' + esc(a.vers) + (a.relais && a.relais.length ? ',' + esc(a.relais.join(',')) : '') + '</b>' : '';
   const f = t.f ? '<span title="Fréquence reçue (Doppler compris) ; entre parenthèses, celle d’émission, le Doppler retiré">' + tpMhz(t.f) + (t.fc ? ' (' + tpMhz(t.fc) + ')' : '') + '</span>' : '';
@@ -12445,6 +12526,66 @@ function tpTrameHtml(t) {
   else if (tlmBrut || !a) h += '<pre class="tlm-pre">' + esc(String(t.hex || '').replace(/(..)/g, m => m + ' ').replace(/((?:.. ){32})/g, m => m + '\n')) + '</pre>';
   else h += '<pre class="tlm-pre">' + esc(a.texte) + '</pre>';
   return h + '</div>';
+}
+// ---- SSDV in USB: GENESIS FSK (SO-127), from the card's or the SDR's audio (receive only)
+function blTrameHtml(t) {
+  const b = (t.essai ? '<span class="tlm-b essai">essai</span>' : '') + '<span class="tlm-b ok">CRC juste</span>';
+  return '<div class="tlm-t"><div class="tlm-h"><b>' + hm(t.t, true) + '</b>' + b + '<b>' + esc(t.nom) + '</b><span>' + esc(t.de) + '</span>' +
+    (t.sat ? '<span>' + esc(t.sat) + '</span>' : '') + '<span style="margin-left:auto">' + t.n + ' octets</span></div>' +
+    '<pre class="tlm-pre">' + esc(tlmBrut ? String(t.hex || '').replace(/(..)/g, m => m + ' ').replace(/((?:.. ){32})/g, m => m + '\n') : t.texte) + '</pre></div>';
+}
+let blRelusVu = '';
+function blRend(b, p) {
+  const e = b, recent = e.derniereMs && Date.now() - e.derniereMs < 60000, marche = b.option || b.pourPassage;
+  if (document.activeElement !== g('bl-on')) g('bl-on').checked = !!b.option;
+  if (document.activeElement !== g('bl-source')) g('bl-source').value = b.source || 'carte';
+  if (document.activeElement !== g('bl-profil')) g('bl-profil').value = b.choisi || '';
+  g('bl-capture').checked = !!b.captureOption; g('bl-essai').disabled = !!b.essaiEnCours; g('bl-brut').checked = tlmBrut;
+  const pa = g('bl-pastille'), pt = !marche ? 'coupé' : recent ? 'paquets reçus' : e.presence ? 'deux tons vus' : e.bits ? 'à l’écoute' : 'en attente du son';
+  if (pa.textContent !== pt) pa.textContent = pt;
+  pa.className = 'pastille ' + (marche ? 'marche' : 'coupe');
+  const em = b.emetteur;
+  txt('bl-em', b.essaiEnCours ? 'Essai en cours…' : (em ? 'Émetteur du satellite suivi : ' + em.description + '. ' : 'Aucun émetteur GENESIS / SSDV en BLU connu pour le satellite suivi. ') +
+    'Décodage : ' + b.profilNom + (b.pourPassage ? ' — allumé par le pilote automatique pour ce passage' : '') + '.' + (b.capture ? ' Capture : ' + b.capture : ''));
+  const it = (v, l, c) => '<span><span class="val' + (c ? ' ' + c : '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
+  const es = b.essai;
+  const v = marche && e.bits ? e : es;
+  tlmPose('bl-etat', v ? it(v.centreHz + ' Hz', 'milieu des tons', v.presence ? 'cyan' : '') + it(v.snrDb + ' dB', 'au-dessus du bruit') + it(v.syncs, 'synchros') +
+    it(v.trames, 'trames') + it(v.crcFaux, 'CRC faux') + it(v.ssdv, 'paquets SSDV', v.ssdv ? 'cyan' : '') : '');
+  const l = (b.liste || []).concat(es && es.liste ? es.liste : []).sort((x, y) => y.t - x.t);
+  tlmPose('bl-trames', l.slice(0, 30).map(blTrameHtml).join('') ||
+    '<div class="petit">Aucune trame. Suis SO-127 (HADES-SA, 436,875 MHz) : SatMe met le poste en USB-D sur sa descente, Doppler corrigé. Démarre la carte son du poste (onglet Son), coche la case. Sans satellite : « Essai ».</div>');
+  // The pictures under way, the latest first (the same as the Images SSDV panel).
+  const im = (p && p.images || []).slice(0, 2);
+  tlmPose('bl-derniere', im.map(tsImageHtml).join(''));
+  // The recordings and captures to read again.
+  const cle = JSON.stringify([b.captures, b.enregistrements]);
+  if (cle !== blRelusVu) {
+    blRelusVu = cle;
+    const sel = g('bl-relire'), avant = sel.value;
+    sel.innerHTML = (b.enregistrements || []).map(f => '<option value="' + escA(f) + '">' + esc(f) + '</option>').join('') +
+      (b.captures || []).map(c => '<option value="' + escA(c.f) + '">' + esc(c.f) + ' (' + Math.round(c.octets / 1024) + ' ko de bits)</option>').join('') ||
+      '<option value="">aucun enregistrement</option>';
+    if (avant) sel.value = avant;
+  }
+}
+async function blRelit() {
+  const f = g('bl-relire').value; if (!f) return;
+  txt('bl-relu', 'Lecture de ' + f + '…');
+  const j = await tlmPost('genesis/relit?f=' + encodeURIComponent(f));
+  txt('bl-relu', blRelu(j));
+}
+function blRelu(j) {
+  if (!j || j.ok === false) return 'Échec' + (j && j.erreur ? ' : ' + j.erreur : '');
+  return (j.secondes != null ? j.secondes + ' s lues (' + j.profil + ') · ' + j.syncs + ' synchros · ' : '') + j.trames + ' trame' + (j.trames > 1 ? 's' : '') + ' · ' + j.nouveaux + ' paquet' + (j.nouveaux > 1 ? 's' : '') + ' SSDV nouveaux';
+}
+async function blFichier(inp) {
+  const f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;
+  txt('bl-relu', 'Envoi de ' + f.name + '…');
+  let j = null;
+  try { j = await (await fetch('api/telemesure/genesis/fichier?nom=' + encodeURIComponent(f.name), { method: 'POST', body: f })).json(); } catch (x) {}
+  txt('bl-relu', blRelu(j));
+  tlmTic(true);
 }
 function tpRend(p) {
   const e = p.etat || {}, recent = e.derniereMs && Date.now() - e.derniereMs < 60000;
@@ -12469,6 +12610,8 @@ function tpRend(p) {
   // The gallery: pictures being put together first (over one pass or several), then those saved.
   const vus = {}, l = [];
   (p.images || []).forEach(i => { vus[i.fichier] = 1; l.push(tsImageHtml(i)); });
+  // The Geoscan satellites' pictures: JPEG chunks (not SSDV), shown as far as they came.
+  (p.geoscan || []).forEach(i => l.push(tsGeoscanHtml(i)));
   (p.sauvees || []).forEach(s2 => { if (!vus[s2.f]) l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?f=' + encodeURIComponent(s2.f) + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?f=' +
     encodeURIComponent(s2.f) + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span><span>' + esc(s2.f) + '</span></div></div>'); });
   txt('ts-n', l.length ? '— ' + l.length : '');
@@ -12490,7 +12633,8 @@ function tsImageHtml(i) {
     (i.bande || []).map(r => '<span style="width:' + (r[1] * 100 / t).toFixed(3) + '%;background:' + (r[2] < 0 ? 'transparent' : TS_COUL[r[2] % TS_COUL.length]) + '"></span>').join('') + '</div>';
   const pass = '<div class="ts-pass petit">' + ps.map((s, k) => '<span title="' + escA((s.sat ? s.sat + ' · ' : '') + 'de ' + hm(s.debut) + ' à ' + hm(s.fin)) + '"><i style="background:' +
     TS_COUL[k % TS_COUL.length] + '"></i>' + (s.source === 'radio' ? 'Passage ' + (k + 1) : esc(s.source)) + ' · ' + jourHeure(s.debut) + ' · ' + s.n + ' paq.</span>').join('') + '</div>';
-  const act = '<div class="ts-act"><a class="bouton-lien" href="' + u.replace('ssdv.jpg', 'ssdv.png') + '&dl=1" download title="L’image telle qu’elle est (blocs manquants en gris), en PNG">⤓ PNG</a>' +
+  // 🌐 to the owner's site (« Publication web »): sent again by itself as more packets come, once sent.
+  const act = '<div class="ts-act">' + (i.essai || typeof siteBouton !== 'function' ? '' : siteBouton('ssdv-image', i.cle)) + '<a class="bouton-lien" href="' + u.replace('ssdv.jpg', 'ssdv.png') + '&dl=1" download title="L’image telle qu’elle est (blocs manquants en gris), en PNG">⤓ PNG</a>' +
     '<a class="bouton-lien" href="' + u + '&dl=1" download title="L’image telle qu’elle est, en JPEG">⤓ JPEG</a>' +
     (i.complete ? '' : '<button class="discret" onclick="tsAbandonne(' + escA(JSON.stringify(i.cle)) + ')" title="Oublier cette image en cours et ses paquets">Abandonner</button>') + '</div>';
   return '<div class="ts-img"><a href="' + u + '&v=' + i.recus + '" target="_blank"><img loading="lazy" alt="" src="' + u + '&v=' + i.recus + '"></a>' +
@@ -12499,6 +12643,16 @@ function tsImageHtml(i) {
     (i.satellite ? '<span>' + esc(i.satellite) + '</span>' : '') + '<span>' + i.largeur + '×' + i.hauteur + '</span></div>' +
     '<div class="petit" style="margin-top:3px">' + tsAvance(i) + (i.manquants && !i.complete ? ' · ' + i.manquants + ' manquant' + (i.manquants > 1 ? 's' : '') : '') +
     (ps.length > 1 ? ' · ' + ps.length + ' passages' : '') + '</div>' + bande + pass + act + '</div>';
+}
+function tsGeoscanHtml(i) {
+  const u = 'api/telemesure/ssdv.jpg?geo=' + encodeURIComponent(i.cle) + '&v=' + i.morceaux;
+  return '<div class="ts-img">' + (i.debut ? '<a href="' + u + '" target="_blank"><img loading="lazy" alt="" src="' + u + '"></a>' :
+    '<div class="petit" style="padding:20px 6px">Le début du fichier (FF D8) n’est pas encore arrivé : l’image s’affichera avec lui.</div>') +
+    '<div class="tlm-h"><span class="tlm-b ssdv">Geoscan</span>' + (i.essai ? '<span class="tlm-b essai">essai</span>' : '') +
+    (i.complete ? '<span class="tlm-b ok">complète</span>' : '<span class="tlm-b encours">en cours</span>') + '<b>' + esc(i.satellite) + '</b>' +
+    (i.fichier >= 0 ? '<span>fichier ' + i.fichier + '</span>' : '') + '</div><div class="petit" style="margin-top:3px">' + i.morceaux + ' morceaux · ' +
+    Math.round(i.octets / 1024 * 10) / 10 + ' ko' + (i.manquants > 0 ? ' · ' + i.manquants + ' octets manquants' : '') + ' · ' + jourHeure(i.t) + '</div>' +
+    (i.debut ? '<div class="ts-act"><a class="bouton-lien" href="' + u + '&dl=1" download>⤓ JPEG</a></div>' : '') + '</div>';
 }
 async function tsAbandonne(cle) {
   if (!confirm('Abandonner cette image en cours ? Ses paquets reçus sont effacés.')) return;
@@ -15008,6 +15162,8 @@ async function apEmetteurs(choisi) {
   g('ap-emetteur').innerHTML = l.map(t => '<option value="' + esc(t.description).replace(/"/g, '&quot;') + '">' + esc(t.description) + ' — ' + apFreq(t.bas) + ' MHz ' + esc(t.mode) + '</option>').join('') +
     '<option value="">Fréquence personnalisée…</option>';
   g('ap-emetteur').value = choisi && l.some(t => t.description === choisi) ? choisi : (v('ap-freq') || !l.length ? '' : l[0].description);
+  // A new campaign on an SSDV-in-USB satellite (SO-127): its decoder ticked, SSTV's not.
+  if (!apEdit && !choisi && l.some(t => /GENESIS|^SSDV$/i.test(t.mode))) { g('ap-ssdv').checked = true; g('ap-sstv').checked = false; }
   apEmetteurChange();
 }
 function apEmetteurChange() { document.querySelectorAll('#ap-form .ap-perso').forEach(x => x.style.display = g('ap-emetteur').value ? 'none' : ''); }
@@ -15023,7 +15179,7 @@ function apNouvelle() {
   g('ap-el').value = 10; g('ap-avant').value = 2; g('ap-largeur').value = 15; g('ap-mode').value = 'Auto'; g('ap-aconf').checked = false; g('ap-profil').value = '';
   g('ap-source').value = 'poste';
   ['ap-poste', 'ap-rotor', 'ap-enreg', 'ap-sstv', 'ap-annonce'].forEach(i => g(i).checked = true);
-  ['ap-cposte', 'ap-crotor', 'ap-parquer'].forEach(i => g(i).checked = false);
+  ['ap-cposte', 'ap-crotor', 'ap-parquer', 'ap-ssdv'].forEach(i => g(i).checked = false);
   apEmisSat = 0; apEmetteurs('');
 }
 async function apEdite(id) {
@@ -15036,7 +15192,7 @@ async function apEdite(id) {
   const h = c.chaine;
   g('ap-profil').value = h.profil; g('ap-source').value = h.source;
   g('ap-poste').checked = h.poste; g('ap-cposte').checked = h.connecterPoste; g('ap-rotor').checked = h.rotor; g('ap-crotor').checked = h.connecterRotor;
-  g('ap-enreg').checked = h.enregistrer; g('ap-sstv').checked = h.sstv; g('ap-annonce').checked = h.annonce; g('ap-parquer').checked = h.parquer;
+  g('ap-enreg').checked = h.enregistrer; g('ap-sstv').checked = h.sstv; g('ap-annonce').checked = h.annonce; g('ap-parquer').checked = h.parquer; g('ap-ssdv').checked = !!h.ssdv;
   await apEmetteurs(c.emetteur);
   g('ap-form').scrollIntoView({ block: 'nearest' });
 }
@@ -15050,7 +15206,7 @@ async function apGarde() {
   const q = { id: apEdit, nom: v('ap-nom'), catnum: apEmisSat, sat: v('ap-sat'), emetteur: em, freq: em ? '' : v('ap-freq'), modulation: g('ap-modulation').value,
     largeur: v('ap-largeur'), mode: g('ap-mode').value, de: de, a: a, aconfirmer: b('ap-aconf'), el: v('ap-el'), avant: v('ap-avant'), horaire: v('ap-horaire'),
     lien: v('ap-lien'), notes: v('ap-notes'), profil: g('ap-profil').value, source: g('ap-source').value, poste: b('ap-poste'), cposte: b('ap-cposte'),
-    rotor: b('ap-rotor'), crotor: b('ap-crotor'), enreg: b('ap-enreg'), sstv: b('ap-sstv'), annonce: b('ap-annonce'), parquer: b('ap-parquer') };
+    rotor: b('ap-rotor'), crotor: b('ap-crotor'), enreg: b('ap-enreg'), sstv: b('ap-sstv'), annonce: b('ap-annonce'), parquer: b('ap-parquer'), ssdv: b('ap-ssdv') };
   const j = await post('api/autopilote/campagne?' + Object.keys(q).map(k => k + '=' + enc(q[k])).join('&'));
   if (j && j.ok) { txt('ap-f-etat', 'Campagne enregistrée.'); apEdit = j.campagne.id; txt('ap-f-titre', 'modifier « ' + j.campagne.nom + ' »'); annonce('Campagne SSTV enregistrée'); apVu = ''; apCharge(); }
   else txt('ap-f-etat', (j && j.erreur) || 'Refusé.');

@@ -145,4 +145,28 @@ class MetaSitePcTest {
         assertFalse(o.has("passages")); assertFalse(o.has("evenementId"))
         assertEquals("rapport:p1", o.getString("rapport"))
     }
+
+    @Test fun `an SSDV picture - its packets, its passes, the auto-pilot`() {
+        val so = SatPass("HADES-SA", 68446, aos, los, 48.2, 200.0, 20.0, false, false)
+        val suivant = SatPass("HADES-SA", 68446, aos + 5_700_000L, los + 5_700_000L, 22.0, 250.0, 80.0, false, false)
+        val tr = CampagneSstv.Trace("c1", "SO-127 octobre", 68446, "HADES-SA", so.aosEpochMs, so.losEpochMs, 48.2, CampagneSstv.Statut.FAIT)
+        val i = MetaSitePc.ImageSsdv("20261030-091204-Q0SAT-17", "HADES-SA", "Q0SAT", 17, aos + 60_000L, suivant.aosEpochMs + 120_000L,
+            38, 40, false, 2, false, 320, 240, listOf(
+                MetaSitePc.PartSsdv(aos + 60_000L, aos + 300_000L, 21, "radio"),
+                MetaSitePc.PartSsdv(suivant.aosEpochMs + 30_000L, suivant.aosEpochMs + 120_000L, 17, "radio")))
+        val o = MetaSitePc.ssdv(JSONObject(), i, 68446, listOf(so, suivant), listOf(tr))
+        assertEquals("HADES-SA", o.getString("satellite")); assertEquals(68446, o.getInt("catnum"))
+        assertEquals(Instant.ofEpochMilli(aos + 60_000L).toString(), o.getString("utc"))
+        assertEquals(o.getString("utc"), o.getString("premier"))
+        assertEquals(17, o.getInt("image")); assertEquals(38, o.getInt("paquetsRecus")); assertEquals(40, o.getInt("paquetsAttendus"))
+        assertEquals(2, o.getInt("manquants")); assertFalse(o.getBoolean("complete")); assertFalse(o.has("attendusEstime"))
+        val ps = o.getJSONArray("passages")
+        assertEquals(2, ps.length())
+        assertEquals(MetaSitePc.idPassage(68446, so.aosEpochMs), ps.getJSONObject(0).getString("id"))
+        assertEquals(Instant.ofEpochMilli(so.losEpochMs).toString(), ps.getJSONObject(0).getString("los"))
+        assertEquals(21, ps.getJSONObject(0).getInt("paquets"))
+        assertTrue(ps.getJSONObject(0).getBoolean("autopilote")); assertEquals("SO-127 octobre", ps.getJSONObject(0).getString("campagne"))
+        assertFalse(ps.getJSONObject(1).has("autopilote"))
+        assertTrue(o.getBoolean("autopilote")); assertEquals("SO-127 octobre", o.getString("campagne"))
+    }
 }
