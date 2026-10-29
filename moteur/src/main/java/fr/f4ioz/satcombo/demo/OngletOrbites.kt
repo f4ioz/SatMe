@@ -34,7 +34,7 @@ object OngletOrbites {
     <div class="ob-fiche" id="ob-fiche" hidden></div>
     <div class="ob-passages" id="ob-passages" hidden></div>
     <button type="button" id="ob-suivre" title="Le satellite choisi devient celui de l'onglet Suivi (Doppler, rotor)">Suivre le satellite choisi</button>
-    <div class="petit aide">Coche pour afficher ; clic sur un nom : le choisir (le globe le suit, la vue Passage montre ses passages). Positions calculées dans ce navigateur (SGP4) avec les éléments orbitaux de la station : rien ne part sur Internet (sauf, si coché, la photo et le résumé des satellites connus, demandés une fois à Wikipédia puis gardés). Glisser pour tourner, molette pour zoomer.</div>
+    <details class="ob-aide petit"><summary title="Aide">?</summary><div class="aide">Coche pour afficher ; clic sur un nom : le choisir (le globe le suit, la vue Passage montre ses passages). Positions calculées dans ce navigateur (SGP4) avec les éléments orbitaux de la station : rien ne part sur Internet (sauf, si coché, la photo et le résumé des satellites connus, demandés une fois à Wikipédia puis gardés). Glisser pour tourner, molette pour zoomer.</div></details>
   </div>
   <div class="ob-scene">
     <canvas id="ob-3d" aria-label="Le globe et les satellites"></canvas>
@@ -79,6 +79,9 @@ object OngletOrbites {
   .ob-liste { min-height:0; display:flex; flex-direction:column; gap:8px; margin:0; }
   .ob-liste .t { margin:0; }
   .ob-sats { overflow:auto; min-height:96px; flex:1 1 0; display:flex; flex-direction:column; gap:2px; }
+  .ob-aide > summary { cursor:pointer; list-style:none; display:inline-block; width:18px; height:18px; line-height:18px; text-align:center; border-radius:50%; border:1px solid currentColor; opacity:.7; }
+  .ob-aide > summary::-webkit-details-marker { display:none; }
+  .ob-aide[open] > summary { opacity:1; }
   .ob-sat { display:grid; grid-template-columns:18px 1fr auto; align-items:center; gap:2px 8px; padding:4px 6px; border-radius:var(--r1); cursor:pointer; }
   .ob-sat:hover, .ob-sat.choisi { background:var(--s3); }
   .ob-sat input { margin:0; }
