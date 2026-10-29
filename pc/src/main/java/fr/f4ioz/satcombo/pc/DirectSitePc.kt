@@ -70,7 +70,9 @@ class DirectSitePc(
         /** The awards followed (« Agenda › Diplômes »): on change, else once a day ([PERIODE_DIPLOMES_MS]). */
         DIPLOMES("diplomes", "Diplômes", 86400, 86400, 86400),
         /** FT8 / FT4: each slot once decoded ([Ft8SitePc], type `direct-ft8`). */
-        FT8("ft8", "FT8/FT4", 15, 15, 15);
+        FT8("ft8", "FT8/FT4", 15, 15, 15),
+        /** QO-100's beacons ([BalisesQo100Pc.siteJson], in `direct` as `balises`): on change, else every [periode] s. */
+        BALISES("balises", "Balises QO-100", 300, 60, 3600);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -110,6 +112,8 @@ class DirectSitePc(
     @Volatile var diplomes: () -> JSONObject? = { null }
     /** The station now ([Station]), null when it cannot be told. */
     @Volatile var station: () -> Station? = { null }
+    /** QO-100's beacons as the site may show them ([BalisesQo100Pc.siteJson]), null while their watch is off. */
+    @Volatile var balises: () -> JSONObject? = { null }
     /** FT8 / FT4's slots and strips ([Ft8SitePc]), null when not set. */
     @Volatile var ft8: Ft8SitePc? = null
     /** « Spectre rapide »: the spectrum streamed ([SpectreRapidePc]), null when not set. */
@@ -178,6 +182,7 @@ class DirectSitePc(
             if (c == Canal.MONTAGE) { runCatching { montage(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.FT8) { runCatching { ft8(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.BALISES) { runCatching { balises(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -218,6 +223,7 @@ class DirectSitePc(
             Canal.DIPLOMES -> diplomes(s, t)
             Canal.MONTAGE -> montage(s, t)
             Canal.FT8 -> ft8(s, t)
+            Canal.BALISES -> balises(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -328,6 +334,23 @@ class DirectSitePc(
         }
     }
 
+    /**
+     * QO-100's beacons: looked at every 10 s, sent in `direct` as `balises` when a verdict changed, else every
+     * [periode] seconds; `null` once when their watch is switched off (the site forgets them).
+     */
+    private fun balises(s: Suivi, t: Long) {
+        if (t < s.prochainMs) return
+        s.prochainMs = t + 10_000L
+        val b = balises()
+        if (b == null) {
+            if (s.envoye) poste(s, t, "direct", JSONObject().put("t", t).put("balises", JSONObject.NULL))?.let { if (it) { s.envoye = false; s.dernier = "" } }
+            return
+        }
+        val cle = listOf("large", "etroites").joinToString("|") { k -> b.optJSONObject(k)?.let { it.optString("statut") + "/" + it.optString("cause") }.orEmpty() }
+        if (s.envoye && cle == s.dernier && t - s.dernierMs < periode(Canal.BALISES) * 1000L) return
+        if (poste(s, t, "direct", JSONObject().put("t", t).put("balises", b)) == true) { s.envoye = true; s.dernier = cle; s.dernierMs = t }
+    }
+
     /** Sends [o] as [type]: true when taken, false when not (the next try put off), null when the target is not set. */
     private fun poste(s: Suivi, t: Long, type: String, o: JSONObject): Boolean? {
         val r = site.envoieDirect(type, o) ?: run { s.erreur = "site non réglé"; return null }
@@ -360,6 +383,7 @@ class DirectSitePc(
             .also { o -> if (c == Canal.STATION) o.put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.FT8) o.put("cadence", "chaque créneau décodé (15 s, FT4 7,5 s)").put("nonPris", on(c) && s.nonPris) }
+            .also { o -> if (c == Canal.BALISES) o.put("cadence", "à chaque changement, sinon toutes les " + periode(c) / 60 + " min") }
     })).also { o -> rapide?.let { o.put("rapide", it.json()) }; video?.let { o.put("video", it.json()) } }
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
@@ -377,6 +401,7 @@ class DirectSitePc(
         suivis.getValue(Canal.STATION).dernierMs = 0L; stationTexte = ""
         suivis.getValue(Canal.DIPLOMES).dernierMs = 0L
         suivis.getValue(Canal.MONTAGE).dernierMs = 0L
+        suivis.getValue(Canal.BALISES).dernier = ""
         rapide?.regle(p)
         video?.regle(p)
         if (p("efface") == "1") runCatching { site.envoieDirect("direct-efface", JSONObject().put("t", horloge())) }

@@ -82,8 +82,11 @@ class SpectreLargePc(
         set(v) { stockage.edit().putBoolean("datv_veille_enr", v).apply() }
     private var enregistrePour: VeilleDatv.Cible? = null
 
-    /** Connected only while wanted: the option on, the DATV tab open. */
-    fun voulu(): Boolean = on && horloge() - vuMs < VU_MS
+    /** Kept connected without a tab looking at it (the beacons' watch, the automatic scan), when it says so. */
+    @Volatile var garde: () -> Boolean = { false }
+
+    /** Connected only while wanted: the option on, the DATV tab open (or [garde]). */
+    fun voulu(): Boolean = on && (horloge() - vuMs < VU_MS || runCatching { garde() }.getOrDefault(false))
 
     /** The reading thread (started once). */
     fun demarre() {

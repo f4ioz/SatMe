@@ -75,6 +75,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var large: SpectreLargePc? = null
     /** The wide band from our own SDR (DATV tab), off unless chosen. */
     @Volatile var spectreSdr: SpectreSdrDatvPc? = null
+    /** QO-100's beacons watched (DATV tab), off unless chosen. */
+    @Volatile var balises: BalisesQo100Pc? = null
+    /** « Balayage auto » (DATV tab), off unless chosen. */
+    @Volatile var secours: SecoursDatvPc? = null
     /** The wide band chat (off unless chosen). */
     @Volatile var chatLarge: ChatLargePc? = null
     /** Tune requests by UDP (off unless chosen). */
@@ -729,8 +733,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val o = if (r.methode == "POST") runCatching { t.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } else t.json()
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
+        if (chemin == "/api/datv/balises" || chemin == "/api/datv/secours") {
+            val o = runCatching {
+                if (chemin == "/api/datv/balises") balises.let { b -> when { b == null -> JSONObject().put("ok", false); r.methode == "POST" -> b.action(q)
+                    else -> b.json(q["depuis"]?.toLongOrNull() ?: 0L, q["court"] == "1") } }
+                else secours.let { b -> when { b == null -> JSONObject().put("ok", false); r.methode == "POST" -> b.action(q); else -> b.json() } }
+            }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (chemin == "/api/datv/large" || chemin.startsWith("/api/datv/large/")) {
             val l = large
+            // A click on a signal: a tuning by hand (the scan pauses, the beacons' check gives way).
+            if (r.methode == "POST" && chemin == "/api/datv/large/accorde") {
+                val k = q["khz"]?.trim()?.toLongOrNull(); val sr = q["sr"]?.trim()?.toIntOrNull()
+                datv?.let { d -> if (k != null && sr != null) secours?.manuel(d.reglage.copy(cielKhz = k, srKs = sr)) }
+                balises?.manuel()
+            }
             val o = when {
                 l == null -> JSONObject().put("ok", false)
                 r.methode == "POST" -> runCatching { l.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
@@ -1883,9 +1901,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["relance"]?.let { d.relanceAuto = it == "1" }
                 q["recepteur"]?.takeIf { it in Datv.RECEPTEURS }?.let { d.recepteur = it }
                 large?.veilleArrete()
+                secours?.manuel(r); balises?.manuel()
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
-            "/api/datv/arrete" -> { large?.veilleArrete("arrêtée : réception arrêtée"); datv?.arrete() }
+            "/api/datv/arrete" -> { large?.veilleArrete("arrêtée : réception arrêtée"); datv?.arrete(); balises?.arretDemande() }
             // Transmission: the parameters (kept), the start (confirmed on the page), the stop, the page's heartbeat, the gain.
             "/api/datv/emission/reglage" -> {
                 val e = emission ?: return JSONObject().put("ok", false)

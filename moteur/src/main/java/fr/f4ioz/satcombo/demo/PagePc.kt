@@ -3185,7 +3185,7 @@ ${OngletSked.HTML}
       <div class="t">Stations entendues <span class="petit">(un clic : y retourner)</span></div>
       <div id="d-entendus" class="d-entendus"></div>
     </div>
-    <div class="carte" id="d-chat-carte">
+${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
       <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Salon de la bande large</span>
         <label class="petit" style="text-transform:none;letter-spacing:0" title="Le salon public de la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert. Rien n’y est envoyé sans un clic sur « Envoyer » ; le pseudo est l’indicatif de la station, posé au premier message."><input type="checkbox" id="d-chat-on" onchange="dChatRegle(this.checked)"> afficher</label>
         <span class="petit" id="d-chat-etat" style="text-transform:none;letter-spacing:0"></span></div>
@@ -18574,6 +18574,7 @@ setInterval(() => {
 setInterval(chargeListe, 30000);
 setInterval(dessinePassages, 5000);
 ${DemarragePagePc.JS}
+${BalisesQo100Js.JS}
 ${IssDirectJs.JS}
 </script>
 </body></html>

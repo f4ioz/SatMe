@@ -346,7 +346,7 @@ un code d'appairage, un mot de passe ou une clé.
 
 | Type | Corps | Cadence |
 |---|---|---|
-| `direct` | JSON `{"type","version","t": <ms UTC>, "pilote": {…} \| null}` ou `{…, "datv": {…} \| null}` : chaque partie présente remplace la précédente, `null` l'efface | Auto-pilote : 10 s (une fois par minute si rien ne change) ; DATV : 3 à 30 s |
+| `direct` | JSON `{"type","version","t": <ms UTC>, "pilote": {…} \| null}` ou `{…, "datv": {…} \| null}` ou `{…, "balises": {…} \| null}` : chaque partie présente remplace la précédente, `null` l'efface | Auto-pilote : 10 s (une fois par minute si rien ne change) ; DATV : 3 à 30 s ; Balises QO-100 : dès qu'un état change, sinon toutes les 5 min |
 | `direct-spectre` | JSON `{"type","version","centreHz","largeurHz","minDb","maxDb","bins"}` : `bins` = 1024 octets en base64, 0 = `minDb`, 255 = `maxDb` | 1 à 10 s, quand le SDR est sur QO-100 |
 | `direct-datv-image` | multipart, `fichier` = JPEG ≤ 190 Ko, 640 px | tant que le récepteur DATV est verrouillé |
 | `direct-sstv-image` | multipart, `fichier` = JPEG | toutes les 5 s pendant un passage de l'auto-pilote, si l'image a changé |
@@ -367,6 +367,31 @@ SatMe-PC), sinon il n'y a que l'indicatif ; `km` et `azimut` (°) depuis la
 station, calculés sur le locator. Jamais la photo QRZ (elle appartient à son
 auteur), l'adresse électronique, la rue ni les coordonnées. Un site qui ne
 connaît pas `station` l'ignore.
+
+`balises` (facultatif, ligne **Balises QO-100**, décochée d'origine ; seulement
+quand la surveillance des balises est cochée dans l'onglet DATV) : l'état des
+balises de QO-100 vu par la station,
+`{"large": {"statut","cause","texte","depuis","mer","niveauDb"}, "etroites": {"statut","cause","texte","depuis"}}`.
+`large` est la balise DATV (10 491,500 MHz), `etroites` les balises bande
+étroite (absent quand aucun SDR ne les écoute). `statut` vaut `ok`, `absente`,
+`flux-abime` (flux abîmé à la source), `faible` (signal faible),
+`pertes-ici` (paquets perdus par le PC ou le réseau) ou `inconnu` ; `cause`
+vaut `source` (la balise elle-même : éteinte, codeur en défaut — pas chez
+vous), `ici` (la réception de la station), `inconnue` ou vide ; `texte` est la
+phrase affichée dans SatMe-PC (200 caractères au plus) ; `depuis` l'heure (ms
+UTC) où cet état a commencé ; `mer` la MER de la balise reçue (dB) et
+`niveauDb` son niveau au-dessus du bruit sur le spectre de la station sol,
+quand ils sont mesurés. Rien d'autre : ni fréquence de la station, ni réglage.
+Exemple :
+
+```json
+{"type":"direct","version":1,"t":1798000000000,
+ "balises":{"large":{"statut":"flux-abime","cause":"source","depuis":1797999400000,"mer":8.1,"niveauDb":8.4,
+   "texte":"Flux abîmé à la source (le codeur de la balise) — pas chez vous : …"},
+  "etroites":{"statut":"ok","cause":"","texte":"Balises bande étroite entendues (3/3)","depuis":1797990000000}}}
+```
+
+Pour un script : `POST /api/site/direct?on_balises=1` (ou `0`), `&periode_balises=300` (60 à 3600 s, la cadence quand rien ne change).
 
 Un récepteur qui ne veut pas du direct répond `403` (ou `404`) à ces types.
 

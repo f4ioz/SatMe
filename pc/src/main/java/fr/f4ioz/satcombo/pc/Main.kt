@@ -297,6 +297,23 @@ fun main(args: Array<String>) {
     }
     large.demarre()
     portee.launch { while (true) { runCatching { large.tic() }; kotlinx.coroutines.delay(1000) } }
+    // QO-100's beacons watched and « Balayage auto » (DATV tab): each off unless chosen, receive only. They tune the
+    // receiver only while the DATV module is on; the wide band spectrum kept connected while either is on.
+    val recoisDatv: (fr.f4ioz.satcombo.datv.ReglageDatv) -> String? = { r ->
+        if (!fr.f4ioz.satcombo.demo.ModulesStation.actif(station.stockage, "datv")) "module DATV coupé" else datv.demarre(r)
+    }
+    val balises = BalisesQo100Pc(station.stockage, datv, large, File(dossier, "balises-qo100.json"), recois = recoisDatv)
+    balises.etroites = {
+        if (!sdr.surQo100 || !sdr.etat.value.actif) null else {
+            sdr.demandePanorama()
+            val p = sdr.panorama; val a = sdr.axeQo100()
+            if (p == null || a == null) null else fr.f4ioz.satcombo.datv.BalisesQo100.ecoutes(p, a.first, a.second)
+        }
+    }
+    val secours = SecoursDatvPc(station.stockage, datv, large, recois = recoisDatv)
+    secours.bloque = { if (balises.sondeEnCours()) "contrôle de la balise en cours" else null }
+    large.garde = { balises.on || secours.on }
+    portee.launch { while (true) { runCatching { balises.tic() }; runCatching { secours.tic() }; kotlinx.coroutines.delay(1000) } }
     // DATV transmission with the Pluto: nothing sent until the operator asks and confirms on the page.
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
@@ -377,6 +394,9 @@ fun main(args: Array<String>) {
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
+    serveur.balises = balises
+    serveur.secours = secours
+    balises.occupe = { emission.etat.emet }
     // The wide band from our own SDR on the same LNB: off unless chosen, the receiver held only while the DATV tab shows it.
     val spectreSdr = SpectreSdrDatvPc(station.stockage, datv, sdr, { k, sr -> large.noms.nom(k, sr, System.currentTimeMillis()) })
     spectreSdr.demarre()
@@ -449,7 +469,7 @@ fun main(args: Array<String>) {
     // The wide band chat, tune requests by UDP: each off unless chosen in the DATV tab.
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
     serveur.accordUdp = AccordUdpPc(station.stockage, reseau, { datv.reglage },
-        { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
+        { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); secours.manuel(r); balises.manuel(); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
     // The IC-9700 transmitting (PTT held by a page's button, its microphone, the power): nothing keyed until asked.
     val emissionPoste = EmissionPostePc(station, { son.carteDuPoste() })
     emissionPoste.leila = { qo100.leilaEntendue() }
@@ -662,6 +682,7 @@ fun main(args: Array<String>) {
             enEmission = emission.etat.emet || emissionSstv.etat.emet || emissionPoste.poste.etat.emet || emissionBe.emet || ft8Tx.emet,
             passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
     }
+    directSite.balises = { balises.siteJson() }
     site.direct = directSite
     // « Spectre rapide » (off by default): QO-100's spectrum streamed to the site, 1 to 20 lines a second, over one connection.
     val spectreRapide = SpectreRapidePc(station.stockage, site)
