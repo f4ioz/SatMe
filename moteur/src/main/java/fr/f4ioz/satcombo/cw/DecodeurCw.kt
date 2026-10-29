@@ -229,15 +229,34 @@ class DecodeurCw(
         )
         private val VERS_MORSE = MORSE.entries.associate { (k, v) -> v to k }
 
+        /** A word's characters, a prosign between angle brackets (`<AR>`) kept as one. */
+        private fun symboles(mot: String): List<String> {
+            val l = ArrayList<String>()
+            var i = 0
+            while (i < mot.length) {
+                val f = if (mot[i] == '<') mot.indexOf('>', i) else -1
+                if (f > i + 1) { l += mot.substring(i, f + 1); i = f + 1 } else { l += mot[i].toString(); i++ }
+            }
+            return l
+        }
+
+        /** The code of one character, or of a prosign: its letters run together. */
+        private fun codeDe(c: String): String? {
+            VERS_MORSE[c]?.let { return it }
+            if (c.length < 4 || !c.startsWith("<") || !c.endsWith(">")) return null
+            val lettres = c.substring(1, c.length - 1).map { VERS_MORSE[it.toString()] ?: return null }
+            return lettres.joinToString("")
+        }
+
         /** Morse for [texte] at [wpm], as keying: (key down?, ms) — for tests and a test card. */
         fun manipulation(texte: String, wpm: Int): List<Pair<Boolean, Double>> {
             val u = 1200.0 / wpm
             val l = ArrayList<Pair<Boolean, Double>>()
             texte.uppercase().split(' ').filter { it.isNotEmpty() }.forEachIndexed { iMot, mot ->
                 if (iMot > 0) l += false to 7 * u
-                mot.forEachIndexed { iLettre, c ->
+                symboles(mot).forEachIndexed { iLettre, c ->
                     if (iLettre > 0) l += false to 3 * u
-                    val code = VERS_MORSE[c.toString()] ?: return@forEachIndexed
+                    val code = codeDe(c) ?: return@forEachIndexed
                     code.forEachIndexed { i, s ->
                         if (i > 0) l += false to u
                         l += true to (if (s == '.') u else 3 * u)

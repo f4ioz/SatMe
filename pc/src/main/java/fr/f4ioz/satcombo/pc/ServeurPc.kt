@@ -272,7 +272,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun actionBe(chemin: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
         val b = emissionBe ?: return JSONObject().put("ok", false).put("absent", true)
         return when {
-            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1")?.let { JSONObject().put("ok", false).put("erreur", it) }
+            chemin.endsWith("/demarre") -> b.appuie(cl.id, cl.distant, cl.adresse, q["confirme"] == "1", q["voix"]?.toIntOrNull())?.let { JSONObject().put("ok", false).put("erreur", it) }
                 ?: b.json(cl.id).put("local", !cl.distant)
             chemin.endsWith("/vie") -> if (b.vie(cl.id)) b.json(cl.id).put("local", !cl.distant) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
             else -> { b.relache("relâché"); b.json(cl.id).put("local", !cl.distant) }
@@ -1028,6 +1028,30 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             return
         }
+        // The narrow band's voice memories: one recorded from the page (POST, 16-bit mono, ?n=&nom=&taux=); never played here.
+        if (chemin == "/api/be/voix" && r.methode == "POST") {
+            val b = emissionBe
+            val o = when {
+                b == null -> JSONObject().put("ok", false).put("absent", true)
+                b.emet -> JSONObject().put("ok", false).put("erreur", "relâcher le PTT d'abord")
+                else -> RequeteHttp.corps(c.getInputStream(), r, 8L * 1024 * 1024 /* 30 s of 16-bit mono up to 96 kHz */)?.let { corps ->
+                    b.voix.enregistre(q["n"]?.toIntOrNull() ?: 0, q["nom"].orEmpty(), corps, q["taux"]?.toIntOrNull() ?: 48_000)
+                        ?.let { JSONObject().put("ok", false).put("erreur", it) } ?: b.json(q["client"].orEmpty().take(40)).put("local", local)
+                } ?: JSONObject().put("ok", false).put("erreur", "enregistrement trop gros ou coupé")
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // A voice memory to listen to here (nothing transmitted).
+        if (chemin == "/api/be/voix.wav") {
+            val w = emissionBe?.voix?.wav(q["n"]?.toIntOrNull() ?: 0)
+            if (w == null) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0)) else envoie(sortie, "200 OK", "audio/wav", w)
+            return
+        }
+        // The narrow band's journal of overs, as CSV.
+        if (chemin == "/api/be/journal.csv") {
+            val t = emissionBe?.journal?.csv() ?: ""
+            envoie(sortie, "200 OK", "text/csv; charset=utf-8", t.toByteArray()); return
+        }
         // The Pluto's narrow-band panel: its state, its settings (POST, the guards from this PC only), CW, the measurements.
         if (chemin == "/api/be/emission" || chemin == "/api/be/emission/reglage" || chemin == "/api/be/cw" || chemin == "/api/be/mesure") {
             val b = emissionBe
@@ -1673,7 +1697,34 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The SDR calibration assistant (receive only). */
     private val calibration by lazy { CalibrationSdrPc(station) { sdr } }
 
+    /**
+     * The DATV presets: one applied (its parameters through the settings
+     * route, never a gain, never while transmitting), the form kept as one,
+     * one removed. Nothing here starts a transmission.
+     */
+    private fun prereglageDatv(chemin: String, q: Map<String, String>): JSONObject {
+        val e = emission ?: return JSONObject().put("ok", false)
+        val P = fr.f4ioz.satcombo.datv.PrereglagesDatv
+        q["prereglage"]?.let { nom ->
+            if (e.etat.emet) return JSONObject().put("ok", false).put("erreur", "préréglage : arrêter l'émission d'abord")
+            val p = P.de(e.prereglagesPerso, nom) ?: return JSONObject().put("ok", false).put("erreur", "préréglage inconnu : $nom")
+            P.refus(p)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            return action(chemin, p.parametres()).put("prereglage", p.nom)
+        }
+        q["prereglageGarde"]?.let { nom ->
+            if (nom.isBlank()) return JSONObject().put("ok", false).put("erreur", "un nom pour le préréglage")
+            if (P.INTEGRES.any { it.nom.equals(nom.trim(), true) }) return JSONObject().put("ok", false).put("erreur", "nom d'un préréglage d'origine : en choisir un autre")
+            val p = e.prereglageActuel(nom, q["avecFreq"] == "1")
+            P.refus(p)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            e.prereglagesPerso = P.range(e.prereglagesPerso, p)
+            return JSONObject().put("ok", true).put("prereglage", p.nom)
+        }
+        q["prereglageRetire"]?.let { nom -> e.prereglagesPerso = e.prereglagesPerso.filter { !it.nom.equals(nom.trim(), true) } }
+        return JSONObject().put("ok", true)
+    }
+
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
+        if (chemin == "/api/datv/emission/reglage" && listOf("prereglage", "prereglageGarde", "prereglageRetire").any { it in q }) return prereglageDatv(chemin, q)
         val ok = JSONObject().put("ok", true)
         val rotor = station.stationRotor
         fun entier(k: String) = q[k]?.trim()?.toIntOrNull()

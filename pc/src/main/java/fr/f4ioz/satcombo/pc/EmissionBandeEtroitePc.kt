@@ -9,10 +9,14 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.SonDistant
+import fr.f4ioz.satcombo.domain.GardeNiveauQo100
+import fr.f4ioz.satcombo.domain.JournalEmissionQo100
+import fr.f4ioz.satcombo.domain.MacrosCw
 import fr.f4ioz.satcombo.domain.MonteeQo100
 import fr.f4ioz.satcombo.domain.MonteeQo100.CorrectionPluto
 import fr.f4ioz.satcombo.domain.MonteeQo100.Mode
 import fr.f4ioz.satcombo.domain.MonteeQo100.PlanPluto
+import fr.f4ioz.satcombo.domain.OccupationQo100
 import fr.f4ioz.satcombo.domain.ProfilMontee
 import fr.f4ioz.satcombo.domain.Qo100
 import fr.f4ioz.satcombo.domain.SignalQo100
@@ -54,7 +58,18 @@ import kotlin.concurrent.thread
  * downlink, and LEILA heard while transmitting **cuts at once**.
  *
  * Also the uplink profiles (fixed, portable: chain, antenna, amplifier,
- * cable; [ProfilMontee]) and the two chains' frequency checks.
+ * cable, the Pluto's cap for each; [ProfilMontee]) and the two chains'
+ * frequency checks.
+ *
+ * Opt-in helpers, none of which ever keys anything: the **level guard**
+ * ([GardeNiveauQo100]: the gain lowered, or the transmission cut, when our
+ * signal comes back stronger than the beacon), the **listen-before-talk**
+ * warning ([OccupationQo100]), the CW **memories** with their fields
+ * ([MacrosCw]) and a keyer fed key by key, the **voice memories**
+ * ([MemoiresVoixPc], played under the PTT the operator clicks, released at
+ * their end), the **simulation** ([EmetteurSimulePc]: nothing radiated, no
+ * device opened — the demonstration's only way), and the **journal** of
+ * every over ([JournalEmissionQo100]).
  */
 class EmissionBandeEtroitePc(
     private val stockage: Stockage,
@@ -84,6 +99,14 @@ class EmissionBandeEtroitePc(
     private val fabrique: ((PlutoEmission.Reglage, Double, (ShortArray) -> Unit) -> Pair<EmetteurDatv?, String?>)? = null,
     /** Is the Pluto answering on its address? (a TCP connection opened and closed, nothing sent); null: not probed. */
     private val sonde: (() -> Boolean)? = null,
+    /** The station's locator (Réglages), for the CW memories' {LOC}. */
+    private val locator: () -> String = { "" },
+    /** Where the voice memories are kept; null: none. */
+    dossierVoix: java.io.File? = null,
+    /** Only the simulation (the demonstration: never a device). */
+    private val simulationSeule: () -> Boolean = { ModeDemo.actif },
+    /** Starts the simulated transmitter (the tests' own); by default an [EmetteurSimulePc]. */
+    private val fabriqueSimulation: ((PlutoEmission.Reglage, Double, (ShortArray) -> Unit) -> EmetteurDatv)? = null,
 ) {
     // ------------------------------------------------------------ settings (parameters only, never a transmission)
 
@@ -132,6 +155,53 @@ class EmissionBandeEtroitePc(
      */
     @Volatile var charge = true
 
+    /**
+     * Simulation: the whole chain runs (PTT, guards, keyer, memories) but
+     * the samples go nowhere — no device opened, nothing radiated. Stored;
+     * the demonstration has nothing else.
+     */
+    var simulation: Boolean
+        get() = simulationSeule() || stockage.getBoolean("be_simulation", false)
+        set(v) { stockage.edit().putBoolean("be_simulation", v).apply() }
+
+    /** Where the next over goes: "simulation", "charge" or "air". */
+    val destination: String get() = if (simulation) "simulation" else if (charge) "charge" else "air"
+
+    // ------------------------------------------------------------ the level guard (opt-in)
+
+    /** Lower the gain, or cut, when our signal comes back stronger than the beacon. Off by default. */
+    var gardeNiveau: Boolean
+        get() = stockage.getBoolean("be_garde_niveau", false)
+        set(v) { stockage.edit().putBoolean("be_garde_niveau", v).apply() }
+    /** The level not to exceed, dB relative to the beacon (0, −3, −6, −10). */
+    var gardeSeuilDb: Double
+        get() = stockage.getFloat("be_garde_seuil", 0f).toDouble().let { s -> GardeNiveauQo100.SEUILS.minByOrNull { kotlin.math.abs(it - s) } ?: 0.0 }
+        set(v) { stockage.edit().putFloat("be_garde_seuil", v.coerceIn(-10.0, 0.0).toFloat()).apply() }
+    @Volatile private var gardeNiv = GardeNiveauQo100(gardeSeuilDb)
+    @Volatile private var gardeMessage = ""
+
+    // ------------------------------------------------------------ the CW memories, the voice memories, the journal
+
+    var memoiresCw: List<MacrosCw.Memoire>
+        get() = MacrosCw.lisListe(stockage.getString("be_cw_mem", null))
+        set(v) { stockage.edit().putString("be_cw_mem", MacrosCw.ecrisListe(v)).apply() }
+    /** The other station ({LUI}). */
+    var lui: String
+        get() = stockage.getString("be_cw_lui", "") ?: ""
+        set(v) { stockage.edit().putString("be_cw_lui", MacrosCw.indicatif(v)).apply() }
+    /** The report sent ({RST}). */
+    var rst: String
+        get() = stockage.getString("be_cw_rst", "599") ?: "599"
+        set(v) { stockage.edit().putString("be_cw_rst", v.trim().uppercase().filter { it.isLetterOrDigit() }.take(3).ifBlank { "599" }).apply() }
+
+    val voix = MemoiresVoixPc(dossierVoix)
+    /** The voice memory asked for the next press (by [appuie]), then playing. */
+    @Volatile private var voixDemandee: Int? = null
+    @Volatile private var lecture: LectureVoix? = null
+    @Volatile private var lectureFinMs = 0L
+
+    val journal = JournalEmissionQo100().also { j -> runCatching { j.reprends(stockage.getString("be_journal", null)) } }
+
     // ------------------------------------------------------------ profiles
 
     var profils: List<ProfilMontee>
@@ -157,7 +227,12 @@ class EmissionBandeEtroitePc(
     @Volatile private var tx: EmetteurDatv? = null
     @Volatile private var nco: MelangeurNco? = null
     @Volatile private var plan: PlanPluto? = null
-    @Volatile private var enCours: Triple<Mode, Long, Boolean>? = null
+    /** The over under way: its mode, its dial, where it goes, what it sends, since when, the most seen against the beacon. */
+    private data class EnCours(val mode: Mode, val cadran: Long, val destination: String, val source: String, val debutMs: Long,
+                               val ecartMaxDb: Double? = null) {
+        val surLAir: Boolean get() = destination == "air"
+    }
+    @Volatile private var enCours: EnCours? = null
     @Volatile private var fermeCarte: (() -> Unit)? = null
     @Volatile private var carteErreur = ""
     @Volatile private var dernierRefus: String? = null
@@ -171,10 +246,11 @@ class EmissionBandeEtroitePc(
 
     /** Why [m] on [c] may not go now, or null (the checks before any keying). */
     fun refus(m: Mode = mode, c: Long = cadranHz): String? {
-        ModeDemo.refus("l'émission BLU par le Pluto")?.let { return it }
+        if (!simulation) ModeDemo.refus("l'émission BLU par le Pluto")?.let { return it }
         if (!ReglesSstvRf.indicatifValide(indicatif())) return "indicatif manquant : le donner dans Réglages › Station avant toute émission"
         autreEmission()?.let { return it }
-        plutoOccupe()?.let { return it }
+        // The simulation opens no device: the Pluto may be receiving meanwhile.
+        if (!simulation) plutoOccupe()?.let { return it }
         MonteeQo100.refus(m, c)?.let { return it }
         if (leila() || horloge() - leilaCoupeMs < LEILA_ATTENTE_MS) return "LEILA entendue à l'instant : attendre et baisser le gain avant de réémettre"
         return null
@@ -199,7 +275,16 @@ class EmissionBandeEtroitePc(
         val corr = correctionHz
         val p = PlanPluto.pour(c, corr)
         val gen = ++generation
+        val dest = destination
+        val nv = voixDemandee
+        voixDemandee = null
+        lecture = null; lectureFinMs = 0L
         val src: (ShortArray) -> Int = when {
+            nv != null -> {
+                if (m != Mode.BLU) { dernierRefus = "mémoire vocale : en BLU seulement"; return false }
+                val pcm = voix.lis(nv) ?: run { dernierRefus = "mémoire vocale $nv vide"; return false }
+                LectureVoix(pcm).also { lecture = it }
+            }
             m == Mode.CW -> cw
             source == "carte" -> {
                 tampon.vide()
@@ -213,13 +298,14 @@ class EmissionBandeEtroitePc(
         }
         val mod = ModulateurAudio(ModulationAudio.USB, AUDIO, (PlanPluto.DEBIT / AUDIO).toInt(), niveau = NIVEAU, source = src)
         val melangeur = MelangeurNco(PlanPluto.DEBIT, p.ncoHz)
-        val plafond = if (charge) ReglesSstvRf.GAIN_CHARGE_DB else 0.0
-        val max = minOf(gainMaxDb(), plafondDb, 0.0)
+        val plafond = if (dest == "charge") ReglesSstvRf.GAIN_CHARGE_DB else 0.0
+        val max = minOf(gainMaxDb(), plafondDb, profil.plafondPlutoDb ?: 0.0, 0.0)
         val r = PlutoEmission.Reglage(p.loHz, PlanPluto.DEBIT, gainDb, totMin * 60_000L + 5_000L, plafondDb = plafond,
             paires = EmissionDatvPc.paires(PlanPluto.DEBIT), garde = { garde(gen) })
         val producteur: (ShortArray) -> Unit = { b -> mod.remplis(b, b.size / 2); melangeur.applique(b, b.size / 2) }
         val (e, refus) = runCatching {
-            fabrique?.invoke(r, max, producteur) ?: PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = max).let { px ->
+            if (dest == "simulation") (fabriqueSimulation?.invoke(r, max, producteur) ?: EmetteurSimulePc(r, max, producteur, horloge)) to null
+            else fabrique?.invoke(r, max, producteur) ?: PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = max).let { px ->
                 val non = px.demarre(r, producteur)
                 if (non == null) px to null else null to non
             }
@@ -230,14 +316,26 @@ class EmissionBandeEtroitePc(
             dernierRefus = refus ?: "ADALM-PLUTO : refus"
             return false
         }
-        tx = e; nco = melangeur; plan = p; enCours = Triple(m, c, charge)
+        tx = e; nco = melangeur; plan = p
+        val quoi = when { nv != null -> "mémoire vocale « " + (voix.liste().firstOrNull { it.n == nv }?.nom ?: nv.toString()) + " »"; m == Mode.CW -> "CW"
+            source == "carte" -> "carte son"; else -> "micro" }
+        enCours = EnCours(m, c, dest, quoi, horloge())
         niveau = NiveauSstvQo100.Mesure(null, null)
+        gardeNiv = GardeNiveauQo100(gardeSeuilDb); gardeMessage = ""
         return true
     }
 
     /** The transmitter off (its LO powered down first), the card closed. */
     private fun eteint(raison: String) {
         generation++
+        val ec = enCours
+        val e = tx
+        if (e != null && ec != null) {
+            journal.ajoute(JournalEmissionQo100.Passage(ec.debutMs, (horloge() - ec.debutMs).coerceAtLeast(0), ec.mode.cle, ec.cadran,
+                e.etatCommun().gainDb, ec.destination, ec.source, ec.ecartMaxDb, raison))
+            runCatching { stockage.edit().putString("be_journal", journal.texte()).apply() }
+        }
+        enCours = null
         tx?.let { runCatching { it.arrete(raison) } }
         tx = null; nco = null
         fermeCarte?.let { runCatching { it() } }; fermeCarte = null
@@ -250,11 +348,11 @@ class EmissionBandeEtroitePc(
         if (leila()) return "LEILA"
         val ec = enCours ?: return null
         val c = cadranHz
-        if (c != ec.second) {
-            if (MonteeQo100.refus(ec.first, c) != null) return "fréquence devenue interdite"
+        if (c != ec.cadran) {
+            if (MonteeQo100.refus(ec.mode, c) != null) return "fréquence devenue interdite"
             val p = plan ?: return null
             nco?.ncoHz = PlanPluto.ncoPour(p.loHz, c, correctionHz)
-            enCours = ec.copy(second = c)
+            enCours = ec.copy(cadran = c)
         }
         return null
     }
@@ -264,11 +362,18 @@ class EmissionBandeEtroitePc(
      * machine only with « émission par le réseau autorisée »; on the air
      * (not into the load) only [confirme]d by the operator.
      */
-    fun appuie(client: String, distant: Boolean, adresse: String, confirme: Boolean): String? {
+    fun appuie(client: String, distant: Boolean, adresse: String, confirme: Boolean, voixN: Int? = null): String? {
         if (distant && !reseauAutorise()) return "émission par le réseau non autorisée (Réglages › Émission, sur le PC de la station)"
-        if (!charge && !confirme) return "émission vers QO-100 non confirmée"
-        if (!poste.etat.emet) poste.totMs = totMin * 60_000L
+        if (destination == "air" && !confirme) return "émission vers QO-100 non confirmée"
+        if (voixN != null) {
+            if (poste.etat.emet) return "relâcher le PTT avant de jouer une mémoire vocale"
+            if (mode != Mode.BLU) return "mémoire vocale : en BLU seulement"
+            if (voix.lis(voixN) == null) return "mémoire vocale $voixN vide"
+        }
+        if (!poste.etat.emet) { poste.totMs = totMin * 60_000L; voixDemandee = voixN }
         val r = runBlocking { poste.appuie(client, distant, adresse) }
+        // Refused before the transmitter started: the voice memory asked is not left for the next press.
+        if (r != null) voixDemandee = null
         if (r != null && dernierRefus != null) return dernierRefus
         return r
     }
@@ -295,9 +400,26 @@ class EmissionBandeEtroitePc(
         runBlocking { poste.tic() }
         if (!poste.etat.emet && tx != null) eteint(poste.etat.raison.ifBlank { "relâché" })
         val ec = enCours
-        if (poste.etat.emet && ec != null && !ec.third) {
-            val o = MonteeQo100.occupe(ec.first, ec.second)
+        if (poste.etat.emet && ec != null && ec.surLAir) {
+            val o = MonteeQo100.occupe(ec.mode, ec.cadran)
             niveau = signauxQo100()?.let { NiveauSstvQo100.mesure(it, o.first, o.last) } ?: NiveauSstvQo100.Mesure(null, null)
+            val ecart = niveau.ecartDb
+            if (ecart != null && (ec.ecartMaxDb == null || ecart > ec.ecartMaxDb)) enCours = ec.copy(ecartMaxDb = ecart)
+            if (gardeNiveau) {
+                val e = tx
+                val g = e?.etatCommun()?.gainDb
+                if (g != null) gardeNiv.tic(ecart, g, PlutoEmission.GAIN_MIN_DB, horloge())?.let { d ->
+                    val coupe = d.coupe
+                    if (coupe != null) { gardeMessage = coupe; relache("garde de niveau : $coupe"); return }
+                    d.gainDb?.let { ng -> gainDb = ng; e.regleGain(ng); gardeMessage = d.message }
+                }
+            }
+        }
+        // A voice memory played out: released once its last samples left (the modulator's cushion).
+        val l = lecture
+        if (poste.etat.emet && l != null && l.fini) {
+            if (lectureFinMs == 0L) lectureFinMs = horloge()
+            else if (horloge() - lectureFinMs >= 400L) { lecture = null; relache("mémoire vocale terminée") }
         }
         sondeTic()
     }
@@ -318,9 +440,20 @@ class EmissionBandeEtroitePc(
     fun cw(client: String, q: Map<String, String>): JSONObject {
         q["wpm"]?.toIntOrNull()?.let { wpm = it }
         q["annule"]?.let { cw.annule() }
-        q["texte"]?.let { t ->
-            val s = t.uppercase().filter { it.isLetterOrDigit() || it in " /?.,=" }.take(200)
-            if (s.isNotBlank()) cw.envoie(s)
+        q["lui"]?.let { lui = it }
+        q["rst"]?.let { rst = it }
+        // A memory, or text with fields: filled now ({MOI}, {LUI}, {LOC}, {RST}).
+        val brut = q["memoire"]?.toIntOrNull()?.let { n -> memoiresCw.getOrNull(n - 1)?.texte ?: return refusJ("mémoire CW $n inconnue") } ?: q["texte"]
+        brut?.let { t ->
+            // One key typed (the keyboard keyer): sent as it comes, a space being the word gap.
+            if (q["frappe"] == "1") {
+                val c = MacrosCw.nettoie(t.take(1)).ifBlank { if (t.startsWith(" ")) " " else "" }
+                if (c.isNotEmpty()) cw.envoie(c, enchaine = true)
+            } else {
+                val (s, err) = MacrosCw.developpe(t, indicatif(), lui, locator(), rst)
+                if (s == null) return refusJ(err ?: "texte vide")
+                cw.envoie(s)
+            }
         }
         q["touche"]?.let { v ->
             if (v == "1" && !poste.tenuPar(client)) return JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
@@ -378,13 +511,13 @@ class EmissionBandeEtroitePc(
     fun mesureCorrection(): JSONObject {
         val ec = enCours
         if (!poste.etat.emet || ec == null) return refusJ("émettre d'abord sur l'air (CW, touche enfoncée), puis mesurer")
-        if (ec.third) return refusJ("sur charge, rien n'arrive au satellite : passer sur l'air pour mesurer")
+        if (!ec.surLAir) return refusJ((if (ec.destination == "simulation") "en simulation" else "sur charge") + ", rien n'arrive au satellite : passer sur l'air pour mesurer")
         val s = signauxQo100() ?: return refusJ("SatMe n'entend pas QO-100 : démarrer la réception (onglet QO-100, clé SDR)")
-        val attendu = Qo100.descenteDepuisMontee(porteuseHz(ec.first, ec.second))
+        val attendu = Qo100.descenteDepuisMontee(porteuseHz(ec.mode, ec.cadran))
         val vu = s.filter { kotlin.math.abs(it.hz - attendu) <= 20_000L && it.vuIlYaMs < 3_000L }.maxByOrNull { it.snrDb }
             ?: return refusJ("notre signal n'est pas vu à ±20 kHz de " + MonteeQo100.mhz(attendu) + " MHz")
         val avant = correctionHz
-        val n = CorrectionPluto.mesure(attendu, vu.hz, porteuseHz(ec.first, ec.second), avant)
+        val n = CorrectionPluto.mesure(attendu, vu.hz, porteuseHz(ec.mode, ec.cadran), avant)
         if (!CorrectionPluto.credible(n)) return refusJ("mesure incroyable (" + n + " Hz) : un autre signal ?")
         correctionHz = n
         return JSONObject().put("ok", true).put("avant", avant).put("correction", n).put("ecart", vu.hz - attendu)
@@ -449,7 +582,9 @@ class EmissionBandeEtroitePc(
             .put("restant", poste.restantS(t) ?: JSONObject.NULL).put("tot", totMin).put("chienS", poste.chienMs / 1000.0)
             .put("charge", charge).put("gainCharge", ReglesSstvRf.GAIN_CHARGE_DB)
             .put("gain", gainDb).put("plafond", plafondDb).put("gainMax", gainMaxDb())
-            .put("gainEffectif", minOf(gainDb, plafondDb, gainMaxDb(), if (charge) ReglesSstvRf.GAIN_CHARGE_DB else 0.0))
+            .put("gainEffectif", minOf(gainDb, plafondDb, gainMaxDb(), pr.plafondPlutoDb ?: 0.0, if (destination == "charge") ReglesSstvRf.GAIN_CHARGE_DB else 0.0))
+            .put("plafondProfil", pr.plafondPlutoDb ?: JSONObject.NULL)
+            .put("simulation", simulation).put("simulationSeule", simulationSeule()).put("destination", destination)
             .put("source", source).put("carte", carte).put("cartes", JSONArray(runCatching { cartes() }.getOrDefault(emptyList())))
             .put("carteErreur", carteErreur)
             .put("wpm", wpm).put("cwAttente", cw.enAttente).put("cwOccupe", cw.occupe).put("ton", MonteeQo100.TON_CW_HZ)
@@ -459,12 +594,28 @@ class EmissionBandeEtroitePc(
             .put("leila", leila()).put("microDb", if (t - creteMs < 1_000L && crete > 0) Math.round(20 * Math.log10(crete) * 10) / 10.0 else JSONObject.NULL)
             .put("trames", trames.get()).put("ignorees", ignorees.get()).put("manques", tampon.manques).put("retardMs", tampon.retardMs)
         PlanPluto.pour(c, correctionHz).let { p -> o.put("lo", p.loHz).put("nco", Math.round(p.ncoHz)) }
-        if (pe != null) o.put("gainApplique", pe.gainDb).put("tampons", pe.tampons).put("sousCharge", enCours?.third ?: charge)
+        if (pe != null) o.put("gainApplique", pe.gainDb).put("tampons", pe.tampons).put("sousCharge", enCours?.let { !it.surLAir } ?: (destination != "air"))
+            .put("destinationEnCours", enCours?.destination ?: destination)
         if (e.emet) o.put("client", if (e.distant) "un autre appareil" + (if (e.adresse.isNotBlank()) " (" + e.adresse + ")" else "") else "la page de ce PC")
             .put("moi", client != null && client == e.client).put("depuisS", (t - e.depuisMs) / 1000)
         val n = niveau
         o.put("niveau", JSONObject().put("nous", n.nousDb ?: JSONObject.NULL).put("balise", n.baliseDb ?: JSONObject.NULL)
-            .put("ecart", n.ecartDb ?: JSONObject.NULL).put("tropFort", (n.ecartDb ?: -99.0) > 0.0))
+            .put("ecart", n.ecartDb ?: JSONObject.NULL).put("tropFort", (n.ecartDb ?: -99.0) > 0.0)
+            .put("max", enCours?.ecartMaxDb ?: JSONObject.NULL))
+        // The level guard (opt-in): its setting, its last action.
+        o.put("garde", JSONObject().put("on", gardeNiveau).put("seuil", gardeSeuilDb).put("coupure", GardeNiveauQo100.COUPURE_DB)
+            .put("seuils", JSONArray(GardeNiveauQo100.SEUILS)).put("message", gardeMessage).put("pas", gardeNiv.pas))
+        // Listen before talk: somebody already there (not while we transmit: that would be us).
+        val occ = if (e.emet) null else signauxQo100()?.let { OccupationQo100.occupant(it, m, c) }
+        o.put("occupe", occ?.let { OccupationQo100.texte(it) } ?: "")
+        // The simulated transmitter's output.
+        (tx as? EmetteurSimulePc)?.let { sx -> o.put("simule", JSONObject().put("crete", sx.creteDbfs ?: JSONObject.NULL).put("rms", sx.rmsDbfs ?: JSONObject.NULL)) }
+        // The CW memories, the voice memories, the voice memory playing.
+        o.put("memoiresCw", JSONArray(memoiresCw.map { it.json() })).put("lui", lui).put("rst", rst)
+        o.put("voix", voix.json()).put("voixMax", MemoiresVoixPc.DUREE_MAX_S)
+        lecture?.let { o.put("lecture", Math.round(it.avance * 100)) }
+        // The journal: the last overs, today's time on the air.
+        o.put("journal", JSONArray(journal.liste().take(20).map { it.json() })).put("airAujourdhuiS", journal.surLAirAujourdhui(t) / 1000)
         // The profiles: the one chosen, its estimates (orders of magnitude).
         o.put("profils", JSONArray(profils.map { it.json() })).put("profil", pr.nom)
         o.put("estimation", JSONObject().put("gainAntenne", r1(pr.gainDbi)).put("pireMax", pr.pireMaxDbw?.let { r1(it) } ?: JSONObject.NULL)
@@ -485,10 +636,10 @@ class EmissionBandeEtroitePc(
      * here ever keys the transmitter.
      */
     fun reglage(q: Map<String, String>, local: Boolean): JSONObject {
-        if (!local && listOf("plafond", "tot", "charge", "carte").any { it in q })
+        if (!local && listOf("plafond", "tot", "charge", "carte", "simulation", "garde", "gardeSeuil", "journalEfface").any { it in q })
             return refusJ("ce réglage se change seulement sur le PC de la station")
         val emet = poste.etat.emet
-        if (emet && listOf("mode", "source", "carte", "charge", "correction").any { it in q }) return refusJ("relâcher le PTT d'abord")
+        if (emet && listOf("mode", "source", "carte", "charge", "correction", "simulation", "profil", "profilJson").any { it in q }) return refusJ("relâcher le PTT d'abord")
         q["mode"]?.let { Mode.de(it)?.let { m -> if (m != mode) { mode = m; if (!lie) cadranManuelHz = MonteeQo100.cadranParDefaut(m) } } }
         q["lie"]?.let { lie = it == "1" }
         q["cadran"]?.toLongOrNull()?.let { if (it in Qo100.NB.monteeBasHz - 10_000..Qo100.NB.monteeHautHz + 10_000) { cadranManuelHz = it; lie = false } }
@@ -503,6 +654,18 @@ class EmissionBandeEtroitePc(
         q["tot"]?.toIntOrNull()?.let { totMin = it }
         q["wpm"]?.toIntOrNull()?.let { wpm = it }
         q["charge"]?.let { charge = it != "0" }
+        q["simulation"]?.let { if (it == "0" && simulationSeule()) return refusJ("la démonstration ne fait que simuler"); simulation = it == "1" }
+        q["garde"]?.let { gardeNiveau = it == "1" }
+        q["gardeSeuil"]?.toDoubleOrNull()?.let { gardeSeuilDb = it }
+        q["lui"]?.let { lui = it }
+        q["rst"]?.let { rst = it }
+        q["cwMem"]?.toIntOrNull()?.let { n ->
+            if (n !in 1..MacrosCw.NOMBRE) return refusJ("mémoire CW 1 à " + MacrosCw.NOMBRE)
+            memoiresCw = MacrosCw.change(memoiresCw, n - 1, q["cwNom"].orEmpty(), q["cwTexte"].orEmpty())
+        }
+        q["cwMemDefaut"]?.let { memoiresCw = MacrosCw.PAR_DEFAUT }
+        q["voixEfface"]?.toIntOrNull()?.let { if (!emet) voix.efface(it) }
+        q["journalEfface"]?.let { journal.efface(); stockage.edit().putString("be_journal", journal.texte()).apply() }
         q["correction"]?.toLongOrNull()?.let { if (!CorrectionPluto.credible(it)) return refusJ("correction de ±" + CorrectionPluto.MAX_HZ / 1000 + " kHz au plus à 2400 MHz (±50 ppm)"); correctionHz = it }
         q["profil"]?.let { n -> if (profils.any { it.nom.equals(n, true) }) profilNom = n }
         q["profilJson"]?.let { s ->

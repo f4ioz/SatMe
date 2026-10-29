@@ -155,6 +155,16 @@ class EmissionDatvPc(
     fun tauxDvbs(): TauxDvbs = TauxDvbs.de(tauxDvbsTexte) ?: TauxDvbs.R3_4
     /** The roll-off sent: DVB-S's 0,35 whatever the DVB-S2 setting. */
     val rolloffEffectif: Rolloff get() = if (norme == Norme.DVBS) Rolloff.A35 else rolloff
+    /** The operator's own presets ([fr.f4ioz.satcombo.datv.PrereglagesDatv]): parameters only, never a gain. */
+    var prereglagesPerso: List<fr.f4ioz.satcombo.datv.PrereglagesDatv.Prereglage>
+        get() = fr.f4ioz.satcombo.datv.PrereglagesDatv.lisListe(stockage.getString("datv_tx_prereglages", null))
+        set(v) { stockage.edit().putString("datv_tx_prereglages", fr.f4ioz.satcombo.datv.PrereglagesDatv.ecrisListe(v)).apply() }
+
+    /** The form now as a preset named [nom]; the frequency kept in it when [avecFrequence]. */
+    fun prereglageActuel(nom: String, avecFrequence: Boolean) = fr.f4ioz.satcombo.datv.PrereglagesDatv.Prereglage(nom.trim().take(40),
+        norme, if (norme == Norme.DVBS) tauxDvbsTexte else modcodTexte, srKs, rolloffEffectif.alpha, courtes, pilotes,
+        if (avecFrequence) frequenceKhz else null)
+
     var srKs: Int
         get() = stockage.getInt("datv_tx_sr", 333).takeIf { it in Datv.DEBITS } ?: 333
         set(v) { if (v in Datv.DEBITS) stockage.edit().putInt("datv_tx_sr", v).apply() }
@@ -852,6 +862,7 @@ class EmissionDatvPc(
         val e = etat
         val t = horloge()
         val o = JSONObject().put("emet", e.emet && pe?.emet == true).put("charge", e.chargeFictive)
+            .put("prereglages", JSONArray(fr.f4ioz.satcombo.datv.PrereglagesDatv.tous(prereglagesPerso).map { it.json() }))
             .put("modcod", modcodTexte).put("norme", norme.libelle).put("modcodDvbs", tauxDvbsTexte)
             .put("normes", JSONArray(Norme.entries.map { it.libelle }))
             .put("modcodsDvbs", JSONArray(TauxDvbs.entries.map { it.nom })).put("roEffectif", rolloffEffectif.alpha)
