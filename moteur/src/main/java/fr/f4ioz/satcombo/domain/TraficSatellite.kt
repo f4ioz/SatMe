@@ -243,7 +243,7 @@ object TraficSatellite {
         val l = locator.trim().take(4).uppercase()
         val o = lui.trim().uppercase()
         return when (g) {
-            Genre.APRS -> if (o.isBlank()) ":CQ       :$m $l via satellite" else ":" + o.padEnd(9).take(9) + ":$m $l 73"
+            Genre.APRS -> if (o.isBlank()) "position, puis « $m $l 73 » en statut" else "message à $o : « $m $l 73 »"
             else -> if (o.isBlank()) "$m $l" else "$o de $m, $l, merci 73"
         }
     }

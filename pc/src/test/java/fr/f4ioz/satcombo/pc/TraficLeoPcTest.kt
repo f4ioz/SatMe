@@ -237,4 +237,16 @@ class TraficLeoPcTest {
         // No profile switches it on.
         assertTrue(ModulesStation.TRAFIC in ModulesStation.profil("tout")!!)
     }
+
+    @Test fun balise_kiss_jamais_gardee_d_un_demarrage_a_l_autre() {
+        val st = station()
+        val k = KissPc(st, AprsPc(File(dossier, "aprs"), { "" }))
+        // No ISS pass known: arming refused, the box stays unticked.
+        assertNotNull(k.armeBalise(true))
+        assertFalse(st.settings.aprsBaliseIss)
+        // Ticked from a stored setting (a backup, a previous run): unticked at the first look.
+        st.settings.aprsBaliseIss = true
+        kotlinx.coroutines.runBlocking { k.tic() }
+        assertFalse(st.settings.aprsBaliseIss)
+    }
 }

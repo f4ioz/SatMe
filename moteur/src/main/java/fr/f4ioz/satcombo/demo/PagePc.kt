@@ -2833,7 +2833,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
     <div class="ligne"><span class="petit">SSID</span><select id="kiss-ssid" style="flex:none" onchange="kPost('reglage?ssid=' + this.value)"></select>
       <label class="petit"><input type="checkbox" id="kiss-floue" onchange="kPost('reglage?floue=' + (this.checked ? 1 : 0))"> position approchée (à moins de 500 m)</label></div>
     <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="kiss-balise" onchange="kPost('reglage?balise=' + (this.checked ? 1 : 0))">
-      Balise ISS : ma position une fois par passage, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825</label>
+      Balise ISS pour ce passage : ma position une fois, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825 ; se décoche au LOS</label>
     <div class="petit aide" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
   <details class="carte" id="tr-carte" open>
@@ -18017,6 +18017,7 @@ function emissionsEnCours() {
   if (HX.btx && HX.btx.emet) l.push('BLU Pluto');
   // « Trafic satellite »: its APRS beacon armed for this pass (its overs show as the IC-9700 keyed).
   if (typeof LEO !== 'undefined' && LEO && LEO.balise && LEO.balise.armee) l.push('balise APRS armée');
+  if (typeof LEO !== 'undefined' && LEO && LEO.emet && !(HX.ptx && HX.ptx.emet)) l.push('Trafic satellite' + (LEO.simule ? ' (simulé)' : ''));
   // FT8/FT4 armed (its own poll, api/ft8/tx): keyed in its next slot.
   if (typeof F8TX !== 'undefined' && F8TX && F8TX.arme && !(HX.ptx && HX.ptx.emet)) l.push((F8TX.mode || 'FT8') + (F8TX.simule ? ' (simulé)' : ' armé'));
   return l;

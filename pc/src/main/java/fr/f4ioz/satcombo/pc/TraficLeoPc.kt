@@ -177,7 +177,10 @@ class TraficLeoPc(
         if (!actif()) return "module « Trafic satellite » désactivé (Réglages › Modules)"
         if (emet) return "une émission du trafic satellite est déjà en cours"
         if (!pageLa(VIE_MS)) return "la page ne répond plus"
-        if (simule()) return null
+        val s = runCatching { situation() }.getOrNull()
+        if (s != null && s.catnum != null && !s.geo && TraficSatellite.genre(s.transpondeur) == Genre.AUCUNE_MONTEE)
+            return "« " + s.nom + " » : l'émetteur choisi n'a pas de montée (balise, descente seule), rien à émettre"
+        if (simule()) return garde()
         val p = poste ?: return "pas de poste pour émettre"
         return p.refus() ?: garde()
     }
@@ -480,7 +483,7 @@ class TraficLeoPc(
      * satellite followed, the CW memories and keyer, the other station's
      * callsign, a voice memory's name or removal, the beacon disarmed.
      */
-    fun reglage(q: Map<String, String>): JSONObject {
+    @Synchronized fun reglage(q: Map<String, String>): JSONObject {
         val s = runCatching { situation() }.getOrNull() ?: Situation()
         q["lui"]?.let { lui = it.trim().uppercase().filter { c -> c.isLetterOrDigit() || c == '/' || c == '-' }.take(12) }
         s.catnum?.takeIf { !s.geo }?.let { n ->

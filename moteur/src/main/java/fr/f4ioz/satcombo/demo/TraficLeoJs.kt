@@ -30,6 +30,8 @@ object TraficLeoJs {
   .leo-etat.ok { background:var(--ok); color:#000; }
   .leo .leo-stop { margin-left:auto; }
   .leo .ligne { gap:4px 6px; flex-wrap:wrap; }
+  .leo input[type=number] { flex:none; width:64px; padding:2px 4px; }
+  .leo select { flex:none; max-width:100%; }
   .leo .leo-mem { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0; }
   .leo .leo-mem button { padding:3px 7px; font-size:12px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .leo .leo-ed { display:grid; grid-template-columns:auto 1fr; gap:3px 6px; align-items:center; margin:4px 0; }
