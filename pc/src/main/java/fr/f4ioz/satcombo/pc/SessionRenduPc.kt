@@ -91,7 +91,14 @@ object SessionRenduPc {
                           /** What is made: « video », « gif », « image » (the moment [instant]), « son »; the contacts' sound or not. */
                           val quoi: String = "video", val instant: Long? = null, val son: Boolean = false,
                           /** Before each AOS, after each LOS (ms). */
-                          val avant: Long = MARGE_MS, val apres: Long = MARGE_MS)
+                          val avant: Long = MARGE_MS, val apres: Long = MARGE_MS,
+                          /** The page's « Vitesse » (×1, ×2, ×4): every pace times this, as the preview plays it ([LECTURE_MAX] at most). */
+                          val lecture: Double = 1.0,
+                          /** The globe's camera chosen on the page ([GlobeRenduPc.CAMERAS_SKED]: « espace » by default). */
+                          val camera: String = "espace")
+
+    /** The page's « Vitesse » at most (and 1/[LECTURE_MAX] at least). */
+    const val LECTURE_MAX = 16.0
 
     /** A margin (ms) from « margeAvant » / « margeApres », else « avant » / « apres »: 0 to 30 min, 30 s when missing or wrong. */
     fun marge(p: (String) -> String, nom: String, ancien: String): Long =
@@ -118,7 +125,9 @@ object SessionRenduPc {
             tachesAutres = p("tachesAutres").trim() == "1",
             quoi = p("quoi").trim().takeIf { it in setOf("video", "gif", "image", "son") } ?: "video",
             instant = p("t").trim().toLongOrNull(), son = p("avecSon").trim() == "1",
-            avant = marge(p, "margeAvant", "avant"), apres = marge(p, "margeApres", "apres"))
+            avant = marge(p, "margeAvant", "avant"), apres = marge(p, "margeApres", "apres"),
+            lecture = p("lecture").trim().toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }?.coerceIn(1 / LECTURE_MAX, LECTURE_MAX) ?: 1.0,
+            camera = GlobeRenduPc.cameraDemandee(p("cam")))
     }
 
     /** What a session's video shows: its passes' scenes (sorted by time), how it plays, the cards asked. */
@@ -133,30 +142,41 @@ object SessionRenduPc {
                    */
                   val morceau: LongRange? = null,
                   /** The accelerated replay: its stretches' paces (1: real time with the sound, else faster), in place of the paces in the passes. */
-                  accelere: List<JournalPassage.Segment>? = null) {
+                  accelere: List<JournalPassage.Segment>? = null,
+                  /** Every pace times this (the page's « Vitesse »). */
+                  val lecture: Double = 1.0,
+                  /** The globe's camera ([GlobeRenduPc.centreCamera]). */
+                  val camera: String = "espace") {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
             .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
-        /** The paces imposed in the windows (the stretch's real time, or the accelerated replay's); null: the three paces. */
-        val imposes: List<JournalPassage.Segment>? = morceau?.let { listOf(JournalPassage.Segment(it.first, it.last, 1)) } ?: accelere?.sortedBy { it.deMs }
+        /**
+         * The paces imposed in the windows (the stretch's real time, or the accelerated replay's); null: the three paces.
+         * Skipping the silences, a normal stretch runs in real time to be heard — with the sound asked and a recording
+         * there; else at the pace of a picture or a contact ([Vitesses.image], vitesse 0 here): never slower than needed.
+         */
+        val imposes: List<JournalPassage.Segment>? = morceau?.let { listOf(JournalPassage.Segment(it.first, it.last, 1)) } ?: accelere?.map { g ->
+            val entendu = son && scenes.any { sc -> sc.e.enregistrements.isNotEmpty() && g.deMs <= sc.e.finMs + apres && g.aMs >= sc.e.debutMs - avant }
+            if (g.vitesse <= 1 && !entendu) JournalPassage.Segment(g.deMs, g.aMs, 0) else g
+        }?.sortedBy { it.deMs }
         /** The passes themselves, AOS to LOS: the zoom comes near around them (the satellite seen coming from afar in the margin). */
         val passages: List<LongRange> = scenes.map { it.e.debutMs..it.e.finMs }
         /** A single pass: its own title, cards and summary, its own caption (as its video has them), the session's pace and zooms. */
         val seul get() = scenes.size == 1
         /** The pictures of the session, each once (a picture tied to two passes close together), by the time it was received. */
-        val images: List<Pair<Marque, BufferedImage>> = scenes.flatMap { sc ->
+        val images: List<Pair<Marque, BufferedImage>> by lazy { scenes.flatMap { sc ->
             sc.marques.filter { it.type == TypeMarque.SSTV && it.fichier != null }.mapNotNull { m -> sc.images[m.fichier]?.let { m to it } }
-        }.distinctBy { it.first.fichier }.sortedBy { it.first.finMs }
+        }.distinctBy { it.first.fichier }.sortedBy { it.first.finMs } }
         /** When the pace slows to [Vitesses.image]. */
         val actifs: List<LongRange> = actifs(scenes)
         /** With the sound: when a contact is heard (or a real-time stretch imposed), played in real time. */
-        val ecoute: List<LongRange> = if (!son) emptyList() else imposes?.filter { it.vitesse <= 1 }?.map { it.deMs..it.aMs } ?: ecoute(scenes)
+        val ecoute: List<LongRange> = if (!son) emptyList() else imposes?.filter { it.vitesse == 1 }?.map { it.deMs..it.aMs } ?: ecoute(scenes)
         /** The first scene's: its format (16:9, 9:16 or 3:4) and resolution for every frame. */
         val format: RenduPc.Scene? get() = scenes.firstOrNull()
         val paysage get() = scenes.firstOrNull()?.paysage ?: true
         val resolution get() = scenes.firstOrNull()?.resolution ?: "M"
         init {
             // A picture received stays shown as long as in a pass's video at the pass's pace (the fastest imposed one).
-            val k = imposes?.maxOfOrNull { it.vitesse }?.toDouble()?.coerceAtLeast(1.0) ?: v.passage
+            val k = imposes?.maxOfOrNull { it.vitesse }?.toDouble()?.coerceAtLeast(1.0)?.let { if (imposes.any { it.vitesse <= 0 }) maxOf(it, v.image) else it } ?: v.passage
             scenes.forEach { it.flashMs = (it.flashS * 1000.0 * k).toLong() }
         }
     }
@@ -204,8 +224,11 @@ object SessionRenduPc {
      */
     class Allure(fenetres: List<LongRange>, actifs: List<LongRange>, continu: Boolean, val v: Vitesses, ecoute: List<LongRange> = emptyList(),
                  /** Imposed in the windows: each stretch's pace (the accelerated replay, a stretch in real time); the margins round them at [Vitesses.passage]. */
-                 imposes: List<JournalPassage.Segment>? = null) {
-        private val morceaux: List<Triple<Long, Long, Double>>
+                 imposes: List<JournalPassage.Segment>? = null,
+                 /** Every pace times this (the page's « Vitesse »): above 1, nothing runs in real time, nothing is heard. */
+                 val lecture: Double = 1.0) {
+        /** The stretches (from, to, pace before [lecture]): the page shades them on its timeline. */
+        val morceaux: List<Triple<Long, Long, Double>>
         init {
             val bornes = sortedSetOf<Long>()
             fenetres.forEach { bornes += it.first; bornes += it.last + 1 }
@@ -218,8 +241,9 @@ object SessionRenduPc {
                 val dans = fenetres.any { m in it }
                 val r = when {
                     !dans -> if (continu) v.hors else continue
-                    imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.vitesse?.toDouble()?.coerceAtLeast(1.0) ?: v.passage
-                    ecoute.any { m in it } -> minOf(1.0, v.image); actifs.any { m in it } -> v.image; else -> v.passage }
+                    imposes != null -> imposes.firstOrNull { m in it.deMs..it.aMs }?.vitesse?.let { if (it <= 0) v.image else it.toDouble().coerceAtLeast(1.0) } ?: v.passage
+                    // A contact heard: in real time (its sound only plays there, never slowed nor sped up).
+                    ecoute.any { m in it } -> 1.0; actifs.any { m in it } -> v.image; else -> v.passage }
                 val der = l.lastOrNull()
                 if (der != null && der.third == r && der.second == b[k]) l[l.size - 1] = Triple(der.first, b[k + 1], r) else l += Triple(b[k], b[k + 1], r)
             }
@@ -232,15 +256,17 @@ object SessionRenduPc {
                 val d = if (t < de) de - t else if (t >= a) t - a + 1 else 0L
                 r = minOf(r, v + EASE * d / 1000.0)
             }
-            return if (r == Double.MAX_VALUE) v.passage else r
+            return (if (r == Double.MAX_VALUE) v.passage else r) * lecture
         }
+        /** Real time there: its sound is heard (the page and the video, the same rule). */
+        fun reel(t: Long): Boolean = kotlin.math.abs(a(t) - 1.0) < 1e-4
     }
 
     /** Every frame of the session's passes, [fps] a second, each moment at its pace ([Allure]). */
     fun plan(fenetres: List<LongRange>, actifs: List<LongRange>, mode: String, v: Vitesses, fps: Int = FPS, transition: Double = TRANSITION_S,
-             ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null): List<Trame> {
+             ecoute: List<LongRange> = emptyList(), imposes: List<JournalPassage.Segment>? = null, lecture: Double = 1.0): List<Trame> {
         if (fenetres.isEmpty()) return emptyList()
-        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes)
+        val allure = Allure(fenetres, actifs, mode == "continu", v, ecoute, imposes, lecture)
         fun pas(t: Long) = (1000.0 / fps * allure.a(t)).toLong().coerceAtLeast(1)
         val l = ArrayList<Trame>()
         if (mode == "continu") {
@@ -268,8 +294,70 @@ object SessionRenduPc {
         return l
     }
 
-    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes)
-    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes)
+    fun plan(s: Session): List<Trame> = plan(s.fenetres, s.actifs, s.mode, s.v, FPS, s.transition, s.ecoute, s.imposes, s.lecture)
+    fun allure(s: Session) = Allure(s.fenetres, s.actifs, s.mode == "continu", s.v, s.ecoute, s.imposes, s.lecture)
+
+    // ---------------------------------------------------------------- the timeline, the page's and the video's
+
+    /**
+     * The video's timeline, frame by frame: [debut] frames of cards, then [plan] (each frame its real time), then
+     * [fin] frames of cards, [fps] a second. The journal page plays its preview on it (« /chronologie ») and the
+     * video is made from it: both the same, whatever the paces, the margins, the accelerated replay, the « Vitesse ».
+     */
+    class Chronologie(val fps: Int, val debut: Int, val plan: List<Trame>, val fin: Int, val allure: Allure) {
+        val trames get() = debut + plan.size + fin
+        /** How long the video lasts (s). */
+        val secondes get() = trames.toDouble() / fps
+        /** How long the passes play in it, the cards left out (s). */
+        val secondesPassages get() = plan.size.toDouble() / fps
+        /**
+         * The real time shown [s] seconds into the passes' part (the cards left out): between two frames of a pass, in
+         * proportion; on a turn to the next pass, its window's start; null past the end.
+         */
+        fun reel(s: Double): Long? {
+            if (plan.isEmpty() || s < 0) return plan.firstOrNull()?.t
+            val f = s * fps; val k = f.toInt()
+            if (k >= plan.size) return null
+            val a = plan[k]; val b = plan.getOrNull(k + 1) ?: return a.t
+            if (a is Trame.Tourne || b is Trame.Tourne || b.t < a.t) return a.t
+            return a.t + Math.round((b.t - a.t) * (f - k))
+        }
+        /** Seconds into the passes' part where the real time [t] is first shown (the inverse of [reel]); the end when past. */
+        fun video(t: Long): Double {
+            if (plan.isEmpty() || t <= plan[0].t) return 0.0
+            // In order (two windows overlapping, long margins: the first time it is shown).
+            val k = plan.indexOfFirst { it.t >= t }.takeIf { it > 0 } ?: return (plan.size - 1).toDouble() / fps
+            val a = plan[k - 1]; val b = plan[k]
+            return (k - 1 + if (b.t > a.t && a !is Trame.Tourne && b !is Trame.Tourne) (t - a.t).toDouble() / (b.t - a.t) else 1.0) / fps
+        }
+    }
+
+    /**
+     * The timeline as the journal page reads it ([fr.f4ioz.satcombo.demo.ChronologieJs]): its frames a second, the
+     * cards' frames before (« debut ») and after (« fin »), its length (« secondes »), the first frame's real time
+     * (« t0 ») and each next one's step (« dt », ms), each frame's pass (« i ») and kind (« k »: « p » in a pass, « e »
+     * between two, « t » turning to the next), the paces' stretches (« pieces »: from, to, pace with the « Vitesse »).
+     */
+    fun json(c: Chronologie, s: Session): String = buildString {
+        val l = c.plan
+        append("{\"ok\":true,\"fps\":").append(c.fps).append(",\"debut\":").append(c.debut).append(",\"fin\":").append(c.fin)
+        append(",\"secondes\":").append("%.3f".format(Locale.US, c.secondes)).append(",\"lecture\":").append(s.lecture)
+        append(",\"camera\":\"").append(s.camera.filter { it.isLetter() }).append("\",\"son\":").append(s.son)
+        append(",\"t0\":").append(l.firstOrNull()?.t ?: 0)
+        append(",\"dt\":[")
+        for (k in 1 until l.size) { if (k > 1) append(','); append(l[k].t - l[k - 1].t) }
+        append("],\"i\":[")
+        l.forEachIndexed { k, tr -> if (k > 0) append(','); append(tr.i()) }
+        append("],\"k\":\"")
+        l.forEach { append(when (it) { is Trame.Passe -> 'p'; is Trame.Entre -> 'e'; is Trame.Tourne -> 't' }) }
+        append("\",\"pieces\":[")
+        c.allure.morceaux.forEachIndexed { k, (d, f, v) -> if (k > 0) append(','); append('[').append(d).append(',').append(f).append(',').append(v * s.lecture).append(']') }
+        append("]}")
+    }
+    private fun Trame.i() = when (this) { is Trame.Passe -> i; is Trame.Entre -> i; is Trame.Tourne -> i }
+
+    fun chronologie(s: Session): Chronologie =
+        Chronologie(FPS, debut(s, 1, 1).sumOf { it.second }, plan(s), fin(s, 1, 1).sumOf { it.second }, allure(s))
 
     // ---------------------------------------------------------------- the zoom
 
@@ -321,12 +409,12 @@ object SessionRenduPc {
 
     /** One frame of the session [w]×[h]. */
     fun image(s: Session, tr: Trame, w: Int, h: Int): BufferedImage {
+        // Where the globe looks: as the page's camera (its choice: the satellite followed, my station, both).
+        fun c(k: Int, t: Long) = GlobeRenduPc.centreCamera(s.scenes[k], t, s.camera)
         val (i, centre) = when (tr) {
-            is Trame.Passe -> tr.i to null
-            is Trame.Entre -> tr.i to slerp(GlobeRenduPc.centre(s.scenes[tr.i], s.fenetres[tr.i].last),
-                GlobeRenduPc.centre(s.scenes[tr.i + 1], s.fenetres[tr.i + 1].first), doux(tr.k))
-            is Trame.Tourne -> tr.i to slerp(GlobeRenduPc.centre(s.scenes[tr.i - 1], s.fenetres[tr.i - 1].last),
-                GlobeRenduPc.centre(s.scenes[tr.i], s.fenetres[tr.i].first), doux(tr.k))
+            is Trame.Passe -> tr.i to (if (s.camera == "espace") null else c(tr.i, tr.t))
+            is Trame.Entre -> tr.i to slerp(c(tr.i, s.fenetres[tr.i].last), c(tr.i + 1, s.fenetres[tr.i + 1].first), doux(tr.k))
+            is Trame.Tourne -> tr.i to slerp(c(tr.i - 1, s.fenetres[tr.i - 1].last), c(tr.i, s.fenetres[tr.i].first), doux(tr.k))
         }
         val sc = s.scenes[i]
         val dp = RenduPc.echelle(w, h)
@@ -472,16 +560,18 @@ object SessionRenduPc {
         else if (s.recap) listOf({ -> mosaique(s, w, h) } to 6 * FPS) else emptyList()
 
     /** How many frames the video holds: the card, the passes, the mosaic. */
-    fun trames(s: Session): Int = debut(s, 1, 1).sumOf { it.second } + plan(s).size + fin(s, 1, 1).sumOf { it.second }
+    fun trames(s: Session): Int = chronologie(s).trames
 
     /** The session as an MP4 (H.264, with [son]'s sound as AAC when given) through ffmpeg; null without it or when it failed. */
     fun video(s: Session, sortie: File, son: Son? = null, travail: File? = null, progres: (Float) -> Unit): File? {
         val ff = RenduPc.ffmpeg() ?: return null
         if (s.scenes.isEmpty()) return null
         val (w, h) = s.format?.let { RenduPc.tailleVideo(it) } ?: RenduPc.tailleVideo(s.paysage, s.resolution)
-        val plan = plan(s)
+        // The timeline the page showed: the same frames, the same length.
+        val c = chronologie(s)
+        val plan = c.plan
         val avantP = debut(s, w, h); val apresP = fin(s, w, h)
-        val total = avantP.sumOf { it.second } + plan.size + apresP.sumOf { it.second }
+        val total = c.trames
         val wav = if (son != null && travail != null) File(travail, "session-" + System.nanoTime() + ".wav").also { RenduPc.ecritWav(source(s, plan, son), son.rate, it) } else null
         try {
             return RenduPc.encode(ff, w, h, FPS, total, wav, sortie) { ecris ->
@@ -518,7 +608,8 @@ object SessionRenduPc {
             val l = (debut(k + 1) - debut(k)).toInt()
             cur = ShortArray(l)
             val tr = plan.getOrNull(k - nTitre) as? Trame.Passe ?: return
-            if (!s.son || allure.a(tr.t) > 1.0001) return
+            // Only where the time runs in real time: never sped up nor slowed down (no pitch changed).
+            if (!s.son || !allure.reel(tr.t)) return
             val sp = son.sons[tr.i] ?: return
             val de = son.debuts[tr.i] ?: return
             // The pass's own rate: its samples taken to the video's (the nearest one).

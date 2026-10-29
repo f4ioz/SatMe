@@ -54,6 +54,7 @@ object PageJournal {
         "pj_session", "pj_session_aide", "pj_s_titre", "pj_s_sat", "pj_s_de", "pj_s_a", "pj_s_images", "pj_s_animer", "pj_s_chargement", "pj_s_aucun", "pj_s_resume", "pj_s_mode_passages", "pj_s_mode_continu", "pj_s_passage", "pj_s_recues", "pj_s_evenement", "pj_s_frise", "pj_villes", "pj_v_toutes", "pj_v_capitales", "pj_v_aucune", "pj_e_nom", "pj_e_drapeau", "pj_e_nomdrapeau", "pj_detail", "pj_d_0", "pj_d_1", "pj_d_2", "pj_globe_deplacer", "pj_s_vignettes", "pj_s_video_titre", "pj_s_video", "pj_s_sans_ffmpeg", "pj_s_entre_pause", "pj_s_entre_vite", "pj_police", "pj_s_aos_dans", "pj_s_apres_los", "pj_s_v_hors", "pj_s_v_passage", "pj_s_v_image",
         "pj_s_zoom_hors", "pj_s_zoom_passage", "pj_s_zoom_aide", "pj_s_autres", "pj_s_autres_aide", "pj_s_taches", "pj_s_son_aide", "pj_s_sans_son",
         "pj_onglet_options", "pj_marges", "pj_marge_avant", "pj_marge_apres", "pj_vitesses", "pj_vitesses_aide", "pj_accel_titre",
+        "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_frise_legende", "pj_vitesse_aide",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
         "pj_ft_titre", "pj_ft_aide", "pj_ft_visibilite", "pj_ft_ordre", "pj_ft_bas", "pj_ft_haut", "pj_ft_aucun", "pj_ft_redecoder",
         "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher")
@@ -260,6 +261,7 @@ const T = {/*T*/};
 window.SATME_RACINE = location.pathname.replace(/\/journal\/?.*/, '') + '/';
 const GLOBE_MONDE = ${GlobeDonnees.json()};
 ${OrbitesJs.JS}
+${ChronologieJs.CODE}
 function tf(k) { let s = T[k] || k; for (let i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(arguments[i]); return s; }
 function g(id) { return document.getElementById(id); }
 function el(tag, attrs, kids) {
@@ -312,6 +314,7 @@ function chargeOptions(defauts) {
 function garde() {
   for (const k in O) { if (O[k] === OD[k]) delete OM[k]; else OM[k] = O[k]; }
   try { localStorage.setItem('satme-journal-choix', JSON.stringify(OM)); localStorage.removeItem('satme-journal'); } catch (e) {}
+  chronoAJour();
 }
 
 // ------------------------------------------------------------ times
@@ -366,6 +369,8 @@ function dessineListe() {
  */
 let S = null, P = null, editions = 0;
 let t = 0, joue = false, vitesse = 1, vue0 = 0, vue1 = 1, sel = null, activite = [], onglet = 'moments';
+// SatMe-PC: the video's timeline (« /chronologie », [ChronologieJs]) the preview plays: [tau] seconds into its passes' part.
+let C = null, Ccle = '', tau = 0, chronoN = 0, chronoMin = 0;
 function ouvre(id) { return ouvreEditeur([id]); }
 /**
  * The editor on the passes [ids], in [o.zone] (the session's, under its form) or the page's view; [o.recharge]: the
@@ -387,6 +392,7 @@ async function ouvreEditeur(ids, o) {
   ps.sort((a, b) => a.de - b.de);
   // On the PC, each satellite's elements (it is seen coming before the AOS on the globe) and the companions to choose from.
   if (window.SATME_PC) { for (const q of ps) q.tle = await elementsDe(q.sat); await favorisStation(); }
+  C = null; Ccle = '';
   S = { ps: ps, ids: ps.map(q => q.id), sat: ps[0].sat, i: 0, segs: [], trans: 0, mode: O.mode === 'continu' ? 'continu' : 'passages',
     titre: vieux ? vieux.titre : '', vues: 0, fiches: {}, zone: z, version: ++editions };
   P = null; fiches = S.fiches;
@@ -408,6 +414,7 @@ async function ouvreEditeur(ids, o) {
   passeA(S.i, true);
   ps.forEach(q => lire('/fiches', { id: q.id }).then(f => { if (S && S.ps.includes(q)) { Object.assign(S.fiches, f); maj(); } }).catch(() => {}));
   chargeSegments();
+  chargeChrono();
 }
 /** The pass shown becomes the [i]th: its sky, its timeline, its sound, its pictures' versions, its panels. */
 function passeA(i, force) {
@@ -503,7 +510,8 @@ function construitVue(z) {
   const s = g('smetre'); for (let i = 0; i < 46; i++) s.appendChild(el('i', { class: (i + 0.5) / 46 > 0.6 ? 'r' : '' }));
   [1, 3, 5, 7, 9].forEach(n => g('grad').appendChild(el('span', { text: String(n), style: 'left:' + (n / 9 * 60) + '%' })));
   [20, 40, 60].forEach(db => g('grad').appendChild(el('span', { class: 'r', text: '+' + db, style: 'left:' + Math.min(97, 60 + db / 60 * 40) + '%' })));
-  const vit = el('select', { id: 'vitesse', onchange: ev => { vitesse = +ev.target.value; g('son').playbackRate = vitesse; } },
+  // The speed of everything: on the PC the video's too (its timeline asked again); above ×1, silent.
+  const vit = el('select', { id: 'vitesse', title: window.SATME_PC ? T.vitesse_aide : '', onchange: ev => { vitesse = +ev.target.value; if (!C) g('son').playbackRate = vitesse; chronoAJour(); } },
     [1, 2, 4].map(x => el('option', { value: x, text: '×' + x })));
   vit.value = String(vitesse);
   const acc = el('input', { type: 'checkbox', id: 'accelere' }); acc.checked = O.accelere;
@@ -513,7 +521,7 @@ function construitVue(z) {
     el('button', { class: 'discret', text: '−10 s', onclick: () => cherche(t - 10000) }),
     el('button', { class: 'discret', text: '+10 s', onclick: () => cherche(t + 10000) }),
     el('span', { class: 'aide', text: T.vitesse }), vit,
-    el('label', { class: 'aide' }, [acc, document.createTextNode(' ' + T.accelere.split(':')[0])]),
+    el('label', { class: 'aide', title: T.accelere + '. ' + T.accel_aide }, [acc, document.createTextNode(' ' + T.accelere.split(':')[0])]),
     el('span', { class: 'aide', id: 'position' }), el('span', { class: 'aide', id: 'sansSon' })]));
   // Several passes: all of them end to end above the one shown's timeline, the pictures as ticks.
   if (S.ps.length > 1) {
@@ -522,6 +530,7 @@ function construitVue(z) {
   }
   gauche.appendChild(el('canvas', { id: 'frise' }));
   gauche.appendChild(el('div', { class: 'aide', text: T.frise_aide }));
+  gauche.appendChild(el('div', { class: 'aide', id: 'friseLegende', text: T.frise_legende }));
   gauche.appendChild(el('div', { class: 'rangee', id: 'selection' }));
   gauche.appendChild(el('div', { id: 'sGalerie' }));
   cote.appendChild(el('div', { class: 'onglets' }, [
@@ -662,7 +671,7 @@ function choixGlobe(id, idCam) {
   const sel = (attrs, l, v) => { const s = el('select', attrs, l.map(c => el('option', { value: c[0], text: c[1] }))); s.value = v; return s; };
   return el('div', { class: 'globe-choix', id: id }, [
     sel({ class: 'ob-style-choix', onchange: ev => Orbites.style(ev.target.value) }, Orbites.styles(), Orbites.styleActif()),
-    sel({ id: idCam, onchange: ev => Orbites.camera(ev.target.value) }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station], ['satellite', T.cam_satellite]], Orbites.cameraActive()),
+    sel({ id: idCam, onchange: ev => { Orbites.camera(ev.target.value); chronoAJour(); } }, [['espace', T.cam_ensemble], ['poursuite', T.cam_poursuite], ['sol', T.cam_station], ['satellite', T.cam_satellite]], Orbites.cameraActive()),
     sel({ title: T.villes, onchange: ev => Orbites.villes(ev.target.value) }, [['toutes', T.villes + ' : ' + T.v_toutes], ['capitales', T.villes + ' : ' + T.v_capitales], ['aucune', T.villes + ' : ' + T.v_aucune]], Orbites.villesActives()),
     sel({ onchange: ev => Orbites.etiquettes(ev.target.value) }, [['nom', T.e_nom], ['drapeau', T.e_drapeau], ['nomdrapeau', T.e_nomdrapeau]], Orbites.etiquettesActives()),
     sel({ title: T.detail, onchange: ev => Orbites.detail(+ev.target.value) }, [['0', T.detail + ' : ' + T.d_0], ['1', T.detail + ' : ' + T.d_1], ['2', T.detail + ' : ' + T.d_2]], String(Orbites.detailActif()))]);
@@ -1252,8 +1261,10 @@ function dessineFrise() {
   for (let tt = Math.ceil(vue0 / pas) * pas; tt <= vue1; tt += pas) { const px = tx(tt, w); x.fillRect(px, h - 14, 1, 3); x.fillText(hms(tt).slice(0, pas < 60000 ? 8 : 5), px, h - 2); }
   x.fillStyle = '#18232D'; x.fillRect(tx(P.de, w), 4, tx(P.a, w) - tx(P.de, w), h - 20);
   P.sons.forEach(s => { x.fillStyle = 'rgba(63,224,200,.12)'; x.fillRect(tx(s.o + s.an, w), 4, tx(s.o + s.du, w) - tx(s.o + s.an, w), h - 20); });
-  // Accelerated: the fast stretches hatched.
-  if (O.accelere) segments.forEach(s => { if (s[2] > 1) { x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(tx(s[0], w), 4, tx(s[1], w) - tx(s[0], w), h - 20); } });
+  // The silences skipped: hatched (fast, silent); where the video runs in real time with the sound: a green line under it.
+  if (O.accelere) segments.forEach(s => { if (s[2] > 1) hachure(x, tx(s[0], w), 4, tx(s[1], w) - tx(s[0], w), h - 20); });
+  if (C && O.avecSon) { x.fillStyle = '#5BD68A'; (C.pieces || []).forEach(q => { if (chReel(q[2])) x.fillRect(tx(q[0], w), h - 17, Math.max(2, tx(q[1], w) - tx(q[0], w)), 3); }); }
+  const lg = g('friseLegende'); if (lg) lg.style.display = O.accelere || (C && O.avecSon) ? '' : 'none';
   x.fillStyle = 'rgba(205,215,230,.45)'; activite.forEach(r => x.fillRect(tx(r[0], w), 36, Math.max(2, tx(r[1], w) - tx(r[0], w)), 7));
   if (P.sig.length) { x.strokeStyle = 'rgba(235,240,245,.8)'; x.lineWidth = 1.3; x.beginPath();
     P.sig.forEach((s, i) => { const px = tx(s[0], w), py = h - 18 - part(s[1]) * 22; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke(); }
@@ -1261,6 +1272,15 @@ function dessineFrise() {
   if (sel) { x.fillStyle = 'rgba(63,224,200,.18)'; x.fillRect(tx(sel[0], w), 0, tx(sel[1], w) - tx(sel[0], w), h - 16);
     x.fillStyle = '#3FE0C8'; x.fillRect(tx(sel[0], w), 0, 2, h - 16); x.fillRect(tx(sel[1], w) - 2, 0, 2, h - 16); }
   x.fillStyle = '#FFC21A'; x.fillRect(tx(t, w) - 1, 0, 3, h - 14);
+}
+/** A stretch hatched (the silences skipped): amber stripes over a dark veil, seen on the pass and in its margins. */
+function hachure(x, x0, y0, l, h) {
+  if (l <= 0) return;
+  x.save(); x.beginPath(); x.rect(x0, y0, l, h); x.clip();
+  x.fillStyle = 'rgba(10,15,24,.45)'; x.fillRect(x0, y0, l, h);
+  x.strokeStyle = 'rgba(255,194,26,.55)'; x.lineWidth = 1.5; x.beginPath();
+  for (let u = x0 - h; u < x0 + l; u += 7) { x.moveTo(u, y0 + h); x.lineTo(u + h, y0); }
+  x.stroke(); x.restore();
 }
 function installeFrise() {
   const c = g('frise'); let pres = null;
@@ -1315,13 +1335,13 @@ function allureA(tt) {
   (S.pieces || []).forEach(q => { const d = tt < q[0] ? q[0] - tt : tt >= q[1] ? tt - q[1] + 1 : 0; r = Math.min(r, q[2] + 2 * d / 1000); });
   return isFinite(r) ? r : +O.vPassage;
 }
-/** The sound heard here: the pass shown's recording, where the time runs in real time, the sound asked. */
-function ecouteIci(tt) { return !!(O.avecSon && P && !S.trans && morceauA(tt) >= 0 && allureA(tt) <= 1.0001); }
+/** The sound heard here: the pass shown's recording, where the time runs in real time (as the video: never sped up nor slowed), the sound asked. */
+function ecouteIci(tt) { return !!(O.avecSon && P && !S.trans && morceauA(tt) >= 0 && (C ? chReel(allureVue) : allureA(tt) <= 1.0001)); }
 function synchro() {
   const a = g('son'), i = morceauA(t);
   if (!joue || !ecouteIci(t)) { if (!a.paused) a.pause(); return; }
   const s = P.sons[i], pos = (t - s.o) / 1000, cle = P.id + '#' + i;
-  if (morceauJoue !== cle) { morceauJoue = cle; a.src = url('/son', { id: P.id, n: s.n }); a.playbackRate = vitesse;
+  if (morceauJoue !== cle) { morceauJoue = cle; a.src = url('/son', { id: P.id, n: s.n }); a.playbackRate = C ? 1 : vitesse;
     a.addEventListener('loadedmetadata', () => { a.currentTime = (t - s.o) / 1000; a.play().catch(() => {}); }, { once: true }); return; }
   if (Math.abs(a.currentTime - pos) > 0.6) a.currentTime = pos;
   if (a.paused) a.play().catch(() => {});
@@ -1333,6 +1353,8 @@ function synchro() {
 function boucle(now) {
   if (!joue || !S) return;
   const dt = Math.min(now - (dernier || now), 100); dernier = now;
+  // SatMe-PC: the video's own timeline, frame for frame.
+  if (C) { avanceChrono(dt); if (!joue) return; synchro(); maj(); requestAnimationFrame(boucle); return; }
   const fin = S.segs[S.segs.length - 1][1];
   if (S.mode !== 'continu' && S.trans) {
     S.trans -= dt; if (S.trans <= 0) { S.trans = 0; t = S.segs[S.i + 1][0]; passeA(S.i + 1); }
@@ -1350,15 +1372,69 @@ function boucle(now) {
   maj();
   requestAnimationFrame(boucle);
 }
-function bascule() {
+async function bascule() {
   if (joue) { arrete(); return; }
-  if (t >= S.segs[S.segs.length - 1][1]) { S.trans = 0; S.vues = 0; if (g('sGalerie')) g('sGalerie').innerHTML = ''; t = S.segs[0][0]; passeA(0); }
+  if (window.SATME_PC && !C) await chargeChrono();
+  if (!S) return;
+  const fini = C ? tau >= C.tt.length / C.fps - 1e-6 || chEtat(C, tau).fin : t >= S.segs[S.segs.length - 1][1];
+  if (fini) { S.trans = 0; S.vues = 0; if (g('sGalerie')) g('sGalerie').innerHTML = ''; t = S.segs[0][0]; tau = 0; passeA(0); }
+  else if (C && !S.trans) tau = chVideo(C, t);
   joue = true; dernier = 0; synchro(); requestAnimationFrame(boucle); maj();
+}
+/**
+ * The preview on the video's timeline: [dt] ms of play, the frame it reaches — in a pass (its time between two frames),
+ * turning to the next pass (the old one held while the globe turns), between two (« continu »).
+ */
+function avanceChrono(dt) {
+  tau += dt / 1000;
+  const e = chEtat(C, tau);
+  allureVue = e.allure;
+  if (e.kind === 't') {
+    const j = Math.max(0, e.i - 1);
+    if (S.i !== j) passeA(j);
+    t = S.segs[j][1]; S.trans = Math.max(1, e.trans);
+  } else {
+    if (S.trans) S.trans = 0;
+    t = e.t;
+    if (S.i !== e.i && S.ps[e.i]) passeA(e.i);
+  }
+  if (e.fin) { S.trans = 0; arrete(); }
+}
+/** SatMe-PC: the video's timeline asked again (the options changed), a moment later. */
+function chronoAJour() {
+  if (!window.SATME_PC || !S) return;
+  clearTimeout(chronoMin); chronoMin = setTimeout(() => { chargeChrono(); }, 250);
+}
+/** The words the files are asked with, the same for the preview's timeline (« /chronologie ») and the files (« /fabrique-session »). */
+function chronoParams() { return chApercu(parametresRendu('video')); }
+async function chargeChrono() {
+  if (!window.SATME_PC || !S) return C;
+  const q = chronoParams(), cle = chCle(q), s = S, n = ++chronoN;
+  if (C && cle === Ccle) { majDuree(); return C; }
+  let c = null;
+  try { c = await lire('/chronologie', q); } catch (x) {}
+  if (S !== s || n !== chronoN) return C;
+  if (!c || !c.ok) { C = null; Ccle = ''; majDuree(); return null; }
+  C = chDecode(c); Ccle = cle;
+  if (!S.trans) tau = chVideo(C, t);
+  dessineFrise(); majDuree();
+  return C;
+}
+/** « Durée de la vidéo : 1 min 42 s »: the timeline's own length, cards included — for the file asked (a stretch chosen: its own). */
+async function majDuree() {
+  const l = [...document.querySelectorAll('.duree-video')]; if (!l.length || !S) return;
+  let c = C;
+  const q = chApercu(parametresRendu('video'));
+  if (deQuoi === 'sel' && sel) { q.de = Math.round(sel[0]); q.a = Math.round(sel[1]); try { c = await lire('/chronologie', q); } catch (x) { c = null; } }
+  const texte = !c || !c.ok ? '' : tf('duree_video', chDuree(c.secondes)) +
+    (c.debut + c.fin > 0 ? ' (' + tf('duree_cartes', chDuree((c.debut + c.fin) / c.fps)) + ')' : '');
+  l.forEach(x => { x.textContent = texte; });
 }
 function arrete() { joue = false; const a = g('son'); if (a && !a.paused) a.pause(); if (S && P) maj(); }
 function cherche(tt) {
   const lo = Math.min(S.segs[0][0], S.ps[0].t0), hi = Math.max(S.segs[S.segs.length - 1][1], S.ps[S.ps.length - 1].t1);
   t = Math.max(lo, Math.min(hi, tt)); S.trans = 0; S.vues = 0; if (g('sGalerie')) g('sGalerie').innerHTML = '';
+  if (C) tau = chVideo(C, t);
   if (indexA(t) !== S.i) passeA(indexA(t));
   if (t < vue0 || t > vue1) { const l = vue1 - vue0; vue0 = t - l / 2; vue1 = vue0 + l; }
   if (joue) synchro(); maj();
@@ -1373,7 +1449,7 @@ function maj() {
   g('lecture').textContent = joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
   g('position').textContent = (S.ps.length > 1 ? tf('s_passage', S.i + 1, S.ps.length) + ' · ' : '') +
     (t < P.de ? tf('s_aos_dans', mmss(P.de - t)) : t > P.a ? T.s_apres_los + ' + ' + mmss(t - P.a) : duree(t - P.de) + ' / ' + duree(P.a - P.de)) +
-    (joue && !S.trans ? (allureVue <= 1.0001 ? '' : ' · ×' + Math.round(allureVue * vitesse)) : '');
+    (joue && !S.trans ? ((C ? chReel(allureVue) : allureVue <= 1.0001) ? '' : ' · ×' + facteur(C ? allureVue : allureVue * vitesse)) : '');
   const s = g('selection'); s.innerHTML = '';
   if (sel) { s.appendChild(el('span', { text: tf('selection', hms(sel[0]), hms(sel[1]), duree(sel[1] - sel[0])) }));
     s.appendChild(el('button', { class: 'discret', text: T.effacer, onclick: () => { sel = null; deQuoi = 'tout'; maj(); if (onglet === 'fabriquer') panneau(); } })); }
@@ -1467,12 +1543,18 @@ function chercheSession(f) {
   let reste = f * S.duree;
   for (let i = 0; i < S.segs.length; i++) { const q = S.segs[i], l = q[1] - q[0]; if (reste <= l || i === S.segs.length - 1) { cherche(q[0] + Math.min(l, reste)); return; } reste -= l; }
 }
-/** A speed's slider, from [min] to [max] on a log scale (×10 000 and ×2 both within reach), its value beside it. */
-function curseurVitesse(cle, lib, min, max) {
+/** « 2.5 », « 20 »: a pace as the page shows it. */
+function facteur(x) { return x < 10 ? (+x).toFixed(1).replace(/\.0$/, '') : String(Math.round(x)); }
+/**
+ * A speed's slider, from [min] to [max] on a log scale (×10 000 and ×2 both within reach), its value beside it;
+ * [entier]: whole values only; [apres]: told once it moved (the timeline is asked again by [garde]).
+ */
+function curseurVitesse(cle, lib, min, max, entier, apres) {
   const lmin = Math.log(min), lmax = Math.log(max), v = el('b'), r = el('input', { type: 'range', min: 0, max: 1000, step: 1 });
-  const montre = () => { const x = +O[cle]; v.textContent = '×' + (x < 10 ? x.toFixed(1).replace(/\.0$/, '') : Math.round(x)); };
+  const montre = () => { v.textContent = '×' + facteur(+O[cle]); };
   r.value = Math.round((Math.log(Math.max(min, Math.min(max, +O[cle]))) - lmin) / (lmax - lmin) * 1000);
-  r.oninput = () => { const x = Math.exp(lmin + (lmax - lmin) * r.value / 1000); O[cle] = x < 10 ? Math.round(x * 2) / 2 : x < 100 ? Math.round(x) : Math.round(x / 10) * 10; garde(); montre(); piecesAllure(); };
+  r.oninput = () => { const x = Math.exp(lmin + (lmax - lmin) * r.value / 1000); O[cle] = x < 10 && !entier ? Math.round(x * 2) / 2 : x < 100 ? Math.round(x) : Math.round(x / 10) * 10; garde(); montre(); piecesAllure(); };
+  if (apres) r.onchange = apres;
   montre();
   return el('label', { class: 's-curseur' }, [el('span', { text: lib }), r, v]);
 }
@@ -1559,6 +1641,21 @@ function panneauOptions(p) {
   // One pass: nothing to follow on — said rather than hidden, the editor the same.
   if (seul) p.appendChild(el('div', { class: 'aide', text: T.s_mode_seul }));
   p.appendChild(el('div', { class: 'aide', text: T.vitesses_aide }));
+  // Skipping the silences: quick and silent where nothing was logged nor heard, real time with the sound round the rest —
+  // with the speeds, its own (« Silences ») beside them; the page and the files.
+  p.appendChild(titreBloc(T.accel_titre));
+  const vSil = curseurVitesse('rapide', T.accel_vitesse, 2, 100, true, chargeSegments);
+  const montreSil = () => { vSil.style.display = O.accelere ? '' : 'none'; };
+  p.appendChild(el('div', { class: 'commandes' }, [el('div', { title: T.accelere + '. ' + T.accel_aide },
+    [caseOpt('accelere', T.accelere.split(':')[0].trim(), () => { const x = g('accelere'); if (x) x.checked = O.accelere; montreSil(); piecesAllure(); if (joue) synchro(); })]), vSil]));
+  montreSil();
+  const a = el('div', { class: 'colonnes' });
+  a.appendChild(nombreOpt('avant', T.avant, 0, 60, chargeSegments));
+  a.appendChild(nombreOpt('apres', T.apres, 0, 120, chargeSegments));
+  a.appendChild(caseOpt('surActivite', T.activite_opt, chargeSegments));
+  p.appendChild(a);
+  p.appendChild(el('div', { class: 'aide', text: T.accel_aide }));
+  if (pc) { p.appendChild(el('div', { class: 'aide duree-video' })); majDuree(); }
   if (pc) {
     // On the globe: two zooms, from afar outside the passes (a long margin: the satellite seen coming), near from the AOS to the LOS.
     p.appendChild(titreBloc(T.vue_globe));
@@ -1587,16 +1684,6 @@ function panneauOptions(p) {
   p.appendChild(curseurPolice(rafraichit));
   // The FT8/FT4 messages over the replay, when the pass has some (or a recording to read them from).
   blocFt(p);
-  // The accelerated replay, quick and silent where nothing was logged nor heard: the page and the files.
-  p.appendChild(titreBloc(T.accel_titre));
-  const a = el('div', { class: 'colonnes' });
-  a.appendChild(caseOpt('accelere', T.accelere, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); }));
-  const r = el('select', { onchange: ev => { O.rapide = +ev.target.value; garde(); chargeSegments(); } }, [5, 10, 20, 50].map(x => el('option', { value: x, text: '×' + x })));
-  r.value = String(O.rapide); a.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.vitesse }), r]));
-  a.appendChild(nombreOpt('avant', T.avant, 0, 60, chargeSegments));
-  a.appendChild(nombreOpt('apres', T.apres, 0, 120, chargeSegments));
-  a.appendChild(caseOpt('surActivite', T.activite_opt, chargeSegments));
-  p.appendChild(a);
   if (S.images.length) p.appendChild(el('p', { class: 'aide', text: T.sstv_cadre + ' — ' + T.sstv_cadre_aide }));
   p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
 }
@@ -1630,12 +1717,14 @@ function panneauExports(p) {
   c.appendChild(caseOpt('ouverture', T.ouverture, rafraichit)); c.appendChild(caseOpt('recap', T.recap, rafraichit));
   // The sound: where the time runs in real time (a contact heard, the accelerated replay's normal stretches), here and in the video.
   c.appendChild(el('div', { title: T.s_son_aide }, [caseOpt('avecSon', T.avec_son, () => { piecesAllure(); if (joue) synchro(); })]));
-  c.appendChild(caseOpt('accelere', T.accelere_video, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); }));
+  c.appendChild(el('div', { title: T.accelere + '. ' + T.accel_aide }, [caseOpt('accelere', T.accelere_video, () => { const x = g('accelere'); if (x) x.checked = O.accelere; piecesAllure(); if (joue) synchro(); })]));
   c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
   p.appendChild(c);
   p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: n > 1 ? T.s_video : T.video, onclick: () => fabrique('video') }),
     el('button', { class: 'discret', text: T.gif, onclick: () => fabrique('gif') }), el('button', { class: 'discret', text: T.image, onclick: () => fabrique('image') }),
     el('button', { class: 'discret', text: T.son, onclick: () => fabrique('son') }), el('button', { class: 'discret', text: T.paquet, onclick: () => fabrique('paquet') })]));
+  // How long the video will be: its own timeline (the preview's), before it is made.
+  if (pc) { p.appendChild(el('div', { class: 'duree-video', style: 'margin:4px 0;font-weight:600' })); majDuree(); }
   if (pc) p.appendChild(el('div', { class: 'aide', text: T.exp_unique }));
   if (n > 1) p.appendChild(el('div', { class: 'aide', text: T.exp_plusieurs }));
   p.appendChild(el('div', { class: 'aide', text: T.s_son_aide }));
@@ -1651,16 +1740,25 @@ function optionsSession(sat) {
     zHors: O.zHors, zPassage: O.zPassage, autres: O.autres.filter(n => n !== sat).join(','), tachesAutres: b(O.tachesAutres), avecSon: b(O.avecSon),
     entre: O.entre, transition: O.transition, margeAvant: ma, margeApres: mp };
 }
-/** What the page shows, made by the station: the same engine for one pass or several (the phone's own files: [fabriqueTelephone]). */
-async function fabrique(quoi) {
-  if (!window.SATME_PC) return fabriqueTelephone(quoi);
+/**
+ * The words of a file asked of SatMe-PC (« /fabrique-session »), [quoi] the kind — the same words ask the preview's
+ * timeline (« /chronologie », [chApercu]): the margins, the paces and the page's « Vitesse » (« lecture »), the
+ * accelerated replay, the view and the globe's camera (« cam »), the cards; the stretch chosen when it is the one asked.
+ */
+function parametresRendu(quoi) {
   const b = v => v ? '1' : '0';
   const q = Object.assign({ quoi: quoi, t: Math.round(t), ids: S.ids.join(','), titre: S.titre || '', police: O.police, utc: b(utc),
     res: O.res, format: O.format === 'telephone' ? 'telephone' : 'paysage', vue: O.vue, sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq),
     locator: b(O.locator), ouverture: b(O.ouverture), recap: b(O.recap), cadreSstv: texteCadre(cadreSstv), style: Orbites.styleActif(), villes: Orbites.villesActives(),
     etiquettes: Orbites.etiquettesActives(), detail: Orbites.detailActif(), accelere: b(O.accelere), rapide: O.rapide, accAvant: O.avant, accApres: O.apres,
-    surActivite: b(O.surActivite), contacts: b(O.paquetQsos) }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
+    surActivite: b(O.surActivite), contacts: b(O.paquetQsos), lecture: vitesse, cam: Orbites.cameraActive() }, optionsSession(S.sat), Orbites.cadrage(), paramsFt());
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { q.de = Math.round(sel[0]); q.a = Math.round(sel[1]); }
+  return q;
+}
+/** What the page shows, made by the station: the same engine for one pass or several (the phone's own files: [fabriqueTelephone]). */
+async function fabrique(quoi) {
+  if (!window.SATME_PC) return fabriqueTelephone(quoi);
+  const q = parametresRendu(quoi);
   // The map as framed here, in the file's frame: its view's centre and width — for the pass it shows, the others framed to themselves.
   if (O.vue === 'carte') { const c = g('carte'), f = cadreFichier(); q.mcx = mcx; q.mcy = mcy; q.zc = zc; q.cw = c.clientWidth; q.ch = c.clientHeight; q.carteId = P.id;
     if (f) { const s = 256 * Math.pow(2, zc); q.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; q.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; q.cw = f.fw; q.ch = f.vh; } }

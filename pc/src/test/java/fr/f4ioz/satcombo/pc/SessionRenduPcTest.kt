@@ -328,7 +328,7 @@ class SessionRenduPcTest {
         // Accelerated: real time on its normal stretches, its own pace on the fast ones, the margins at the pass's pace.
         val segs = listOf(JournalPassage.Segment(e.debutMs, e.debutMs + 140_000L, 10), JournalPassage.Segment(e.debutMs + 140_000L, e.debutMs + 170_000L, 1),
             JournalPassage.Segment(e.debutMs + 170_000L, e.finMs, 10))
-        val a = SessionRenduPc.Session(listOf(sc[1]), "passages", SessionRenduPc.Vitesses(passage = 50.0), son = true, accelere = segs, avant = 60_000L, apres = 0L)
+        val a = SessionRenduPc.Session(listOf(scenes(avecSon = true)[1]), "passages", SessionRenduPc.Vitesses(passage = 50.0), son = true, accelere = segs, avant = 60_000L, apres = 0L)
         val al = SessionRenduPc.allure(a)
         assertEquals(1.0, al.a(e.debutMs + 155_000L), 1e-9)
         assertEquals(10.0, al.a(e.debutMs + 60_000L), 1e-9)
@@ -542,5 +542,123 @@ class SessionRenduPcTest {
         assertEquals(1920, ImageIO.read(png).width)
         // Between two passes: a moment of the turn, not a pass's end.
         assertTrue(SessionRenduPc.trameA(s, (s.fenetres[0].last + s.fenetres[1].first) / 2) is SessionRenduPc.Trame.Entre)
+    }
+
+    // ---------------------------------------------------------------- the timeline shared by the page and the video
+
+    @Test
+    fun la_demande_dit_la_vitesse_de_lecture_et_la_camera() {
+        fun lit(vararg kv: Pair<String, String>) = SessionRenduPc.parametres { k -> kv.toMap()[k].orEmpty() }
+        assertEquals(1.0, lit().lecture, 0.0); assertEquals("espace", lit().camera)
+        assertEquals(4.0, lit("lecture" to "4").lecture, 0.0); assertEquals("poursuite", lit("cam" to "poursuite").camera)
+        assertEquals(SessionRenduPc.LECTURE_MAX, lit("lecture" to "1e9").lecture, 0.0)
+        assertEquals(1.0, lit("lecture" to "-2").lecture, 0.0); assertEquals("espace", lit("cam" to "drone").camera)
+    }
+
+    /** One pass of 6 min, 30 s margins, no picture nor contact: the paces alone. */
+    private fun seul(v: SessionRenduPc.Vitesses, lecture: Double = 1.0, mode: String = "continu", accelere: List<JournalPassage.Segment>? = null, son: Boolean = false) =
+        SessionRenduPc.Session(scenes(avecSon = son).drop(1).take(1), mode, v, ouverture = false, recap = false, avant = 30_000L, apres = 30_000L,
+            lecture = lecture, accelere = accelere, son = son)
+
+    @Test
+    fun la_chronologie_vitesses_duree_et_ordre() {
+        // ×4 in the pass: 420 s of window (the contact has no sound: no slowing) in 105 s of video, the cards none.
+        val s = seul(SessionRenduPc.Vitesses(hors = 20.0, passage = 4.0, image = 3.0))
+        val c = SessionRenduPc.chronologie(s)
+        assertEquals(0, c.debut); assertEquals(0, c.fin)
+        assertEquals(105.0, c.secondes, 0.5)
+        assertEquals(c.trames, SessionRenduPc.trames(s))
+        // Never back in time; t_video → t_real → t_video gives the same.
+        assertTrue(c.plan.zipWithNext().all { (a, b) -> b.t > a.t })
+        var avant = Long.MIN_VALUE
+        for (k in 0..1000) {
+            val x = c.secondesPassages * k / 1000
+            val t = c.reel(x) ?: break
+            assertTrue("$x", t >= avant); avant = t
+            assertEquals(x, c.video(t), 1.0 / SessionRenduPc.FPS)
+        }
+        assertEquals(s.fenetres[0].first, c.reel(0.0)); assertNull(c.reel(c.secondesPassages + 1))
+        // ×4 between frames: 500 ms of the pass a frame.
+        assertEquals(500L, c.plan[100].t - c.plan[99].t)
+        // The page's « Vitesse » ×2: everything twice as fast, half as long.
+        val d = SessionRenduPc.chronologie(seul(SessionRenduPc.Vitesses(hors = 20.0, passage = 4.0, image = 3.0), lecture = 2.0))
+        assertEquals(c.secondes / 2, d.secondes, 0.3)
+        // The cards before and after count in the length (a single pass: its title 3 s, its summary 6 s).
+        val avecCartes = SessionRenduPc.Session(s.scenes, "continu", s.v, avant = 30_000L, apres = 30_000L)
+        val e = SessionRenduPc.chronologie(avecCartes)
+        assertEquals(3 * SessionRenduPc.FPS, e.debut); assertTrue(e.fin >= 6 * SessionRenduPc.FPS)
+        assertEquals(e.trames.toDouble() / SessionRenduPc.FPS, e.secondes, 1e-9)
+    }
+
+    @Test
+    fun la_chronologie_des_silences_sautes_et_du_son() {
+        val e = scenes()[1].e
+        // Skipping the silences: ×1 round the contact (30 s), ×10 elsewhere in the pass, the margins at the pass's ×4.
+        val segs = listOf(JournalPassage.Segment(e.debutMs, e.debutMs + 140_000L, 10), JournalPassage.Segment(e.debutMs + 140_000L, e.debutMs + 170_000L, 1),
+            JournalPassage.Segment(e.debutMs + 170_000L, e.finMs, 10))
+        val s = seul(SessionRenduPc.Vitesses(hors = 20.0, passage = 4.0), accelere = segs, son = true)
+        val c = SessionRenduPc.chronologie(s)
+        // 60 s of margins at ×4 = 15 s; 330 s at ×10 = 33 s; 30 s at ×1 = 30 s; plus the easing in and out.
+        assertTrue("${c.secondes}", c.secondes in 78.0..90.0)
+        // Real time (its sound heard) only on the normal stretch, never elsewhere.
+        assertTrue(c.allure.reel(e.debutMs + 155_000L)); assertTrue(!c.allure.reel(e.debutMs + 60_000L)); assertTrue(!c.allure.reel(e.debutMs - 20_000L))
+        assertTrue(c.allure.morceaux.any { it.third == 1.0 } && c.allure.morceaux.any { it.third == 10.0 })
+        // A contact heard plays in real time even when « Image ou contact » is slower (×0.5): never slowed sound.
+        val lent = SessionRenduPc.Allure(s.fenetres, emptyList(), true, SessionRenduPc.Vitesses(passage = 4.0, image = 0.5),
+            ecoute = listOf((e.debutMs + 140_000L)..(e.debutMs + 170_000L)))
+        assertEquals(1.0, lent.a(e.debutMs + 155_000L), 1e-9)
+        // Nothing to hear (no sound asked, or no recording): the normal stretch at the pace of a picture or a contact, not ×1.
+        val muet = SessionRenduPc.chronologie(seul(SessionRenduPc.Vitesses(hors = 20.0, passage = 4.0, image = 3.0), accelere = segs, son = false))
+        assertEquals(3.0, muet.allure.a(e.debutMs + 155_000L), 1e-9); assertTrue(muet.plan.none { muet.allure.reel(it.t) })
+        assertTrue("${muet.secondes}", muet.secondes < c.secondes - 15)
+        // « Vitesse » ×2: nothing in real time any more, silent.
+        val vite = SessionRenduPc.chronologie(seul(SessionRenduPc.Vitesses(hors = 20.0, passage = 4.0), lecture = 2.0, accelere = segs, son = true))
+        assertTrue(vite.plan.none { vite.allure.reel(it.t) })
+    }
+
+    @Test
+    fun la_chronologie_pour_la_page_et_les_tours() {
+        // Three passes in a row: the turns between them in the page's words, its steps adding up to each frame's time.
+        val s = SessionRenduPc.Session(scenes(), "passages", SessionRenduPc.Vitesses(passage = 20.0), lecture = 1.0, camera = "poursuite")
+        val c = SessionRenduPc.chronologie(s)
+        val j = org.json.JSONObject(SessionRenduPc.json(c, s))
+        assertTrue(j.getBoolean("ok")); assertEquals(SessionRenduPc.FPS, j.getInt("fps"))
+        assertEquals(c.debut, j.getInt("debut")); assertEquals(c.fin, j.getInt("fin")); assertEquals(c.secondes, j.getDouble("secondes"), 0.001)
+        assertEquals("poursuite", j.getString("camera"))
+        val k = j.getString("k"); val dt = j.getJSONArray("dt"); val ii = j.getJSONArray("i")
+        assertEquals(c.plan.size, k.length); assertEquals(c.plan.size - 1, dt.length()); assertEquals(c.plan.size, ii.length())
+        var t = j.getLong("t0")
+        for (n in c.plan.indices) {
+            if (n > 0) t += dt.getLong(n - 1)
+            assertEquals(c.plan[n].t, t)
+            assertEquals(if (c.plan[n] is SessionRenduPc.Trame.Tourne) 't' else 'p', k[n])
+        }
+        assertEquals(2 * SessionRenduPc.tourne(s.transition), k.count { it == 't' })
+        // On a turn, the time held: the next window's start.
+        val tour = c.plan.indexOfFirst { it is SessionRenduPc.Trame.Tourne }
+        assertEquals(s.fenetres[1].first, c.reel(tour.toDouble() / c.fps + 0.01))
+    }
+
+    @Test
+    fun la_camera_de_la_page_dans_la_video() {
+        val sc = scenes()[0]
+        val t = sc.e.debutMs + 30_000L
+        val sat = GlobeRenduPc.ou(sc, t)!!.first
+        // « Poursuite », « satellite »: the view on the satellite; « sol »: on my station; « espace »: between both.
+        fun angle(a: DoubleArray, b: DoubleArray) = Math.toDegrees(Math.acos((a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).coerceIn(-1.0, 1.0)))
+        assertTrue(angle(GlobeRenduPc.centreCamera(sc, t, "poursuite"), sat) < 3)
+        assertTrue(angle(GlobeRenduPc.centreCamera(sc, t, "satellite"), sat) < 3)
+        val qth = GlobeRenduPc.centreCamera(sc, t, "sol")
+        assertTrue(angle(qth, sat) > 5)
+        val milieu = GlobeRenduPc.centreCamera(sc, t, "espace")
+        assertTrue(angle(milieu, sat) > 2 && angle(milieu, qth) > 2)
+        // A frame with the chase camera differs from the overall view.
+        val s1 = SessionRenduPc.Session(listOf(sc), "passages", ouverture = false, recap = false, camera = "poursuite")
+        val s2 = SessionRenduPc.Session(listOf(sc), "passages", ouverture = false, recap = false, camera = "espace")
+        val tr = SessionRenduPc.Trame.Passe(0, t)
+        val a = SessionRenduPc.image(s1, tr, 320, 180); val b = SessionRenduPc.image(s2, tr, 320, 180)
+        var diff = 0
+        for (y in 0 until 180) for (x in 0 until 320) if (a.getRGB(x, y) != b.getRGB(x, y)) diff++
+        assertTrue("$diff", diff > 1000)
     }
 }
