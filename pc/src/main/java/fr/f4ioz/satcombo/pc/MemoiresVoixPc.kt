@@ -68,6 +68,17 @@ class MemoiresVoixPc(private val dossier: File?) {
         return ShortArray(o.size / 2).also { ByteBuffer.wrap(o).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(it) }
     }
 
+    /** Memory [n] as a WAV file to listen to in the browser (nothing transmitted), or null. */
+    fun wav(n: Int): ByteArray? {
+        val pcm = lis(n) ?: return null
+        val b = ByteBuffer.allocate(44 + pcm.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+        b.put("RIFF".toByteArray()).putInt(36 + pcm.size * 2).put("WAVE".toByteArray())
+        b.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(DEBIT).putInt(DEBIT * 2).putShort(2).putShort(16)
+        b.put("data".toByteArray()).putInt(pcm.size * 2)
+        for (v in pcm) b.putShort(v)
+        return b.array()
+    }
+
     companion object {
         const val NOMBRE = 4
         const val DEBIT = 48_000

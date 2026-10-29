@@ -399,7 +399,7 @@ object PagePc {
     if (X.stx && X.stx.emet) tx.push('SSTV');
     if (X.iq && X.iq.actif) tx.push('calibration I/Q');
     if (X.ptx && X.ptx.emet) tx.push('IC-9700');
-    if (X.btx && X.btx.emet) tx.push('BLU Pluto');
+    if (X.btx && X.btx.emet) tx.push('BLU Pluto' + (X.btx.destinationEnCours === 'simulation' ? ' (simulé)' : ''));
     if (X.f8 && X.f8.arme && !(X.ptx && X.ptx.emet)) tx.push((X.f8.mode || 'FT8') + (X.f8.simule ? ' (simulé)' : ' armé'));
     const h = g('h-tx'); if (h) { h.hidden = !tx.length; g('h-tx-q').textContent = tx.join(' · '); }
     document.body.classList.toggle('en-tx', tx.length > 0);
@@ -1333,6 +1333,13 @@ ${Ft8EmissionJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; paddin
   .btx-bandeau { margin-top:6px; padding:4px 8px; border-radius:8px; font-weight:700; font-size:var(--fs-xs); border:1px solid var(--tx); color:var(--tx); background:rgba(255,90,54,.10); }
   .btx-bandeau.air { color:#fff; background:var(--tx); }
   .btx-bandeau:empty { display:none; }
+  .btx-bandeau.sim { color:var(--cyan); border-color:var(--cyan); background:rgba(0,200,255,.08); }
+  .btx-mem { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+  .btx-mem button { padding:3px 8px; font-size:var(--fs-xs); }
+  .bxo-jr { width:100%; border-collapse:collapse; font-size:var(--fs-xs); }
+  .bxo-jr td, .bxo-jr th { padding:2px 4px; border-bottom:1px solid var(--bord, #22303C); text-align:left; white-space:nowrap; }
+  .bxo-jr td.fin { white-space:normal; }
+  .bxo-mem { display:grid; grid-template-columns:22px 90px 1fr; gap:4px; align-items:center; margin-top:4px; }
   #btx-info.avert, #btx-mic-etat.avert, #btx-niv.avert { color:var(--warn); }
   #btx-niv.danger { color:var(--danger); font-weight:700; }
   .f-molette { cursor:ew-resize; touch-action:none; }
@@ -3534,12 +3541,23 @@ ${OngletSked.HTML}
           <input id="btx-cadran" style="width:110px" placeholder="2400,300 MHz" aria-label="Montée (MHz, porteuse supprimée)" title="La montée à la main (MHz, porteuse supprimée, comme le cadran d’un poste en USB)" onchange="bxCadran(this.value)"></div>
         <div class="ptx-l2" style="margin-top:2px"><span class="avert" id="btx-freq" style="flex:1"></span><button type="button" id="btx-seg" hidden onclick="bxSegment()" title="Accorde le cockpit sur la fréquence de départ de ce mode (montée et descente liées)"></button></div>
         <div class="ptx-l2"><span class="petit">Gain Pluto</span><input type="range" id="btx-g" min="-89" max="0" step="1" value="-40" title="Atténuation du Pluto (dB) ; jamais au-dessus du plafond, ni de −40 dB sur charge" oninput="txt('btx-gv', this.value + ' dB')" onchange="bxRegle('gain=' + this.value)"><b class="val" id="btx-gv" style="font-size:14px;min-width:120px">—</b>
-          <label class="petit" title="Sur charge fictive : gain bridé à −40 dB. Décocher (sur le PC de la station) pour émettre vers QO-100, confirmé à la première émission."><input type="checkbox" id="btx-charge" onchange="bxCharge(this.checked)"> sur charge</label></div>
+          <label class="petit" title="Sur charge fictive : gain bridé à −40 dB. Décocher (sur le PC de la station) pour émettre vers QO-100, confirmé à la première émission."><input type="checkbox" id="btx-charge" onchange="bxCharge(this.checked)"> sur charge</label>
+          <label class="petit" title="Simulation : tout marche (PTT, minuterie, chien de garde, CW, mémoires) mais rien n’est émis, aucun appareil n’est ouvert. Coché, la charge et l’air sont sans effet."><input type="checkbox" id="btx-sim" onchange="bxRegle('simulation=' + (this.checked ? 1 : 0))"> simulation</label></div>
         <div id="btx-cw" class="ptx-l2" hidden>
           <input id="btx-cw-t" style="flex:1;min-width:120px" placeholder="CQ CQ DE F4IOZ K" aria-label="Texte CW" onkeydown="if (event.key === 'Enter') bxCwEnvoie()">
           <button type="button" onclick="bxCwEnvoie()" title="Émet le texte (le PTT pris et rendu tout seul) à la vitesse choisie">Envoyer</button>
           <button type="button" id="btx-cle" title="Manipulateur droit : maintenir pour une porteuse (aussi pour mesurer la correction du Pluto)">Touche</button>
           <input type="number" id="btx-wpm" min="5" max="40" style="width:52px" aria-label="Vitesse (mots par minute)" title="Vitesse (mots par minute)" onchange="bxRegle('wpm=' + this.value)"><span class="petit">mots/min</span></div>
+        <div id="btx-cwm" hidden>
+          <div class="ptx-l2" style="margin-top:2px"><span class="petit">Lui</span><input id="btx-lui" style="width:90px" placeholder="DL1ABC" aria-label="Indicatif du correspondant ({LUI})" title="L’indicatif du correspondant, mis à la place de {LUI} dans les mémoires" onchange="bxRegle('lui=' + enc(this.value))">
+            <span class="petit">RST</span><input id="btx-rst" style="width:44px" aria-label="Report envoyé ({RST})" title="Le report envoyé, mis à la place de {RST}" onchange="bxRegle('rst=' + enc(this.value))">
+            <label class="petit" title="Chaque touche tapée dans le texte CW part tout de suite (le PTT pris à la première, rendu quand tout est parti) ; Entrée n’est plus nécessaire"><input type="checkbox" id="btx-frappe"> frappe directe</label></div>
+          <div class="btx-mem" id="btx-mem" role="group" aria-label="Mémoires CW (Alt+1 à Alt+6, le panneau sélectionné)"></div>
+        </div>
+        <div id="btx-voix" class="btx-mem" hidden role="group" aria-label="Mémoires vocales"></div>
+        <div class="petit avert" id="btx-occ"></div>
+        <div class="petit" id="btx-garde"></div>
+        <div class="petit" id="btx-sortie"></div>
         <div class="petit" id="btx-niv"></div>
         <div class="petit" id="btx-mic-etat"></div>
         <div class="petit" id="btx-info"></div>
@@ -3658,6 +3676,7 @@ ${OngletSked.HTML}
           <div class="ligne"><span class="petit" style="min-width:80px">Ampli</span><input id="bxp-w" type="number" step="1" min="0" style="width:70px"><span class="petit">W</span>
             <input id="bxp-ag" type="number" step="1" min="0" style="width:60px" title="Gain de l’ampli (dB) ; 0 : inconnu"><span class="petit">dB de gain (0 : inconnu)</span></div>
           <div class="ligne"><span class="petit" style="min-width:80px">Câble</span><input id="bxp-pertes" type="number" step="0.1" min="0" style="width:70px"><span class="petit">dB de pertes</span></div>
+          <div class="ligne"><span class="petit" style="min-width:80px">Plafond</span><input id="bxp-plaf" type="number" step="1" min="-89" max="0" style="width:70px" placeholder="—" title="Gain Pluto maximum avec ce profil (dB) : l’ampli du portable n’est pas celui du fixe. Vide : aucun, seuls les autres plafonds comptent."><span class="petit">dB (gain Pluto maximum avec ce profil ; vide : aucun)</span></div>
           <div class="ligne"><button onclick="bxProfilGarde()">Enregistrer</button><button onclick="bxProfilRetire()" title="Retirer ce profil">Retirer</button><span class="petit" id="bxp-msg"></span></div>
         </details>
         <div class="ligne"><button onclick="bxMontage()" title="Ouvre l’onglet Montage sur un plan qui dessine ce profil (créé s’il n’existe pas ; rien n’est remplacé)">Voir au Montage ›</button></div>
@@ -3681,6 +3700,30 @@ ${OngletSked.HTML}
         <div class="petit" id="bxc-local"></div>
         <div class="petit aide">Le Pluto émet seulement pendant le PTT (panneau « Émission Pluto » au-dessus) : mis en route à chaque appui, coupé (oscillateur éteint) à chaque relâche. Relâché tout seul : 2 s sans nouvelles de la page, la minuterie, LEILA entendue, la fréquence devenue interdite, SatMe-PC fermé ; Échap ou le bandeau TX coupent tout. Son oscillateur est garé sous le transpondeur (2399,6 MHz) : ni sa fuite ni son image n’arrivent au satellite. Chaque démarrage de SatMe-PC remet l’essai sur charge.</div>
         <div class="petit aide">BLU haute, CW (une porteuse à 700 Hz au-dessus du cadran, manipulée sans clics) et modes numériques (FT8… depuis WSJT-X : sa sortie son vers une carte son virtuelle ou une boucle, choisie ici, source « carte son du PC », PTT « maintenu »). Le plan de bande AMSAT-DL est appliqué par mode : la BLU dans les segments phonie et mixte, la CW dans le sien et le mixte, le numérique dans les siens et le mixte, jamais sur une balise, la diffusion ni l’urgence. La correction : l’erreur du quartz du Pluto (1 ppm = 2,4 kHz sur QO-100), mesurée en retrouvant sa propre porteuse sur la descente ou saisie. Le gain : jamais au-dessus du plafond ni de celui de Réglages › Émission (commun à la DATV et la SSTV).</div>
+      </div>
+      <div class="carte" id="bxo-carte" hidden>
+        <div class="t">Aides à l’émission</div>
+        <label style="display:block"><input type="checkbox" id="bxo-sim" onchange="bxRegle('simulation=' + (this.checked ? 1 : 0))"> <b>Simulation</b>
+          <span class="petit">— le PTT, la minuterie, le chien de garde, la CW et les mémoires marchent, mais rien n’est émis : aucun appareil ouvert. Pour s’entraîner, préparer ses mémoires, montrer.</span></label>
+        <label style="display:block;margin-top:6px"><input type="checkbox" id="bxo-garde" onchange="bxRegle('garde=' + (this.checked ? 1 : 0))"> <b>Garde de niveau</b>
+          <span class="petit">— sur l’air, quand SatMe entend la descente : notre signal plus fort que</span>
+          <select id="bxo-seuil" style="flex:none" aria-label="Seuil de la garde" onchange="bxRegle('gardeSeuil=' + this.value)"></select>
+          <span class="petit">pendant 1 s, le gain baisse de l’excès + 1 dB ; 6 dB au-dessus de la balise, l’émission est coupée. Ne monte jamais le gain.</span></label>
+        <div class="petit" id="bxo-local"></div>
+        <details style="margin-top:8px"><summary class="petit" style="cursor:pointer">Mémoires CW</summary>
+          <div class="petit aide">Champs : <code>{MOI}</code> ton indicatif, <code>{LUI}</code> le correspondant (case « Lui » du panneau), <code>{LOC}</code> ton locator, <code>{RST}</code> le report. Prosignes : <code>&lt;AR&gt;</code> <code>&lt;SK&gt;</code> <code>&lt;BT&gt;</code> <code>&lt;KN&gt;</code> <code>&lt;BK&gt;</code>. Un clic sur une mémoire du panneau (ou Alt+1 à Alt+6) l’émet, le PTT pris et rendu tout seul.</div>
+          <div id="bxo-cw"></div>
+          <div class="ligne"><button onclick="if (confirm('Remettre les six mémoires CW d’origine ?')) bxRegle('cwMemDefaut=1')">Remettre d’origine</button></div>
+        </details>
+        <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mémoires vocales</summary>
+          <div class="petit aide">Quatre enregistrements de 30 s au plus (un appel CQ, ton indicatif et ton locator), faits avec le micro de ce navigateur. Un clic sur ▶ dans le panneau « Émission Pluto » (en BLU) l’émet : le PTT pris, puis rendu à la fin. Enregistrer n’émet rien.</div>
+          <div id="bxo-voix"></div>
+          <div class="petit" id="bxo-voix-msg"></div>
+        </details>
+        <details style="margin-top:6px" id="bxo-jd"><summary class="petit" style="cursor:pointer">Journal des émissions <span id="bxo-air"></span></summary>
+          <div style="overflow-x:auto"><table class="bxo-jr"><thead><tr><th>Heure</th><th>Durée</th><th>Mode</th><th>Montée</th><th>Vers</th><th>Source</th><th>Gain</th><th>Max / balise</th><th>Fin</th></tr></thead><tbody id="bxo-jr"></tbody></table></div>
+          <div class="ligne"><a href="api/be/journal.csv" download="emissions-qo100.csv"><button>⤓ CSV</button></a><button id="bxo-jr-x" onclick="if (confirm('Effacer le journal des émissions ?')) bxRegle('journalEfface=1')">Effacer</button></div>
+        </details>
       </div>
         </div>
         <div class="st-pan" id="tq-p-ciel" hidden>
@@ -17293,6 +17336,7 @@ async function pxTrace(input) {
 
 // ------------------------------------------------------------------ QO-100's narrow band by the Pluto (api/be/emission): the PTT held, the microphone or a card, CW; the uplink profiles
 var BX = null, bxTenu = false, bxVerrouille = false, bxVieW = null, bxConfirme = false, bxCleTient = false, bxCwAuto = false, bxCwMs = 0;
+var bxCwAttente = 1500, bxVoixEnCours = 0, bxFrappeQ = Promise.resolve(), bxRec = null;
 var bxMic = null, bxWs = null, bxPic = 0, bxSeq = 0, bxGainN = null, bxGT = null;
 const bxPluto = () => !!(BX && BX.ok && !BX.absent && (BX.profils || []).some(p => p.nom === BX.profil && p.chaine === 'pluto'));
 async function bxLit() {
@@ -17311,16 +17355,18 @@ function bxRend() {
   const moi = !!(j.emet && j.moi);
   p.classList.toggle('emet', !!j.emet);
   const e = g('btx-etat');
-  e.textContent = j.emet ? '● TX' + (j.restant != null ? ' ' + Math.floor(j.restant / 60) + ':' + String(j.restant % 60).padStart(2, '0') : '') : !j.pret ? 'indisponible' : j.plutoVu === false ? 'Pluto absent' : 'prêt';
-  e.className = 'ptx-etat' + (j.emet ? ' tx' : j.pret && j.plutoVu !== false ? ' ok' : '');
+  const absent = j.plutoVu === false && !j.simulation;
+  e.textContent = j.emet ? (j.destinationEnCours === 'simulation' ? '● SIM' : '● TX') + (j.restant != null ? ' ' + Math.floor(j.restant / 60) + ':' + String(j.restant % 60).padStart(2, '0') : '') : !j.pret ? 'indisponible' : absent ? 'Pluto absent' : 'prêt';
+  e.className = 'ptx-etat' + (j.emet ? ' tx' : j.pret && !absent ? ' ok' : '');
   e.title = j.emet ? 'En émission ; temps restant avant la minuterie (' + j.tot + ' min)' : !j.pret ? j.pourquoi : j.plutoVu === false ? 'L’ADALM-PLUTO ne répond pas sur ' + j.pluto + ' (onglet SDR pour son adresse)' : 'Prêt : maintenir PTT pour émettre';
   txt('btx-qui', j.emet ? (moi ? 'par cette page' : 'par ' + j.client) : '');
   txt('btx-profil', 'profil ' + j.profil);
   const ban = g('btx-bandeau');
-  const charge = j.emet ? j.sousCharge : j.charge;
-  txt('btx-bandeau', charge ? 'ESSAI SUR CHARGE — gain bridé à ' + j.gainCharge + ' dB : la sortie du Pluto (ou de l’ampli) sur une charge fictive, jamais sur l’antenne'
+  const dest = j.emet ? (j.destinationEnCours || j.destination) : j.destination;
+  txt('btx-bandeau', dest === 'simulation' ? 'SIMULATION — rien n’est émis, aucun appareil n’est ouvert' + (j.simulationSeule ? ' (démonstration)' : '')
+    : dest === 'charge' ? 'ESSAI SUR CHARGE — gain bridé à ' + j.gainCharge + ' dB : la sortie du Pluto (ou de l’ampli) sur une charge fictive, jamais sur l’antenne'
     : 'SUR L’AIR vers QO-100 — jamais plus fort que la balise' + (j.emet ? '' : ' (confirmé au premier PTT)'));
-  ban.classList.toggle('air', !charge);
+  ban.classList.toggle('air', dest === 'air'); ban.classList.toggle('sim', dest === 'simulation');
   const b = g('btx-ptt');
   b.disabled = !j.pret && !moi && !bxTenu;
   b.classList.toggle('on', moi || bxTenu);
@@ -17332,7 +17378,8 @@ function bxRend() {
   g('btx-source').hidden = j.mode === 'cw';
   g('btx-micl').hidden = j.mode === 'cw' || j.source !== 'micro';
   g('btx-cw').hidden = j.mode !== 'cw';
-  g('btx-charge').checked = !!j.charge; g('btx-charge').disabled = !!j.emet || !j.local;
+  g('btx-charge').checked = !!j.charge; g('btx-charge').disabled = !!j.emet || !j.local || !!j.simulation;
+  g('btx-sim').checked = !!j.simulation; g('btx-sim').disabled = !!j.emet || !j.local || !!j.simulationSeule;
   g('btx-lie').checked = !!j.lie;
   txt('btx-f', bxMhz(j.cadran) + ' MHz');
   txt('btx-d', 'descente ' + bxMhz(j.descente) + (j.mode === 'cw' ? ' · porteuse ' + bxMhz(j.porteuse) : ''));
@@ -17357,12 +17404,13 @@ function bxRend() {
   if (!j.pret && !j.emet && j.pourquoi !== j.refusFreq) l.push(j.pourquoi);
   if (j.erreur) l.push(j.erreur);
   else if (!j.emet && j.raison && j.raison !== 'relâché' && j.raison !== 'PTT relâché') l.push('dernière émission : ' + j.raison);
-  if (j.plutoVu === false && !j.emet && !j.erreur) l.push('ADALM-PLUTO absent (' + j.pluto + ')');
+  if (absent && !j.emet && !j.erreur) l.push('ADALM-PLUTO absent (' + j.pluto + ')');
   if (j.emet && j.carteErreur) l.push(j.carteErreur);
   txt('btx-info', l.filter(x => x).join(' · '));
-  g('btx-info').classList.toggle('avert', !!(j.erreur || (!j.pret && !j.emet) || j.plutoVu === false));
+  g('btx-info').classList.toggle('avert', !!(j.erreur || (!j.pret && !j.emet) || absent));
   // The CW text sent with its own PTT: released once out.
-  if (bxCwAuto && bxTenu && j.emet && !j.cwOccupe && !bxCleTient && Date.now() - bxCwMs > 1500) { bxCwAuto = false; bxRelache(); }
+  if (bxCwAuto && bxTenu && j.emet && !j.cwOccupe && !bxCleTient && Date.now() - bxCwMs > bxCwAttente) { bxCwAuto = false; bxRelache(); }
+  bxAidesRend();
   bxReglagesRend();
 }
 function bxReglagesRend() {
@@ -17423,6 +17471,7 @@ function bxProfilRend() {
     if (!g('bxp-antenne').options.length) g('bxp-antenne').innerHTML = (j.antennes || []).map(c => '<option value="' + c.cle + '">' + esc(c.nom) + '</option>').join('');
     g('bxp-nom').value = p.nom; g('bxp-chaine').value = p.chaine; g('bxp-antenne').value = p.antenne;
     g('bxp-gain').value = p.gainAutre; g('bxp-w').value = p.ampliW; g('bxp-ag').value = p.ampliGain; g('bxp-pertes').value = p.pertes;
+    g('bxp-plaf').value = p.plafondPluto == null ? '' : p.plafondPluto;
     g('bxp-gl').hidden = p.antenne !== 'autre';
   }
 }
@@ -17449,7 +17498,8 @@ function bxCharge(on) {
 }
 async function bxProfilGarde() {
   const p = { nom: v('bxp-nom'), chaine: g('bxp-chaine').value, antenne: g('bxp-antenne').value, gainAutre: +g('bxp-gain').value || 0,
-    ampliW: +g('bxp-w').value || 0, ampliGain: +g('bxp-ag').value || 0, pertes: +g('bxp-pertes').value || 0 };
+    ampliW: +g('bxp-w').value || 0, ampliGain: +g('bxp-ag').value || 0, pertes: +g('bxp-pertes').value || 0,
+    plafondPluto: g('bxp-plaf').value.trim() === '' ? null : Math.min(0, +g('bxp-plaf').value || 0) };
   if (!p.nom) { txt('bxp-msg', 'un nom'); return; }
   await bxRegle('profilJson=' + enc(JSON.stringify(p)));
   txt('bxp-msg', 'enregistré');
@@ -17482,8 +17532,8 @@ async function bxMesure(quoi) {
   txt(id, j ? (j.ok ? j.message : 'Refusé : ' + j.erreur) : 'pas de réponse');
   bxLit(); if (quoi === 'poste') chargeQo100();
 }
-/** Keys the Pluto; [maintenu]: until clicked again (FT8, CW text). */
-async function bxAppuie(maintenu) {
+/** Keys the Pluto; [maintenu]: until clicked again (FT8, CW text); [voix]: that voice memory played, then released by SatMe. */
+async function bxAppuie(maintenu, voix) {
   if (bxTenu || !BX || g('btx-ptt').disabled) return false;
   bxTenu = true; bxVerrouille = !!maintenu; g('btx-ptt').classList.add('on');
   let c = null;
@@ -17493,18 +17543,20 @@ async function bxAppuie(maintenu) {
     if (await txPeutDemarrer()) txt('btx-info', 'Émission depuis cet appareil confirmée : appuyer de nouveau.');
     return false;
   }
+  // Somebody already there (listen before talk): the operator's word for this over.
+  if (BX.destination === 'air' && BX.occupe && !confirm(BX.occupe + '.\n\nÉmettre quand même ?')) { bxTenu = false; g('btx-ptt').classList.remove('on'); return false; }
   // On the air: the operator's word, once for this page.
-  if (!BX.charge && !bxConfirme) {
+  if (BX.destination === 'air' && !bxConfirme) {
     if (!confirm('Émettre VERS QO-100 avec le Pluto : montée ' + bxMhz(BX.cadran) + ' MHz, gain ' + fr1(BX.gainEffectif) + ' dB.\n\nJamais plus fort que la balise ; LEILA coupe l’émission. Confirmer pour cette page ?')) {
       bxTenu = false; g('btx-ptt').classList.remove('on'); return false;
     }
     bxConfirme = true;
   }
   if (!bxTenu) return false;
-  if (BX.mode !== 'cw' && BX.source === 'micro') await bxMicro();
+  if (BX.mode !== 'cw' && BX.source === 'micro' && !voix) await bxMicro();
   if (!bxTenu) return false;
   let r = null;
-  try { r = await (await fetch('api/be/emission/demarre?client=' + TX_CLIENT + (bxConfirme ? '&confirme=1' : ''), { method: 'POST' })).json(); } catch (x) {}
+  try { r = await (await fetch('api/be/emission/demarre?client=' + TX_CLIENT + (bxConfirme ? '&confirme=1' : '') + (voix ? '&voix=' + voix : ''), { method: 'POST' })).json(); } catch (x) {}
   if (!r || r.ok === false) {
     bxTenu = false; bxVerrouille = false; g('btx-ptt').classList.remove('on');
     txt('btx-info', 'PTT refusé : ' + (r && r.erreur || 'pas de réponse')); g('btx-info').classList.add('avert');
@@ -17516,7 +17568,7 @@ async function bxAppuie(maintenu) {
   return true;
 }
 function bxRelache() {
-  const etait = bxTenu; bxTenu = false; bxVerrouille = false; bxCwAuto = false;
+  const etait = bxTenu; bxTenu = false; bxVerrouille = false; bxCwAuto = false; bxVoixEnCours = 0; bxCwAttente = 1500;
   const b = g('btx-ptt'); if (b) b.classList.remove('on');
   bxVie(false);
   if (etait) fetch('api/be/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json())
@@ -17527,7 +17579,8 @@ function bxVie(on) {
   if (on && !bxVieW) {
     const bat = () => fetch('api/be/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json()).then(j => {
       if (!bxTenu) return;
-      if (j && j.ok === false) { bxTenu = false; bxVerrouille = false; bxVie(false); g('btx-ptt').classList.remove('on'); txt('btx-info', 'PTT perdu : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); bxLit(); }
+      if (j && j.ok === false && bxVoixEnCours) { bxTenu = false; bxVerrouille = false; bxVoixEnCours = 0; bxVie(false); g('btx-ptt').classList.remove('on'); bxLit(); }
+      else if (j && j.ok === false) { bxTenu = false; bxVerrouille = false; bxVie(false); g('btx-ptt').classList.remove('on'); txt('btx-info', 'PTT perdu : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); bxLit(); }
       else if (j) { BX = j; bxRend(); }
     }).catch(() => {});
     try {
@@ -17547,6 +17600,13 @@ function bxVie(on) {
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, () => { if (bxTenu && !bxVerrouille) bxRelache(); }));
   b.addEventListener('contextmenu', ev => ev.preventDefault());
+  p.addEventListener('keydown', ev => {
+    if (ev.altKey && !ev.ctrlKey && /^Digit[1-6]$/.test(ev.code) && BX && BX.mode === 'cw') { ev.preventDefault(); bxCwMem(+ev.code.slice(5)); }
+  });
+  g('btx-cw-t').addEventListener('keydown', ev => {
+    if (!g('btx-frappe').checked || ev.ctrlKey || ev.altKey || ev.metaKey || ev.key.length !== 1) return;
+    bxFrappe(ev.key);
+  });
   p.addEventListener('keydown', ev => { if (ev.code !== 'Space' || (ev.target !== p && ev.target !== b)) return; ev.preventDefault(); ev.stopPropagation(); if (!ev.repeat && !bxTenu) bxAppuie(false); });
   p.addEventListener('keyup', ev => { if (ev.code !== 'Space') return; ev.preventDefault(); if (bxTenu && !bxVerrouille) bxRelache(); });
   // Held by the button: released when the page loses the hand; latched: the watchdog decides (a hidden tab's worker still beats).
@@ -17576,8 +17636,140 @@ async function bxCwEnvoie() {
   bxCwMs = Date.now();
   if (!bxTenu) { if (!await bxAppuie(true)) return; bxCwAuto = true; }
   bxCwMs = Date.now();
-  try { await fetch('api/be/cw?client=' + TX_CLIENT + '&texte=' + enc(t), { method: 'POST' }); } catch (x) {}
+  let j = null;
+  try { j = await (await fetch('api/be/cw?client=' + TX_CLIENT + '&texte=' + enc(t), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) { txt('btx-info', 'CW : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); return; }
   g('btx-cw-t').value = '';
+}
+/** CW memory [n] sent (its fields filled by SatMe), the PTT taken and given back as for the text. */
+async function bxCwMem(n) {
+  if (!BX || BX.mode !== 'cw') return;
+  bxCwMs = Date.now(); bxCwAttente = 1500;
+  // Checked before keying: a field missing ({LUI} empty) refuses without a PTT.
+  const m = (BX.memoiresCw || [])[n - 1];
+  if (m && m.texte.includes('{LUI}') && !v('btx-lui')) { txt('btx-info', 'CW : indicatif du correspondant à saisir (case « Lui »)'); g('btx-info').classList.add('avert'); g('btx-lui').focus(); return; }
+  if (!bxTenu) { if (!await bxAppuie(true)) return; bxCwAuto = true; }
+  bxCwMs = Date.now();
+  let j = null;
+  try { j = await (await fetch('api/be/cw?client=' + TX_CLIENT + '&memoire=' + n + '&lui=' + enc(v('btx-lui')), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) { txt('btx-info', 'CW : ' + (j.erreur || '?')); g('btx-info').classList.add('avert'); if (bxCwAuto) bxRelache(); }
+}
+/** The keyboard keyer: each key sent as typed, in order; the PTT taken at the first, given back 4 s after the last is out. */
+function bxFrappe(k) {
+  bxFrappeQ = bxFrappeQ.then(async () => {
+    bxCwAttente = 4000; bxCwMs = Date.now();
+    if (!bxTenu) { if (!await bxAppuie(true)) return; bxCwAuto = true; }
+    bxCwMs = Date.now();
+    try { await fetch('api/be/cw?client=' + TX_CLIENT + '&frappe=1&texte=' + enc(k), { method: 'POST' }); } catch (x) {}
+    const t = g('btx-cw-t'); if (t.value.length > 60) t.value = t.value.slice(-40);
+  });
+}
+/** Voice memory [n] on the air: the PTT taken for it, released by SatMe at its end (or by PTT, Échap, as always). */
+async function bxVoixJoue(n) {
+  if (bxTenu || !BX || BX.mode !== 'blu') return;
+  bxVoixEnCours = n;
+  if (!await bxAppuie(true, n)) bxVoixEnCours = 0;
+}
+/** The panel's helpers: the CW and voice memories, listen before talk, the level guard, the simulated output. */
+function bxAidesRend() {
+  const j = BX; if (!j || !j.ok) return;
+  g('btx-cwm').hidden = j.mode !== 'cw';
+  if (document.activeElement !== g('btx-lui')) g('btx-lui').value = j.lui || '';
+  if (document.activeElement !== g('btx-rst')) g('btx-rst').value = j.rst || '599';
+  const mh = (j.memoiresCw || []).map((m, i) => '<button type="button" data-n="' + (i + 1) + '" title="' + esc(m.texte) + ' (Alt+' + (i + 1) + ')">' + (i + 1) + ' · ' + esc(m.nom) + '</button>').join('');
+  const bm = g('btx-mem');
+  if (bm.dataset.h !== mh) { bm.innerHTML = mh; bm.dataset.h = mh; bm.querySelectorAll('button').forEach(b => b.onclick = () => bxCwMem(+b.dataset.n)); }
+  const vx = j.voix || [];
+  const bv = g('btx-voix');
+  bv.hidden = j.mode !== 'blu' || !vx.length;
+  const vh = vx.map(m => '<button type="button" data-n="' + m.n + '" title="Émettre cette mémoire vocale (le PTT pris, rendu à la fin)">▶ ' + esc(m.nom) + ' · ' + fr1(m.duree / 1000) + ' s</button>').join('') +
+    (j.lecture != null ? '<span class="petit">lecture ' + j.lecture + ' %</span>' : '');
+  if (bv.dataset.h !== vh) { bv.innerHTML = vh; bv.dataset.h = vh; bv.querySelectorAll('button').forEach(b => b.onclick = () => bxVoixJoue(+b.dataset.n)); }
+  bv.querySelectorAll('button').forEach(b => b.disabled = !!j.emet);
+  txt('btx-occ', !j.emet && j.occupe ? '⚠ ' + j.occupe + ' — écouter avant d’émettre' : '');
+  const gd = j.garde || {};
+  txt('btx-garde', gd.on && j.destination === 'air' ? 'Garde de niveau : au plus ' + (gd.seuil ? fr1(-gd.seuil) + ' dB sous' : 'le niveau de') + ' la balise' + (gd.message ? ' · ' + gd.message : '') : '');
+  const so = j.simule;
+  txt('btx-sortie', j.emet && so && so.rms != null ? 'Sortie simulée : ' + fr1(so.rms) + ' dBFS efficaces, crête ' + fr1(so.crete) + ' dBFS (gain ' + fr1(j.gainApplique) + ' dB, rien n’est émis)' : '');
+  bxoRend();
+}
+/** The Émission sub-tab's card of helpers. */
+function bxoRend() {
+  const j = BX, c = g('bxo-carte');
+  if (!j || !j.ok || !c) return;
+  c.hidden = !bxPluto();
+  g('bxo-sim').checked = !!j.simulation; g('bxo-sim').disabled = !j.local || !!j.emet || !!j.simulationSeule;
+  const gd = j.garde || {};
+  g('bxo-garde').checked = !!gd.on; g('bxo-garde').disabled = !j.local;
+  const sel = g('bxo-seuil');
+  if (!sel.options.length) sel.innerHTML = (gd.seuils || [0]).map(x => '<option value="' + x + '">' + (x ? fr1(-x) + ' dB sous la balise' : 'la balise') + '</option>').join('');
+  if (document.activeElement !== sel) sel.value = String(gd.seuil);
+  sel.disabled = !j.local;
+  txt('bxo-local', j.local ? (j.simulationSeule ? 'Démonstration : seulement la simulation.' : '') : 'Simulation, garde de niveau et journal : sur le PC de la station seulement.');
+  // CW memories editor (not while typing in it).
+  const ce = g('bxo-cw');
+  if (!ce.contains(document.activeElement)) {
+    const h = (j.memoiresCw || []).map((m, i) => '<div class="bxo-mem"><b class="petit">' + (i + 1) + '</b><input data-n="' + (i + 1) + '" data-k="nom" value="' + esc(m.nom) + '" aria-label="Nom de la mémoire ' + (i + 1) + '">' +
+      '<input data-n="' + (i + 1) + '" data-k="texte" value="' + esc(m.texte) + '" aria-label="Texte de la mémoire ' + (i + 1) + '"></div>').join('');
+    if (ce.dataset.h !== h) {
+      ce.innerHTML = h; ce.dataset.h = h;
+      ce.querySelectorAll('input').forEach(x => x.onchange = () => {
+        const n = x.dataset.n, nom = ce.querySelector('input[data-n="' + n + '"][data-k="nom"]').value, t = ce.querySelector('input[data-n="' + n + '"][data-k="texte"]').value;
+        bxRegle('cwMem=' + n + '&cwNom=' + enc(nom) + '&cwTexte=' + enc(t));
+      });
+    }
+  }
+  // Voice memories: record, listen here, erase.
+  const ve = g('bxo-voix');
+  if (!ve.contains(document.activeElement) || bxRec) {
+    const vx = j.voix || [];
+    const h = [1, 2, 3, 4].map(n => { const m = vx.find(x => x.n === n);
+      return '<div class="bxo-mem" style="grid-template-columns:22px 110px 1fr"><b class="petit">' + n + '</b><input data-n="' + n + '" value="' + esc(m ? m.nom : '') + '" placeholder="Voix ' + n + '" aria-label="Nom de la mémoire vocale ' + n + '">' +
+        '<span style="display:flex;gap:4px;flex-wrap:wrap;align-items:center"><button type="button" data-r="' + n + '"' + (j.emet ? ' disabled' : '') + '>' + (bxRec && bxRec.n === n ? '■ Arrêter' : '● Enregistrer') + '</button>' +
+        (m ? '<button type="button" data-e="' + n + '" title="Écouter ici (rien n’est émis)">🔈 Écouter</button><button type="button" data-x="' + n + '" title="Effacer">✕</button><span class="petit">' + fr1(m.duree / 1000) + ' s</span>' : '<span class="petit">vide</span>') + '</span></div>'; }).join('');
+    if (ve.dataset.h !== h) {
+      ve.innerHTML = h; ve.dataset.h = h;
+      ve.querySelectorAll('button[data-r]').forEach(b => b.onclick = () => bxoEnregistre(+b.dataset.r));
+      ve.querySelectorAll('button[data-e]').forEach(b => b.onclick = () => { try { new Audio('api/be/voix.wav?n=' + b.dataset.e + '&t=' + Date.now()).play(); } catch (x) {} });
+      ve.querySelectorAll('button[data-x]').forEach(b => b.onclick = () => { if (confirm('Effacer la mémoire vocale ' + b.dataset.x + ' ?')) bxRegle('voixEfface=' + b.dataset.x); });
+    }
+  }
+  // The journal of overs.
+  const jr = j.journal || [], as = j.airAujourdhuiS || 0;
+  txt('bxo-air', '· sur l’air aujourd’hui ' + Math.floor(as / 60) + ' min ' + String(as % 60).padStart(2, '0') + ' s');
+  const dn = { air: 'air', charge: 'charge', simulation: 'simulation' }, mn = { blu: 'BLU', cw: 'CW', num: 'num.' };
+  const h = jr.map(p => '<tr><td>' + new Date(p.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '</td><td>' + Math.round(p.duree / 1000) + ' s</td><td>' + (mn[p.mode] || esc(p.mode)) + '</td><td>' +
+    bxMhz(p.montee) + '</td><td' + (p.dest === 'air' ? ' class="tx-mot"' : '') + '>' + (dn[p.dest] || esc(p.dest)) + '</td><td>' + esc(p.source) + '</td><td>' + fr1(p.gain) + ' dB</td><td' + (p.ecartMax > 0 ? ' class="rose"' : '') + '>' +
+    (p.ecartMax == null ? '—' : (p.ecartMax > 0 ? '+' : '') + fr1(p.ecartMax) + ' dB') + '</td><td class="fin">' + esc(p.fin) + '</td></tr>').join('') || '<tr><td colspan="9" class="petit">Aucune émission.</td></tr>';
+  const tb = g('bxo-jr'); if (tb.dataset.h !== h) { tb.innerHTML = h; tb.dataset.h = h; }
+  g('bxo-jr-x').disabled = !j.local;
+}
+/** Records voice memory [n] from this browser's microphone (30 s at most); a second click stops and keeps it. Nothing is transmitted. */
+async function bxoEnregistre(n) {
+  if (bxRec) { const r = bxRec; bxRec = null; r.fin(r.n === n); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { txt('bxo-voix-msg', 'micro refusé par le navigateur : page non sûre (passer en HTTPS : Réglages › Accès à distance)'); return; }
+  let flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+  catch (x) { txt('bxo-voix-msg', 'micro : ' + (x.message || x.name)); return; }
+  const ctx = new AudioContext(), src = ctx.createMediaStreamSource(flux), pr = ctx.createScriptProcessor(4096, 1, 1), morceaux = [];
+  let total = 0;
+  const max = ((BX && BX.voixMax) || 30) * ctx.sampleRate;
+  pr.onaudioprocess = ev => { const x = ev.inputBuffer.getChannelData(0); morceaux.push(new Float32Array(x)); total += x.length; if (total >= max && bxRec) { const r = bxRec; bxRec = null; r.fin(true); } };
+  src.connect(pr); pr.connect(ctx.destination);
+  const debut = Date.now(), t = setInterval(() => txt('bxo-voix-msg', 'enregistrement ' + n + '… ' + Math.round((Date.now() - debut) / 1000) + ' s (cliquer « Arrêter »)'), 250);
+  bxRec = { n, fin: async garder => {
+    clearInterval(t); pr.disconnect(); src.disconnect(); flux.getTracks().forEach(k => k.stop());
+    const taux = ctx.sampleRate; ctx.close();
+    if (!garder) { txt('bxo-voix-msg', 'abandonné'); bxoRend(); return; }
+    const pcm = new Int16Array(Math.min(total, max)); let k = 0;
+    for (const m of morceaux) for (let i = 0; i < m.length && k < pcm.length; i++) pcm[k++] = Math.max(-1, Math.min(1, m[i])) * 32767;
+    const nom = (g('bxo-voix').querySelector('input[data-n="' + n + '"]') || {}).value || '';
+    let j = null;
+    try { j = await (await fetch('api/be/voix?client=' + TX_CLIENT + '&n=' + n + '&taux=' + taux + '&nom=' + enc(nom), { method: 'POST', body: pcm.buffer })).json(); } catch (x) {}
+    txt('bxo-voix-msg', j ? (j.ok === false ? 'Refusé : ' + j.erreur : 'mémoire vocale ' + n + ' gardée') : 'envoi impossible');
+    if (j && j.ok !== false) { BX = j; bxRend(); } else bxoRend();
+  } };
+  bxoRend();
 }
 
 // ---- the microphone for the Pluto: as the IC-9700's (getUserMedia at 48 kHz, a light compressor, 20 ms frames), its own socket

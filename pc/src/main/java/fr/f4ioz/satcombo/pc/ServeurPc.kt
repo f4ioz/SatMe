@@ -1004,6 +1004,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
+        // A voice memory to listen to here (nothing transmitted).
+        if (chemin == "/api/be/voix.wav") {
+            val w = emissionBe?.voix?.wav(q["n"]?.toIntOrNull() ?: 0)
+            if (w == null) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0)) else envoie(sortie, "200 OK", "audio/wav", w)
+            return
+        }
         // The narrow band's journal of overs, as CSV.
         if (chemin == "/api/be/journal.csv") {
             val t = emissionBe?.journal?.csv() ?: ""
