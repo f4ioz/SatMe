@@ -16,6 +16,14 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **SSTV : les couleurs analysées et corrigées, et un débruitage IA facultatif.** Dans la visionneuse, **📊 Analyse** dit ce qui est mesuré sur l'image : dominante de couleur (et l'écart d'accord qu'elle représente), couleur décalée par rapport à l'image (au dixième de pixel), niveaux, saturation, bruit, note. **🎨 Couleurs corrigées** les corrige sans rien inventer (une étape dont la mesure n'est pas nette n'est pas appliquée, une image juste ressort inchangée) ; **Avant | Après** compare. Le réglage par défaut et les étapes : *SSTV › Réglages › Couleurs et IA*. L'image reçue n'est jamais modifiée ; la version retouchée sert aussi aux planches et au site web.
+- **IA débruitage** (jamais par défaut, image par image) : SCUNet (licence Apache-2.0) sur le processeur, 2 à 3 s par image. *SSTV › Réglages › Couleurs et IA › Installer* le télécharge (environ 170 Mo, sommes vérifiées). Une image passée par l'IA est toujours marquée « IA » : galerie, planches, site web.
+
+### en
+- **SSTV: colour analysed and corrected, and an optional AI denoiser.** In the viewer, **📊 Analyse** says what is measured on the picture: colour cast (and the tuning error it amounts to), colour shifted against the picture (to a tenth of a pixel), levels, saturation, noise, mark. **🎨 Couleurs corrigées** sets them right, nothing invented (a step whose measure is not clear is not applied, a picture already right comes out unchanged); **Avant | Après** compares. The default and the steps: *SSTV › Réglages › Couleurs et IA*. The picture as received is never changed; the finished version also goes to the sheets and the web site.
+- **AI denoising** (never the default, picture by picture): SCUNet (Apache-2.0 licence) on the processor, 2 to 3 s a picture. *SSTV › Réglages › Couleurs et IA › Installer* downloads it (about 170 MB, checksums checked). A picture through the AI is always marked « IA »: gallery, sheets, web site.
+
+### fr
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
 
 ### en

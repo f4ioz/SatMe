@@ -861,6 +861,8 @@ val FR: Map<String, String> = mapOf(
     "sstv_corr_desc" to "Re-décodée de son son (toute l'image d'un coup : lignes recalées sur toutes les synchros, dérive d'horloge, niveaux), ou ses taches retirées, ou les copies de la diapo mises ensemble. Toujours à part, marquée « corrigée » ou « fusion ».",
     "sstv_planche_corrigee" to "corrigée",
     "sstv_planche_fusion" to "fusion de {0} copies",
+    "sstv_planche_couleur" to "couleur corrigée",
+    "sstv_planche_ia" to "IA",
     "planche_corrigees" to "Meilleures versions traitées",
     "planche_corrigees_desc" to "Dans chaque case, la mieux notée des versions de sa diapo : reçue, corrigée ou fusion. Le pack ARISS garde toujours les originales.",
     "planche_marque_traitees" to "Le dire sur la planche",

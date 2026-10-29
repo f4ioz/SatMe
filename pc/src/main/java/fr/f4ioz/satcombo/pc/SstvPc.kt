@@ -477,6 +477,8 @@ class SstvPc(
         runCatching { SstvSon.gif(png).delete() }
         // Its corrected version with it (a fused picture of its group stays: the other copies made it too).
         runCatching { fr.f4ioz.satcombo.sstv.CorrectionsGalerie.dossier(dossier).let { d -> val c = File(d, fr.f4ioz.satcombo.sstv.CorrectionsGalerie.nomCorrigee(png.name)); File(d, c.name.removeSuffix(".png") + ".meta").delete(); c.delete() } }
+        // Its colour's and IA's versions, and its switches.
+        runCatching { fr.f4ioz.satcombo.sstv.RetouchesGalerie.oublie(dossier, png.name) }
         return png.delete()
     }
 

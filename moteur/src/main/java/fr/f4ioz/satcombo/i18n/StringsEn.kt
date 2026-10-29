@@ -844,6 +844,8 @@ val EN: Map<String, String> = mapOf(
     "sstv_corr_desc" to "Decoded again from its sound (the whole picture at once: lines placed on every sync pulse, clock drift, levels), or its specks removed, or the slide's copies fused. Always a separate file, marked “corrected” or “fused”.",
     "sstv_planche_corrigee" to "corrected",
     "sstv_planche_fusion" to "{0} copies fused",
+    "sstv_planche_couleur" to "colour corrected",
+    "sstv_planche_ia" to "AI",
     "planche_corrigees" to "Best processed versions",
     "planche_corrigees_desc" to "In each box, the best marked of its slide's versions: received, corrected or fused. The ARISS pack always keeps the originals.",
     "planche_marque_traitees" to "Say it on the sheet",

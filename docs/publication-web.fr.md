@@ -127,6 +127,8 @@ Selon le type, quand SatMe-PC les connaît :
 | `evenement` | texte | `"ARISS octobre 2026"` | sstv-image (campagne), planche, rapport |
 | `description` | texte | `"Diapo 3/12"` | sstv-image |
 | `incomplete` | booléen | `true` | sstv-image reçue en partie |
+| `traitement` | texte | `"corrigée · couleur corrigée · IA"` | sstv-image qui n'est pas telle que reçue : ce qui lui a été fait |
+| `ia` | booléen | `true` | sstv-image passée par le débruitage appris (IA) : à dire à côté de l'image ; planche : une case au moins (`imagesIa` : combien) |
 | `indicatif` | texte | `"EA4ABC"` | qso : la station contactée |
 | `locator` | texte | `"IN80DD"` | qso : son locator |
 

@@ -592,10 +592,14 @@ object Planche {
         locators.filter { it.isNotBlank() }.groupingBy { it.uppercase().take(6) }.eachCount()
             .maxByOrNull { it.value }?.key ?: ""
 
-    /** The line under a picture: "PD 120 | 2025/05/31 20:00 UTC | F4IOZ", and « corrigée » for a processed version ([SstvMeta.SstvShot.traitement]). */
+    /**
+     * The line under a picture: "PD 120 | 2025/05/31 20:00 UTC | F4IOZ", and « corrigée » for a processed
+     * version ([SstvMeta.SstvShot.traitement]); « IA » always for a picture through a learnt denoiser.
+     */
     fun legende(s: SstvMeta.SstvShot, indicatif: String, avecTraitement: Boolean = false): String =
         listOf(s.mode, if (s.timeMs > 0) minute.format(Date(s.timeMs)) + " UTC" else "",
-            indicatif.ifBlank { s.callsign }, if (avecTraitement) s.traitement else "").filter { it.isNotBlank() }.joinToString(" | ")
+            indicatif.ifBlank { s.callsign }, if (avecTraitement) s.traitement else if (s.retoucheIa) fr.f4ioz.satcombo.i18n.t("sstv_planche_ia") else "")
+            .filter { it.isNotBlank() }.joinToString(" | ")
 
     /**
      * Boxes filled in order of reception with the pictures given, one per box,

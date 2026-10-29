@@ -11,6 +11,8 @@ package fr.f4ioz.satcombo.demo
 import fr.f4ioz.satcombo.sstv.ClassementSstv
 import fr.f4ioz.satcombo.sstv.CorrectionsGalerie
 import fr.f4ioz.satcombo.sstv.Planche
+import fr.f4ioz.satcombo.sstv.RetouchesGalerie
+import fr.f4ioz.satcombo.sstv.CouleurSstv
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
@@ -37,6 +39,9 @@ class ApiCorrectionSstv(
     private val images: () -> List<SstvMeta.SstvShot>,
     private val groupes: () -> List<ClassementSstv.Groupe>,
 ) {
+    /** The finish of the pictures (colour, IA: [RetouchesGalerie]); SatMe-PC sets it, the phone not yet. */
+    @Volatile var retouches: RetouchesGalerie? = null
+
     /** What is being done: the picture's name or the group's id, "" nothing. */
     @Volatile var enCours = ""; private set
     /** The last action's error code ([CorrectionsGalerie.Issue.erreur]) and on what. */
@@ -109,11 +114,11 @@ class ApiCorrectionSstv(
         val places = m.images.mapNotNull { (i, f) ->
             val p = parNom[f] ?: return@mapNotNull null
             val v = Planche.version(m, i)
-            if (v == Planche.Version.AUTO && !m.corrigees) return@mapNotNull i to p
+            if (v == Planche.Version.AUTO && !m.corrigees) return@mapNotNull i to retouchee(f, p)
             val g = gs.firstOrNull { gr -> gr.images.any { it.fileName == f } }
-            val c = runCatching { corrections.pourCase(d, f, g?.notes?.get(f) ?: -1, g, v, m.corrigees) }.getOrNull() ?: return@mapNotNull i to p
+            val c = runCatching { corrections.pourCase(d, f, g?.notes?.get(f) ?: -1, g, v, m.corrigees) }.getOrNull() ?: return@mapNotNull i to retouchee(f, p)
             if (c.repli) replis += i
-            i to (if (c.fichier != null && c.fiche != null) c.fichier to p.second.copy(traitement = etiquette(c.fiche)) else p)
+            i to retouchee(f, if (c.fichier != null && c.fiche != null) c.fichier to p.second.copy(traitement = etiquette(c.fiche)) else p)
         }.toMap()
         return Cases(places, replis.sorted())
     }
@@ -150,6 +155,122 @@ class ApiCorrectionSstv(
         return o
     }
 
+    // ------------------------------------------------------------ the finish: colour, IA
+
+    /**
+     * Version [p] (its file, what is known) of picture [png] as it goes out
+     * (sheets, the web site): finished as the picture's switches say
+     * ([RetouchesGalerie]), what was done added to its
+     * [SstvMeta.SstvShot.traitement], « IA » marked; else as it is.
+     */
+    fun retouchee(png: String, p: Pair<File, SstvMeta.SstvShot>): Pair<File, SstvMeta.SstvShot> {
+        val r = retouches ?: return p
+        val d = dossier()
+        val e = runCatching { r.effet(d, png) }.getOrNull()?.takeIf { it.actif } ?: return p
+        val f = runCatching { r.finie(d, p.first, e) }.getOrNull() ?: return p
+        val dit = listOfNotNull(p.second.traitement.takeIf { it.isNotEmpty() }, if (f.fiche.couleur) t("sstv_planche_couleur") else null,
+            if (f.fiche.ia.isNotEmpty()) t("sstv_planche_ia") else null).joinToString(" · ")
+        return f.fichier to p.second.copy(traitement = dit, retoucheIa = f.fiche.ia.isNotEmpty())
+    }
+
+    /** The version of picture [png] a viewer asks for: as received, corrected, fused (else as received). */
+    private fun base(png: String, version: String): File? {
+        val d = dossier()
+        val brute = File(d, png).takeIf { File(png).name == png && png.endsWith(".png") && it.isFile } ?: return null
+        return when (version) {
+            "corr" -> corrections.corrigee(d, png)?.let { File(CorrectionsGalerie.dossier(d), it.fichier) }
+            "fus" -> groupeDe(png)?.takeIf { it.images.size > 1 }?.let { corrections.fusion(d, it.id) }?.let { File(CorrectionsGalerie.dossier(d), it.fichier) }
+            else -> null
+        }?.takeIf { it.isFile } ?: brute
+    }
+
+    private fun analyseJson(a: CouleurSstv.Analyse, p: CouleurSstv.Plan): JSONObject {
+        fun r(v: Double, k: Int = 1) = Math.round(v * Math.pow(10.0, k.toDouble())) / Math.pow(10.0, k.toDouble())
+        return JSONObject().put("lignes", a.lignes)
+            .put("dominante", JSONObject().put("cb", r(a.dominanteCb)).put("cr", r(a.dominanteCr)).put("taille", r(a.dominante))
+                .put("appui", r(a.appuiNeutre * 100)).put("sure", a.dominanteSure).put("accordHz", a.accordHz?.let { r(it, 0) } ?: JSONObject.NULL)
+                .put("corrigee", p.dominante))
+            .put("chroma", JSONObject().put("cbX", a.cbX).put("cbY", a.cbY).put("crX", a.crX).put("crY", a.crY).put("correlation", r(a.correlationChroma, 2))
+                .put("corrigee", p.chroma))
+            .put("niveaux", JSONObject().put("noir", r(a.noir)).put("blanc", r(a.blanc)).put("gain", p.gain).put("corriges", p.niveaux))
+            .put("saturation", JSONObject().put("p90", r(a.saturation)).put("facteur", p.saturation))
+            .put("bruit", JSONObject().put("y", r(a.bruitY)).put("c", r(a.bruitC)).put("neige", a.bruitDominant))
+    }
+
+    /** What the viewer shows of a picture's finish: its switches, the defaults, the analysis of [version], the finished files. */
+    fun retouche(png: String, version: String, ia: RetoucheIa? = null): JSONObject {
+        val o = JSONObject().put("nom", png).put("version", version)
+        val r = retouches ?: return o.put("ok", false).put("erreur", "absent")
+        val d = dossier()
+        val base = base(png, version) ?: return o.put("ok", false).put("erreur", "introuvable")
+        val reg = r.reglage(d, png); val e = r.effet(reg)
+        fun b(v: Boolean?) = v ?: JSONObject.NULL
+        o.put("ok", true).put("base", base.name)
+            .put("reglage", JSONObject().put("couleur", b(reg.couleur)).put("dominante", b(reg.dominante)).put("chroma", b(reg.chroma))
+                .put("niveaux", b(reg.niveaux)).put("saturation", b(reg.saturation)).put("ia", reg.ia))
+            .put("effet", JSONObject().put("couleur", e.couleur).put("dominante", e.options.dominante).put("chroma", e.options.chroma)
+                .put("niveaux", e.options.niveaux).put("saturation", e.options.saturation).put("ia", e.ia))
+        // Measured with the steps the picture asks (all of them when its colour is off: to show what would be done).
+        val opts = if (e.couleur && !e.options.rien) e.options else CouleurSstv.Options(true, true, true, e.options.saturation)
+        r.analyse(base, opts)?.let { (res, px) ->
+            val noteAv = runCatching { ClassementSstv.analyse(px.px, px.w, px.h).note }.getOrDefault(-1)
+            val noteAp = if (res.plan.vide) noteAv else runCatching { ClassementSstv.analyse(res.px, px.w, px.h).note }.getOrDefault(-1)
+            o.put("analyse", analyseJson(res.analyse, res.plan).put("noteAvant", noteAv).put("noteApres", noteAp).put("rien", res.plan.vide))
+        }
+        // The colour's version is quick: made now. The IA's only when made (or being made).
+        val couleur = if (e.couleur && !e.options.rien) runCatching { r.finie(d, base, RetouchesGalerie.Effet(true, e.options, false), avecIa = false) }.getOrNull() else null
+        o.put("couleur", couleur?.let { PREFIXE + it.fichier.name + "?v=" + it.fiche.quandMs } ?: JSONObject.NULL)
+        val iaFaite = if (e.ia && r.ia != null) r.existante(d, base, e) else null
+        o.put("ia", iaFaite?.let { JSONObject().put("url", PREFIXE + it.fichier.name + "?v=" + it.fiche.quandMs).put("modele", it.fiche.iaNom).put("ms", it.fiche.iaMs) } ?: JSONObject.NULL)
+        o.put("iaPossible", r.ia != null).put("enCours", enCours).put("erreur", erreur).put("erreurSur", erreurSur)
+        ia?.let { o.put("iaModele", it.etat()) }
+        return o
+    }
+
+    /** SatMe-PC's learnt denoiser as the page sees it (installed, its name, its download). */
+    fun interface RetoucheIa { fun etat(): JSONObject }
+
+    /** The finish's actions: a switch (`k`, `v` 1, 0 or `defaut`), the IA made in the background. */
+    private fun actionRetouche(route: String, p: (String) -> String): JSONObject? {
+        val r = retouches ?: return JSONObject().put("ok", false).put("erreur", "absent")
+        val d = dossier()
+        val png = p("nom")
+        if (images().none { it.fileName == png }) return JSONObject().put("ok", false).put("erreur", "introuvable")
+        return when (route) {
+            "/api/sstv/retouche/reglage" -> {
+                val v = when (p("v")) { "1" -> true; "0" -> false; else -> null }
+                val a = r.reglage(d, png)
+                val n = when (p("k")) {
+                    "couleur" -> a.copy(couleur = v); "dominante" -> a.copy(dominante = v); "chroma" -> a.copy(chroma = v)
+                    "niveaux" -> a.copy(niveaux = v); "saturation" -> a.copy(saturation = v); "ia" -> a.copy(ia = v == true)
+                    "tout" -> RetouchesGalerie.Reglage()
+                    else -> return JSONObject().put("ok", false).put("erreur", "réglage inconnu")
+                }
+                if (!r.change(d, png, n)) return JSONObject().put("ok", false).put("erreur", CorrectionsGalerie.ECRITURE)
+                // The IA turned on: made now, in the background, on the version shown.
+                if (n.ia && !a.ia && r.ia != null) lanceIa(png, p("version"))
+                JSONObject().put("ok", true)
+            }
+            "/api/sstv/retouche/ia" -> {
+                if (r.ia == null) return JSONObject().put("ok", false).put("erreur", "ia_absente")
+                if (!r.reglage(d, png).ia) return JSONObject().put("ok", false).put("erreur", "ia_coupee")
+                if (lanceIa(png, p("version"))) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", "occupe")
+            }
+            else -> null
+        }
+    }
+
+    private fun lanceIa(png: String, version: String): Boolean {
+        val r = retouches ?: return false
+        val d = dossier()
+        val base = base(png, version) ?: return false
+        return lance(png) {
+            val f = r.finie(d, base, r.effet(d, png))
+            CorrectionsGalerie.Issue(if (f == null) null else CorrectionsGalerie.Fiche(png, f.fichier.name, CorrectionsGalerie.Methode.IMAGE, -1, -1, f.fiche.quandMs),
+                if (f == null) "ia_echec" else "")
+        }
+    }
+
     /** A file of `sstv/corrigees/`, or null. */
     fun fichier(nom: String): File? = corrections.fichier(dossier(), nom)
 
@@ -179,6 +300,7 @@ class ApiCorrectionSstv(
                 if (g.images.size < 2) return JSONObject().put("ok", false).put("erreur", CorrectionsGalerie.UNE_COPIE)
                 if (lance(g.id) { corrections.fusionne(d, g) }) JSONObject().put("ok", true).put("groupe", g.id) else JSONObject().put("ok", false).put("erreur", "occupe")
             }
+            "/api/sstv/retouche/reglage", "/api/sstv/retouche/ia" -> actionRetouche(route, p)
             "/api/sstv/correction/oublier" -> {
                 p("nom").takeIf { it.isNotEmpty() && images().any { s -> s.fileName == it } }?.let { corrections.oublie(d, it) }
                 p("groupe").takeIf { it.isNotEmpty() }?.let { corrections.oublieFusion(d, it) }

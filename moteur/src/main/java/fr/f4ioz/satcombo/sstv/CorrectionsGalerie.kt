@@ -96,7 +96,7 @@ class CorrectionsGalerie(
 
         /** A name of the folder, safe to serve: a plain PNG name made here. */
         fun nomValide(n: String) = File(n).name == n && !n.startsWith('.') && n.endsWith(".png") &&
-            (n.endsWith(SUFFIXE + ".png") || n.endsWith(SUFFIXE_FUSION + ".png"))
+            (n.endsWith(SUFFIXE + ".png") || n.endsWith(SUFFIXE_FUSION + ".png") || RetouchesGalerie.nomValide(n))
 
         fun encode(f: Fiche): String = buildString {
             fun put(k: String, v: Any) { val s = v.toString().replace('\n', ' ').replace('\r', ' ').trim(); if (s.isNotEmpty()) append(k).append('=').append(s).append('\n') }

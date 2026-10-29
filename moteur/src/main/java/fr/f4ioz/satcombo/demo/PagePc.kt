@@ -1402,6 +1402,12 @@ ${EncartSstvJs.CSS}  #i-galerie .petit { font-size:11px; line-height:1.3; }
   #vi-corr .seg button { border-radius:0; margin:0; } #vi-corr .seg button:first-child { border-radius:6px 0 0 6px; } #vi-corr .seg button:last-child { border-radius:0 6px 6px 0; }
   #vi-corr .seg button.actif { background:var(--accent, #4FC3F7); color:#000; }
   .vi-traitee { color:#FFD54F; font-weight:700; }
+  /* The finish: the « IA » always said, the analysis. */
+  .badge-ia { display:inline-block; padding:0 5px; border-radius:4px; font-weight:800; color:#000; background:#FFB454; letter-spacing:.5px; }
+  #vi-ia-badge { position:absolute; top:6px; left:6px; pointer-events:none; font-size:13px; }
+  #vi-ret .actif { background:var(--accent, #4FC3F7); color:#000; }
+  #vi-analyse table { border-collapse:collapse; margin-top:4px; } #vi-analyse td { padding:1px 10px 1px 0; vertical-align:top; } #vi-analyse td:first-child { color:var(--gris, #9AA7B4); white-space:nowrap; }
+  #vi-analyse label { margin-right:8px; }
   .cl-corr { position:absolute; top:4px; left:40px; background:rgba(0,0,0,.72); color:#FFD54F; border-radius:6px; padding:0 5px; font-size:11px; }
   .cl-puces { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
   .cl-puces span { min-width:26px; text-align:center; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; border:1px solid var(--bord); cursor:default; }
@@ -2780,6 +2786,22 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <div class="petit" id="so-station"></div>
       <div class="ligne"><a class="bouton" id="so-pack-serie" href="api/sstv-options/ariss.zip?serie=1" onclick="viFichier(event, this)" title="La meilleure copie de chaque diapo de la série en cours, originale et QSL, et le résumé pour le formulaire ARISS">🏅 Pack ARISS de la série</a></div>
       <div class="petit aide">Le pack : les images telles que reçues, leur QSL et un résumé (indicatif, locator, date et heure UTC, satellite, fréquence, mode, série, diapo, matériel du Montage) prêt pour <a href="https://ariss-usa.org/ARISS_SSTV/submit.php" target="_blank" rel="noopener noreferrer">le formulaire de la galerie ARISS</a>. Rien n’est envoyé : le formulaire demande l’image originale, sans texte ajouté.</div>
+    </div>
+    <div class="carte" id="so-couleur-carte" hidden>
+      <div class="t">Couleurs et IA</div>
+      <label class="petit" style="display:block;margin-top:0" title="Chaque image sans réglage à elle : sa version aux couleurs corrigées est montrée dans la visionneuse et utilisée par les planches et le site web. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-couleur" onchange="soReglage('couleur', this.checked ? 1 : 0)"> Corriger les couleurs de chaque image <span class="petit">(par défaut ; chaque image a aussi son réglage dans la visionneuse)</span></label>
+      <div class="ligne" style="margin-top:2px"><span class="petit">Étapes :</span>
+        <label class="petit" title="La couleur que partagent les zones neutres claires et sombres (un écart d’accord la donne à toute l’image)"><input type="checkbox" id="so-c_dominante" onchange="soReglage('c_dominante', this.checked ? 1 : 0)"> dominante</label>
+        <label class="petit" title="La couleur recalée sur les bords de l’image (Robot 36, PD)"><input type="checkbox" id="so-c_chroma" onchange="soReglage('c_chroma', this.checked ? 1 : 0)"> couleur décalée</label>
+        <label class="petit" title="Noir et blanc étirés quand les deux restent en deçà (jamais plus de ×1,6)"><input type="checkbox" id="so-c_niveaux" onchange="soReglage('c_niveaux', this.checked ? 1 : 0)"> niveaux</label>
+        <label class="petit" title="Des couleurs délavées ravivées (jamais plus de ×1,5)"><input type="checkbox" id="so-c_saturation" onchange="soReglage('c_saturation', this.checked ? 1 : 0)"> saturation</label></div>
+      <div class="petit aide">Tout est mesuré sur l’image (visionneuse › 📊 Analyse) et corrigé d’une même règle pour tous les pixels : rien n’est inventé, une étape dont la mesure n’est pas nette n’est pas appliquée. Une version à part dans corrigees/ ; le pack ARISS prend toujours l’image reçue.</div>
+      <div class="t" style="margin-top:10px">Débruitage <b class="badge-ia">IA</b> <span class="petit" style="font-weight:400">facultatif, jamais par défaut</span></div>
+      <div class="petit" id="so-ia-etat"></div>
+      <div id="so-ia-barre-f" style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden" hidden><div id="so-ia-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <div class="ligne"><button class="primaire" id="so-ia-installer" onclick="soIaInstalle()">Installer</button><button id="so-ia-supprimer" onclick="soIaSupprime()" hidden>Supprimer</button></div>
+      <div class="petit aide">Un réseau appris qui retire le bruit d’une image (cochez « IA » dans la visionneuse, image par image). Il dessine ce qu’il croit voir : une image passée par l’IA est toujours marquée « IA » (galerie, planches, site web), après les couleurs et sans les remplacer, jamais dans le pack ARISS.
+        Modèle : <a href="https://github.com/cszn/SCUNet" target="_blank" rel="noopener noreferrer">SCUNet</a> (K. Zhang et al., 2022), poids « real-PSNR » sous licence Apache-2.0, en ONNX (<a href="https://huggingface.co/Heliosoph/scunet-onnx" target="_blank" rel="noopener noreferrer">Heliosoph/scunet-onnx</a>), exécuté sur le processeur par ONNX Runtime (Microsoft, licence MIT). Rien n’est fourni avec SatMe-PC : téléchargé au clic dans ia/ (environ 170 Mo), chaque fichier vérifié (SHA-256). 2 à 3 s par image de 320×256, 8 s pour un PD 120.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
       <div class="t">Décoder un enregistrement</div>
@@ -5090,7 +5112,7 @@ ${DemarragePagePc.DIALOGUES}
   <div class="ligne"><button onclick="g('fd-dlg').close()">Fermer</button></div>
 </dialog>
 <dialog id="visionneuse" onclick="if (event.target === this) this.close()">
-  <div id="vi-cadre"><img id="vi-img" alt="" onclick="if (viVue !== 'cmp') g('visionneuse').close()"><img id="vi-img2" alt="" hidden><div id="vi-trait" hidden></div><span id="vi-badge" class="cl-badge grand" hidden></span>
+  <div id="vi-cadre"><img id="vi-img" alt="" onclick="if (viVue !== 'cmp') g('visionneuse').close()"><img id="vi-img2" alt="" hidden><div id="vi-trait" hidden></div><span id="vi-badge" class="cl-badge grand" hidden></span><span id="vi-ia-badge" class="badge-ia" hidden title="Image passée par un débruitage appris (IA) : il dessine ce qu’il croit voir">IA</span>
     <span class="vi-etiq" id="vi-etiq-g" style="left:6px" hidden>Brute</span><span class="vi-etiq" id="vi-etiq-d" style="right:6px" hidden>Corrigée</span></div>
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
@@ -5117,6 +5139,13 @@ ${DemarragePagePc.DIALOGUES}
     <button id="vi-redec-son" onclick="viCorrige('son')" title="Décoder à nouveau le son gardé de cette image, toute l’image d’un coup (lignes recalées sur toutes les synchros, dérive d’horloge, niveaux) : une version corrigée, à part (pas une image de plus dans la galerie)">⟳ Version corrigée depuis l’enregistrement</button>
     <button id="vi-fusionner" onclick="viFusionne()" title="Mettre ensemble les copies de cette diapo (chacune re-décodée de son son quand il est gardé) : le bruit d’un passage n’est jamais aux mêmes pixels">⧉ Fusionner les copies</button>
     <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
+  <div class="ligne" id="vi-ret" style="margin-top:6px" hidden>
+    <label class="petit" title="Dominante de couleur, couleur décalée par rapport à l’image, niveaux : mesurés sur l’image et corrigés d’une même règle pour tous les pixels, rien n’est inventé. Une version à part (corrigees/), utilisée aussi par les planches et le site web : l’image reçue n’est jamais modifiée. Pour cette image (le réglage par défaut est dans SSTV › Réglages)."><input type="checkbox" id="vi-ret-couleur" onchange="viRetReglage('couleur', this.checked ? 1 : 0)"> 🎨 Couleurs corrigées</label>
+    <label class="petit" id="vi-ret-ia-l"><input type="checkbox" id="vi-ret-ia" onchange="viRetReglage('ia', this.checked ? 1 : 0)"> <b class="badge-ia">IA</b> débruitage</label>
+    <button id="vi-v-ret" onclick="viMontre(viVue === 'ret' ? viRetBase : 'ret')" title="Cette version sans et avec ses retouches (couleurs, IA) : glisser sur l’image" hidden>Avant | Après</button>
+    <button class="discret" id="vi-ret-analyse-b" onclick="viRetAnalyseOuvre()" aria-expanded="false" title="Ce qui a été mesuré sur cette image : dominante, couleur décalée, niveaux, saturation, bruit, note">📊 Analyse</button>
+    <span class="petit" id="vi-ret-txt" style="flex:1;min-width:160px"></span></div>
+  <div id="vi-analyse" class="petit" hidden style="margin-top:6px;text-align:left"></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
@@ -10062,13 +10091,14 @@ function rendSon() {
   if (ouverte('sstv')) clTic();
   if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
   // The sorting's numbers too: each picture's slide badge.
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '') + (i.ia ? 'i' : '') + (i.couleur ? 'c' : i.couleur === false ? 'x' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? clJour(i.t) + '/' + new Date(i.t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(i.t) + (utc() ? ' UTC' : '') : '') + (i.complete ? '' : ' · partielle') +
-      (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
+      (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
+      (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="Débruitage appris (IA) demandé pour cette image">IA</b>' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
   if (g('visionneuse').open) voisOutils();
@@ -10143,7 +10173,8 @@ function clGalerie(filtre) {
           (i.abimees ? ' · ' + i.abimees + ' % de lignes abîmées' : '') + (i.lu ? ' · lue ' + i.lu + '/12' : '') + '">' +
           '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') + clBadge(gr) +
           (gr.traite && gr.traite.corrigees.includes(i.nom) ? '<span class="cl-corr" title="Une version corrigée existe (à part ; celle-ci est la réception brute)">✨</span>' : '') +
-          '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') + '</div></a>';
+          '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') +
+          (im.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (im.ia ? ' · <b class="badge-ia" title="Débruitage appris (IA) demandé pour cette image">IA</b>' : '') + '</div></a>';
       }).join('') + '</div></div>';
   }).join('') || '<div class="petit">aucune image</div>';
 }
@@ -10442,7 +10473,7 @@ function voisImage(n) {
     i.reunion ? 'réunie de ' + i.reunion.length + ' images partielles' : '', i.trous ? 'lignes perdues ' + i.trous.replace(/;/g, ', ').replace(/-/g, '–') : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
-  VC = null; viCorrCharge();
+  VR = null; viRetCle = ''; VC = null; viCorrCharge();
   if (!g('visionneuse').open) g('visionneuse').showModal();
 }
 let viNom = '', viSonVu = '';
@@ -10494,7 +10525,7 @@ async function viCorrCharge() {
   VC = j && j.existe ? j : null;
   viCorrRend();
   if (VC && VC.enCours) viCorrMinuterie = setTimeout(viCorrCharge, 1200);
-  else if (etait) clTic(true);
+  else if (etait) { clTic(true); viRetCle = ''; viCorrRend(); }
 }
 function viFiche(k) { return !VC ? null : k === 'corr' ? VC.corrigee : k === 'fus' ? (VC.groupe && VC.groupe.fusion) : null; }
 function viDit(f) {
@@ -10520,29 +10551,45 @@ function viCorrRend() {
   if (vue === 'corr' && !corr) vue = fus ? 'fus' : 'brute';
   if (vue === 'fus' && !fus) vue = corr ? 'corr' : 'brute';
   if (vue === 'cmp' && !corr && !fus) vue = 'brute';
+  if (vue === 'ret' && viRetBase === 'corr' && !corr || vue === 'ret' && viRetBase === 'fus' && !fus) viRetBase = 'brute';
   if (vue === 'corr' || vue === 'fus') viCible = vue;
   if (viCible === 'corr' && !corr) viCible = 'fus'; if (viCible === 'fus' && !fus) viCible = 'corr';
-  ['brute', 'corr', 'fus', 'cmp'].forEach(k => g('vi-v-' + k).classList.toggle('actif', k === vue));
+  ['brute', 'corr', 'fus', 'cmp', 'ret'].forEach(k => g('vi-v-' + k).classList.toggle('actif', k === vue));
   txt('vi-v-cmp', 'Brute | ' + (viCible === 'fus' ? 'Fusion' : 'Corrigée'));
   const msg = occupe ? (c.enCours === viNom ? 'Correction en cours…' : gr && c.enCours === gr.id ? 'Fusion en cours…' : 'Une correction est en cours…')
     : c.erreur && (c.erreurSur === viNom || (gr && c.erreurSur === gr.id)) ? '✗ ' + (VC_ERREURS[c.erreur] || c.erreur)
+    : vue === 'ret' ? '<span class="vi-traitee">Retouchée</span> — avant (gauche) et après (droite)'
+    : vue !== 'cmp' && viRetFinie() ? '<span class="vi-traitee">Retouchée</span> — ' + esc(viRetDit())
     : vue === 'brute' ? (corr || fus ? 'Image reçue, sans traitement.' : '')
     : '<span class="vi-traitee">Traitée</span> — ' + esc(viDit(viFiche(vue === 'cmp' ? viCible : vue)));
   if (g('vi-corr-txt').innerHTML !== msg) g('vi-corr-txt').innerHTML = msg;
   viAffiche(vue);
 }
 function viAffiche(vue) {
-  const brut = 'sstv/' + enc(viNom), f = viFiche(vue === 'cmp' ? viCible : vue);
-  const url = f ? f.url + '?v=' + f.quand : '';
-  const cmp = vue === 'cmp' && f;
-  const src = (vue === 'corr' || vue === 'fus') && f ? url : brut;
+  // The version shown (as received, corrected, fused) and its finish (colour, IA) when the picture asks it.
+  const base = viRetVersion(vue);
+  if (viRetCle !== viNom + '|' + base) { viRetCle = viNom + '|' + base; viRetBase = base; VR = null; viRetCharge(base); }
+  const brut = 'sstv/' + enc(viNom), fb = base === 'brute' ? null : viFiche(base), fbUrl = fb ? fb.url + '?v=' + fb.quand : brut;
+  const fini = viRetFinie(), finiIa = !!(fini && VR.effet.ia && VR.ia);
+  let src = fbUrl, droite = '';
+  if (vue === 'cmp') { const f = viFiche(viCible); src = brut; if (f) droite = f.url + '?v=' + f.quand; }
+  else if (vue === 'ret') droite = fini;
+  else if (fini) src = fini;
+  const cmp = !!droite;
   if (!g('vi-img').src.endsWith(src)) g('vi-img').src = src;
-  g('vi-lien').href = src; g('vi-lien').download = f && vue !== 'brute' && vue !== 'cmp' ? f.fichier : viNom;
+  const lien = vue === 'ret' && fini ? fini : src;
+  g('vi-lien').href = lien; g('vi-lien').download = lien === brut ? viNom : decodeURIComponent(lien.split('?')[0].split('/').pop());
   g('vi-img2').hidden = g('vi-trait').hidden = g('vi-curseur').hidden = g('vi-etiq-g').hidden = g('vi-etiq-d').hidden = !cmp;
+  g('vi-ia-badge').hidden = !(finiIa && vue !== 'cmp');
   g('vi-img').style.cursor = cmp ? 'ew-resize' : '';
   // Compared, the pictures shown large enough to see the noise (an SSTV picture is 320 pixels wide).
-  g('vi-img').style.width = vue !== 'brute' ? 'min(92vw, 960px, calc((92vh - 160px) * 4 / 3))' : '';
-  if (cmp) { if (!g('vi-img2').src.endsWith(url)) g('vi-img2').src = url; txt('vi-etiq-d', viCible === 'fus' ? 'Fusion' : 'Corrigée'); viCurseur(); }
+  g('vi-img').style.width = vue !== 'brute' || fini ? 'min(92vw, 960px, calc((92vh - 160px) * 4 / 3))' : '';
+  if (cmp) {
+    if (!g('vi-img2').src.endsWith(droite)) g('vi-img2').src = droite;
+    txt('vi-etiq-g', vue === 'ret' ? 'Avant' : 'Brute');
+    txt('vi-etiq-d', vue === 'ret' ? (finiIa ? 'Après · IA' : 'Après') : viCible === 'fus' ? 'Fusion' : 'Corrigée');
+    viCurseur();
+  }
 }
 function viCurseur() {
   const x = +g('vi-curseur').value;
@@ -10562,6 +10609,96 @@ async function viCorrPost(u, cible) {
   else txt('vi-corr-txt', '✗ ' + (j && (VC_ERREURS[j.erreur] || j.erreur) || 'pas de réponse'));
 }
 function viCorrige(methode) { viCorrPost('api/sstv/corriger?nom=' + enc(viNom) + '&methode=' + methode, 'corr'); }
+// ---- the finish (api/sstv/retouche): the colour set right (measured, nothing invented) and the « IA » (said so wherever shown)
+let VR = null, viRetBase = 'brute', viRetCle = '', viRetMinuterie = 0;
+function viRetVersion(vue) { return vue === 'corr' || vue === 'fus' ? vue : vue === 'cmp' ? viCible : vue === 'ret' ? viRetBase : 'brute'; }
+async function viRetCharge(version) {
+  const nom = viNom, cle = nom + '|' + version; clearTimeout(viRetMinuterie);
+  let j = null; try { j = await (await fetch('api/sstv/retouche?nom=' + enc(nom) + '&version=' + version)).json(); } catch (x) {}
+  if (cle !== viRetCle) return;
+  VR = j && j.ok ? j : null;
+  viRetRend();
+  // The IA being made: asked again until it is there.
+  if (VR && VR.effet.ia && VR.iaPossible && !VR.ia && VR.enCours) viRetMinuterie = setTimeout(() => { if (cle === viRetCle) viRetCharge(version); }, 1500);
+}
+// The finished version shown in place of its own, '' none.
+function viRetFinie() {
+  if (!VR || viRetCle !== viNom + '|' + VR.version) return '';
+  if (VR.effet.ia && VR.ia) return VR.ia.url;
+  return VR.effet.couleur && VR.couleur ? VR.couleur : '';
+}
+function viRetEtapes(a) {
+  const l = [];
+  if (a.dominante.corrigee) l.push('dominante');
+  if (a.chroma.corrigee) l.push('couleur recalée');
+  if (a.niveaux.corriges) l.push('niveaux ×' + String(a.niveaux.gain).replace('.', ','));
+  if (a.saturation.facteur !== 1) l.push('saturation ×' + String(a.saturation.facteur).replace('.', ','));
+  return l;
+}
+function viRetDit() {
+  if (!VR) return '';
+  const l = [];
+  if (VR.effet.couleur && VR.analyse) { const e = viRetEtapes(VR.analyse); l.push(VR.analyse.bruit.neige ? 'couleurs : surtout du bruit, rien de corrigé' : e.length ? 'couleurs corrigées : ' + e.join(', ') : 'couleurs : rien à corriger'); }
+  if (VR.effet.ia) l.push(VR.ia ? 'IA : ' + VR.ia.modele + (VR.ia.ms ? ' (' + (VR.ia.ms / 1000).toFixed(1).replace('.', ',') + ' s)' : '')
+    : !VR.iaPossible ? 'IA : modèle non installé (SSTV › Réglages › Couleurs et IA)' : VR.enCours ? 'IA en cours…' : VR.erreur === 'ia_echec' ? '✗ IA : échec' : 'IA : pas encore calculée');
+  return l.join(' · ');
+}
+function viRetRend() {
+  const r = VR;
+  g('vi-ret').hidden = !r;
+  if (!r) { g('vi-analyse').hidden = true; return; }
+  g('vi-ret-couleur').checked = r.effet.couleur;
+  g('vi-ret-ia').checked = r.effet.ia;
+  g('vi-ret-ia').disabled = !r.iaPossible && !r.effet.ia;
+  g('vi-ret-ia-l').title = r.iaPossible ? 'Débruitage appris (SCUNet, sur le processeur, 2 à 3 s) : il dessine ce qu’il croit voir. Jamais par défaut ; l’image est alors marquée « IA » partout (galerie, planches, site web). Après les couleurs, sans les remplacer ; l’image reçue n’est jamais modifiée.'
+    : 'Modèle IA non installé : SSTV › Réglages › Couleurs et IA › Installer';
+  g('vi-v-ret').hidden = !viRetFinie();
+  txt('vi-ret-txt', viRetDit());
+  if (!g('vi-analyse').hidden) g('vi-analyse').innerHTML = viRetAnalyse();
+  viCorrRend();
+}
+function viRetAnalyseOuvre() {
+  const ouvre = g('vi-analyse').hidden;
+  g('vi-analyse').hidden = !ouvre; g('vi-ret-analyse-b').setAttribute('aria-expanded', ouvre ? 'true' : 'false');
+  if (ouvre) g('vi-analyse').innerHTML = viRetAnalyse();
+}
+function viRetAnalyse() {
+  const a = VR && VR.analyse;
+  if (!a) return 'Analyse impossible : image illisible.';
+  const n = v => String(Math.round(v * 10) / 10).replace('.', ','), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + n(Math.abs(v));
+  const actif = VR.effet.couleur;
+  const fait = t => '<b style="color:var(--vert)">' + (actif ? t : t + ' si activé') + '</b>';
+  const d = a.dominante, c = a.chroma, nv = a.niveaux, s = a.saturation, b = a.bruit;
+  const decal = c.cbX || c.cbY || c.crX || c.crY;
+  const lignes = [
+    ['Dominante', (d.taille < 2 ? 'aucune' : 'Cb ' + sg(d.cb) + ', Cr ' + sg(d.cr) + ' niveaux' + (d.accordHz != null ? ' — comme un écart d’accord de ' + sg(d.accordHz) + ' Hz' : '')) +
+      (d.corrigee ? ' · ' + fait('corrigée') : d.taille >= 2 && !d.sure ? ' · laissée : pas sûre (les zones neutres claires et sombres ne s’accordent pas : la couleur de la diapo, pas un défaut)' : '') +
+      ' <span class="petit">(' + n(d.appui) + ' % de pixels près du neutre)</span>'],
+    ['Couleur décalée', decal ? 'Cb ' + sg(c.cbX) + ' / ' + sg(c.cbY) + ' px, Cr ' + sg(c.crX) + ' / ' + sg(c.crY) + ' px (horizontal / vertical)' + (c.corrigee ? ' · ' + fait('recalée') : '')
+      : 'aucune' + ' <span class="petit">(bords couleur et image accordés ' + n(c.correlation * 100) + ' %)</span>'],
+    ['Niveaux', 'noir ' + n(nv.noir) + ', blanc ' + n(nv.blanc) + ' <span class="petit">(16 à 235)</span>' + (nv.corriges ? ' · ' + fait('étirés ×' + n(nv.gain)) : ' · laissés')],
+    ['Saturation', 'rayon couleur (90 %) ' + n(s.p90) + (s.facteur !== 1 ? ' · ' + fait('×' + n(s.facteur)) : '')],
+    ['Bruit', 'luminance σ ' + n(b.y) + ', couleur σ ' + n(b.c) + ' niveaux' + (b.neige ? ' · <span class="ambre">surtout du bruit : rien n’est corrigé</span>' : '')],
+    ['Note', a.noteAvant >= 0 ? a.noteAvant + (a.noteApres !== a.noteAvant ? ' → ' + a.noteApres : '') : '—']];
+  const r = VR.reglage, e = VR.effet;
+  const ck = (k, lib, t) => '<label title="' + t + '"><input type="checkbox"' + (e[k] ? ' checked' : '') + ' onchange="viRetReglage(\'' + k + '\', this.checked ? 1 : 0)"> ' + lib + (r[k] == null ? ' <span class="petit">(défaut)</span>' : '') + '</label>';
+  return '<table>' + lignes.map(l => '<tr><td>' + l[0] + '</td><td>' + l[1] + '</td></tr>').join('') + '</table>' +
+    '<div class="ligne" style="margin-top:4px"><span>Étapes pour cette image :</span>' +
+    ck('dominante', 'dominante', 'Retirer la couleur que partagent les zones neutres (un écart d’accord la donne à toute l’image)') +
+    ck('chroma', 'couleur décalée', 'Recaler la couleur sur les bords de l’image (Robot 36, PD : couleur lue un peu tôt ou tard)') +
+    ck('niveaux', 'niveaux', 'Étirer noir et blanc quand les deux restent en deçà (échelle des tons resserrée par un signal faible)') +
+    ck('saturation', 'saturation', 'Raviver des couleurs délavées (jamais plus de ×1,5)') +
+    (r.couleur != null || r.dominante != null || r.chroma != null || r.niveaux != null || r.saturation != null ? '<button class="discret" onclick="viRetReglage(\'tout\', \'\')" title="Oublier les réglages de cette image (l’IA aussi) : ceux de SSTV › Réglages">Réglages par défaut</button>' : '') + '</div>' +
+    '<div class="petit aide">Mesuré sur ' + (VR.version === 'corr' ? 'la version corrigée' : VR.version === 'fus' ? 'la fusion' : 'l’image reçue') + '. Corrections globales, la même règle pour chaque pixel : rien n’est inventé. ' +
+    'Une étape n’est appliquée que si sa mesure est nette ; une image déjà juste ressort inchangée.</div>';
+}
+async function viRetReglage(k, v) {
+  if (!viNom) return;
+  const j = await post('api/sstv/retouche/reglage?nom=' + enc(viNom) + '&k=' + k + '&v=' + v + '&version=' + viRetBase);
+  // Turned on: shown before and after.
+  if (j && j.ok && v === 1 && (k === 'couleur' || k === 'ia')) { viRetBase = viRetVersion(viVue); viVue = 'ret'; }
+  viRetCle = ''; imagesVus = ''; clVu = ''; viCorrRend();
+}
 function viFusionne() { viCorrPost('api/sstv/fusionner?nom=' + enc(viNom), 'fus'); }
 async function viSatellite() {
   const i = ((S && S.images) || []).find(x => x.nom === viNom); if (!i) return;
@@ -10608,6 +10745,10 @@ async function soCharge() {
   if (!SO || !SO.ok) { g('so-carte').hidden = true; return; }
   g('so-carte').hidden = false;
   const r = SO.reglages;
+  g('so-couleur-carte').hidden = false;
+  [['so-couleur', r.couleur], ['so-c_dominante', r.c_dominante], ['so-c_chroma', r.c_chroma], ['so-c_niveaux', r.c_niveaux], ['so-c_saturation', r.c_saturation]]
+    .forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = !!b; });
+  soIaCharge();
   [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-redecode', r.redecode], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
   [['so-avant', r.avant], ['so-note', r.note], ['so-jours', r.jours], ['so-mo', r.mo], ['so-dispo', r.dispo]].forEach(([i, v]) => { if (document.activeElement !== g(i)) g(i).value = v; });
   txt('so-enreg-etat', SO.enregistreMaintenant ? '— en cours pour ce passage' : '');
@@ -10619,7 +10760,29 @@ async function soCharge() {
   txt('so-station', 'Indicatif et locator de la QSL : ceux de l’image, sinon Réglages › Ma station (' + (r.indicatif || '—') + ', ' + (r.locator || '—') + ').');
   viQslMaj();
 }
-async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); }
+async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); if (k === 'couleur' || k.startsWith('c_')) viRetCle = ''; }
+// The « IA »'s model: its files, their sizes, the download (asked again while it runs).
+let soIaMinuterie = 0;
+async function soIaCharge() {
+  clearTimeout(soIaMinuterie);
+  let j = null; try { j = await (await fetch('api/sstv-options/ia')).json(); } catch (x) {}
+  if (!j || !j.ok) { txt('so-ia-etat', 'Débruitage IA indisponible ici.'); g('so-ia-installer').hidden = true; return; }
+  const mo = o => (o / 1e6).toFixed(0) + ' Mo';
+  const fichiers = j.fichiers.map(f => f.role + ' — ' + mo(f.octets) + (f.present ? ' ✓' : '')).join(' · ');
+  txt('so-ia-etat', j.enCours ? 'Téléchargement : ' + j.etape + ' — ' + mo(j.recus) + ' / ' + mo(j.total)
+    : j.installe ? 'Installé : ' + j.modele + ' (' + mo(j.total) + ', ' + j.fils + ' fils de calcul' + (j.dernierMs ? ', dernière image ' + (j.dernierMs / 1000).toFixed(1).replace('.', ',') + ' s' : '') + ').'
+    : (j.erreur ? '✗ ' + j.erreur + ' — ' : '') + 'Non installé. À télécharger : ' + fichiers + ' (' + mo(j.total) + ' en tout).');
+  g('so-ia-etat').style.color = j.erreur && !j.enCours ? 'var(--danger)' : '';
+  g('so-ia-barre-f').hidden = !j.enCours; g('so-ia-barre').style.width = (j.total ? 100 * j.recus / j.total : 0) + '%';
+  g('so-ia-installer').hidden = j.installe; g('so-ia-installer').disabled = j.enCours; txt('so-ia-installer', j.enCours ? 'Installation…' : 'Installer (' + mo(j.total) + ')');
+  g('so-ia-supprimer').hidden = !j.installe || j.enCours;
+  if (j.enCours) soIaMinuterie = setTimeout(soIaCharge, 1000);
+}
+async function soIaInstalle() { await post('api/sstv-options/ia/installer'); soIaCharge(); }
+async function soIaSupprime() {
+  if (!confirm('Supprimer le modèle IA (environ 170 Mo dans ia/) ? Les images déjà passées par l’IA restent ; aucune nouvelle ne l’est plus.')) return;
+  await post('api/sstv-options/ia/supprimer'); soIaCharge(); viRetCle = '';
+}
 async function soRetention() {
   const R = SO && SO.retention; if (!R || !R.supprimer.length) return;
   if (!confirm('Supprimer ' + R.supprimer.length + ' enregistrement(s) SSTV ?\n\n' + R.supprimer.slice(0, 12).join('\n') + (R.supprimer.length > 12 ? '\n…' : ''))) return;

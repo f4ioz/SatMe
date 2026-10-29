@@ -49,6 +49,10 @@ class OptionsSstvPc(
     private val fichierSstv = File(dossier, "sstv-enregistrements.txt")
     private val journalRetention get() = File(son.dossierEnregistrements, "retention-sons.log")
     @Volatile private var dites: Set<String> = AlerteDiapo.litDites(runCatching { fichierDites.readText() }.getOrNull())
+    /** The pictures' « IA » ([IaSstvPc]), set by Main; [iaPrete] told when it is installed or removed. */
+    @Volatile var ia: IaSstvPc? = null
+    @Volatile var iaPrete: (Boolean) -> Unit = {}
+
     /** A sentence said aloud (when the announcements are on), set by Main. */
     @Volatile var annonce: (String) -> Unit = {}
 
@@ -262,6 +266,7 @@ class OptionsSstvPc(
                 val (b, n) = qsl(p("nom"), d, jpeg) ?: return refus("image introuvable")
                 if (p("voir") == "1") ReponseWeb("200 OK", if (jpeg) "image/jpeg" else "image/png", b) else fichier(b, n, if (jpeg) "image/jpeg" else "image/png")
             }
+            "/ia" -> json(ia?.etat()?.put("ok", true) ?: JSONObject().put("ok", false).put("erreur", "absent"))
             "/ariss.zip" -> {
                 val noms = if (p("serie") == "1") meilleuresDeLaSerie() else p("noms").split(',').map { it.trim() }.filter { it.isNotEmpty() }
                 val (b, n) = pack(noms) ?: return refus("aucune image")
@@ -285,11 +290,28 @@ class OptionsSstvPc(
                     "dispo" -> o.qslDisposition = runCatching { QslSstv.Disposition.valueOf(v) }.getOrDefault(QslSstv.Disposition.BANDEAU)
                     "satme" -> o.qslSatme = on
                     "jpeg" -> o.qslJpeg = on
+                    "couleur" -> o.couleurDefaut = on
+                    "c_dominante" -> o.couleurDominante = on
+                    "c_chroma" -> o.couleurChroma = on
+                    "c_niveaux" -> o.couleurNiveaux = on
+                    "c_saturation" -> o.couleurSaturation = on
                     else -> return refus("réglage inconnu")
                 }
                 json(json())
             }
             "/retention" -> json(JSONObject().put("ok", true).put("supprimes", appliqueRetention("à la main")))
+            // The « IA »'s model: downloaded (checked) in the background, or taken away.
+            "/ia/installer" -> {
+                val x = ia ?: return refus("absent")
+                if (!x.installe { iaPrete(true) }) return refus("installation déjà en cours")
+                json(JSONObject().put("ok", true))
+            }
+            "/ia/supprimer" -> {
+                val x = ia ?: return refus("absent")
+                iaPrete(false)
+                if (!x.supprime()) { if (x.installe()) iaPrete(true); return refus("modèle en cours d’utilisation : le supprimer après un redémarrage de SatMe-PC") }
+                json(JSONObject().put("ok", true))
+            }
             "/garde" -> {
                 val n = File(p("nom")).name
                 if (n.isBlank()) return refus("nom")
@@ -317,6 +339,8 @@ class OptionsSstvPc(
             .put("reglages", JSONObject().put("alerte", o.alerteDiapo).put("avant", o.alerteAvantMin).put("note", o.alerteNoteMin)
                 .put("enreg", o.enregistrePassages).put("jours", o.retentionJours).put("mo", o.retentionMaxMo).put("journal", o.retentionJournal)
                 .put("redecode", o.redecodeFin).put("dispo", o.qslDisposition.name).put("satme", o.qslSatme).put("jpeg", o.qslJpeg)
+                .put("couleur", o.couleurDefaut).put("c_dominante", o.couleurDominante).put("c_chroma", o.couleurChroma)
+                .put("c_niveaux", o.couleurNiveaux).put("c_saturation", o.couleurSaturation)
                 .put("activites", station.settings.activitesOn).put("indicatif", station.settings.callsign).put("locator", station.etat.value.locator))
             .put("enregistreMaintenant", runCatching { enregistreSerie() }.getOrDefault(false))
             .put("prochaines", JSONArray(prochaines(t).map { a ->

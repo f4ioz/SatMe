@@ -47,8 +47,11 @@ class SourcesSitePc(
 
     fun contenu(g: SitePc.Genre, ref: String): SitePc.Contenu? = when (g) {
         SitePc.Genre.SSTV -> {
-            val f = sstv.fichier(ref)?.takeIf { it.name.endsWith(".png") }
-            val s = sstv.images().firstOrNull { it.fileName == ref }
+            val f0 = sstv.fichier(ref)?.takeIf { it.name.endsWith(".png") }
+            val s0 = sstv.images().firstOrNull { it.fileName == ref }
+            // As the picture's switches ask: its colour set right, the « IA » (always said in its words).
+            val (f, s) = if (f0 == null || s0 == null) f0 to s0
+                else runCatching { src.corrections()?.retouchee(ref, f0 to s0) }.getOrNull() ?: (f0 to s0)
             if (f == null || s == null) null else SitePc.Contenu(f.readBytes(), null, "image/png", metaSstv(s))
         }
         SitePc.Genre.PLANCHE -> planche.planches().firstOrNull { it.id == ref }?.let { m ->
@@ -58,6 +61,7 @@ class SourcesSitePc(
                     val r = rapportLeger(m)
                     MetaSitePc.planche(o, m, r, shots(), campagneDe(r?.evenement ?: m.evenement), traces(), videos())
                 }
+                runCatching { planche.imagesIa(ref) }.getOrDefault(0).takeIf { it > 0 }?.let { o.put("ia", true).put("imagesIa", it) }
                 SitePc.Contenu(PlancheRenduPc.jpeg(PlancheRenduPc.rgb(img), 0.88f), null, "image/jpeg", o)
             }
         }
@@ -155,6 +159,9 @@ class SourcesSitePc(
         Regex("^Campagne\\s*:\\s*(.+)$").find(s.note.trim())?.let { o.put("evenement", it.groupValues[1].trim().take(80)) }
         if (s.diapo > 0) o.put("description", "Diapo " + s.diapo + (if (s.diapos > 0) "/" + s.diapos else ""))
         if (!s.complete) o.put("incomplete", true)
+        // Not as received: what was done (« couleur corrigée », « IA »), and the learnt denoiser said apart.
+        if (s.traitement.isNotEmpty()) o.put("traitement", s.traitement)
+        if (s.retoucheIa) o.put("ia", true)
         // Its pass and the auto-pilot.
         runCatching {
             val catnum = src.catnumDe(s.satName)
