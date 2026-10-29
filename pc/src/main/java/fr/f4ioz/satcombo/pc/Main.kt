@@ -725,6 +725,21 @@ fun main(args: Array<String>) {
             Thread({ runCatching { if (journal.ft.duPassage(e).isNotEmpty()) site.publie(SitePc.Genre.FT8, e.id, false) } }, "satme-site-ft8").apply { isDaemon = true; start() }
     }
     directSite.demarre()
+    // « Assistant et domotique »: one door for the voice assistant, Home Assistant and the site's remote commands — questions
+    // and safe actions only (receive, sound), never a transmission or a rotor move (CommandesPc). Each module off by default.
+    val commandes = CommandesPc(MondeCommandesPc(station, son, datv, qo100, carnet, autopilote, textesDatv,
+        baisseSdr = { baisseSdr.regle("commande", it) }, avantDatv = { large.veilleArrete() }))
+    val assistant = AssistantVocalPc(station.stockage, phonie.install, commandes, { phonie.install.python(phonie.python) },
+        dit = AssistantVocalPc.parSynthese(parole) { baisseSdr.regle("assistant", it) })
+    val domotique = DomotiquePc(station.stockage, commandes)
+    val commandesSite = CommandesSitePc(station.stockage, site, commandes, autres = {
+        listOfNotNull(station.etat.value.suivi?.catalogNumber).toSet() + runCatching { autopilote.catnums() }.getOrDefault(emptySet())
+    })
+    serveur.commandesWeb = CommandesWebPc(station.stockage, commandes, assistant, domotique, commandesSite)
+    assistant.revise()
+    domotique.demarre()
+    commandesSite.demarre()
+    portee.launch { while (true) { runCatching { assistant.tic() }; runCatching { assistant.revise() }; kotlinx.coroutines.delay(1000) } }
     // « Agenda › Diplômes »: the standing awards, those announced online, the ARISS sessions; the gallery and the log matched.
     val diplomes = DiplomesPc(station, dossier,
         images = {
@@ -841,6 +856,8 @@ fun main(args: Array<String>) {
         runCatching { molette.arrete() }
         runCatching { phonie.arrete() }
         runCatching { parole.arrete() }
+        runCatching { assistant.arrete() }
+        runCatching { domotique.arrete() }
         serveur.arrete()
     })
     // The server and the loops run on their own threads; this one waits.

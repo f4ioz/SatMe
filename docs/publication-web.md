@@ -654,6 +654,50 @@ the voice alone (« seule »); the visitors choose the sound track in their
 player. Only the voices SatMe-PC renders itself (Piper, eSpeak NG) go there,
 not speech-dispatcher's.
 
+### Remote commands (optional)
+
+So that an Alexa skill or a page of your site can ask the station questions
+and a few gestures **without ever connecting to it**: *Settings › Assistant
+and home automation › Remote commands* (« Commandes à distance »), two
+boxes, unticked by default. SatMe-PC always does the sending, to the same
+address (`{type}`) and with the same token as the rest.
+
+> **Never any transmission.** Only eight actions exist, all receive or
+> sound: `autopilote_on`, `autopilote_off`, `sstv_on`, `sstv_off`,
+> `datv_on`, `datv_off`, `son_muet`, `son_remet`. SatMe-PC refuses
+> everything else (PTT, CAT, DATV / SSTV / FT8 / ADALM-PLUTO transmission,
+> rotator) and answers "do it on the screen", whatever the site sends.
+
+| Type | Body sent | Expected answer | When |
+|---|---|---|---|
+| `commandes-etat` | JSON `{"type","version","t","reponses","passages","actions"}` | `{"ok":true}` | every minute (**Questions** or **Actions** ticked), and right after an action |
+| `commandes-attente` | JSON `{"type","version","attente":25}` | `{"ok":true,"commandes":[{"id","intention","t","source"}]}` as soon as a command waits, else an empty list after `attente` seconds at most | in a loop, **Actions** ticked |
+| `commandes-resultat` | JSON `{"type","version","id","ok","fr","en"}` | `{"ok":true}` | after each command received |
+
+- `reponses`: for each question, the sentence ready to say, in French and
+  English, in the station's local time — `prochain_passage` (your
+  favourites), `visibles`, `autopilote_etat`, `derniere_sstv`, `datv_etat`,
+  `balise`, `rotor`, `prochain_aos`, `dernier_qso`, `aide` — each
+  `{"fr","en"}` and, when it announces a pass to come, `"aos"` (ms UTC) so
+  the site can add "in 25 minutes" at the time it answers.
+- `passages`: the next pass (above the minimum elevation) of the
+  favourites, the satellite followed, the campaigns' and a few common ones
+  (ISS, SO-50, AO-91, RS-44…), 40 at most:
+  `{"nom","catnum","cles","aos","los","el","fr","en"}`. `cles`: the
+  satellite's names normalised (NFD without accents, lowercase, letters and
+  digits only: "AO-91" → `ao91`, "ISS (ZARYA)" → `isszarya`, `iss`,
+  `stationspatiale`…) to find a spoken name.
+- `actions`: the actions the station accepts now (empty when **Actions** is
+  unticked).
+- A command: `intention` is one of the eight actions; a command already
+  seen (same `id`) is not done again. SatMe-PC keeps the
+  `commandes-attente` request open up to 25 s: your site holds it while it
+  has nothing and answers as soon as a command arrives (a 60 s proxy
+  timeout is enough).
+- A site that doesn't know these types answers `404`: SatMe-PC tries again
+  less and less often (up to 5 min) and says so on the card.
+
+
 ---
 
 ## Security

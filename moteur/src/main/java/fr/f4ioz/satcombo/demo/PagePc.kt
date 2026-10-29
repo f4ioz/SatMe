@@ -4836,6 +4836,7 @@ ${DemarragePagePc.CARTES}
         <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
     </div>
 ${SiteWebJs.CARTE}
+${CommandesJs.CARTES}
     <div class="carte" id="dop-carte">
       <div class="t">Journal Doppler / CAT</div>
       <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
@@ -5121,6 +5122,7 @@ ${DemarragePagePc.DIALOGUES}
     <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
+${CommandesJs.FLOTTANT}
 <script>
 // The page's own errors, counted in the status bar.
 window.__err = window.__err || [];
@@ -5729,6 +5731,7 @@ const CATS_REG = [
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, envoi vers votre site web (module)', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Envoyer vers un site web'] },
+  { id: 'commandes', nom: 'Assistant et domotique', ico: 'mic', desc: 'Assistant vocal, Home Assistant, commandes à distance par votre site — jamais d’émission', cartes: ['Assistant vocal', 'Home Assistant', 'Commandes à distance'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
@@ -10857,6 +10860,7 @@ ${VideoSkedJs.JS}
 majVueSked();
 
 ${SiteWebJs.JS}
+${CommandesJs.JS}
 // ------------------------------------------------------------------ the followed satellite's map
 let ecranStation = 'ciel';
 try { const q = localStorage.getItem('ecran-station'); ecranStation = q === 'carte' || (q === 'globe' && !window.SATME_TELEPHONE) ? q : 'ciel'; } catch (x) {}

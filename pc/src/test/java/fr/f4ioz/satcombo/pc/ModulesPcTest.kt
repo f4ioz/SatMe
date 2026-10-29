@@ -92,26 +92,28 @@ class ModulesPcTest {
             // « Tout »: everything but « Mon site web », which only the owner switches on.
             j = post("/api/modules?profil=tout")
             assertEquals(PagePc.TOUS.size, j.getJSONArray("onglets").length())
-            assertEquals(listOf("#site-carte", ".site-b"), liste(j.getJSONArray("masques")))
+            // (and the other modules switched on by the owner only: the voice assistant, Home Assistant)
+            assertEquals(ModulesStation.MODULES.filter { it.surDemande }.flatMap { it.masques }, liste(j.getJSONArray("masques")))
             assertEquals("tout", j.getString("profil"))
             // Its actions refused while it is off.
             val refus = post("/api/site/essai")
             assertFalse(refus.getBoolean("ok")); assertEquals("site", refus.getString("module"))
             // Switched on by hand: a profile leaves it on, and still matches.
             j = post("/api/modules?m=site&on=1")
-            assertEquals(0, j.getJSONArray("masques").length())
+            val autres = ModulesStation.MODULES.filter { it.surDemande && it.id != ModulesStation.SITE }
+            assertEquals(autres.flatMap { it.masques }, liste(j.getJSONArray("masques")))
             j = post("/api/modules?profil=sstv")
             assertEquals("sstv", j.getString("profil"))
             assertTrue(ModulesStation.actif(stockage, "site"))
             j = post("/api/modules?profil=tout")
-            assertEquals(0, j.getJSONArray("masques").length())
+            assertEquals(autres.flatMap { it.masques }, liste(j.getJSONArray("masques")))
 
             // From another site's page open in the same browser: refused, nothing changed.
             Socket("127.0.0.1", s.portReel).use { k ->
                 k.getOutputStream().write(("POST /api/modules?profil=sstv HTTP/1.1\r\nHost: 127.0.0.1:${s.portReel}\r\nOrigin: http://ailleurs.example\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").toByteArray())
                 assertTrue(k.getInputStream().bufferedReader().readLine().contains("403"))
             }
-            assertEquals(emptySet<String>(), ModulesStation.coupes(stockage))
+            assertEquals(autres.map { it.id }.toSet(), ModulesStation.coupes(stockage))
         } finally { s.arrete() }
     }
 

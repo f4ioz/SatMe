@@ -164,6 +164,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var diplomes: DiplomesPc? = null
     /** « Réglages › Envoyer vers un site web »: what is sent to the owner's web site (or a folder) (set before [demarre]). */
     @Volatile var site: SitePc? = null
+    /** « Assistant et domotique »: the voice assistant, Home Assistant, the site's remote commands (set before [demarre]). */
+    @Volatile var commandesWeb: CommandesWebPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -935,6 +937,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else {
                     val f = if (r.methode == "POST") RequeteHttp.corps(c.getInputStream(), r, 8192)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty() else emptyMap()
                     st.sert(chemin, r.methode) { k -> f[k] ?: q[k].orEmpty() }
+                }
+            } ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // « Assistant et domotique »: settings and the commands given; a POST from this page's own origin only, its fields in the body
+        // (the broker's password never in an address). Nothing here can transmit (CommandesPc).
+        if (chemin == "/api/commandes" || chemin.startsWith("/api/commandes/")) {
+            val rep = commandesWeb?.let { cw ->
+                if (r.methode == "POST" && !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]))
+                    fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"erreur\":\"origine refusée\"}".toByteArray())
+                else {
+                    val f = if (r.methode == "POST") RequeteHttp.corps(c.getInputStream(), r, 8192)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty() else emptyMap()
+                    cw.sert(chemin, r.methode) { k -> f[k] ?: q[k].orEmpty() }
                 }
             } ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
