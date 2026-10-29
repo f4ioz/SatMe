@@ -15,6 +15,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Phonie → texte : 15 langues de plus à traduire** — danois, suédois, norvégien, finnois, estonien, letton, lituanien, slovaque, hongrois, roumain, bulgare, slovène, grec, turc et catalan, en passant par l'anglais comme les autres. Les cocher dans *Réglages › Phonie → texte*, puis **Installer la traduction** (environ 65 à 150 Mo par langue).
+
+### en
+- **Speech to text: 15 more languages can be translated** — Danish, Swedish, Norwegian, Finnish, Estonian, Latvian, Lithuanian, Slovak, Hungarian, Romanian, Bulgarian, Slovenian, Greek, Turkish and Catalan, through English like the others. Tick them in *Settings › Speech to text*, then **Install translation** (about 65 to 150 MB per language).
+
 ## 2026.10.34
 
 ### fr
