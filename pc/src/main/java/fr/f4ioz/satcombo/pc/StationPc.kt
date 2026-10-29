@@ -166,6 +166,13 @@ class StationPc(
      */
     @Volatile var afcSstvHz: Long = 0L
 
+    /**
+     * The access tone the Doppler loop arms (tenths of Hz; 0: none; -1: from
+     * the transmitter's description, as always). Set by « Trafic satellite »
+     * ([TraficLeoPc]); -1 while it is off.
+     */
+    @Volatile var ctcssVoulu: () -> Int = { -1 }
+
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
         // Behind the converter table's guard: a frequency no rig band and no line's IF holds is not sent.
@@ -191,8 +198,9 @@ class StationPc(
         override fun txSuitVite() = false
         override fun modelePoste() = _etat.value.catModele
         override fun inversionForcee(): Boolean? = null
-        override fun ctcssChoisi() = 0
-        override fun ctcssAuto() = true
+        // « Trafic satellite »: the satellite's preset tone, or SO-50's arming tone for a moment (automatic otherwise).
+        override fun ctcssChoisi() = runCatching { ctcssVoulu() }.getOrDefault(-1).coerceAtLeast(0)
+        override fun ctcssAuto() = runCatching { ctcssVoulu() }.getOrDefault(-1) < 0
         override fun repos() = _etat.value.repos
         override fun poseRepos(hz: Long) = change { copy(repos = hz) }
         // The converters (LNB, transverter): the table's first line for the rig's RX or TX side.

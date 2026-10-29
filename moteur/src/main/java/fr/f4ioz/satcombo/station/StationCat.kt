@@ -160,6 +160,14 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     @Volatile var ecritMonteeHz = 0L; private set
     @Volatile var luDescenteHz = 0L; private set
 
+    /**
+     * The access tone written at the last arming (tenths of Hz, 0: none),
+     * and how many armings so far: who changes the tone (SO-50's arming)
+     * knows when the rig has it. -1 before any.
+     */
+    @Volatile var tonArme = -1; private set
+    @Volatile var armements = 0L; private set
+
     // ---------------------------------------------- what the rest of the app tells
 
     /** The knob hold delay, the same for RX, FM and TX: two seconds too long is too long everywhere. */
@@ -405,6 +413,8 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         catArmedFor = catnum
         catArmedTxDesc = t.description
         catLayout = layout
+        tonArme = if (isFmMode(t) && tone > 0) tone else 0
+        armements++
         lastSentDl = 0L; lastSentUl = 0L
         rxArbiter.reset(); fmArbiter.reset()
         // New satellite, new bands: what the driver knew about the rig is

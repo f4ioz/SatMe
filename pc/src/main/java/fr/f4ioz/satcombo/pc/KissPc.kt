@@ -142,14 +142,37 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
     @Volatile private var baliseAos = 0L
 
     /**
-     * The ISS beacon, when chosen: once the ISS is 15° up, one position a
-     * pass through the ARISS digipeater — only when SatMe read the radio on
+     * The LOS of the ISS pass the beacon was armed for (0: not armed in this
+     * run). The setting alone never sends: ticked from a stored value, a
+     * phone's backup or a previous pass, it is unticked at the next look.
+     */
+    @Volatile var baliseLos = 0L; private set
+
+    /** The ISS beacon armed (for the pass under way, or the next within 30 min) or disarmed; null when done, else why not. */
+    fun armeBalise(on: Boolean): String? {
+        val s = station.settings
+        if (!on) { s.aprsBaliseIss = false; baliseLos = 0L; return null }
+        val t = horloge()
+        val p = station.passageEnCours(25544, t)
+            ?: station.etat.value.passages.firstOrNull { it.catalogNumber == 25544 && it.losEpochMs > t && it.aosEpochMs - t <= 30 * 60_000L }
+                ?.let { it.aosEpochMs to it.losEpochMs }
+            ?: return "pas de passage de l'ISS en cours ni dans les 30 min : armer la balise juste avant le passage"
+        baliseLos = p.second
+        s.aprsBaliseIss = true
+        return null
+    }
+
+    /**
+     * The ISS beacon, when armed for this pass ([armeBalise]): once the ISS
+     * is 15° up, one position through the ARISS digipeater — only when SatMe read the radio on
      * 145.825 itself. Every check still applies.
      */
     private suspend fun balise() {
         val s = station.settings
-        if (!s.aprsBaliseIss || !EmissionKiss.balisePrete(lien.etat.value)) return
         val maintenant = horloge()
+        // Armed for one pass only: past its LOS (or never armed in this run), unticked.
+        if (s.aprsBaliseIss && (baliseLos == 0L || maintenant >= baliseLos)) { s.aprsBaliseIss = false; baliseLos = 0L; return }
+        if (!s.aprsBaliseIss || !EmissionKiss.balisePrete(lien.etat.value)) return
         if ((iss(maintenant)?.elevationDeg ?: -90.0) < 15.0) return
         val aos = station.passageEnCours(25544, maintenant)?.first ?: return
         if (aos == baliseAos || EmissionKiss.source(s).isBlank()) return

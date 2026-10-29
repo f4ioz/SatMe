@@ -85,6 +85,8 @@ object ModulesStation {
             avis = "Un boîtier ESP32 et un WiMo ; ne fait rien tant qu’aucun port n’est choisi (l’ESP32 virtuel pour essayer)"),
         Module(SITE, "Publication web", "Envoyer images SSTV, planches, rapports, contacts et vidéos (et en option des données en direct) vers votre site web, par HTTPS, ou dans un dossier. Votre site les reçoit comme il veut (API documentée). Rien n’est envoyé tant que ce module n’est pas activé et testé.",
             masques = listOf("#site-carte", ".site-b"), avis = "Désactivé par défaut ; aucun profil ne l’active", surDemande = true),
+        Module(TRAFIC, "Trafic satellite (émission)", "Émettre par les satellites en orbite basse avec l’IC-9700 : préréglages par satellite (tonalité, élévation minimale, puissance), armement de SO-50, mémoires CW et vocales, APRS par digipeater (ARISS), assistant de QSO. Chaque émission part d’un clic de l’opérateur.",
+            masques = listOf("#leo-carte"), avis = "Désactivé par défaut ; aucun profil ne l’active. Un IC-9700 connecté par CAT", surDemande = true),
     )
 
     private val PAR_ID = MODULES.associateBy { it.id }
@@ -112,6 +114,9 @@ object ModulesStation {
 
     /** « Publication web », sending to the owner's web site (SitePc): off until switched on. Its id stays « site » (the stations' settings). */
     const val SITE = "site"
+
+    /** « Trafic satellite » (TraficLeoPc): transmitting through low-orbit satellites; off until switched on. */
+    const val TRAFIC = "trafic"
 
     fun module(id: String): Module? = PAR_ID[id]
 

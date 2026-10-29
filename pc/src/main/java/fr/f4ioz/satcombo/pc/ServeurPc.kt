@@ -105,6 +105,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var emissionPoste: EmissionPostePc? = null
     /** FT8/FT4 on the air from the FT8 tab (through [emissionPoste]'s PTT). */
     @Volatile var ft8Tx: Ft8EmissionPc? = null
+    /** « Trafic satellite »: presets, memories, APRS by satellite (set before [demarre]). */
+    @Volatile var traficLeo: TraficLeoPc? = null
     /** QO-100's narrow band by the Pluto: SSB, CW, digital; the uplink profiles (set before [demarre]). */
     @Volatile var emissionBe: EmissionBandeEtroitePc? = null
 
@@ -236,7 +238,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/be/emission/demarre", "/api/be/emission/vie", "/api/be/emission/arrete")
 
     private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
-        emissionBe?.emet == true || ft8Tx?.arme == true
+        emissionBe?.emet == true || ft8Tx?.arme == true ||
+        traficLeo?.emet == true
 
     /**
      * The countdown to the next SSTV picture ([fr.f4ioz.satcombo.sstv.ProchaineImageSstv]) of the
@@ -1049,6 +1052,37 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         }
                     }.getOrElse { it.message ?: "erreur" }
                     if (err == null) controle.prend(cl, "FT8/FT4")
+                    f.json().also { if (err != null) it.put("ok", false).put("erreur", err) }
+                }
+                else -> f.reglage(q)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // « Trafic satellite »: its state (GET; the page's « still there » with vie=1), a voice memory recorded (POST body),
+        // its settings (POST, nothing keyed), an over or the beacon armed (POST joue=1, through the controller's rules), STOP from anyone.
+        if (chemin == "/api/trafic-sat" || chemin == "/api/trafic-sat/voix") {
+            val f = traficLeo
+            val cl = fr.f4ioz.satcombo.datv.ControleEmission.Client(q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress },
+                !local, c.inetAddress?.hostAddress.orEmpty())
+            val o = when {
+                f == null -> JSONObject().put("ok", false).put("absent", true)
+                chemin == "/api/trafic-sat/voix" && r.methode == "POST" -> {
+                    val n = q["n"]?.toIntOrNull() ?: 0
+                    val corps = RequeteHttp.corps(c.getInputStream(), r, 8L * 1024 * 1024)
+                    val err = if (corps == null) "fichier trop gros ou coupé" else f.enregistreVoix(n, q["nom"], corps)
+                    f.json().also { if (err != null) it.put("ok", false).put("erreur", err) }
+                }
+                r.methode != "POST" -> {
+                    if (q["vie"] == "1" && (!(f.emet || f.balise.armee) || controle.vie(cl))) f.vie()
+                    f.json().put("controle", controle.json(cl))
+                }
+                q["arret"] == "1" -> { f.arrete(if (cl.distant) "arrêt demandé depuis un autre appareil" else "arrêt demandé"); f.balise.desarme()
+                    if (!emetQuelqueChose()) controle.libere(); f.json() }
+                q["joue"] == "1" -> controle.refus(cl, emetQuelqueChose())
+                    ?.let { JSONObject().put("ok", false).put("erreur", it).put("controle", controle.json(cl)) } ?: run {
+                    f.vie()
+                    val err = runCatching { f.action(q) }.getOrElse { it.message ?: "erreur" }
+                    if (err == null) controle.prend(cl, "Trafic satellite")
                     f.json().also { if (err != null) it.put("ok", false).put("erreur", err) }
                 }
                 else -> f.reglage(q)
@@ -2309,7 +2343,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/kiss/deconnecter" -> kiss?.deconnecte()
             "/api/kiss/reglage" -> {
                 val st = station.settings
-                q["balise"]?.let { st.aprsBaliseIss = it == "1" }
+                // The ISS beacon: armed for one pass (the one under way or about to start), never as a lasting setting.
+                q["balise"]?.let { v -> (kiss?.armeBalise(v == "1") ?: run { st.aprsBaliseIss = false; null })
+                    ?.let { return JSONObject().put("ok", false).put("erreur", it) } }
                 q["floue"]?.let { st.aprsPositionFloue = it == "1" }
                 entier("ssid")?.let { st.aprsSsid = it.coerceIn(0, 15) }
                 kiss?.let { k -> if (q["travail"] != null || q["doppler"] != null) kotlinx.coroutines.runBlocking { k.regle(q["travail"], q["doppler"]?.let { it == "1" }) } }
