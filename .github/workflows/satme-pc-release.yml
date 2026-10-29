@@ -71,13 +71,27 @@ jobs:
           cp pc/build/distributions/satme.tar satme-pc.tar
           cp pc/build/distributions/satme.tar "satme-pc-$V.tar"
           tar xOf satme-pc.tar satme/lib/pc.jar > /tmp/pc.jar && unzip -p /tmp/pc.jar META-INF/MANIFEST.MF | grep Implementation-Version
+      # The PDF manuals (SatMe-manuel-fr.pdf, SatMe-manuel-en.pdf): the guide printed by the runner's Google Chrome
+      # (:pc:manuelPdf). Never in the way of the release: without them, a warning and the release goes on.
+      - name: PDF manuals
+        continue-on-error: true
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends fonts-noto-core fonts-noto-color-emoji fonts-dejavu-core || true
+          export CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:manuelPdf && cp pc/build/manuel/SatMe-manuel-fr.pdf pc/build/manuel/SatMe-manuel-en.pdf .; then
+            ls -l SatMe-manuel-*.pdf
+          else
+            rm -f SatMe-manuel-*.pdf
+            echo "::warning::The PDF manuals could not be made: the release goes without them"
+          fi
       - uses: actions/download-artifact@v8
         with:
           name: satme-pc-windows
       - name: Checksums
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
-          sha256sum satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip > SHA256SUMS
+          sha256sum satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip $(ls SatMe-manuel-*.pdf 2>/dev/null) > SHA256SUMS
       # The release's text: the downloads (NOTES-RELEASE.md), then this version's section of pc/NOUVEAUTES.md
       # (its « ### fr » and « ### en »), which SatMe-PC's « Nouvelle version » window shows.
       - name: Release notes
@@ -92,5 +106,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
-          gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip $(ls SatMe-manuel-*.pdf 2>/dev/null) SHA256SUMS \
             --title "SatMe-PC $V" --notes-file notes.md --latest

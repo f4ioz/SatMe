@@ -9,7 +9,7 @@ All in one: Java, SatMe-PC, ffmpeg (videos, GIFs, DATV) and rtl_tcp (RTL-SDR don
 From the [downloads page](https://github.com/f4ioz/SatMe/releases/latest):
 
 - **`satme-pc-windows.msi`**: the installer. Double-click it. It installs for your account only, without administrator rights, with a Start menu entry (folder *SatMe*) and, if you wish, a desktop shortcut.
-- or **`satme-pc-windows.zip`**: the same without installing. Unzip it anywhere, then run `SatMe-PC\SatMe-PC.exe`.
+- or **`satme-pc-windows.zip`**: the same without installing. Unzip it anywhere, then run `SatMe-PC\SatMe-PC.exe`. This is the **portable mode** (a USB stick): a `donnees` folder beside `SatMe-PC.exe` then keeps all the settings and files.
 
 **Windows may warn** ("Windows protected your PC"): SatMe-PC is not signed with a paid certificate. Click **More info**, then **Run anyway**. To check the file, compare its fingerprint with `SHA256SUMS`:
 
@@ -23,7 +23,7 @@ Start **SatMe-PC** from the Start menu. The page opens in the browser (**http://
 
 SatMe-PC has no window of its own: it runs in the background, with **its icon by the clock** (under the ^ arrow if hidden). A click opens the page again; a right click also offers the settings folder and **Quit SatMe-PC**. Starting it again while it runs simply opens its page.
 
-Settings, log, journal and recordings are in `%APPDATA%\SatMe` (and what SatMe-PC writes while running: `satme-pc.log`).
+Settings, log, journal and recordings are in `%APPDATA%\SatMe` (and what SatMe-PC writes while running: `satme-pc.log`) — **never in the program's folder**, which the installer replaces at each update. A `donnees` folder found in the program's folder (the ZIP's portable mode) is copied at start-up into `%APPDATA%\SatMe` (or `%APPDATA%\SatMe-portable-<date>` if that one is already in use), checked, then used; the original is kept and a window says where your data is. *Réglages › Démarrage* refuses a data folder inside the program's.
 
 ## 3. What each feature needs
 
@@ -49,5 +49,5 @@ The shortcut starts `SatMe-PC.exe` with no option. To add some (for instance to 
 
 ## 5. Update, uninstall
 
-- **Update**: quit SatMe-PC (icon by the clock → Quit), then install the new `.msi`: it replaces the old one. Your data stays in `%APPDATA%\SatMe`.
+- **Update**: quit SatMe-PC (icon by the clock → Quit), then install the new `.msi`: it replaces the old one, and removes only its own files. Your data stays in `%APPDATA%\SatMe`. **From 2026.10.33 or older**: first copy elsewhere a `donnees` folder kept in the program's folder — the old installer empties it one last time as it goes.
 - **Uninstall**: *Settings → Apps → SatMe-PC → Uninstall*. Also delete `%APPDATA%\SatMe` to erase your data.

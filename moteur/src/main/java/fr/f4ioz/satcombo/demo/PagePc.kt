@@ -1922,6 +1922,8 @@ ${ConversionPagePc.CSS}
     border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); overflow:hidden; }
   .man-tete { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--ligne); }
   .man-tete b { font-size:15px; white-space:nowrap; }
+  .man-tete .man-pdf { font-size:12px; white-space:nowrap; color:var(--texte-2); text-decoration:none; }
+  .man-tete .man-pdf:hover { color:var(--clair); text-decoration:underline; }
   .man-tete .ico { width:18px; height:18px; fill:var(--texte-2); flex:none; }
   #man-q { flex:1; min-width:120px; max-width:520px; }
   .man-corps { display:grid; grid-template-columns:minmax(220px,300px) 1fr; min-height:0; }
@@ -5065,6 +5067,7 @@ ${DemarragePagePc.DIALOGUES}
     <div class="man-tete"><b id="man-t">Manuel</b>${IconesPc.svg("search")}<input id="man-q" type="search" autocomplete="off" placeholder="Chercher dans le manuel (tous les mots)" aria-label="Chercher dans le manuel" aria-controls="man-res">
       <span class="petit" id="man-n" aria-live="polite"></span><span class="h-esp"></span>
       <button class="arret" id="man-tx" hidden onclick="arretEmissions()" title="Une émission est en cours">■ Arrêter toute émission</button>
+      <a class="man-pdf" href="https://github.com/f4ioz/SatMe/releases/latest/download/SatMe-manuel-fr.pdf" target="_blank" rel="noopener" title="Ce manuel mis en page pour l'impression, joint à chaque version de SatMe-PC sur GitHub (Internet nécessaire)">⤓ Télécharger le manuel (PDF)</a>
       <button class="discret" onclick="manFerme()" aria-label="Fermer le manuel" title="Fermer (Échap)">✕</button></div>
     <div class="man-corps">
       <div class="man-gauche"><nav id="man-plan" aria-label="Chapitres du manuel"></nav><div id="man-res" role="listbox" aria-label="Résultats de la recherche" hidden></div></div>

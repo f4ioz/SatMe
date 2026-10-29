@@ -20,7 +20,7 @@ object Ft8SiteJs {
       <div class="carte f8-site-boite" id="8-site" hidden style="order:5">
         <div class="paire f8-t"><b>🌐 Passages FT8/FT4 sur le site</b><span class="petit" id="8-site-info"></span></div>
         <div id="8-site-liste" class="f8-site-liste"></div>
-        <div class="petit aide">Les passages du journal où des messages FT8/FT4 ont été reçus : 🌐 envoie le passage (ses créneaux, les stations entendues, leurs carrés) vers votre site, qui peut le rejouer en spectrogramme. Réglages › Services en ligne › Envoyer vers un site web › « Passages FT8/FT4 ».</div>
+        <div class="petit aide">Les passages du journal où des messages FT8/FT4 ont été reçus : 🌐 envoie le passage (ses créneaux, les stations entendues, leurs locators) vers votre site, qui peut le rejouer en spectrogramme. Réglages › Services en ligne › Envoyer vers un site web › « Passages FT8/FT4 ».</div>
       </div>
 """
 

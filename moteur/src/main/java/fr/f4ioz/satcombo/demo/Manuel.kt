@@ -64,6 +64,9 @@ object Manuel {
     )
     const val PAR_DEFAUT = "les-onglets-dun-coup-dœil"
 
+    /** The guide's own table of contents, left out (the French guide's and the English one's). */
+    private val SOMMAIRES = setOf("sommaire", "contents")
+
     /** [src] cut at its `##` titles; what comes before the first is « Présentation », the table of contents is left out. */
     fun chapitres(src: String): List<Chapitre> {
         val lignes = src.replace("\r\n", "\n").split('\n')
@@ -75,7 +78,7 @@ object Manuel {
             else morceaux.last().second.add(l)
         }
         return morceaux.mapNotNull { (titre, corps) ->
-            if (titre != null && Markdown.ancre(titre) == "sommaire") return@mapNotNull null
+            if (titre != null && Markdown.ancre(titre) in SOMMAIRES) return@mapNotNull null
             val md = corps.joinToString("\n")
             val t = titre ?: corps.firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: "Présentation"
             if (titre == null && md.isBlank()) return@mapNotNull null

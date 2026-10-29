@@ -15,6 +15,15 @@ Amateur radio satellite tracking for Android and the PC — passes, pointing, Do
 
 SatMe-PC has had a big autumn. The short version, with pictures — every point is detailed in the [built-in guide](docs/station-pc.md) (**F1** in SatMe-PC) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
 
+**New since 2026.10.33**
+
+- **Web publishing** (optional module, off by default): SatMe-PC pushes to **your** site, whatever it is, or into a folder — SSTV and SSDV pictures, planches, reports, contacts, the journal's videos, FT8 / FT4 passes, and as an option live data (auto-pilot, QO-100 spectrum, DATV picture, station, FT8 / FT4, favourites, awards); a documented API, ready-to-use receivers.
+- **SSDV**: SO-127's (HADES-SA) decoded in USB (*Télémesure › SSDV en BLU*, the rig in USB-D), IO-86's through its repeater's AFSK 1200, the Geoscan satellites' pictures; in the SSTV tab and with the auto-pilot. Every transmitter of a satellite listed, and **Autre fréquence…** to type your own.
+- **Journal**: the video follows the preview exactly, the sound is back (**sped up to ×4 with its pitch kept**, where something is heard), « Hors passage » before the AOS and after the LOS, **skip the silences**, and a handsome **closing summary**, the pictures near their own size.
+- **SSTV**: the **followed satellite's** inset beside the live picture; ARISS **series 33** slides numbered too.
+- **Windows**: an MSI update no longer deletes anything; the data stays in `%APPDATA%\SatMe`.
+- **The manual as a PDF**, laid out, attached to every release (`SatMe-manuel-fr.pdf`, `SatMe-manuel-en.pdf`).
+
 **New since 2026.10.32**
 
 - **FT8 / FT4 transmit**, through the IC-9700 SatMe already keys: double-click a line to answer, **📣 Appeler CQ**, the sequence up to 73, terrestrial or through a transponder (RS-44, QO-100) with the Doppler; the rig put in USB-D by itself; **never unattended** (attendance watchdog, Esc). The Journal shows the FT4 / FT8 decodes on the replay and in its videos.
@@ -231,7 +240,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
-**🌐 Web publishing** (optional module, off by default) — SatMe-PC sends over HTTPS what you choose — SSTV pictures, planches, reports, contacts, the journal's videos, and as an option live data — to an address of **your** site, which receives them as it likes (PHP, WordPress, a small Python server…), or writes them into a folder (static site, Nextcloud, Syncthing). Each kind **at a click** (the default), **automatic** or **never**; a queue on disk, tried again; nothing opened on the station. The format is a [documented API](docs/publication-web.md), with ready-to-use receivers in PHP and Python.
+**🌐 Web publishing** (optional module, off by default) — SatMe-PC sends over HTTPS what you choose — SSTV and SSDV pictures, planches, reports, contacts, the journal's videos, FT8 / FT4 passes, and as an option live data — to an address of **your** site, which receives them as it likes (PHP, WordPress, a small Python server…), or writes them into a folder (static site, Nextcloud, Syncthing). Each kind **at a click** (the default), **automatic** or **never**; a queue on disk, tried again; nothing opened on the station. The format is a [documented API](docs/publication-web.md), with ready-to-use receivers in PHP and Python.
 
 **🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. From afar, only the IC-9700's transmitting goes through (PTT and microphone over HTTPS), after a confirmation.
 
@@ -341,7 +350,7 @@ The phone has a single USB-C port. A powered hub behind it carries everything: r
 
 - **[SatMe wiki](https://github.com/f4ioz/SatMe/wiki)**: the full guide, step by step, with screenshots — installation, passes, CAT, recording, SSTV, APRS, logbook, FAQ
 - **[SatMe-PC guide (wiki)](https://github.com/f4ioz/SatMe/wiki/SatMe-PC)**: every SatMe-PC function and where to click, chapter by chapter, with screenshots — also as a PDF manual
-- [SatMe-PC built-in guide](docs/station-pc.md): the manual's text SatMe-PC opens on **F1**
+- [SatMe-PC built-in guide](docs/station-pc.md): the manual's text SatMe-PC opens on **F1** — also [as a PDF](https://github.com/f4ioz/SatMe/releases/latest/download/SatMe-manuel-en.pdf), attached to every release
 - [The demonstration](pc/demo/README.md): a made-up station to install on a VM or a Raspberry Pi
 - [Polarisation box](materiel/esp32-polarisation/README.md): the ESP32 firmware, its wiring and its USB dialogue
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients

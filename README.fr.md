@@ -15,6 +15,15 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 
 SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point est détaillé dans le [guide intégré](docs/station-pc.fr.md) (**F1** dans SatMe-PC) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
 
+**Nouveau depuis la 2026.10.33**
+
+- **Publication web** (module facultatif, désactivé d'origine) : SatMe-PC envoie vers **votre** site, quel qu'il soit, ou dans un dossier — images SSTV et SSDV, planches, rapports, contacts, vidéos du journal, passages FT8 / FT4, et en option un direct (auto-pilote, spectre QO-100, image DATV, station, FT8 / FT4, favoris, diplômes) ; une API documentée, des récepteurs prêts à l'emploi.
+- **SSDV** : celui de SO-127 (HADES-SA) décodé en BLU (*Télémesure › SSDV en BLU*, le poste en USB-D), celui d'IO-86 par l'AFSK 1200 de son répéteur, les images des Geoscan ; dans l'onglet SSTV et avec l'auto-pilote. Tous les émetteurs d'un satellite listés, et **Autre fréquence…** pour taper la sienne.
+- **Journal** : la vidéo suit exactement l'aperçu, le son revient (**accéléré jusqu'à ×4 sans changer sa hauteur**, là où quelque chose est entendu), « Hors passage » avant l'AOS et après le LOS, **Sauter les silences**, et un **bilan de fin** soigné, les images à leur taille.
+- **SSTV** : l'encart du **satellite suivi** à côté de l'image en direct ; les diapos ARISS de la **série 33** numérotées aussi.
+- **Windows** : une mise à jour par le MSI n'efface plus rien ; les données restent dans `%APPDATA%\SatMe`.
+- **Le manuel en PDF**, mis en page, joint à chaque version (`SatMe-manuel-fr.pdf`, `SatMe-manuel-en.pdf`).
+
 **Nouveau depuis la 2026.10.32**
 
 - **FT8 / FT4 en émission**, par l'IC-9700 que SatMe tient déjà : double-clic sur une ligne pour répondre, **📣 Appeler CQ**, la séquence jusqu'au 73, en terrestre ou par un transpondeur (RS-44, QO-100) avec le Doppler ; le poste mis en USB-D tout seul ; **jamais sans opérateur** (chien de garde de présence, Échap). Le Journal montre les décodages FT4 / FT8 sur le rejeu et dans ses vidéos.
@@ -231,7 +240,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
-**🌐 Publication web** (module facultatif, désactivé d'origine) — SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV, planches, rapports, contacts, vidéos du journal, et en option des données en direct — à une adresse de **votre** site, qui les reçoit comme il veut (PHP, WordPress, un petit serveur Python…), ou les écrit dans un dossier (site statique, Nextcloud, Syncthing). Chaque genre **Sur clic** (d'origine), **Automatique** ou **Jamais** ; une file sur le disque, réessayée ; rien d'ouvert sur la station. Le format est une [API documentée](docs/publication-web.fr.md), avec des récepteurs prêts à l'emploi en PHP et en Python.
+**🌐 Publication web** (module facultatif, désactivé d'origine) — SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV et SSDV, planches, rapports, contacts, vidéos du journal, passages FT8 / FT4, et en option des données en direct — à une adresse de **votre** site, qui les reçoit comme il veut (PHP, WordPress, un petit serveur Python…), ou les écrit dans un dossier (site statique, Nextcloud, Syncthing). Chaque genre **Sur clic** (d'origine), **Automatique** ou **Jamais** ; une file sur le disque, réessayée ; rien d'ouvert sur la station. Le format est une [API documentée](docs/publication-web.fr.md), avec des récepteurs prêts à l'emploi en PHP et en Python.
 
 **🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. De loin, seule l'émission de l'IC-9700 passe (PTT et micro en HTTPS), après une confirmation.
 
@@ -341,7 +350,7 @@ Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout
 
 - **[Wiki SatMe](https://github.com/f4ioz/SatMe/wiki/Accueil)** : le guide complet, pas à pas, avec captures — installation, passages, CAT, enregistrement, SSTV, APRS, carnet, FAQ
 - **[Guide de SatMe-PC (wiki)](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr)** : chaque fonction de SatMe-PC et où cliquer, chapitre par chapitre, avec captures — aussi en manuel PDF
-- [Guide intégré de SatMe-PC](docs/station-pc.fr.md) : le texte du manuel que SatMe-PC ouvre sur **F1**
+- [Guide intégré de SatMe-PC](docs/station-pc.fr.md) : le texte du manuel que SatMe-PC ouvre sur **F1** — aussi [en PDF](https://github.com/f4ioz/SatMe/releases/latest/download/SatMe-manuel-fr.pdf), joint à chaque version
 - [La démonstration](pc/demo/README.md) : une station fictive à installer sur une VM ou un Raspberry Pi
 - [Boîtier de polarisation](materiel/esp32-polarisation/README.fr.md) : le firmware de l'ESP32, son câblage et son dialogue USB
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients

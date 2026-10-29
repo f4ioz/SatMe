@@ -2,9 +2,10 @@
 
 *[Version française](publication-web.fr.md)*
 
-SatMe-PC can **push items to an outside web site**: SSTV pictures, planches,
-event reports, contacts, the journal's videos, and as an option live data
-(auto-pilot, QO-100 spectrum, DATV picture), your favourite satellites and your awards. Your site receives them **as it
+SatMe-PC can **push items to an outside web site**: SSTV and SSDV pictures,
+planches, event reports, contacts, the journal's videos, FT8 / FT4 passes, and
+as an option live data (auto-pilot, QO-100 spectrum, DATV picture, station,
+FT8 / FT4), your favourite satellites and your awards. Your site receives them **as it
 likes** — a PHP file on shared hosting, a WordPress plugin, a small Python or
 Node server, anything that can answer an HTTP request. This page covers the
 setting in SatMe-PC and **the wire format (API v1)**, stable and versioned,
@@ -54,7 +55,10 @@ The settings' names below are the French ones shown by SatMe-PC.
      (never). **Everything starts at « Sur clic »**: nothing goes by itself
      until you choose « Automatique ».
 3. The **🌐** buttons appear: SSTV viewer, log lines, Planche page (planche
-   and report), videos made by the journal's editor.
+   and report), videos made by the journal's editor, SSDV pictures
+   (*Télémesure › Images SSDV*), the passes of the « Passages FT8/FT4 sur le
+   site » card (FT8/FT4 tab), and **Envoyer le diplôme reçu** (send the award
+   received; *Agenda › Diplômes*).
 
 `http://` (no S) is accepted only towards this machine or the local network
 (`127.0.0.1`, `192.168.…`, `10.…`, `172.16–31.…`, `….local`, a name without a
@@ -479,7 +483,7 @@ on); what the site does not take is dropped.
 | `satellite` | the pass under way (from a minute before AOS to a minute after LOS), or QO-100 at the rig (`geo`, no `aos`/`los`); absent between passes |
 | `bande` | without a satellite, the band of the dial (`2 m`, `70 cm`, `20 m`…), when known |
 | `dialHz`, `transpondeur` | the dial (sky Hz) as read from the rig; the satellite's transmitter chosen |
-| `decodes` | at most 60, the strongest, sorted by audio frequency: `df` audio offset (Hz), `dt` time offset (s), `snr` report (dB), `msg` the message (FT8's characters, 40 at most), `de` the callsign that sent it (when it can be told), `grid` the square it gives (4 characters), `cq` a CQ, `toMe` addressed to the station's callsign |
+| `decodes` | at most 60, the strongest, sorted by audio frequency: `df` audio offset (Hz), `dt` time offset (s), `snr` report (dB), `msg` the message (FT8's characters, 40 at most), `de` the callsign that sent it (when it can be told), `grid` the locator it gives (4 characters), `cq` a CQ, `toMe` addressed to the station's callsign |
 | `n` | how many messages the slot had (before the cap of 60) |
 | `cascade` | when the waterfall ran: `lignes` rows of `bins` bytes (0 quiet … 255 loud), oldest row first, from `basHz` to `hautHz` across |
 
@@ -507,7 +511,7 @@ few hundred KB):
 `tranches`: each slot with messages (480 at most), its `decodes` as above
 (60 at most), `cascade` only for the slots SatMe-PC still had in memory (the
 last three hours). `stations`, `carres`, `dxcc`: how many callsigns (not the
-station's own), squares and DXCC entities were heard.
+station's own), locators and DXCC entities were heard.
 
 ---
 

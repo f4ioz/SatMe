@@ -3,9 +3,10 @@
 *[English version](publication-web.md)*
 
 SatMe-PC peut **pousser des éléments vers un site web extérieur** : images
-SSTV, planches, rapports d'événement, contacts, vidéos du journal, et en
-option des données en direct (auto-pilote, spectre QO-100, image DATV), la
-liste de vos satellites favoris et vos diplômes.
+SSTV et SSDV, planches, rapports d'événement, contacts, vidéos du journal,
+passages FT8 / FT4, et en option des données en direct (auto-pilote, spectre
+QO-100, image DATV, station, FT8 / FT4), la liste de vos satellites favoris
+et vos diplômes.
 Votre site les reçoit **comme il veut** — un fichier PHP sur un hébergement
 mutualisé, une extension WordPress, un petit serveur Python ou Node, n'importe
 quoi qui sait répondre à une requête HTTP. Cette page décrit le réglage dans
@@ -53,7 +54,10 @@ Sommaire : [Réglage](#réglage-dans-satme-pc) ·
      commence à « Sur clic »** : rien ne part tout seul tant que vous ne
      choisissez pas « Automatique ».
 3. Les boutons **🌐** apparaissent : visionneuse SSTV, lignes du carnet, page
-   Planche (planche et rapport), vidéos faites par l'éditeur du journal.
+   Planche (planche et rapport), vidéos faites par l'éditeur du journal,
+   images SSDV (*Télémesure › Images SSDV*), passages de la carte
+   « Passages FT8/FT4 sur le site » (onglet FT8/FT4), et **Envoyer le
+   diplôme reçu** (*Agenda › Diplômes*).
 
 `http://` (sans S) n'est accepté que vers cette machine ou le réseau local
 (`127.0.0.1`, `192.168.…`, `10.…`, `172.16–31.…`, `….local`, un nom sans
@@ -489,7 +493,7 @@ prend pas est perdu.
 | `satellite` | le passage en cours (d'une minute avant l'AOS à une minute après le LOS), ou QO-100 au poste (`geo`, sans `aos`/`los`) ; absent entre les passages |
 | `bande` | sans satellite, la bande de la fréquence (`2 m`, `70 cm`, `20 m`…), si connue |
 | `dialHz`, `transpondeur` | la fréquence (Hz ciel) lue au poste ; l'émetteur choisi du satellite |
-| `decodes` | 60 au plus, les plus forts, triés par fréquence audio : `df` fréquence audio (Hz), `dt` décalage (s), `snr` report (dB), `msg` le message (les caractères de FT8, 40 au plus), `de` l'indicatif qui l'envoie (quand on le sait), `grid` le carré qu'il donne (4 caractères), `cq` un CQ, `toMe` adressé à l'indicatif de la station |
+| `decodes` | 60 au plus, les plus forts, triés par fréquence audio : `df` fréquence audio (Hz), `dt` décalage (s), `snr` report (dB), `msg` le message (les caractères de FT8, 40 au plus), `de` l'indicatif qui l'envoie (quand on le sait), `grid` le locator qu'il donne (4 caractères), `cq` un CQ, `toMe` adressé à l'indicatif de la station |
 | `n` | combien de messages avait le créneau (avant la limite de 60) |
 | `cascade` | quand la cascade tourne : `lignes` rangées de `bins` octets (0 calme … 255 fort), la plus ancienne d'abord, de `basHz` à `hautHz` en travers |
 
@@ -517,7 +521,7 @@ un JSON (`application/json`, jusqu'à quelques centaines de Ko) :
 `tranches` : chaque créneau avec des messages (480 au plus), ses `decodes`
 comme plus haut (60 au plus), `cascade` seulement pour les créneaux que
 SatMe-PC avait encore en mémoire (les trois dernières heures). `stations`,
-`carres`, `dxcc` : combien d'indicatifs (pas celui de la station), de carrés
+`carres`, `dxcc` : combien d'indicatifs (pas celui de la station), de locators
 et d'entités DXCC ont été entendus.
 
 ---

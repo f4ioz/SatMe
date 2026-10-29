@@ -9,7 +9,7 @@ Tout en un : Java, SatMe-PC, ffmpeg (vidéos, GIF, DATV) et rtl_tcp (clé RTL-SD
 Sur la [page des téléchargements](https://github.com/f4ioz/SatMe/releases/latest) :
 
 - **`satme-pc-windows.msi`** : l'installateur. Double-cliquer dessus. Il s'installe pour votre compte seulement, sans droits d'administrateur, avec un raccourci dans le menu Démarrer (dossier *SatMe*) et, si vous le voulez, sur le bureau.
-- ou **`satme-pc-windows.zip`** : la même chose sans installation. Le décompresser où vous voulez, puis lancer `SatMe-PC\SatMe-PC.exe`.
+- ou **`satme-pc-windows.zip`** : la même chose sans installation. Le décompresser où vous voulez, puis lancer `SatMe-PC\SatMe-PC.exe`. C'est le **mode portable** (une clé USB) : un dossier `donnees` à côté de `SatMe-PC.exe` garde alors tous les réglages et fichiers.
 
 **Windows peut avertir** (« Windows a protégé votre ordinateur ») : SatMe-PC n'est pas signé par un certificat payant. Cliquer sur **Informations complémentaires**, puis **Exécuter quand même**. Pour vérifier le fichier, comparer son empreinte avec `SHA256SUMS` :
 
@@ -23,7 +23,7 @@ Lancer **SatMe-PC** depuis le menu Démarrer. La page s'ouvre dans le navigateur
 
 SatMe-PC n'a pas de fenêtre à lui : il tourne en arrière-plan, avec **son icône près de l'horloge** (dans la flèche ^ si elle n'est pas visible). Un clic dessus rouvre la page ; un clic droit propose aussi le dossier des réglages et **Quitter SatMe-PC**. Le relancer alors qu'il tourne déjà ouvre simplement sa page.
 
-Réglages, carnet, journal et enregistrements sont dans `%APPDATA%\SatMe` (ce que SatMe-PC écrit en marchant aussi : `satme-pc.log`).
+Réglages, carnet, journal et enregistrements sont dans `%APPDATA%\SatMe` (ce que SatMe-PC écrit en marchant aussi : `satme-pc.log`) — **jamais dans le dossier du programme**, que l'installateur remplace à chaque mise à jour. Un dossier `donnees` trouvé dans le dossier du programme (le mode portable du ZIP) est copié au démarrage dans `%APPDATA%\SatMe` (ou `%APPDATA%\SatMe-portable-<date>` si celui-ci sert déjà), vérifié, puis utilisé ; l'original est gardé et une fenêtre dit où sont vos données. *Réglages › Démarrage* refuse un dossier des données placé dans celui du programme.
 
 ## 3. Ce que demande chaque fonction
 
@@ -49,5 +49,5 @@ Le raccourci lance `SatMe-PC.exe` sans option. Pour en ajouter (par exemple ouvr
 
 ## 5. Mettre à jour, désinstaller
 
-- **Mettre à jour** : quitter SatMe-PC (icône près de l'horloge → Quitter), puis installer le nouveau `.msi` : il remplace l'ancien. Vos données restent dans `%APPDATA%\SatMe`.
+- **Mettre à jour** : quitter SatMe-PC (icône près de l'horloge → Quitter), puis installer le nouveau `.msi` : il remplace l'ancien, et ne retire que ses propres fichiers. Vos données restent dans `%APPDATA%\SatMe`. **Depuis la 2026.10.33 ou une plus ancienne** : copiez d'abord ailleurs un dossier `donnees` posé dans le dossier du programme — l'ancien installateur le vide encore une dernière fois en se retirant.
 - **Désinstaller** : *Paramètres → Applications → SatMe-PC → Désinstaller*. Supprimer aussi `%APPDATA%\SatMe` pour effacer vos données.

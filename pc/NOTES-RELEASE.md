@@ -4,5 +4,6 @@
 - SatMe-PC on Windows: [install guide](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc-windows.md) · [guide d'installation](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-pc-windows.fr.md)
 - SatMe-Node on a Raspberry Pi 3: [install guide](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.md) · [guide d'installation](https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.fr.md)
 - What SatMe-PC does: [SatMe-PC](https://github.com/f4ioz/SatMe/blob/main/docs/station-pc.md) · [en français](https://github.com/f4ioz/SatMe/blob/main/docs/station-pc.fr.md)
+- The manual as a PDF, to read offline or print: `SatMe-manuel-en.pdf` · en français : `SatMe-manuel-fr.pdf`
 
 Linux: Java 17 or later. `SHA256SUMS` checks the download. The Android app is on [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).

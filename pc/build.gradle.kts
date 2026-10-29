@@ -94,3 +94,24 @@ val demoTar by tasks.registering(Tar::class) {
         into("satme") { from(layout.buildDirectory.dir("install/satme")) }
     }
 }
+
+// The PDF manuals (SatMe-manuel-fr.pdf, SatMe-manuel-en.pdf in build/manuel): the guide docs/station-pc*.md laid out
+// for printing (ManuelImprime, in :moteur) and printed by a headless Chrome or Chromium (CHROME=… to choose one).
+// A source set of its own: nothing of it goes into SatMe-PC. Without a browser, only the HTML (exit code 2).
+val manuel by sourceSets.creating {
+    compileClasspath += sourceSets["main"].output + sourceSets["main"].compileClasspath
+    runtimeClasspath += output + compileClasspath + sourceSets["main"].runtimeClasspath
+}
+val manuelPdf by tasks.registering(JavaExec::class) {
+    group = "documentation"
+    description = "The PDF manuals of SatMe-PC (FR and EN) in build/manuel, printed by a headless Chrome or Chromium"
+    classpath = manuel.runtimeClasspath
+    mainClass.set("fr.f4ioz.satcombo.pc.manuel.ManuelPdfKt")
+    val docs = rootProject.file("docs")
+    val sortie = layout.buildDirectory.dir("manuel")
+    inputs.files(fileTree(docs) { include("station-pc*.md", "images/**") })
+    inputs.property("version", versionPc)
+    outputs.dir(sortie)
+    args(docs.path, sortie.get().asFile.path, versionPc)
+    providers.gradleProperty("manuelLangues").orNull?.let { args(it) }
+}
