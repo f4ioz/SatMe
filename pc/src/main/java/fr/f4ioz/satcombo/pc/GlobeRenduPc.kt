@@ -338,6 +338,24 @@ object GlobeRenduPc {
         return lisseCentre(sc.sol, t, qth)
     }
 
+    /**
+     * Where the view looks at [t] with the journal page's [camera]: « poursuite » and « satellite » follow the
+     * satellite (its track, else its elements: seen coming in a margin), smoothed over a minute; « sol » keeps my
+     * station in the middle; « espace » (« Vue d'ensemble ») half way from the station to the satellite ([centre]).
+     */
+    fun centreCamera(sc: RenduPc.Scene, t: Long, camera: String): DoubleArray = when (camera) {
+        "poursuite", "satellite" -> {
+            var x = 0.0; var y = 0.0; var z = 0.0
+            for (k in -4..4) {
+                val m = ou(sc, t + k * 7_500L)?.first ?: continue
+                val w = exp(-(k / 2.0).pow(2)); x += w * m[0]; y += w * m[1]; z += w * m[2]
+            }
+            if (x == 0.0 && y == 0.0 && z == 0.0) centre(sc, t) else norme(doubleArrayOf(x, y, z))
+        }
+        "sol" -> sc.qth?.let { vec(it.first, it.second) } ?: centre(sc, t)
+        else -> centre(sc, t)
+    }
+
     /** Half way from [ancre] (unit; none: the satellite alone) to the point under the satellite, smoothed over a few minutes around [t]. */
     private fun lisseCentre(sol: List<JournalPassage.Sol>, t: Long, ancre: DoubleArray?): DoubleArray {
         var x = 0.0; var y = 0.0; var z = 0.0

@@ -293,6 +293,12 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 // The session's older words: on the globe unless a view is asked; « avant » / « apres » its margins (ms).
                 fabriqueEditeur(es) { k -> when (k) { "vue" -> vueDemandee(p, "globe"); else -> p(k) } }
             }
+            // The timeline the video will have, asked with the same words as « /fabrique-session »: the page plays its preview on it.
+            "/chronologie" -> {
+                val es = SessionRenduPc.parametres(p).ids.mapNotNull { j.passage(it) }.distinctBy { it.id }.sortedBy { it.debutMs }.take(150)
+                if (es.isEmpty()) return json("{\"ok\":false,\"raison\":\"vide\"}")
+                chronologie(es) { k -> when (k) { "vue" -> vueDemandee(p, "globe"); else -> p(k) } }
+            }
             // The FT8/FT4 panel as placed on the page, kept with each pass asked (« ids », else « id »).
             "/ft/choix" -> {
                 val ids = p("ids").split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(p("id")) }
@@ -402,31 +408,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 val fenetres = es.map { e -> (e.debutMs - q.avant)..(e.finMs + q.apres) }
                     .map { w -> morceau?.let { m -> maxOf(w.first, m.first)..minOf(w.last, m.last) } ?: w }
                 if (quoi == "son") return@runCatching wavBoutABout(es, fenetres, sortie, f)
-                val vue = p("vue")
-                val carteId = p("carteId")
-                val scenes = es.map { e ->
-                    // The map as framed on the page: for the pass it was framed on, the others framed to themselves.
-                    val pg: (String) -> String = { k ->
-                        when (k) {
-                            "carte" -> if (vue == "carte") "1" else "0"
-                            "avant" -> p("accAvant"); "apres" -> p("accApres")
-                            "mcx", "mcy", "zc", "cw", "ch" -> if (carteId.isEmpty() || carteId == e.id) p(k) else ""
-                            else -> p(k)
-                        }
-                    }
-                    scene(e, morceau, q.titre, quoi == "image", pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } }
-                }
-                // The companions, seen from the first pass's station, each its colour (as on the page).
-                val e0 = es[0]
-                val autres = if (vue != "globe") emptyList() else q.autres.filter { it != e0.satName }.mapIndexed { i, nomA ->
-                    GlobeRenduPc.Autre(nomA, java.awt.Color(GlobeRenduPc.COULEURS_AUTRES[i % GlobeRenduPc.COULEURS_AUTRES.size])) { tt -> j.positionDe(nomA, e0, tt) }
-                }
-                val avecSon = q.son && quoi == "video"
-                val accelere = if (morceau == null && quoi != "image" && opt(p, "accelere", false)) scenes.flatMap { it.segments.orEmpty() } else null
-                val session = SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
-                    ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap) && morceau == null, transition = q.transition,
-                    zHors = q.zHors, zPassage = q.zPassage, autres = autres, tachesAutres = q.tachesAutres, son = avecSon, avant = q.avant, apres = q.apres,
-                    morceau = morceau, accelere = accelere)
+                val session = sessionEditeur(es, q, quoi, morceau, p)
+                val avecSon = session.son
                 // Each pass's sound over its window, the pass whole at least (a stretch outside what was recorded: silent).
                 val debuts = HashMap<Int, Long>()
                 if (avecSon) es.forEachIndexed { i, e ->
@@ -446,6 +429,54 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             t.progres = 1f; t.fini = true
         }
         return json("{\"ok\":true,\"travail\":\"$n\",\"passages\":${es.size}}")
+    }
+
+    /**
+     * The editor's session as the files play it, from the page's words [p] ([q] read from them): the same for the
+     * video, the GIF, the picture and the timeline the page previews ([chronologie]) — they cannot differ.
+     */
+    private fun sessionEditeur(es: List<JournalPassage.Entree>, q: SessionRenduPc.Parametres, quoi: String, morceau: LongRange?,
+                               p: (String) -> String): SessionRenduPc.Session {
+        val vue = p("vue")
+        val carteId = p("carteId")
+        val scenes = es.map { e ->
+            // The map as framed on the page: for the pass it was framed on, the others framed to themselves.
+            val pg: (String) -> String = { k ->
+                when (k) {
+                    "carte" -> if (vue == "carte") "1" else "0"
+                    "avant" -> p("accAvant"); "apres" -> p("accApres")
+                    "mcx", "mcy", "zc", "cw", "ch" -> if (carteId.isEmpty() || carteId == e.id) p(k) else ""
+                    else -> p(k)
+                }
+            }
+            scene(e, morceau, q.titre, quoi == "image", pg).also { sc -> sc.horsTrace = { tt -> j.positionA(e, tt) } }
+        }
+        // The companions, seen from the first pass's station, each its colour (as on the page).
+        val e0 = es[0]
+        val autres = if (vue != "globe") emptyList() else q.autres.filter { it != e0.satName }.mapIndexed { i, nomA ->
+            GlobeRenduPc.Autre(nomA, java.awt.Color(GlobeRenduPc.COULEURS_AUTRES[i % GlobeRenduPc.COULEURS_AUTRES.size])) { tt -> j.positionDe(nomA, e0, tt) }
+        }
+        val avecSon = q.son && quoi == "video"
+        val accelere = if (morceau == null && quoi != "image" && opt(p, "accelere", false)) scenes.flatMap { it.segments.orEmpty() } else null
+        return SessionRenduPc.Session(scenes, q.mode, q.v, q.titre, q.vignettes,
+            ouverture = opt(p, "ouverture", s.journalOuverture), recap = opt(p, "recap", s.journalRecap) && morceau == null, transition = q.transition,
+            zHors = q.zHors, zPassage = q.zPassage, autres = autres, tachesAutres = q.tachesAutres, son = avecSon, avant = q.avant, apres = q.apres,
+            morceau = morceau, accelere = accelere, lecture = q.lecture, camera = if (vue == "globe") q.camera else "espace")
+    }
+
+    /**
+     * The video's timeline for the page (« /chronologie »), from the same words as « /fabrique-session »: its frames a
+     * second, the cards' frames before and after, each frame's real time (the first, then the steps), which pass and
+     * what kind (« p » in a pass, « e » between two, « t » turning to the next), the paces' stretches, its length.
+     */
+    private fun chronologie(tous: List<JournalPassage.Entree>, p: (String) -> String): ReponseWeb {
+        val q = SessionRenduPc.parametres(p)
+        val de = p("de").toLongOrNull(); val a = p("a").toLongOrNull()
+        val morceau = if (de != null && a != null && a > de) de..a else null
+        val es = tous.filter { SessionRenduPc.touche(it, q.avant, q.apres, morceau) }
+        if (es.isEmpty()) return json("{\"ok\":false,\"raison\":\"vide\"}")
+        val session = sessionEditeur(es, q, "video", morceau, p)
+        return json(SessionRenduPc.json(SessionRenduPc.chronologie(session), session))
     }
 
     /**
