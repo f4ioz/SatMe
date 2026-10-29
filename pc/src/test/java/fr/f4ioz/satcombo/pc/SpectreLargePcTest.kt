@@ -87,6 +87,18 @@ class SpectreLargePcTest {
         assertEquals(2, ouvertures)
     }
 
+    @Test fun `le signal selectionne, la balise a part`() {
+        fun sg(c: Long, sr: Int, balise: Boolean = false) = fr.f4ioz.satcombo.datv.SignalLarge(c - sr / 2, c + sr / 2, c, sr.toLong(), sr, 30_000, 0.0, balise, false)
+        val l = listOf(sg(Datv.BALISE_KHZ, 1500, true), sg(10_494_750L, 333), sg(10_495_250L, 333))
+        assertEquals(10_494_750L, SpectreLargePc.selectionnee(l, 10_494_760L)!!.centreKhz)
+        assertEquals(10_495_250L, SpectreLargePc.selectionnee(l, 10_495_200L)!!.centreKhz)
+        // Between two signals, on the beacon: none.
+        assertNull(SpectreLargePc.selectionnee(l, 10_495_000L))
+        assertNull(SpectreLargePc.selectionnee(l, Datv.BALISE_KHZ))
+        // Nothing selected without a fresh spectrum.
+        assertNull(spectre().selection()); assertEquals("", spectre().indicatifSelection())
+    }
+
     @Test fun `un clic accorde le recepteur, OL garde`() {
         val s = spectre()
         val avant = datv.reglage

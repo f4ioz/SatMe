@@ -43,6 +43,32 @@ class QrzDatvTest {
     }
 
     @Test
+    fun l_indicatif_dans_l_etiquette_du_spectre() {
+        assertEquals("G4ABC", QrzDatv.indicatifDans("G4ABC Simon"))
+        assertEquals("OZ9XYZ", QrzDatv.indicatifDans("OZ9XYZ_John"))
+        assertEquals("G0XYZ", QrzDatv.indicatifDans("g0xyz-James"))
+        assertEquals("F4XYZ/P", QrzDatv.indicatifDans("F4XYZ/P"))
+        // A beacon, a channel number, a name alone, nothing: no callsign.
+        for (n in listOf("QO-100 BEACON", "QARS", "0303", "Simon", "", "  ")) assertEquals(n, "", QrzDatv.indicatifDans(n))
+    }
+
+    @Test
+    fun candidats_avec_la_selection_du_spectre() {
+        // After the card and the service name, before the picture's reading; even alone (not locked yet).
+        assertEquals(listOf("F4XYZ", "G4ABC", "DL1XYZ"), QrzDatv.candidats("F4XYZ", "", listOf("DL1XYZ"), spectre = "G4ABC Simon"))
+        assertEquals(listOf("G4ABC"), QrzDatv.candidats("", "", emptyList(), spectre = "G4ABC Simon"))
+        // Not twice; the beacon's label is no candidate.
+        assertEquals(listOf("G4ABC/P"), QrzDatv.candidats("G4ABC/P", "", emptyList(), spectre = "G4ABC"))
+        assertEquals(emptyList<String>(), QrzDatv.candidats("", "", emptyList(), spectre = "QO-100 BEACON"))
+        // Kept within [max] even behind four others.
+        assertTrue("G4ABC" in QrzDatv.candidats("F4XYZ", "F5AAA", listOf("DL1XYZ", "ON4ZZ"), spectre = "G4ABC"))
+        // The list's own spelling of the selected callsign.
+        assertEquals("G4ABC/P", QrzDatv.parmi(listOf("F4XYZ", "G4ABC/P"), "G4ABC"))
+        assertEquals("", QrzDatv.parmi(listOf("F4XYZ"), "G4ABC"))
+        assertEquals("", QrzDatv.parmi(listOf("F4XYZ"), ""))
+    }
+
+    @Test
     fun une_fois_par_indicatif_et_une_requete_toutes_les_5_s() {
         val l = listOf("F4IOZ", "G4ABC")
         assertEquals("F4IOZ", cache.prochain(l))

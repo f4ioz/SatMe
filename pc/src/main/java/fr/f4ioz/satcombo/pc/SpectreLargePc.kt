@@ -144,8 +144,22 @@ class SpectreLargePc(
     // ------------------------------------------------------------ the receiver
 
     /** The signal the MiniTiouner is on, when it receives. */
-    fun tenu(sg: SignalLarge): Boolean = datv.etat.actif &&
-        Math.abs(sg.centreKhz - datv.reglage.cielKhz) <= maxOf(NomsSignaux.tolerance(sg.srKs), sg.largeurKhz / 2)
+    fun tenu(sg: SignalLarge): Boolean = datv.etat.actif && sur(sg, datv.reglage.cielKhz)
+
+    /**
+     * The signal selected on the spectrum: the one the receiver is on,
+     * locked or not, with its label as the page shows it. Null without a
+     * fresh spectrum or a receiver.
+     */
+    fun selection(): Pair<SignalLarge, String>? {
+        if (!on || !frais() || !datv.etat.actif) return null
+        val sg = selectionnee(signaux, datv.reglage.cielKhz) ?: return null
+        val nom = noms.nom(sg.centreKhz, sg.srKs, horloge()) ?: if (datv.etat.verrouille) nomRecu() else ""
+        return sg to nom
+    }
+
+    /** The callsign in the selected signal's label ([selection]), or empty (none selected, a label that is not one). */
+    fun indicatifSelection(): String = selection()?.let { fr.f4ioz.satcombo.datv.QrzDatv.indicatifDans(it.second) }.orEmpty()
 
     /** Receives [khz] at [srKs] (the LNB's oscillator, the input, the supply as they are); null when started. */
     fun accorde(khz: Long, srKs: Int): String? {
@@ -272,6 +286,14 @@ class SpectreLargePc(
         const val DELAI_MIN_MS = 2_000L
         const val DELAI_MAX_MS = 60_000L
         private const val CLE_NOMS = "datv_large_noms"
+
+        /** True when a receiver tuned to [cielKhz] is on [sg]. */
+        fun sur(sg: SignalLarge, cielKhz: Long): Boolean =
+            Math.abs(sg.centreKhz - cielKhz) <= maxOf(NomsSignaux.tolerance(sg.srKs), sg.largeurKhz / 2)
+
+        /** The signal of [signaux] a receiver tuned to [cielKhz] is on (the nearest), the beacon aside; null when none. */
+        fun selectionnee(signaux: List<SignalLarge>, cielKhz: Long): SignalLarge? =
+            signaux.filter { !it.balise && sur(it, cielKhz) }.minByOrNull { Math.abs(it.centreKhz - cielKhz) }
         private const val CLE_ENTENDUS = "datv_entendus"
     }
 }

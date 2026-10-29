@@ -16,6 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **DATV : la fiche de la station sélectionnée sur le spectre.** L'indicatif écrit sur le signal sélectionné du spectre de la bande large (celui sur lequel le récepteur est accordé) est cherché sur QRZ.com : sa fiche s'affiche en tête, *Station sélectionnée sur le spectre*, même avant l'accrochage. Avec *Réglages › Services en ligne › Envoyer vers un site web › En direct › Image DATV*, le site reçoit aussi la station regardée : indicatif, nom, ville, locator, pays, distance et azimut (jamais la photo QRZ, l'adresse électronique ni la rue).
+
+### en
+- **DATV: the record of the station selected on the spectrum.** The callsign written on the selected signal of the wide band spectrum (the one the receiver is tuned to) is looked up on QRZ.com: its record shows first, *Station sélectionnée sur le spectre*, even before the lock. With *Réglages › Services en ligne › Envoyer vers un site web › En direct › Image DATV*, the site also gets the station watched: callsign, name, town, locator, country, distance and bearing (never the QRZ photo, the e-mail address or the street).
+
+### fr
 - **DATV par un SatMe-Node : la réception reprend toute seule après un redémarrage du node** (service relancé ou Pi redémarré). SatMe-PC relance la réception là-bas avec les mêmes réglages et reprend le flux ; « node silencieux » s'efface dès que le node répond. Un flux resté muet 20 s est rouvert : il ne reste plus bloqué après une coupure.
 
 ### en

@@ -40,16 +40,33 @@ object QrzDatv {
     }
 
     /**
-     * The callsigns confirmed on the reception, best first: the station's
-     * card, the first service name word that is a callsign, the callsigns
-     * the picture's reading confirmed. Distinct, at most [max].
+     * The callsign in a name (a service name, a signal's label on the wide
+     * band spectrum: « G4ABC Simon », « OZ9XYZ_John », « G0XYZ-James »): its
+     * first word that is one, upper case; empty when none (« QO-100 BEACON »,
+     * a channel number, a name alone).
      */
-    fun candidats(carte: String, service: String, ocr: List<String>, max: Int = 4): List<String> {
+    fun indicatifDans(nom: String): String =
+        nom.uppercase().split(Regex("[^A-Z0-9/]+")).firstOrNull { cle(it).isNotEmpty() }.orEmpty()
+
+    /**
+     * The callsigns of the reception, best first: the station's card, the
+     * first service name word that is a callsign, the one in the label of
+     * the signal selected on the wide band spectrum ([spectre], locked or
+     * not), the callsigns the picture's reading confirmed. Distinct, at most [max].
+     */
+    fun candidats(carte: String, service: String, ocr: List<String>, max: Int = 4, spectre: String = ""): List<String> {
         val l = ArrayList<String>()
         l += carte.trim().uppercase()
-        service.uppercase().split(Regex("[^A-Z0-9/]+")).firstOrNull { cle(it).isNotEmpty() }?.let { l += it }
+        l += indicatifDans(service)
+        l += indicatifDans(spectre)
         l += ocr.map { it.trim().uppercase() }
         return l.filter { cle(it).isNotEmpty() }.distinctBy { cle(it) }.take(max)
+    }
+
+    /** The entry of [candidats] that is [indicatif] (as the list writes it: « F4XYZ/P » for « F4XYZ »), or empty. */
+    fun parmi(candidats: List<String>, indicatif: String): String {
+        val c = cle(indicatif)
+        return if (c.isEmpty()) "" else candidats.firstOrNull { cle(it) == c }.orEmpty()
     }
 
     /** A QRZ answer sorted: found, not in QRZ (an answer too), or a failure to retry later. */

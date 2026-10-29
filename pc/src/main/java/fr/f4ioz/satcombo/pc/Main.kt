@@ -631,7 +631,20 @@ fun main(args: Array<String>) {
         son.sstv.imageEnCours() ?: son.images().filter { it.timeMs >= aos - 60_000L && !SstvPc.horsAntenne(it) }.maxByOrNull { it.timeMs }
             ?.let { son.sstv.fichier(it.fileName)?.readBytes() }
     }
-    directSite.datv = { DirectSitePc.Datv(datv.etat, datv.reglage, datv.marge(), datv.image) }
+    directSite.datv = {
+        // The station watched: the signal selected on the wide band spectrum, else (locked) the best callsign confirmed;
+        // its QRZ record asked for the site too (the DATV tab's cache and pace), only while « Image DATV » is sent.
+        val st = runCatching {
+            val (l, sp) = serveur.indicatifsDatv(datv)
+            val z = serveur.qrzDatv
+            val c = sp.ifEmpty { if (datv.etat.verrouille) l.firstOrNull().orEmpty() else "" }
+            if (c.isEmpty()) null else {
+                z?.suit(listOf(c) + l)
+                DirectSitePc.StationDatv(c, sp.isNotEmpty(), z?.fiche(c), station.etat.value.observateur)
+            }
+        }.getOrNull()
+        DirectSitePc.Datv(datv.etat, datv.reglage, datv.marge(), datv.image, st)
+    }
     directSite.panorama = {
         if (!sdr.surQo100) null else sdr.panorama?.let { p -> sdr.axeQo100()?.let { (c, w) -> DirectSitePc.Panorama(p, c, w) } }
     }

@@ -496,6 +496,7 @@ ${STYLE_JETONS}
   .dc-qrz img { float:right; max-width:72px; max-height:90px; border-radius:4px; margin-left:8px; }
   .dc-qrz a { color:var(--cyan); }
   .dc-qrz .non { opacity:.4; text-decoration:line-through; }
+  .dc-qrz.dc-sel { border-left:3px solid var(--vert); padding-left:8px; }
   .dc-call { font-size:22px; letter-spacing:.5px; color:var(--cyan); }
   .dc-drapeau { font-size:24px; font-family:Drapeaux,system-ui; }
   .dc-message { margin-top:6px; font-style:italic; }
@@ -3066,6 +3067,7 @@ ${OngletSked.HTML}
       <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
     </div>
     <div class="petit" id="d-service" style="margin-top:4px"></div>
+    <div id="d-qrz-spectre" class="dc-qrz dc-sel" hidden></div>
     <div id="d-qrz-service" class="dc-qrz" hidden></div>
         <div id="q-resume" hidden>
       <div class="q-haut">
@@ -8216,7 +8218,14 @@ async function ticDatv(premier) {
   // The callsign read in the picture since this lock comes first when it differs from the service name (often the transmitter's own setting).
   const lu = D.verrouille ? dLuActuel() : null;
   const sv = D.qrz && D.qrz.service && !(D.carte && D.carte.recue && D.carte.indicatif === D.qrz.service) ? D.qrz.service : '';
-  const sq = D.verrouille ? (lu && lu.c !== sv ? lu.c : sv) : '';
+  // The station selected on the wide band spectrum (the signal the receiver is on, its label's callsign): first, locked or not.
+  const sel = D.actif && D.qrz && D.qrz.spectre ? D.qrz.spectre : '';
+  const selCarte = sel && D.carte && D.carte.recue && D.carte.indicatif === sel, selQrz = sel && !selCarte ? dQrzHtml(sel, false) : '';
+  dPose('d-qrz-spectre', sel ? '<span class="petit">Station sélectionnée sur le spectre : </span><b>' + esc(sel) + '</b>' +
+    (D.verrouille ? '' : ' <span class="petit">(pas encore accrochée)</span>') + (selCarte ? ' <span class="petit">· sa carte de station ci-dessous</span>' : '') +
+    (selQrz ? ' · ' + selQrz : '') : '');
+  const sq0 = D.verrouille ? (lu && lu.c !== sv ? lu.c : sv) : '';
+  const sq = sq0 === sel ? '' : sq0;
   dPose('d-qrz-service', sq ? '<b>' + esc(sq) + '</b>' + (lu && sq === lu.c ? ' <span class="petit">lu dans l’image' + (sv ? ' (service : ' + esc(sv) + ')' : '') + '</span>' : '') +
     ' · ' + dQrzHtml(sq, false) : '');
   txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');

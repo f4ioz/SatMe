@@ -352,7 +352,20 @@ un code d'appairage, un mot de passe ou une clé.
 | `direct-efface` | JSON `{"type","version","t"}` | bouton **Effacer le direct** : oubliez tout le direct |
 
 `pilote` : `{"maitre": bool, "prochain": {"campagne","sat","aos","los","el"}, "enCours": {…, "phase","mode","images","elMaintenant","azMaintenant","image": {"phase","progression","mode","prochaine"}}, "derniere": {"sat","utc","mode"}}` (heures en ms UTC).
-`datv` : `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge"}`.
+`datv` : `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station"}`.
+
+`datv.station` (facultatif, absent quand on ne sait pas) : la station regardée,
+`{"indicatif","selection","nom","qth","carre","pays","km","azimut"}`.
+`selection` vaut `true` quand c'est le signal sélectionné sur le spectre de la
+bande large (celui sur lequel le récepteur est accordé, l'indicatif pris dans
+son étiquette ; présent même avant l'accrochage), `false` quand c'est
+l'indicatif confirmé par la réception (carte de station, nom du service, image ;
+seulement une fois verrouillé). `nom`, `qth` (la ville), `carre` (le locator),
+`pays` viennent de sa fiche QRZ.com quand elle est trouvée (compte QRZ dans
+SatMe-PC), sinon il n'y a que l'indicatif ; `km` et `azimut` (°) depuis la
+station, calculés sur le locator. Jamais la photo QRZ (elle appartient à son
+auteur), l'adresse électronique, la rue ni les coordonnées. Un site qui ne
+connaît pas `station` l'ignore.
 
 Un récepteur qui ne veut pas du direct répond `403` (ou `404`) à ces types.
 

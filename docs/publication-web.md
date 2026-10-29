@@ -347,7 +347,19 @@ password or a key.
 | `direct-efface` | JSON `{"type","version","t"}` | the **Effacer le direct** button: forget all live data |
 
 `pilote`: `{"maitre": bool, "prochain": {"campagne","sat","aos","los","el"}, "enCours": {…, "phase","mode","images","elMaintenant","azMaintenant","image": {"phase","progression","mode","prochaine"}}, "derniere": {"sat","utc","mode"}}` (times in UTC ms).
-`datv`: `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge"}`.
+`datv`: `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station"}`.
+
+`datv.station` (optional, absent when unknown): the station watched,
+`{"indicatif","selection","nom","qth","carre","pays","km","azimut"}`.
+`selection` is `true` when it is the signal selected on the wide band
+spectrum (the one the receiver is tuned to, the callsign taken from its
+label; present even before the lock), `false` when it is the callsign the
+reception confirmed (station card, service name, picture; only once locked).
+`nom` (name), `qth` (town), `carre` (locator) and `pays` (country) come from
+its QRZ.com record when found (QRZ account in SatMe-PC), else there is the
+callsign alone; `km` and `azimut` (°) from the station, worked out from the
+locator. Never the QRZ photo (it belongs to its author), the e-mail address,
+the street or the coordinates. A site that does not know `station` ignores it.
 
 A receiver that does not want live data answers `403` (or `404`) to these
 types.
