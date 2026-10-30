@@ -218,7 +218,8 @@ const Orbites = (function () {
     cam: lit('ob-cam', 'poursuite'), hauteur: parseFloat(lit('ob-hauteur', '3.5')) || 3.5,
     detail: Math.max(0, Math.min(2, parseInt(lit('ob-detail', '1'), 10) || 0)), contacts: lit('ob-contacts', 'aucun'), carnet: null, carnetLu: 0,
     villes: lit('ob-villes', 'toutes'), etiq: lit('ob-etiq', 'nom'), monuments: lit('ob-monuments', 'principaux'), monOff: [], tb: null,
-    monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)), traces: Math.max(0, Math.min(100, parseInt(lit('ob-traces', '60'), 10))) };
+    monTaille: Math.max(.5, Math.min(3, parseFloat(lit('ob-montaille', '1')) || 1)), traces: Math.max(0, Math.min(100, parseInt(lit('ob-traces', '60'), 10))),
+    transparence: Math.max(0, Math.min(80, parseInt(lit('ob-transparence', '0'), 10) || 0)) };
   if (isNaN(OB.traces)) OB.traces = 60;
   try { OB.monOff = JSON.parse(lit('ob-montypes-off', '[]')) || []; } catch (x) {}
   let libs = null, donnees = null, scenes = [], boucle = false, tab = null, suivi = null, rejeu = null, sked = null;
@@ -518,16 +519,16 @@ const Orbites = (function () {
   function matBleuNuit(s, anisotropie) {
     const tex = new THREE.CanvasTexture(masqueBleuNuit()); tex.anisotropy = anisotropie;
     return new THREE.ShaderMaterial({
-      uniforms: { m: { value: tex }, s: { value: s } },
+      uniforms: { m: { value: tex }, s: { value: s }, a: { value: 1 } },
       vertexShader: 'varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){ u = uv; nw = mat3(modelMatrix)*normal; n = normalMatrix*normal; vec4 q = modelViewMatrix*vec4(position,1.0); v = -q.xyz; gl_Position = projectionMatrix*q; }',
-      fragmentShader: 'uniform sampler2D m; uniform vec3 s; varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){' +
+      fragmentShader: 'uniform sampler2D m; uniform vec3 s; uniform float a; varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){' +
         ' vec3 k = texture2D(m, u).rgb; float h = dot(normalize(nw), normalize(s));' +
         ' float jour = clamp((h + .1) / .22, 0., 1.), mi = clamp(.25 + .75 * max(0., h), 0., 1.) * jour;' +
         ' vec3 c = mix(mix(vec3(.039, .122, .220), vec3(.090, .247, .227), k.r), mix(vec3(.102, .337, .518), vec3(.310, .592, .478), k.r), mi);' +
         ' c *= .72 + .28 * max(0., dot(normalize(n), normalize(v)));' +
         ' c = mix(c, vec3(.008, .024, .051), (1. - jour) * .88);' +
         ' c = mix(c, vec3(.588, .902, .843), k.g * .5); c = mix(c, vec3(.549, .706, .902), k.b * .13);' +
-        ' gl_FragColor = vec4(c, 1.); }'
+        ' gl_FragColor = vec4(c, a); }'
     });
   }
   function nuages() {
@@ -867,6 +868,17 @@ const Orbites = (function () {
       if (OB.contacts === 'indicatifs') l.slice(0, 400).forEach(c => { const s = etiquette(c.c, '#FFD1E8', sc.style, 'contact'); s.position.copy(local(c.q.lat, c.q.lon, 1.006)); s.center.set(-.05, .5); s.userData.contact = 1; contactsGp.add(s); });
     };
 
+    /**
+     * The globe seen through ([OB.transparence], 0 opaque … 80 %): its ground and the cartoon's outline let the orbits,
+     * the satellites and the stars behind the Earth show, dimmed.
+     */
+    sc.voile = () => {
+      if (!sol) return;
+      const t = OB.transparence / 100, base = sc.style === 'holo' ? .92 : 1, op = base * (1 - t);
+      const regle = m => { m.transparent = op < 1; m.opacity = op; m.depthWrite = t === 0; if (m.uniforms && m.uniforms.a) m.uniforms.a.value = op; m.needsUpdate = true; };
+      regle(sol.material);
+      extras.forEach(e => { if (e.userData && e.userData.voile) regle(e.material); });
+    };
     sc.appliqueStyle = k => {
       if (!STYLES[k]) k = 'cartoon';
       sc.style = k;
@@ -883,13 +895,14 @@ const Orbites = (function () {
       sol = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), mat); terre.add(sol);
       const ajoute = (o, parent) => { (parent || scene).add(o); extras.push(o); };
       if (k === 'realiste') { ajoute(nuages(), terre); ajoute(bord('#5aa8ff', 3.0, 1.1)); ajoute(bord('#3f8cff', 2.2, 1.0, 1.09, true)); }
-      if (k === 'cartoon') { ajoute(new THREE.Mesh(new THREE.SphereGeometry(1.022, 96, 64), new THREE.MeshBasicMaterial({ color: 0x0a1230, side: THREE.BackSide }))); ajoute(nuagesCartoon(), terre); }
+      if (k === 'cartoon') { const contour = new THREE.Mesh(new THREE.SphereGeometry(1.022, 96, 64), new THREE.MeshBasicMaterial({ color: 0x0a1230, side: THREE.BackSide })); contour.userData.voile = 1; ajoute(contour); ajoute(nuagesCartoon(), terre); }
       if (k === 'holo') { mat.transparent = true; mat.opacity = .92; ajoute(bord('#3fe8ff', 2.2, 1.4)); ajoute(bord('#3fe8ff', 2.5, .6, 1.06, true)); }
       if (k === 'points') { ajoute(pointsTerre(), terre); ajoute(bord('#5f86ff', 2.5, 1.2)); ajoute(bord('#3f5fff', 3, .5, 1.07, true)); }
       if (k === 'radar') ajoute(bord('#3cff7a', 2.4, 1.1));
       if (k === 'bleunuit') { ajoute(bord('#46a0ff', 3.2, .55)); ajoute(bord('#46a0ff', 2.4, .75, 1.12, true)); }
       scene.background = new THREE.Color(STYLES[k].fond);
       etoiles.material.color.set(STYLES[k].etoiles);
+      sc.voile();
       sc.objets.forEach(o => o.restyle());
       sc.placeStation(); sc.monde(); sc.contacts(); if (mode === 'rejeu') sc.rejeuPrepare(); if (mode === 'sked') sc.skedPrepare();
     };
@@ -1595,6 +1608,11 @@ const Orbites = (function () {
   /** A polyline [pts] as segments, for [ruban]. */
   function enSegments(pts) { const seg = []; for (let i = 1; i < pts.length; i++) seg.push(pts[i - 1], pts[i]); return seg; }
   /** The « Traces » setting (0 … 100), kept in this browser; the boxes showing it follow, the orbits' tubes and the Sked's common window are redrawn. */
+  function prendTransparence(n) {
+    OB.transparence = Math.max(0, Math.min(80, Math.round(+n || 0))); garde('ob-transparence', String(OB.transparence));
+    document.querySelectorAll('.ob-transparence-choix').forEach(s => { if (+s.value !== OB.transparence) s.value = String(OB.transparence); });
+    scenes.forEach(sc => { if (sc.voile) sc.voile(); });
+  }
   function prendTraces(n) {
     OB.traces = Math.max(0, Math.min(100, Math.round(+n || 0))); garde('ob-traces', String(OB.traces));
     document.querySelectorAll('.ob-traces-choix').forEach(s => { if (+s.value !== OB.traces) s.value = String(OB.traces); });
@@ -1637,6 +1655,7 @@ const Orbites = (function () {
     el('ob-monuments').value = OB.monuments; el('ob-monuments').onchange = e => prendMonuments(e.target.value);
     el('ob-montaille').value = String(OB.monTaille); el('ob-montaille').onchange = e => prendMonTaille(+e.target.value);
     el('ob-traces').value = String(OB.traces); el('ob-traces').oninput = e => prendTraces(+e.target.value);
+    el('ob-transparence').value = String(OB.transparence); el('ob-transparence').oninput = e => prendTransparence(+e.target.value);
     el('ob-montypes-b').onclick = ev => {
       ev.stopPropagation(); const m = el('ob-montypes'), ouvre = m.hidden;
       m.hidden = !ouvre; el('ob-montypes-b').setAttribute('aria-expanded', ouvre); if (ouvre) { typesMon(m); const c = m.querySelector('input'); if (c) c.focus(); }
@@ -2174,6 +2193,9 @@ const Orbites = (function () {
     monumentsTaille: n => prendMonTaille(n),
     monumentsTailleActive: () => OB.monTaille,
     /** How marked the tracks are (0 discreet … 100 very marked), kept in this browser. */
+    /** How much the globe lets what is behind it show (0 opaque … 80 %), kept in this browser. */
+    transparence: n => prendTransparence(n),
+    transparenceActive: () => OB.transparence,
     traces: n => prendTraces(n),
     tracesActives: () => OB.traces,
     /** The landmarks' families to tick, in [box]. */

@@ -360,7 +360,16 @@ function reglagesGlobeSked() {
   choix('Taille', 'ob-montaille-choix', [['0.7', 'petite'], ['1', 'normale'], ['1.6', 'grande'], ['2.4', 'très grande']], Orbites.monumentsTailleActive(), q => Orbites.monumentsTaille(+q),
     'La taille des monuments (plus grands : lisibles de loin)');
   box.appendChild(rangeTraces());
+  box.appendChild(rangeTransparence());
   const ty = document.createElement('div'); ty.className = 'k-montypes'; box.appendChild(ty); Orbites.typesMonuments(ty);
+}
+/** « Transparence » 0 (opaque) … 80 %: the globe lets the orbits and satellites behind the Earth show; shared by the globes. */
+function rangeTransparence() {
+  const l = document.createElement('label'), r = document.createElement('input');
+  r.type = 'range'; r.min = 0; r.max = 80; r.step = 5; r.className = 'ob-transparence-choix'; r.value = String(Orbites.transparenceActive());
+  r.setAttribute('aria-label', 'Transparence du globe : opaque à très transparent'); l.title = 'Le globe transparent : ce qui est derrière la Terre se voit (à gauche opaque)';
+  r.oninput = () => Orbites.transparence(+r.value);
+  l.append(document.createTextNode('Transparence '), r); return l;
 }
 /** « Traces » 0 (discreet) … 100 (very marked): the ground tracks, shared by the globes and the maps; the Sked's map follows. */
 function rangeTraces() {
