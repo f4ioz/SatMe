@@ -47,10 +47,23 @@ class GlobeRenduPcTest {
         assertEquals("cartoon", GlobeRenduPc.styleDemande("globe", ""))
         assertEquals("cartoon", GlobeRenduPc.styleDemande("globe", "inconnu"))
         assertEquals("vintage", GlobeRenduPc.styleDemande("globe", "vintage"))
+        assertEquals("bleunuit", GlobeRenduPc.styleDemande("globe", "BleuNuit"))
         assertEquals("realiste", GlobeRenduPc.styleDemande(" globe ", "Realiste"))
         assertNull(GlobeRenduPc.styleDemande("", "cartoon"))
         assertNull(GlobeRenduPc.styleDemande("ciel", "cartoon"))
         for (s in GlobeRenduPc.STYLES) assertEquals(s, GlobeRenduPc.styleDemande("globe", s))
+    }
+
+    @Test
+    fun chaque_style_est_un_choix_de_la_page() {
+        // The page's looks (Orbites, Sked, the journal) and the Suivi tab's list: the same as the videos'.
+        val js = fr.f4ioz.satcombo.demo.OrbitesJs.JS
+        val suivi = fr.f4ioz.satcombo.demo.PagePc.HTML.substringAfter("id=\"st-globe-styles\"").substringBefore("</select>")
+        for (s in GlobeRenduPc.STYLES) {
+            assertTrue(s, js.contains("\n    $s: { nom: '"))
+            assertTrue(s, suivi.contains("<option value=\"$s\">"))
+        }
+        assertEquals(GlobeRenduPc.STYLES.size, Regex("<option ").findAll(suivi).count())
     }
 
     private fun proche(c: Int, cible: Color, tol: Int): Boolean =
@@ -76,8 +89,10 @@ class GlobeRenduPcTest {
             val k = 1 + alt / 6371.0
             val p = doubleArrayOf(s[0] * k, s[1] * k, s[2] * k)
             val sx = cam.x(p).toInt(); val sy = cam.y(p).toInt()
+            // « Bleu nuit »'s satellite is a cyan light, the others' the ISS's yellow.
+            val sa = if (style == "bleunuit") Color(0x3fe0c8) else RenduPc.ISS
             var trouve = false
-            for (y in sy - 6..sy + 6) for (x in sx - 6..sx + 6) if (proche(img.getRGB(x, y), RenduPc.ISS, 40)) trouve = true
+            for (y in sy - 6..sy + 6) for (x in sx - 6..sx + 6) if (proche(img.getRGB(x, y), sa, 40)) trouve = true
             assertTrue("$style: the satellite at ($sx, $sy)", trouve)
             if (style == "cartoon") {
                 // The open Atlantic (lit): the cartoon's bright blue.
@@ -93,7 +108,7 @@ class GlobeRenduPcTest {
                 assertTrue("France %06x".format(cf and 0xffffff), (cf and 255) < 150)
             }
         }
-        // Six looks, six pictures.
+        // Seven looks, seven pictures.
         val styles = vus.keys.toList()
         for (i in styles.indices) for (j in i + 1 until styles.size) {
             val a = vus.getValue(styles[i]); val b = vus.getValue(styles[j])
@@ -241,6 +256,30 @@ class GlobeRenduPcTest {
         assertTrue("satellite at ($sx, $sy)", trouve)
         // Small and to a side too.
         rend(GlobeRenduPc.Options(gdx = -0.3f, gz = 0.5f), "globe-petit.png")
+    }
+
+    @Test
+    fun bleu_nuit_un_ocean_profond_des_terres_vertes_et_la_nuit() {
+        // 15:45 UTC in October: the Sun low over France, set over the Volga.
+        val w = 1280; val h = 720; val instant = t0 + 300_000L
+        val o = GlobeRenduPc.Options(villes = "aucune", detail = 0)
+        val sc = scene("bleunuit", o = o)
+        val img = RenduPc.image(w, h, sc, instant)
+        ImageIO.write(img, "png", File(echantillons, "globe-bleunuit-seul.png"))
+        val haut = RenduPc.hautVue(w, h, sc).toFloat()
+        val cam = GlobeRenduPc.camera(sc, instant, w.toFloat(), haut)
+        fun c(lat: Double, lon: Double) = cam.ecran(lat, lon).let { assertTrue(it.third > 0.2); Color(img.getRGB(it.first.toInt(), it.second.toInt())) }
+        // The open Atlantic, lit: a deep blue.
+        val mer = c(44.0, -20.0)
+        assertTrue("mer $mer", mer.blue > mer.red + 40 && mer.blue > mer.green)
+        // France in the low Sun: green land, greener than the sea.
+        val terre = c(46.5, 2.5)
+        assertTrue("terre $terre", terre.green > terre.blue && terre.green > terre.red + 20)
+        // The steppe past the twilight: night, nearly black.
+        val nuit = c(50.5, 46.0)
+        assertTrue("nuit $nuit", nuit.red + nuit.green + nuit.blue < 90)
+        // Space round it: the night blue, not the ocean's.
+        assertTrue(proche(img.getRGB(4, 4), Color(0x050a12), 30))
     }
 
     @Test
