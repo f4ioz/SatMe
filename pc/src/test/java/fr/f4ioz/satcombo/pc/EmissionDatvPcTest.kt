@@ -138,8 +138,8 @@ class EmissionDatvPcTest {
 
     private fun emission(p: FauxPluto, ts: EmissionDatvPc.FabriqueTs, indicatif: String = "F4IOZ", vieMs: Long = 15_000L,
                          reception: () -> EmissionDatvPc.Reception? = { null }, occupe: String? = null, vue: VueEmisDatvPc = VueEmisDatvPc()): EmissionDatvPc =
-        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif },
-            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs, vue = vue)
+        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif }, { "JN18du" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs, vue = vue).pret()
 
     @Test
     fun debit_ou_modcod_non_prevu_refuse_et_non_garde_en_silence() {
@@ -303,8 +303,8 @@ class EmissionDatvPcTest {
             val fab = fr.f4ioz.satcombo.sdr.EmetteurNoeud.Fabrique {
                 fr.f4ioz.satcombo.sdr.EmetteurNoeud("127.0.0.1", noeud.portReel, "/noeud/tx/flux?cle=$cle", -10.0)
             }
-            fun emission(ts: TsSynthetique) = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
-                plutoOccupe = { "l'ADALM-PLUTO de ce PC reçoit" }, fabrique = ts, noeudTx = { fab }).apply {
+            fun emission(ts: TsSynthetique) = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" }, { "JN18du" },
+                plutoOccupe = { "l'ADALM-PLUTO de ce PC reçoit" }, fabrique = ts, noeudTx = { fab }).pret().apply {
                 modcodTexte = "QPSK 2/3"; srKs = 333; rolloff = Rolloff.A25; pilotes = true; courtes = false
                 frequenceKhz = 2_409_750L; gainDb = -30.0
             }
@@ -389,8 +389,8 @@ class EmissionDatvPcTest {
     private fun hackrf(f: FauxHackrf?, ts: EmissionDatvPc.FabriqueTs, indicatif: String = "F4IOZ"): EmissionDatvPc {
         assumeTrue("sh absent", File("/bin/sh").canExecute())
         // Never the PATH: no real hackrf_transfer, ever.
-        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif },
-            plutoHote = { "127.0.0.1" }, plutoPort = { 9 }, fabrique = ts, outilParDefaut = { null })
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif }, { "JN18du" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { 9 }, fabrique = ts, outilParDefaut = { null }).pret()
         e.emetteur = Emetteur.HACKRF
         if (f != null) { fauxHackrf += f; e.hackrfOutil = f.dossier.path }
         return e
@@ -587,9 +587,9 @@ class EmissionDatvPcTest {
     }
 
     private fun adaptative(p: FauxPluto, ts: EmissionDatvPc.FabriqueTs, horloge: () -> Long, vue: () -> EmissionDatvPc.Reception?) =
-        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" }, { "JN18du" },
             plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, reception = vue, fabrique = ts, horloge = horloge,
-            nouvelleAdaptation = { fr.f4ioz.satcombo.datv.AdaptationModcod(monteeMs = 3_000L, attenteMs = 2_000L, perteBoucleMs = 3_000L) })
+            nouvelleAdaptation = { fr.f4ioz.satcombo.datv.AdaptationModcod(monteeMs = 3_000L, attenteMs = 2_000L, perteBoucleMs = 3_000L) }).pret()
 
     private fun debit(m: String) = fr.f4ioz.satcombo.datv.s2.Modcod.de(m, false, true)!!.debitTs(333_000.0).toLong()
 
@@ -683,8 +683,8 @@ class EmissionDatvPcTest {
     fun chat_seulement_pendant_une_emission_et_pas_trop_vite() {
         val p = FauxPluto().also { ouverts += it }
         var t = 1_000_000L
-        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
-            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, fabrique = TsSynthetique(50), horloge = { t })
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" }, { "JN18du" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, fabrique = TsSynthetique(50), horloge = { t }).pret()
         e.frequenceKhz = 2_409_750L
         // Typing never transmits: refused with no transmission running, and nothing started.
         assertNotNull(e.dis("bonjour"))
@@ -713,9 +713,9 @@ class EmissionDatvPcTest {
                         reception: () -> EmissionDatvPc.Reception? = { null }): EmissionDatvPc {
         assumeTrue("sh ou mkfifo absent", File("/bin/sh").canExecute() && File("/usr/bin/mkfifo").canExecute())
         // Never the PATH: no real bladeRF-cli, ever.
-        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" }, { "JN18du" },
             plutoHote = { "127.0.0.1" }, plutoPort = { 9 }, plutoOccupe = { "le Pluto ne doit pas compter" }, bladerfOccupe = { occupe },
-            bladerfProgramme = { f?.cli?.path }, reception = reception, fabrique = ts)
+            bladerfProgramme = { f?.cli?.path }, reception = reception, fabrique = ts).pret()
         e.emetteur = Emetteur.BLADERF
         if (f != null) fauxBladerf += f
         return e
@@ -813,3 +813,6 @@ class EmissionDatvPcTest {
             """<device id="iio:device3" name="cf-ad9361-lpc" ></device></context>"""
     }
 }
+
+/** A transmission ready to start in a test: the level already chosen and kept across stops (the gate has its own tests). */
+internal fun EmissionDatvPc.pret(): EmissionDatvPc = apply { garderNiveau = true; gainDb = gainDb }

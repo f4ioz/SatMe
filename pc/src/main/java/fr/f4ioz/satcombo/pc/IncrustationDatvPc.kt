@@ -25,6 +25,9 @@ import javax.imageio.ImageIO
 /**
  * Text and the SatMe mark over the transmitted DATV picture: the callsign,
  * the locator, a line of free text, the UTC time, in a corner or a strip.
+ * The free text may scroll instead ([Reglage.defile]): drawn once into a
+ * PNG of its own, moved across by ffmpeg's `overlay` (its x a function of
+ * the time), smooth at the picture's rate.
  *
  * Drawn here (Java2D, the JVM's own fonts) into a transparent PNG at the
  * stream's picture size, which ffmpeg lays over the picture with `overlay`:
@@ -59,6 +62,8 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         val taille: Taille = Taille.MOYEN,
         /** A dark, half-transparent box behind the text. */
         val fond: Boolean = true,
+        /** The free text scrolling right to left along the bottom (the top when the box is at the bottom). */
+        val defile: Boolean = false,
     )
 
     // ------------------------------------------------------------ settings
@@ -72,11 +77,13 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
             logo = stockage.getBoolean("datv_inc_logo", false),
             position = Position.de(stockage.getString("datv_inc_position", "")),
             taille = Taille.de(stockage.getString("datv_inc_taille", "")),
-            fond = stockage.getBoolean("datv_inc_fond", true))
+            fond = stockage.getBoolean("datv_inc_fond", true),
+            defile = stockage.getBoolean("datv_inc_defile", false))
         set(r) {
             stockage.edit().putBoolean("datv_inc_indicatif", r.indicatif).putBoolean("datv_inc_locator", r.locator)
                 .putString("datv_inc_texte", nettoie(r.texte)).putBoolean("datv_inc_heure", r.heure).putBoolean("datv_inc_logo", r.logo)
-                .putString("datv_inc_position", r.position.cle).putString("datv_inc_taille", r.taille.cle).putBoolean("datv_inc_fond", r.fond).apply()
+                .putString("datv_inc_position", r.position.cle).putString("datv_inc_taille", r.taille.cle).putBoolean("datv_inc_fond", r.fond)
+                .putBoolean("datv_inc_defile", r.defile).apply()
         }
 
     /** The page's settings ([q]: what it sent; the rest kept). */
@@ -85,13 +92,13 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         fun b(k: String, d: Boolean) = q[k]?.let { it == "1" } ?: d
         reglage = r.copy(indicatif = b("indicatif", r.indicatif), locator = b("locator", r.locator), texte = q["texte"] ?: r.texte,
             heure = b("heure", r.heure), logo = b("logo", r.logo), position = q["position"]?.let { Position.de(it) } ?: r.position,
-            taille = q["taille"]?.let { Taille.de(it) } ?: r.taille, fond = b("fond", r.fond))
+            taille = q["taille"]?.let { Taille.de(it) } ?: r.taille, fond = b("fond", r.fond), defile = b("defile", r.defile))
     }
 
     fun json(): JSONObject {
         val r = reglage
         return JSONObject().put("ok", true).put("indicatif", r.indicatif).put("locator", r.locator).put("texte", r.texte).put("heure", r.heure)
-            .put("logo", r.logo).put("position", r.position.cle).put("taille", r.taille.cle).put("fond", r.fond).put("texteMax", TEXTE_MAX)
+            .put("logo", r.logo).put("position", r.position.cle).put("taille", r.taille.cle).put("fond", r.fond).put("defile", r.defile).put("texteMax", TEXTE_MAX)
     }
 
     /**
@@ -108,11 +115,22 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         ImageIO.write(rendu(w, h, r, indicatif, locator, source, horloge()), "png", png)
         // The clock card takes ffmpeg's input itself (and shows the time): the overlay then a still one.
         val enDirect = direct && r.heure && source != "horloge"
-        return IncrustationTs(png, enDirect, { ms -> octets(rendu(w, h, r, indicatif, locator, source, ms)) }, horloge)
+        // The scrolling text: its own PNG, moved by ffmpeg.
+        val d = lignes(r, source, indicatif, locator, 0L).defile.takeIf { it.isNotEmpty() }?.let { t ->
+            val f = File(png.parentFile, png.nameWithoutExtension + "-defile.png")
+            ImageIO.write(texteDefilant(w, h, r, t), "png", f)
+            Defile(f, defileY(w, h, r), maxOf(20, w / 8))
+        }
+        return IncrustationTs(png, enDirect, { ms -> octets(rendu(w, h, r, indicatif, locator, source, ms)) }, horloge, d)
     }
 
+    /** The scrolling text's PNG, the strip's top ([y], pixels) and its speed (pixels a second). */
+    class Defile(val png: File, val y: Int, val vitessePx: Int)
+
     /** What ffmpeg gets: a still PNG, or PNGs written twice a second into its input ([alimente]). */
-    class IncrustationTs(val png: File, val direct: Boolean, private val image: (Long) -> ByteArray, private val horloge: () -> Long = System::currentTimeMillis) {
+    class IncrustationTs(val png: File, val direct: Boolean, private val image: (Long) -> ByteArray, private val horloge: () -> Long = System::currentTimeMillis,
+                         /** The scrolling text, laid last ([filtre]); null: none. */
+                         val defile: Defile? = null) {
         /**
          * Writes a picture each half second into [o] (ffmpeg's input) until
          * ffmpeg goes (the pipe closed) or [encore] says stop; each drawn
@@ -149,14 +167,41 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
         fun surMire(source: String) = source == "mire" || source == "animee" || source == "horloge"
 
         fun actif(r: Reglage, source: String, indicatif: String, locator: String): Boolean =
-            lignes(r, source, indicatif, locator, 0L).let { it.call.isNotEmpty() || it.loc.isNotEmpty() || it.logo || it.texte.isNotEmpty() || it.heure.isNotEmpty() }
+            lignes(r, source, indicatif, locator, 0L).let { it.call.isNotEmpty() || it.loc.isNotEmpty() || it.logo || it.texte.isNotEmpty() || it.heure.isNotEmpty() || it.defile.isNotEmpty() }
 
-        private class Lignes(val call: String, val loc: String, val logo: Boolean, val texte: String, val heure: String)
+        private class Lignes(val call: String, val loc: String, val logo: Boolean, val texte: String, val heure: String, val defile: String = "")
 
         private fun lignes(r: Reglage, source: String, indicatif: String, locator: String, ms: Long): Lignes {
             val m = surMire(source)
+            val t = nettoie(r.texte)
             return Lignes(if (r.indicatif && !m) indicatif.trim().uppercase() else "", if (r.locator && !m) locator.trim().uppercase() else "",
-                r.logo && !m, nettoie(r.texte), if (r.heure && source != "horloge") heure(ms) else "")
+                r.logo && !m, if (r.defile) "" else t, if (r.heure && source != "horloge") heure(ms) else "", if (r.defile) t else "")
+        }
+
+        /** The scrolling strip's height at [h] (pixels). */
+        private fun defileHauteur(h: Int, r: Reglage): Int = maxOf(12, (h * r.taille.part * 1.5f).toInt())
+
+        /** The strip's top: along the bottom, or along the top when the box sits at the bottom. */
+        fun defileY(w: Int, h: Int, r: Reglage): Int {
+            val bh = defileHauteur(h, r)
+            val enBas = r.position == Position.BAS_GAUCHE || r.position == Position.BAS_DROITE || r.position == Position.BANDEAU
+            return if (enBas) (h * 0.03f).toInt() else h - bh - (h * 0.03f).toInt()
+        }
+
+        /** The scrolling text alone, as wide as it is (transparent, outlined when there is no strip behind it). */
+        fun texteDefilant(w: Int, h: Int, r: Reglage, texte: String): BufferedImage {
+            val bh = defileHauteur(h, r)
+            val f = police(true, bh / 1.6f)
+            val mesure = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics()
+            val tw = try { mesure.getFontMetrics(f).stringWidth(texte) } finally { mesure.dispose() }
+            val im = BufferedImage(maxOf(1, tw + bh), bh, BufferedImage.TYPE_INT_ARGB)
+            val g = im.createGraphics()
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+                dessine(g, Morceau(texte, f, Color.WHITE), bh / 2f, 0f, bh.toFloat(), r.fond, Float.MAX_VALUE)
+            } finally { g.dispose() }
+            return im
         }
 
         fun heure(ms: Long): String = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(java.time.ZoneOffset.UTC)
@@ -164,14 +209,21 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
 
         fun octets(im: BufferedImage): ByteArray = ByteArrayOutputStream().also { ImageIO.write(im, "png", it) }.toByteArray()
 
-        /** ffmpeg's input for the overlay (added after the others: their numbers unchanged). */
+        /** ffmpeg's input for the overlay (added after the others: their numbers unchanged), then the scrolling text's. */
         fun entree(inc: IncrustationTs): List<String> =
-            if (inc.direct) listOf("-f", "image2pipe", "-framerate", "2", "-i", "pipe:0")
-            else listOf("-re", "-loop", "1", "-framerate", "1", "-i", inc.png.path)
+            (if (inc.direct) listOf("-f", "image2pipe", "-framerate", "2", "-i", "pipe:0")
+            else listOf("-re", "-loop", "1", "-framerate", "1", "-i", inc.png.path)) +
+                (inc.defile?.let { listOf("-re", "-loop", "1", "-framerate", "1", "-i", it.png.path) } ?: emptyList())
 
-        /** [chaine] (a filter chain on the picture, unlabelled) with input [k]'s overlay laid on it, as [v]. */
-        fun filtre(chaine: String, k: Int, w: Int, h: Int): String =
-            "$chaine[s];[$k:v]scale=$w:$h,format=rgba[o];[s][o]overlay=0:0,format=yuv420p[v]"
+        /**
+         * [chaine] (a filter chain on the picture, unlabelled) with input [k]'s
+         * overlay laid on it, as [v]; the scrolling text ([d], input k + 1)
+         * last, from two thirds across at the start, right to left, looping.
+         */
+        fun filtre(chaine: String, k: Int, w: Int, h: Int, d: Defile? = null): String =
+            if (d == null) "$chaine[s];[$k:v]scale=$w:$h,format=rgba[o];[s][o]overlay=0:0,format=yuv420p[v]"
+            else "$chaine[s];[$k:v]scale=$w:$h,format=rgba[o];[s][o]overlay=0:0[t];[${k + 1}:v]format=rgba[d];" +
+                "[t][d]overlay=x='W-mod(t*${d.vitessePx}+W/3,W+w)':y=${d.y},format=yuv420p[v]"
 
         /**
          * One frame of what the command [l] sends, as a JPEG into [sortie]:
@@ -208,6 +260,8 @@ class IncrustationDatvPc(private val stockage: Stockage, private val horloge: ()
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
                 g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
                 g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                // The scrolling text's strip (the text itself moves over it, laid by ffmpeg).
+                if (l.defile.isNotEmpty() && r.fond) { g.color = Color(0, 0, 0, 150); g.fillRect(0, defileY(w, h, r), w, defileHauteur(h, r)) }
                 if (r.position == Position.BANDEAU) bandeau(g, w, h, r, l) else coin(g, w, h, r, l)
             } finally { g.dispose() }
             return im

@@ -436,7 +436,7 @@ class NoeudSdrTxTest {
         val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee)
         st.settings.manualLocator = "JN18FS"
         val fab = EmetteurNoeud.Fabrique { EmetteurNoeud("127.0.0.1", noeud.portReel, "/noeud/tx/flux?cle=$cle", -10.0) }
-        val e = EmissionDatvPc(StockageMemoire(), File(dossier, "img"), { "F4IOZ" }, fabrique = TsNul(), noeudTx = { fab })
+        val e = EmissionDatvPc(StockageMemoire(), File(dossier, "img"), { "F4IOZ" }, { "JN18du" }, fabrique = TsNul(), noeudTx = { fab }).pret()
             .apply { frequenceKhz = 2_409_750L; gainDb = -30.0 }
         val acces = AccesDistantPc(File(dossier, "acces").apply { mkdirs() }, reseau = true, iterations = 1000)
         acces.regle("mot-de-passe-du-mat")

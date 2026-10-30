@@ -3126,7 +3126,9 @@ ${OngletSked.HTML}
         <label class="petit" title="Ce n’est pas votre réception : c’est le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert (rien n’y est envoyé). Votre niveau, celui du récepteur DATV, est superposé en violet sur la même échelle."><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large — <b>station sol, par Internet</b> (pas ma réception)</label>
         <span class="petit" id="wb-etat"></span>
         <span class="petit" id="wb-veille-etat"></span>
-        <span class="petit wb-aide">un clic sur un signal : le récepteur s’y accorde (même OL, même entrée)</span>
+        <span class="petit wb-aide" id="wb-aide">un clic sur un signal : le récepteur s’y accorde (même OL, même entrée)</span>
+        <label class="petit" id="wb-clic-tx-l" hidden title="Coché : un clic sur le spectre règle la fréquence d’émission DATV (Émission) au lieu d’accorder le récepteur — sur le canal du plan de bande sous le clic, sinon à 10 kHz près. Rien n’est émis. L’indication libre / occupé vient du spectre de la station sol : indicative seulement, écouter avant d’émettre."><input type="checkbox" id="wb-clic-tx" onchange="wbClicTx(this.checked)"> un clic choisit la fréquence d’<b>émission</b></label>
+        <span class="petit" id="wb-tx-msg"></span>
         <button id="wb-plus-b" onclick="wbPlus()" title="La liste des signaux, la veille, un spectre plus haut">Détails ▾</button>
       </div>
       <div id="wb-zone" hidden>
@@ -3262,20 +3264,28 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
       <div class="petit" id="e-cr-info" style="margin:-2px 0 4px 92px"></div>
       <div class="ligne" id="e-mhz-l"><span class="petit" style="min-width:86px">Montée (MHz)</span><input id="e-mhz" style="max-width:120px" onchange="eRegle()">
         <span class="petit" id="e-descente"></span></div>
+      <div class="petit" id="e-indice" style="margin:-2px 0 4px 92px" title="D’après le spectre de la station sol (BATC), vu par Internet il y a quelques secondes : une station faible peut être sous son bruit. Indicatif seulement — ni une autorisation ni un refus ; écouter avant d’émettre. Astuce : cocher « un clic choisit la fréquence d’émission » au-dessus du spectre de la bande large."></div>
       <div class="avert" id="e-bande"></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Source</span><select id="e-source" onchange="eRegle()" style="max-width:190px">
-        <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="horloge">Horloge en direct + indicatif (bip chaque seconde)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="camera">Caméra</option></select>
+        <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="horloge">Horloge en direct + indicatif (bip chaque seconde)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="dossier">Dossier de vidéos (en boucle)</option><option value="camera">Caméra</option></select>
         <select id="e-hevc" onchange="eRegle()" style="max-width:90px"><option value="0">H.264</option><option value="1">H.265</option></select>
         <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
       <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"><button id="e-image-par" onclick="fdOuvre('image')" title="Choisir une image sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
       <div class="ligne" id="e-video-l" hidden><span class="petit" style="min-width:86px">Vidéo</span><input id="e-video" placeholder="/home/…/essai.mp4" onchange="eRegle()"><button id="e-video-par" onclick="fdOuvre('video')" title="Choisir une vidéo sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
+      <div class="ligne" id="e-dossier-l" hidden><span class="petit" style="min-width:86px">Dossier</span><input id="e-dossier" placeholder="/home/…/videos" onchange="eRegle()" title="Toutes les vidéos du dossier (mp4, mkv, mov, avi, webm, ts, m4v), par ordre de nom, l’une après l’autre, puis on recommence. Le même format pour toutes passe le mieux.">
+        <button id="e-dossier-par" onclick="fdOuvre('video', 'e-dossier', c => { g('e-dossier').value = c.substring(0, Math.max(c.lastIndexOf('/'), c.lastIndexOf('\\'))); g('e-source').value = 'dossier'; eRegle(); })" title="Choisir une des vidéos du dossier : c’est tout le dossier qui sera joué">Parcourir…</button>
+        <span class="petit" id="e-dossier-n"></span></div>
       <div class="ligne" id="e-camera-l" hidden><span class="petit" style="min-width:86px">Caméra</span><select id="e-camera" onchange="eRegle()"></select></div>
+      <div class="ligne" id="e-decalage-l"><span class="petit" style="min-width:86px" title="Le son du flux émis décalé par rapport à l’image, de −500 à +500 ms : positif, le son arrive plus tard ; négatif, plus tôt. Pris au démarrage.">Décalage son</span>
+        <input id="e-decalage" type="range" min="-500" max="500" step="10" style="max-width:200px" oninput="eDecalageVu(+this.value)" onchange="eDecalage(+this.value)">
+        <span class="petit" id="e-decalage-v" style="min-width:150px"></span><button onclick="g('e-decalage').value = 0; eDecalage(0)" title="Son et image ensemble">0</button></div>
       <details id="ei" style="margin-top:6px"><summary class="petit">Incrustation sur l’image <span id="ei-resume"></span></summary>
         <div class="ligne"><label class="petit"><input type="checkbox" id="ei-indicatif" onchange="eiRegle()"> indicatif</label>
           <label class="petit"><input type="checkbox" id="ei-locator" onchange="eiRegle()"> locator</label>
           <label class="petit"><input type="checkbox" id="ei-logo" onchange="eiRegle()"> logo SatMe</label>
           <label class="petit"><input type="checkbox" id="ei-heure" onchange="eiRegle()"> heure UTC</label></div>
-        <div class="ligne"><span class="petit" style="min-width:86px">Texte</span><input id="ei-texte" maxlength="60" placeholder="Une ligne libre (60 caractères)" onchange="eiRegle()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Texte</span><input id="ei-texte" maxlength="60" placeholder="Une ligne libre (60 caractères)" onchange="eiRegle()">
+          <label class="petit" style="flex:none" title="Le texte défile de droite à gauche en bas de l’image (en haut quand l’encadré est en bas), en boucle"><input type="checkbox" id="ei-defile" onchange="eiRegle()"> défilant</label></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Position</span><select id="ei-position" onchange="eiRegle()" style="max-width:200px">
           <option value="haut-gauche">en haut à gauche</option><option value="haut-droite">en haut à droite</option><option value="bas-gauche">en bas à gauche</option>
           <option value="bas-droite">en bas à droite</option><option value="bandeau">bandeau en bas</option></select>
@@ -3288,9 +3298,13 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
       <img id="e-apercu" alt="Aperçu de l’image émise" hidden style="max-width:100%;border-radius:6px;border:1px solid var(--bord);display:block;margin-bottom:6px">
       <div class="ligne" style="align-items:flex-start"><button id="e-banc-go" onclick="eBanc()" title="Quelques secondes d’une image de test codées par ffmpeg vers nulle part, à la taille et au débit de ce débit de symboles et de ce MODCOD : H.264, H.265 et les encodeurs matériels présents. Rien n’est émis, aucune caméra n’est ouverte.">Tester l’encodeur</button>
         <span class="petit" id="e-banc" style="flex:1;line-height:1.5"></span></div>
-      <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="20" style="max-width:80px" onchange="eRegle()">
+      <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="20" style="max-width:80px" placeholder="niveau 0" onchange="post('api/datv/emission/reglage?vga=' + enc(v('e-vga'))).then(ticEmission)">
         <span class="petit">0 à 20 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
-      <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
+      <div class="ligne" id="e-niveau-l"><span class="petit" style="min-width:86px" title="Le niveau d’émission part de 0 : rien ne démarre à 0. Il revient à 0 après chaque arrêt, sauf si « garder le niveau » est coché. Tout à gauche : 0 ; ensuite le gain (Pluto, bladeRF : atténuation en dB, 0 dB = pleine puissance ; HackRF : gain VGA).">Niveau</span>
+        <input id="e-niveau" type="range" min="0" max="90" step="1" value="0" style="max-width:220px" oninput="eNiveauVu(+this.value)" onchange="eNiveau(+this.value)">
+        <b class="petit" id="e-niveau-v" style="min-width:110px"></b><button id="e-niveau-0" onclick="eNiveau(0)" title="Revenir au niveau 0 (rien ne peut démarrer)">Niveau 0</button></div>
+      <label class="petit" style="display:block;margin:-2px 0 6px 92px"><input type="checkbox" id="e-garder-niveau" onchange="post('api/datv/emission/reglage?garderNiveau=' + (this.checked ? 1 : 0)).then(ticEmission)"> garder le niveau après l’arrêt (décoché : retour à 0 après chaque émission)</label>
+      <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" placeholder="niveau 0" onchange="eGainSaisi()">
         <button onclick="eGain(-1)" title="1 dB de moins">−1</button><button onclick="eGain(1)" title="1 dB de plus">+1</button><span class="petit" id="e-gainmax"></span></div>
       <div class="ligne" id="e-rampe-l" style="flex-wrap:wrap;gap:4px 6px"><span class="petit" style="min-width:86px" title="Pendant une émission : le gain déplacé pas à pas plutôt que d’un coup. Descendre : 3 dB par seconde jusqu’à −60 dB. Monter : 1 dB toutes les 2 s jusqu’au gain calibré pour ce débit (sinon le gain réglé), arrêté net si la boucle dit trop fort. Les plafonds (Réglages, charge, intérieur) s’appliquent à chaque pas.">Rampe</span>
         <button id="e-rampe-bas" onclick="eRampe('bas')">▼ Descendre</button><button id="e-rampe-stop" onclick="eRampe('stop')">■ Stop</button><button id="e-rampe-haut" onclick="eRampe('haut')">▲ Monter</button>
@@ -3310,11 +3324,32 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
         <div class="avert" id="e-int-refus" style="color:var(--rose)"></div>
         <div class="avert" id="e-int-avert"></div>
       </div>
+      <label class="petit" style="display:block;margin-top:6px" title="Tout fonctionne — ffmpeg, la modulation, la sortie PTT et ses délais, la garde de la page, la minuterie — mais aucun émetteur n’est ouvert : rien n’est émis. Pour essayer le séquenceur et la coupure à la fermeture de la page."><input type="checkbox" id="e-simulation" onchange="post('api/datv/emission/reglage?simulation=' + (this.checked ? 1 : 0)).then(ticEmission)"> <b>Simulation</b> — rien n’est émis, aucun émetteur ouvert</label>
+      <details id="e-ptt" style="margin-top:6px" ontoggle="if (this.open) ePttCharge()"><summary class="petit">Sortie PTT / séquenceur <span id="e-ptt-resume"></span></summary>
+        <div class="petit aide">Une sortie active pendant l’émission, pour un relais, un séquenceur, un préampli ou un ampli : <b>sortie active, délai, puis la HF</b> ; <b>HF coupée, délai, puis sortie au repos</b>. Aucune d’origine. Seulement depuis le PC de la station.</div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Sortie</span><select id="ep-type" onchange="ePttVu()" style="max-width:220px"></select></div>
+        <div id="ep-serie" hidden>
+          <div class="ligne"><span class="petit" style="min-width:86px">Port</span><select id="ep-port" style="max-width:200px"></select>
+            <select id="ep-ligne" style="max-width:80px"><option value="rts">RTS</option><option value="dtr">DTR</option></select>
+            <label class="petit"><input type="checkbox" id="ep-inverse"> active à 0</label></div>
+        </div>
+        <div id="ep-http" hidden>
+          <div class="ligne"><span class="petit" style="min-width:86px">Active</span><input id="ep-on" placeholder="http://boitier.local/ptt?on=1"></div>
+          <div class="ligne"><span class="petit" style="min-width:86px">Repos</span><input id="ep-off" placeholder="http://boitier.local/ptt?on=0"></div>
+          <div class="petit aide">Une requête GET à chaque changement (2 s au plus, réponse 2xx attendue). Pour le futur boîtier antenne (ESP32) ; MQTT viendra au même endroit.</div>
+        </div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Délais (ms)</span><span class="petit">avant la HF</span><input id="ep-avant" type="number" min="0" max="5000" step="50" style="max-width:80px">
+          <span class="petit">après</span><input id="ep-apres" type="number" min="0" max="5000" step="50" style="max-width:80px"></div>
+        <div class="ligne"><button onclick="ePttGarde()">Enregistrer</button><button id="ep-test" onclick="ePttTeste()" title="La sortie active une seconde, puis au repos : pour vérifier le câblage. Aucune HF.">Tester (1 s, sans HF)</button>
+          <span class="petit" id="ep-msg" style="flex:1"></span></div>
+      </details>
       <div class="petit" id="e-rx" style="margin-top:6px;line-height:1.6" hidden></div>
       <div class="petit e-resume" id="e-resume"></div>
       <div class="petit" id="e-calc" style="margin-top:6px"></div>
       <div class="ligne e-boutons"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
         <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
+      <div class="petit" id="e-go-raison" style="color:var(--ambre)"></div>
+      <div class="petit" id="e-garde" style="opacity:.8"></div>
       <div id="e-chat-l" hidden>
         <div class="ligne"><input id="e-chat" maxlength="140" placeholder="Chat dans le flux émis (Entrée) — 140 caractères" onkeydown="if (event.key === 'Enter') eChat()">
           <button onclick="eChat()">Envoyer</button></div>
@@ -8976,8 +9011,12 @@ async function wsRegle(q) {
 function wbBranche(id, bulle) {
 const c = g(id);
 c.onclick = e => wbAvec(id, () => {
-  if (!WB || !(c._b || []).length) return;
-  const r = c.getBoundingClientRect(), b = wbSous(c, (e.clientX - r.left) * c.width / r.width);
+  if (!WB) return;
+  const r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width;
+  // « un clic choisit la fréquence d'émission »: the DATV uplink set there (nothing transmitted), the receiver left alone.
+  if (id === 'wb-spectre' && wbClicTxOn()) { wbChoisitTx(Math.round(WB.debut + px / c.width * WB.largeur)); return; }
+  if (!(c._b || []).length) return;
+  const b = wbSous(c, px);
   if (b) wbAccorde(b.s);
 });
 c.onmousemove = e => wbAvec(id, () => {
@@ -8988,11 +9027,12 @@ c.onmousemove = e => wbAvec(id, () => {
   let t = b ? wbTitre(b.s) : mhz3(Math.round(khz)) + ' MHz · aucun signal ici';
   if (rx && Math.abs(khz - rx.khz) <= rx.larg / 2) t += '\n' + wbMoiTitre(rx.m);
   if (tx && Math.abs(khz - tx.khz) <= tx.larg / 2) t += '\nnotre émission : ' + mhz3(Math.round(tx.khz)) + ' MHz · ' + wbSr(tx.sr);
+  if (id === 'wb-spectre' && wbClicTxOn()) t += '\nun clic : fréquence d’émission ici (rien n’est émis)';
   const bu = g(bulle);
   bu.textContent = t; bu.hidden = false;
   const l = px + 14 + bu.offsetWidth > r.width ? px - 14 - bu.offsetWidth : px + 14;
   bu.style.left = Math.max(0, l) + 'px';
-  c.style.cursor = b ? 'pointer' : 'crosshair';
+  c.style.cursor = b || (id === 'wb-spectre' && wbClicTxOn()) ? 'pointer' : 'crosshair';
   if (WB.on) setTimeout(() => wbDessine(id), 0);
 });
 c.onmouseleave = () => { g(bulle).hidden = true; c._s = null; wbAvec(id, () => { if (WB && WB.on) setTimeout(() => wbDessine(id), 0); }); };
@@ -9026,6 +9066,24 @@ function wbChute(vals, id) {
     im.data[px * 4] = r; im.data[px * 4 + 1] = gg; im.data[px * 4 + 2] = b; im.data[px * 4 + 3] = 255;
   }
   x.putImageData(im, 0, 0);
+}
+// Click to tune the transmission: on only while ticked (kept in this browser), never while transmitting.
+function wbClicTxOn() { return !g('wb-clic-tx-l').hidden && g('wb-clic-tx').checked; }
+function wbClicTx(on) {
+  try { localStorage.setItem('wb-clic-tx', on ? '1' : '0'); } catch (x) {}
+  txt('wb-aide', on ? 'un clic sur le spectre : la fréquence d’émission DATV s’y règle (rien n’est émis)' : 'un clic sur un signal : le récepteur s’y accorde (même OL, même entrée)');
+  if (!on) txt('wb-tx-msg', '');
+}
+try { if (localStorage.getItem('wb-clic-tx') === '1') { g('wb-clic-tx').checked = true; wbClicTx(true); } } catch (x) {}
+async function wbChoisitTx(descenteKhz) {
+  if (EM && EM.emet) { txt('wb-tx-msg', 'en émission : la fréquence ne change pas'); return; }
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/reglage?clicDescenteKhz=' + descenteKhz, { method: 'POST' })).json(); } catch (x) {}
+  if (!j || j.ok === false) { txt('wb-tx-msg', j && j.erreur ? j.erreur : 'pas de réponse de SatMe-PC'); return; }
+  const i = j.indice || {};
+  txt('wb-tx-msg', 'émission : ↑ ' + mhz3(j.khz) + ' MHz (↓ ' + mhz3(i.descente || j.khz) + ') — ' + (i.texte || ''));
+  g('wb-tx-msg').style.color = i.etat === 'libre' ? 'var(--vert)' : i.etat === 'occupe' || i.etat === 'interdit' ? 'var(--rose)' : '';
+  g('e-mhz').value = mhz3(j.khz); ePremier = true; setTimeout(ticEmission, 100);
 }
 async function wbAccorde(s) {
   g('d-ciel').value = mhz3(s.centre); dSr = s.sr;
@@ -9470,7 +9528,7 @@ async function drCopie(i) {
 dtAffRend();
 
 // ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO, HackRF One)
-let EM = null, eVieW = null, ePremier = true;
+let EM = null, eVieW = null, ePremier = true, eMoi = false;
 async function chargePx() {
   try { const j = await (await fetch('api/datv/emission')).json(); if (!j.ok) { g('px-carte').hidden = true; return; }
     g('px-coupe').checked = !!j.coupeTx; g('px-gainmax').value = j.gainMax; } catch (x) {}
@@ -9486,12 +9544,16 @@ function eVie(on) {
     bat();
   } else if (!on && eVieW) { eVieW.terminate(); eVieW = null; }
 }
-window.addEventListener('pagehide', () => { if (EM && EM.emet) navigator.sendBeacon('api/datv/emission/arrete'); });
+// The page closed: the transmission stopped — by the tab that drives it only (another tab, the phone, closing changes nothing).
+window.addEventListener('pagehide', () => { if (EM && EM.emet && eMoi) navigator.sendBeacon('api/datv/emission/arrete?client=' + TX_CLIENT); });
 async function ticEmission() {
   if (g('v-datv').hidden && !(EM && EM.emet)) return;
-  let j; try { j = await (await fetch('api/datv/emission')).json(); } catch (x) { return; }
+  let j; try { j = await (await fetch('api/datv/emission?client=' + TX_CLIENT)).json(); } catch (x) { return; }
   if (!j.ok) { g('e-carte').hidden = true; return; }
-  EM = j; eVie(j.emet); dDuo(); ePreRend(j);
+  // This tab drives the transmission when it holds it (or when nobody does: an older SatMe-PC, a start just made here).
+  const ct = j.controle;
+  eMoi = !!j.emet && (!ct || !ct.tenue || !!ct.moi);
+  EM = j; eVie(eMoi); dDuo(); ePreRend(j);
   const libre = !document.activeElement || !document.activeElement.id.startsWith('e-');
   if (ePremier || libre) {
     if (ePremier) {
@@ -9507,12 +9569,14 @@ async function ticEmission() {
     if (g('e-modcod').dataset.norme !== j.norme) { g('e-modcod').dataset.norme = j.norme; g('e-modcod').innerHTML = lst.map(m => '<option>' + m + '</option>').join(''); }
     g('e-norme').value = j.norme;
     g('e-modcod').value = s1 ? j.modcodDvbs : j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
-    g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.gain; g('e-duree').value = Math.round(j.duree / 60);
+    g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.niveauZero ? '' : j.gain; g('e-duree').value = Math.round(j.duree / 60);
     g('e-source').value = j.source; g('e-image').value = j.image; g('e-video').value = j.video || ''; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
+    g('e-dossier').value = j.dossier || ''; g('e-decalage').value = j.decalageSon || 0;
+    g('e-garder-niveau').checked = !!j.garderNiveau; g('e-simulation').checked = !!j.simulation;
     const cams = j.cameras.length ? j.cameras : [''];
     g('e-camera').innerHTML = cams.map(c => '<option value="' + esc(c) + '">' + (c ? esc(c) : 'aucune caméra trouvée') + '</option>').join('');
     g('e-camera').value = j.camera || cams[0];
-    g('e-emetteur').value = j.emetteur; g('e-vga').value = j.vga; g('e-hackrf-outil').value = j.hackrfOutil; g('e-hackrf-dec').checked = !!j.hackrfDecalage;
+    g('e-emetteur').value = j.emetteur; g('e-vga').value = j.niveauZero ? '' : j.vga; g('e-hackrf-outil').value = j.hackrfOutil; g('e-hackrf-dec').checked = !!j.hackrfDecalage;
     g('e-int-mhz').value = mhz3(j.intKhz); g('e-int-duree').value = Math.round(j.intDuree / 60);
     ePremier = false;
   }
@@ -9529,6 +9593,11 @@ async function ticEmission() {
   g('e-adapt-on').disabled = s1 || j.emet && j.normeEnCours === 'DVB-S';
   txt('e-norme-info', s1 ? 'EN 300 421 : QPSK, Reed-Solomon et code convolutif, roll-off 0,35 ; le MiniTiouner le reçoit ; pas d’adaptation du MODCOD' : 'EN 302 307');
   g('e-image-l').hidden = j.source !== 'image'; g('e-video-l').hidden = j.source !== 'video'; g('e-camera-l').hidden = j.source !== 'camera';
+  g('e-dossier-l').hidden = j.source !== 'dossier';
+  txt('e-dossier-n', j.source !== 'dossier' ? '' : j.dossierNb ? j.dossierNb + ' vidéo' + (j.dossierNb > 1 ? 's' : '') + ', en boucle' : 'aucune vidéo ici');
+  if (document.activeElement !== g('e-decalage')) eDecalageVu(j.decalageSon || 0);
+  eNiveauRend(j); eIndice(j); ePttResume(j);
+  g('wb-clic-tx-l').hidden = false;
   txt('e-descente', '↓ ' + mhz3(j.descenteKhz) + ' MHz');
   txt('e-gainmax', 'max ' + j.gainMax + ' dB (Réglages)');
   const charge = g('e-charge').checked;
@@ -9555,11 +9624,16 @@ async function ticEmission() {
     (j.echantillons / 1e6).toFixed(3).replace('.', ',') + ' Méch/s (' + j.sps + ' par symbole)' + (hk ? ' · filtre ' + (j.filtreHackrf / 1e6).toFixed(2).replace('.', ',') + ' MHz' : '') +
     (j.indicatif ? ' · service « ' + j.indicatif + ' »' : ' · indicatif manquant (Réglages)'));
   const p = g('e-pastille');
-  p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : 'arrêtée';
-  p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
-  g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
+  p.textContent = j.emet ? (j.simulationEnCours ? 'SIMULATION' : j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : (j.simulation ? 'arrêtée · simulation' : 'arrêtée');
+  p.style.background = j.emet ? (j.simulationEnCours ? '#6B4FA0' : '#C62828') : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
+  // « Démarrer » only with the station identified (callsign, locator) and a level above 0.
+  g('e-go').disabled = j.emet || !!j.refusDepart; g('e-stop').hidden = !j.emet;
+  txt('e-go-raison', !j.emet && j.refusDepart ? '⚠ ' + j.refusDepart : '');
+  txt('e-garde', !j.emet ? '' : eMoi ? 'Cette page pilote l’émission : la fermer, ou la laisser sans nouvelles ' + (j.controle && j.controle.vous && j.controle.vous.distant ? fr1(j.controle.chienDistantS) + ' s' : 'environ 15 s') + ', coupe l’émission.'
+    : 'Émission pilotée par ' + (j.controle && j.controle.client ? j.controle.client : 'une autre page') + ' : ici, seulement la regarder et ARRÊT ; fermer cette page ne change rien.');
+  g('e-simulation').disabled = j.emet; g('e-decalage').disabled = j.emet; g('e-niveau-0').disabled = j.emet;
   g('e-ro').disabled = j.emet || s1; g('e-norme').disabled = j.emet;
-  ['e-modcod', 'e-sr', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-image-par', 'e-video-par', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
+  ['e-modcod', 'e-sr', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-image-par', 'e-video-par', 'e-dossier', 'e-dossier-par', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
     'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det', 'e-hackrf-dec'].forEach(i => g(i).disabled = j.emet);
   // A transmission running (the page reloaded): its mode shown.
   if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
@@ -9775,19 +9849,100 @@ async function eNorme() {
 }
 function eParams() {
   return 'norme=' + enc(v('e-norme')) + '&modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + (v('e-norme') === 'DVB-S' ? '' : '&ro=' + v('e-ro')) + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
-    '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
-    '&image=' + enc(v('e-image')) + '&video=' + enc(v('e-video')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
-    '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) + '&hackrfDecalage=' + (g('e-hackrf-dec').checked ? 1 : 0) +
+    '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
+    '&image=' + enc(v('e-image')) + '&video=' + enc(v('e-video')) + '&dossier=' + enc(v('e-dossier')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
+    '&emetteur=' + v('e-emetteur') + '&hackrfOutil=' + enc(v('e-hackrf-outil')) + '&hackrfDecalage=' + (g('e-hackrf-dec').checked ? 1 : 0) +
     '&intMhz=' + enc(v('e-int-mhz').replace(',', '.')) + '&intDuree=' + enc(v('e-int-duree'));
 }
 async function eRegle() {
   try { await fetch('api/datv/emission/reglage?' + eParams(), { method: 'POST' }); } catch (x) {}
   setTimeout(ticEmission, 100);
 }
-async function eGain(d) { g('e-gain').value = Math.min(0, (parseFloat(v('e-gain')) || -30) + d); await eRegle(); }
+// The level: never sent with the other settings — only by the operator's own gesture on it (slider, gain, ±1).
+async function eGain(d) {
+  const x = v('e-gain');
+  g('e-gain').value = x === '' ? (EM ? EM.niveauBas : -89) : Math.min(0, (parseFloat(x) || -30) + d);
+  await eGainSaisi();
+}
+async function eGainSaisi() {
+  if (v('e-gain') === '') return;
+  await post('api/datv/emission/reglage?gain=' + enc(v('e-gain').replace(',', '.')));
+  setTimeout(ticEmission, 100);
+}
+// The slider: 0 at the far left (no level), then the gain dB by dB from the lowest to the ceiling.
+function eNiveauPas(j) { return Math.max(1, Math.round((j.niveauHaut - j.niveauBas) / 1) + 1); }
+function eNiveauDe(j, k) { return Math.min(j.niveauHaut, j.niveauBas + (k - 1)); }
+function eNiveauVu(k) {
+  const j = EM; if (!j) return;
+  const hk = j.emetteur === 'hackrf';
+  txt('e-niveau-v', k <= 0 ? '0 — aucun niveau' : (hk ? 'VGA ' : '') + String(eNiveauDe(j, k)).replace('.', ',').replace('-', '−') + ' dB');
+}
+function eNiveauRend(j) {
+  const r = g('e-niveau'), n = eNiveauPas(j);
+  if (+r.max !== n) r.max = n;
+  if (document.activeElement !== r) {
+    const val = j.emetteur === 'hackrf' ? j.vga : j.gain;
+    r.value = j.niveauZero ? 0 : Math.max(1, Math.min(n, Math.round(val - j.niveauBas) + 1));
+    eNiveauVu(+r.value);
+  }
+  g('e-niveau-v').style.color = j.niveauZero ? 'var(--ambre)' : '';
+}
+async function eNiveau(k) {
+  const j = EM; if (!j) return;
+  if (k <= 0) await post('api/datv/emission/reglage?niveauZero=1');
+  else await post('api/datv/emission/reglage?' + (j.emetteur === 'hackrf' ? 'vga=' : 'gain=') + enc(String(eNiveauDe(j, k))));
+  ePremier = true; setTimeout(ticEmission, 100);
+}
+// The sound against the picture: −500 to +500 ms, taken at the start.
+function eDecalageVu(ms) {
+  txt('e-decalage-v', ms === 0 ? '0 ms (ensemble)' : (ms > 0 ? '+' + ms + ' ms (son plus tard)' : '−' + (-ms) + ' ms (son plus tôt)'));
+}
+async function eDecalage(ms) { eDecalageVu(ms); await post('api/datv/emission/reglage?decalageSon=' + ms); setTimeout(ticEmission, 100); }
+// « Créneau qui semble libre / occupé » for the frequency set: a hint from the ground station's spectrum.
+function eIndice(j) {
+  const i = j.indice, e = g('e-indice');
+  if (!i || g('e-interieur').checked || g('e-charge').checked) { txt('e-indice', ''); return; }
+  txt('e-indice', (i.etat === 'libre' ? '● ' : i.etat === 'occupe' ? '⚠ ' : '') + i.texte);
+  e.style.color = i.etat === 'libre' ? 'var(--vert)' : i.etat === 'occupe' || i.etat === 'interdit' ? 'var(--rose)' : '';
+}
+// The PTT/sequencer output: a summary always, the settings when opened.
+let EP = null;
+function ePttResume(j) {
+  const p = j.ptt; if (!p) return;
+  txt('e-ptt-resume', p.type === 'aucune' ? '· aucune' : '· ' + (p.type === 'serie' ? 'port série' : 'HTTP') + ', ' + p.avant + ' / ' + p.apres + ' ms' +
+    (p.actif ? ' · ACTIVE' : '') + (p.erreur ? ' · ⚠ ' + p.erreur : ''));
+}
+function ePttVu() { const t = v('ep-type'); g('ep-serie').hidden = t !== 'serie'; g('ep-http').hidden = t !== 'http'; }
+async function ePttCharge() {
+  let j; try { j = await (await fetch('api/datv/emission/ptt')).json(); } catch (x) { return; }
+  if (!j.ok) { g('e-ptt').hidden = true; return; }
+  EP = j;
+  g('ep-type').innerHTML = j.types.map(t => '<option value="' + t.cle + '">' + esc(t.libelle) + '</option>').join('');
+  const ports = j.ports.slice(); if (j.port && ports.indexOf(j.port) < 0) ports.unshift(j.port);
+  g('ep-port').innerHTML = (ports.length ? ports : ['']).map(p => '<option value="' + esc(p) + '">' + (p ? esc(p) : 'aucun port trouvé') + '</option>').join('');
+  g('ep-type').value = j.type; g('ep-port').value = j.port; g('ep-ligne').value = j.ligne; g('ep-inverse').checked = j.inverse;
+  g('ep-on').value = j.urlActive; g('ep-off').value = j.urlRepos; g('ep-avant').value = j.avant; g('ep-apres').value = j.apres;
+  ['ep-type', 'ep-port', 'ep-ligne', 'ep-inverse', 'ep-on', 'ep-off', 'ep-avant', 'ep-apres', 'ep-test'].forEach(i => g(i).disabled = !j.modifiable);
+  ePttVu();
+  txt('ep-msg', !j.modifiable ? 'pendant une émission : réglages figés' : j.erreur ? '⚠ ' + j.erreur : '');
+}
+async function ePttGarde() {
+  const q = 'type=' + v('ep-type') + '&port=' + enc(g('ep-port').value) + '&ligne=' + v('ep-ligne') + '&inverse=' + (g('ep-inverse').checked ? 1 : 0) +
+    '&urlActive=' + enc(v('ep-on')) + '&urlRepos=' + enc(v('ep-off')) + '&avant=' + enc(v('ep-avant')) + '&apres=' + enc(v('ep-apres'));
+  let j = null; try { j = await (await fetch('api/datv/emission/ptt?' + q, { method: 'POST' })).json(); } catch (x) {}
+  await ePttCharge();
+  txt('ep-msg', !j ? 'pas de réponse de SatMe-PC' : j.ok === false ? 'Refusé : ' + j.erreur : 'enregistré');
+  setTimeout(ticEmission, 100);
+}
+async function ePttTeste() {
+  txt('ep-msg', 'sortie active 1 s (aucune HF)…');
+  let j = null; try { j = await (await fetch('api/datv/emission/ptt?test=1', { method: 'POST' })).json(); } catch (x) {}
+  txt('ep-msg', !j ? 'pas de réponse de SatMe-PC' : j.ok === false ? 'Échec : ' + j.erreur : 'essai fait : active 1 s, puis au repos');
+}
 async function eEmettre() {
   await eRegle();
   if (!EM) return;
+  if (EM.refusDepart) { txt('e-msg', 'Refusé : ' + EM.refusDepart); return; }
   const charge = g('e-charge').checked, inter = g('e-interieur').checked, hk = EM.emetteur === 'hackrf';
   const gainTxt = hk ? 'gain VGA ' + Math.max(0, Math.min(parseInt(v('e-vga')) || 0, EM.vgaMax)) + ' dB, amplificateur RF coupé'
     : 'gain ' + Math.min(parseFloat(v('e-gain')), charge ? EM.gainCharge : EM.intGainPluto) + ' dB au plus';
@@ -9795,7 +9950,8 @@ async function eEmettre() {
       'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
     : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : EM.emetteur === 'bladerf' ? 'bladeRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
     : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-norme') + ' ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\n' + eCrConfirme() + 'Canal libre vérifié ? Indicatif ' + EM.indicatif + '.';
-  if (!confirm(q + (EM.parNoeud ? '\n\nPar l’émetteur du SatMe-Node.' : ''))) return;
+  if (!confirm((EM.simulation ? 'SIMULATION — rien ne sera émis, aucun émetteur ouvert.\n\n' : '') + q + (EM.parNoeud ? '\n\nPar l’émetteur du SatMe-Node.' : '') +
+    (EM.ptt && EM.ptt.type !== 'aucune' ? '\n\nSortie PTT : active ' + EM.ptt.avant + ' ms avant la HF, au repos ' + EM.ptt.apres + ' ms après.' : ''))) return;
   if (!(await txPeutDemarrer())) return;
   txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : EM.emetteur === 'bladerf' ? 'bladeRF-cli…' : 'l’ADALM-PLUTO…'));
   let j = null;
@@ -9811,7 +9967,7 @@ function eCrConfirme() {
   return c.etat === 'occupe' ? '⚠ CANAL OCCUPÉ d’après la station sol : ' + c.occupant + ' !\n\n' : c.etat === 'libre' ? 'Canal libre d’après la station sol. ' : '';
 }
 async function eArrete() {
-  try { await fetch('api/datv/emission/arrete', { method: 'POST' }); } catch (x) {}
+  try { await fetch('api/datv/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }); } catch (x) {}
   txt('e-msg', 'arrêtée'); setTimeout(ticEmission, 200);
 }
 
@@ -9921,15 +10077,15 @@ async function eiCharge() {
   if (!j.ok) { g('ei').hidden = true; g('e-apercu-go').hidden = true; return; }
   const libre = !document.activeElement || !document.activeElement.id.startsWith('ei-');
   if (eiPremier || libre) {
-    ['indicatif', 'locator', 'logo', 'heure', 'fond'].forEach(k => g('ei-' + k).checked = j[k]);
+    ['indicatif', 'locator', 'logo', 'heure', 'fond', 'defile'].forEach(k => g('ei-' + k).checked = !!j[k]);
     g('ei-texte').value = j.texte; g('ei-position').value = j.position; g('ei-taille').value = j.taille;
     eiPremier = false;
   }
-  const l = [j.indicatif ? 'indicatif' : '', j.locator ? 'locator' : '', j.logo ? 'logo' : '', j.texte ? 'texte' : '', j.heure ? 'heure' : ''].filter(x => x);
+  const l = [j.indicatif ? 'indicatif' : '', j.locator ? 'locator' : '', j.logo ? 'logo' : '', j.texte ? (j.defile ? 'texte défilant' : 'texte') : '', j.heure ? 'heure' : ''].filter(x => x);
   txt('ei-resume', l.length ? '· ' + l.join(', ') : '· aucune');
 }
 async function eiRegle() {
-  const q = ['indicatif', 'locator', 'logo', 'heure', 'fond'].map(k => k + '=' + (g('ei-' + k).checked ? 1 : 0)).join('&') +
+  const q = ['indicatif', 'locator', 'logo', 'heure', 'fond', 'defile'].map(k => k + '=' + (g('ei-' + k).checked ? 1 : 0)).join('&') +
     '&texte=' + enc(g('ei-texte').value) + '&position=' + v('ei-position') + '&taille=' + v('ei-taille');
   try { await fetch('api/datv/emission/incrustation?' + q, { method: 'POST' }); } catch (x) {}
   eiCharge();
@@ -17279,6 +17435,21 @@ window.addEventListener('hashchange', () => { const n = location.hash.slice(1); 
 /** This tab's id for the transmissions: only the client that started one keeps it alive; everyone may stop it. */
 var TX_CLIENT = (function () { const n = () => Math.random().toString(36).slice(2, 12);
   try { let k = sessionStorage.getItem('satme-tx-client'); if (!k) { k = n(); sessionStorage.setItem('satme-tx-client', k); } return k; } catch (x) { return n(); } })();
+// A tab duplicated by the browser copies its sessionStorage, the id with it: an older tab answering for it, this one draws its own.
+(function () {
+  try {
+    const bc = new BroadcastChannel('satme-tx-client'), t0 = Date.now();
+    bc.onmessage = e => {
+      const d = e.data || {};
+      if (d.qui === TX_CLIENT) bc.postMessage({ deja: TX_CLIENT });
+      else if (d.deja === TX_CLIENT && Date.now() - t0 < 3000) {
+        TX_CLIENT = Math.random().toString(36).slice(2, 12);
+        try { sessionStorage.setItem('satme-tx-client', TX_CLIENT); } catch (x) {}
+      }
+    };
+    bc.postMessage({ qui: TX_CLIENT });
+  } catch (x) {}
+})();
 /** Before a start: another client holding the transmissions said; from another machine, the session's confirmation. */
 async function txPeutDemarrer() {
   let j = null;

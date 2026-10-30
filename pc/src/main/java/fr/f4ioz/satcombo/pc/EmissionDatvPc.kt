@@ -18,6 +18,7 @@ import fr.f4ioz.satcombo.datv.InserteurCarte
 import fr.f4ioz.satcombo.datv.LigneChat
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.DecalageHackrf
+import fr.f4ioz.satcombo.datv.DepartDatv
 import fr.f4ioz.satcombo.datv.DemandeEmission
 import fr.f4ioz.satcombo.datv.Emetteur
 import fr.f4ioz.satcombo.datv.PlanInterieur
@@ -64,6 +65,10 @@ import kotlin.concurrent.thread
  * nothing transmits at startup and nothing of a transmission is kept in the
  * settings but its parameters. Every rule of [ReglesEmission] applies; the
  * page must keep saying it is there ([vie]), else the transmission stops.
+ * The station identified (callsign and locator) and a level chosen first
+ * ([DepartDatv]): the level is 0 at startup and after every stop, unless
+ * the operator keeps it ([garderNiveau]). The PTT output ([ptt]) goes
+ * active before the RF and at rest after it.
  */
 class EmissionDatvPc(
     private val stockage: Stockage,
@@ -101,6 +106,8 @@ class EmissionDatvPc(
     private val noeudTx: () -> EmetteurNoeud.Fabrique? = { null },
     /** The picture being transmitted, for the page (a copy of the stream: display only). */
     val vue: VueEmisDatvPc = VueEmisDatvPc(),
+    /** The PTT/sequencer output around the RF (none by default). */
+    val ptt: PttDatvPc = PttDatvPc(stockage),
 ) {
     /**
      * The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the
@@ -134,6 +141,8 @@ class EmissionDatvPc(
         val incrustation: IncrustationDatvPc.IncrustationTs? = null,
         /** The live clock card ([HorlogeDatvPc]) written into ffmpeg's input; null: [image] looped instead. */
         val horloge: IncrustationDatvPc.IncrustationTs? = null,
+        /** The sound against the picture (ms, [DECALAGE_SON_MIN_MS] to [DECALAGE_SON_MAX_MS]): above 0 later, below 0 earlier. */
+        val decalageSonMs: Int = 0,
     )
 
     /** How a transport stream of [tsBps] is shared: the picture's size and rate, the video's and the sound's bit rates. */
@@ -181,9 +190,21 @@ class EmissionDatvPc(
     var frequenceKhz: Long
         get() = stockage.getLong("datv_tx_khz", 2_409_750L)
         set(v) { stockage.edit().putLong("datv_tx_khz", v).apply() }
+    /** The Pluto's gain, kept; set by the operator, it also takes the level off 0 ([niveauAZero]). */
     var gainDb: Double
         get() = stockage.getFloat("datv_tx_gain", ReglesEmission.GAIN_DEFAUT_DB.toFloat()).toDouble()
-        set(v) { stockage.edit().putFloat("datv_tx_gain", v.coerceIn(ReglesEmission.GAIN_MIN_DB, 0.0).toFloat()).apply() }
+        set(v) { stockage.edit().putFloat("datv_tx_gain", v.coerceIn(ReglesEmission.GAIN_MIN_DB, 0.0).toFloat()).apply(); niveauAZero = false }
+    /**
+     * « Niveau 0 »: no level chosen since SatMe-PC started, or since the last
+     * stop — no start then ([DepartDatv.NIVEAU_ZERO]). Never kept on disk.
+     */
+    @Volatile var niveauAZero = true; private set
+    /** The level back to 0 after a stop unless this is checked (off by default). */
+    var garderNiveau: Boolean
+        get() = stockage.getBoolean("datv_tx_garder_niveau", false)
+        set(v) { stockage.edit().putBoolean("datv_tx_garder_niveau", v).apply() }
+    /** The level set to 0 by the operator (nothing else changes). */
+    fun niveauZero() { niveauAZero = true }
     /** The highest TX gain ever applied (Réglages). */
     var gainMaxDb: Double
         get() = stockage.getFloat("datv_tx_gain_max", -10f).toDouble()
@@ -194,7 +215,8 @@ class EmissionDatvPc(
     /**
      * "mire", "animee" (the test card with a moving picture and a beep),
      * "horloge" (the live clock card, a beep each second), "image", "video"
-     * (a file, looped) or "camera".
+     * (a file, looped), "dossier" (the videos of a folder, one after the
+     * other, looped) or "camera".
      */
     var source: String
         get() = stockage.getString("datv_tx_source", "mire").takeIf { it in SOURCES } ?: "mire"
@@ -205,6 +227,22 @@ class EmissionDatvPc(
     var video: String
         get() = stockage.getString("datv_tx_video", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_video", v.trim()).apply() }
+    /** The folder whose videos "dossier" plays. */
+    var dossierVideos: String
+        get() = stockage.getString("datv_tx_dossier", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_dossier", v.trim()).apply() }
+    /** The sound against the picture (ms): above 0 later, below 0 earlier; 0 by default. */
+    var decalageSonMs: Int
+        get() = decalageSon(stockage.getInt("datv_tx_decalage_son", 0))
+        set(v) { stockage.edit().putInt("datv_tx_decalage_son", decalageSon(v)).apply() }
+    /**
+     * « Simulation »: everything runs (ffmpeg, the modulator, the PTT output,
+     * the page's heartbeat, the time-out) but no transmitter is opened —
+     * nothing radiates ([EmetteurSimulePc]). Off by default.
+     */
+    var simulation: Boolean
+        get() = stockage.getBoolean("datv_tx_simulation", false)
+        set(v) { stockage.edit().putBoolean("datv_tx_simulation", v).apply() }
     var camera: String
         get() = stockage.getString("datv_tx_camera", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_camera", v.trim()).apply() }
@@ -220,11 +258,11 @@ class EmissionDatvPc(
     /** The HackRF's TX VGA gain (dB), asked; applied at [ReglesEmission.HACKRF_VGA_MAX] at most. */
     var vgaHackrf: Int
         get() = stockage.getInt("datv_tx_hackrf_vga", 0).coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)
-        set(v) { stockage.edit().putInt("datv_tx_hackrf_vga", v.coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)).apply() }
+        set(v) { stockage.edit().putInt("datv_tx_hackrf_vga", v.coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)).apply(); niveauAZero = false }
     /** The bladeRF's attenuation (dB, ≤ 0), as the Pluto's gain; low by default. */
     var gainBladerf: Double
         get() = stockage.getFloat("datv_tx_bladerf_gain", GAIN_BLADERF_DEFAUT_DB.toFloat()).toDouble()
-        set(v) { if (!v.isNaN()) stockage.edit().putFloat("datv_tx_bladerf_gain", v.coerceIn(BladerfEmission.GAIN_MIN_DB.toDouble(), 0.0).toFloat()).apply() }
+        set(v) { if (!v.isNaN()) { stockage.edit().putFloat("datv_tx_bladerf_gain", v.coerceIn(BladerfEmission.GAIN_MIN_DB.toDouble(), 0.0).toFloat()).apply(); niveauAZero = false } }
     /** Where hackrf_transfer is (the program or its folder); empty: the PATH. */
     var hackrfOutil: String
         get() = stockage.getString("datv_tx_hackrf_outil", "") ?: ""
@@ -429,6 +467,8 @@ class EmissionDatvPc(
         val debitTs: Long = 0L,
         /** Sent by the SatMe-Node's transmitter (a board of the same kind there, not this PC's). */
         val parNoeud: Boolean = false,
+        /** « Simulation »: no transmitter opened, nothing radiated. */
+        val simulation: Boolean = false,
         val raison: String = "",
         val erreur: String = "",
     )
@@ -484,12 +524,15 @@ class EmissionDatvPc(
         if (!confirme) return "émission non confirmée"
         if (etat.emet) return "déjà en émission"
         autreEmission()?.let { return it }
+        // The station identified, a level chosen: before anything is opened.
+        DepartDatv.refus(indicatif(), locator(), niveauAZero)?.let { return it }
         val qui = emetteur
         val hackrf = qui == Emetteur.HACKRF
         val blade = qui == Emetteur.BLADERF
-        // Through the node: its board of this kind, its guards there; this PC's board stays free.
-        val noeud = if (hackrf) null else noeudTx()
-        if (noeud == null) { if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it } }
+        val sim = simulation
+        // Through the node: its board of this kind, its guards there; this PC's board stays free. A simulation opens none.
+        val noeud = if (hackrf || sim) null else noeudTx()
+        if (noeud == null && !sim) { if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it } }
         val m = modcod()
         val nrm = norme
         val td = tauxDvbs()
@@ -499,7 +542,7 @@ class EmissionDatvPc(
         val gain = if (hackrf) vgaHackrf.toDouble() else if (blade) gainBladerf else gainDb
         val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
-        val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf()
+        val programme = if (sim) "" else if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf()
             else if (blade && noeud == null) bladerfProgramme() ?: return conseilBladerf() else ""
         // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
         val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
@@ -511,6 +554,7 @@ class EmissionDatvPc(
         val img = when (source) {
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
             "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
+            "dossier" -> listeVideos() ?: return refusDossier()
             "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
             "horloge" -> horlogePng(debitTs)
             else -> mire()
@@ -523,7 +567,7 @@ class EmissionDatvPc(
         val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
         val inc = runCatching { incrustation?.pour(debitTs, source, d.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull()
         val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son, inc,
-            if (source == "horloge") horlogeTs(debitTs, img!!) else null)
+            if (source == "horloge") horlogeTs(debitTs, img!!) else null, decalageSonMs)
         val p = runCatching { fabrique.demarre(pts) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
@@ -531,9 +575,20 @@ class EmissionDatvPc(
         val mod: ModulateurDatv = if (nrm == Norme.DVBS) ModulateurDvbs(td, sps, f) else ModulateurDvbs2(m, rolloff, sps, f)
         modulateur = mod; sortie = mod
         derniereVie = horloge()
+        // The PTT output first, its delay waited: only then the RF.
+        ptt.sequenceur.avantRf()?.let { generation++; p.arrete(); processus = null; return it }
+        derniereVie = horloge()
         val e: EmetteurDatv
         val refus: String?
-        if (hackrf) {
+        if (sim) {
+            // The samples taken at the board's pace, the same guard and time-out: no device opened.
+            val r = PlutoEmission.Reglage(
+                frequenceHz = khz * 1000L, debit = debit, gainDb = gain, dureeMs = duree * 1000L,
+                plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
+                paires = paires(debit), garde = { garde(gen) })
+            e = EmetteurSimulePc(r, minOf(gainMaxDb, 0.0), { b -> mod.remplis(b, b.size / 2) }, horloge)
+            refus = null
+        } else if (hackrf) {
             val hx = HackrfEmission(programme, ReglesEmission.HACKRF_VGA_MAX)
             val r = HackrfEmission.Reglage(
                 frequenceHz = plan?.loHz ?: (khz * 1000L), debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
@@ -571,11 +626,12 @@ class EmissionDatvPc(
             refus = px.demarre(r) { b -> mod.remplis(b, b.size / 2) }
             e = px
         }
-        if (refus != null) { generation++; p.arrete(); processus = null; return refus }
+        if (refus != null) { generation++; p.arrete(); processus = null; ptt.sequenceur.relacheMaintenant(); return refus }
         tx = e
         inserteur = ins; modcodEnCours = m; normeEnCours = nrm; tauxEnCours = if (nrm == Norme.DVBS) td else null; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
         adaptation = nouvelleAdaptation()
-        etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs, parNoeud = noeud != null)
+        etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs,
+            parNoeud = noeud != null, simulation = sim)
         vue.emission(true)
         return null
     }
@@ -652,6 +708,9 @@ class EmissionDatvPc(
     fun arrete(raison: String = "arrêt demandé") {
         val px = tx
         px?.arrete(raison)
+        // The RF off: the PTT output at rest after its delay; the level back to 0 unless kept.
+        ptt.sequenceur.apresRf()
+        if (px != null && !garderNiveau) niveauAZero = true
         generation++
         processus?.arrete(); processus = null
         tx = null
@@ -798,6 +857,20 @@ class EmissionDatvPc(
         return f
     }
 
+    /** The videos of [dossierVideos], by name, as ffmpeg's concat list (written beside the test card); null when none. */
+    private fun listeVideos(): File? {
+        val l = videosDe(File(dossierVideos))
+        if (l.isEmpty()) return null
+        dossierImages.mkdirs()
+        return File(dossierImages, "videos-datv.txt").also { it.writeText(listeConcat(l)) }
+    }
+
+    private fun refusDossier(): String = when {
+        dossierVideos.isBlank() -> "aucun dossier de vidéos choisi"
+        !File(dossierVideos).isDirectory -> "dossier introuvable : $dossierVideos"
+        else -> "aucune vidéo dans $dossierVideos (" + FichiersDatvPc.VIDEOS.sorted().joinToString(", ") + ")"
+    }
+
     /** The clock card now, at the picture's size for [debitTs], as a PNG (the preview's, the first frame). */
     private fun horlogePng(debitTs: Long): File {
         dossierImages.mkdirs()
@@ -832,6 +905,7 @@ class EmissionDatvPc(
         val img = when (src) {
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
             "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
+            "dossier" -> listeVideos() ?: return refusDossier()
             "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
             "horloge" -> horlogePng(debitTs())
             else -> mire()
@@ -841,7 +915,7 @@ class EmissionDatvPc(
         val inc = runCatching { incrustation?.pour(ts, src, call, locator(), File(dossierImages, "incrustation-apercu.png"), direct = false) }.getOrNull()
         val sortie = fichierApercu
         sortie.delete()
-        val c = IncrustationDatvPc.commandeApercu(commande(ff, ParametresTs(ts, src, img, camera, call, hevc, son, inc)), sortie)
+        val c = IncrustationDatvPc.commandeApercu(commande(ff, ParametresTs(ts, src, img, camera, call, hevc, son, inc, decalageSonMs = decalageSonMs)), sortie)
         return runCatching {
             val pr = ProcessBuilder(c).redirectErrorStream(true).start()
             runCatching { pr.outputStream.close() }
@@ -875,7 +949,7 @@ class EmissionDatvPc(
             .put("echantillons", srKs * 1000L * ReglesEmission.sps(srKs))
             .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloffEffectif.alpha))
             .put("refusBande", PlanQo100.refus(frequenceKhz, srKs, rolloffEffectif.alpha) ?: "")
-            .put("indicatif", indicatif().trim().uppercase())
+            .put("indicatif", indicatif().trim().uppercase()).put("locator", locator().trim().uppercase())
             .put("raison", e.raison).put("erreur", e.erreur).put("khzEnCours", e.frequenceKhz)
             .put("cameras", JSONArray(cameras()))
             .put("modcods", JSONArray(Modcod.tous(false, false).map { it.constellation.libelle + " " + it.taux.libelle }))
@@ -935,6 +1009,22 @@ class EmissionDatvPc(
             .put("erreur", erreurAdaptation)
             .put("historique", JSONArray((a?.historique() ?: emptyList()).map { c ->
                 JSONObject().put("t", c.ms).put("de", c.de).put("vers", c.vers).put("raison", c.raison) })))
+        // Before a start: the station identified, a level chosen (0 at startup and after each stop unless kept).
+        val (bas, haut) = when (emetteur) {
+            Emetteur.HACKRF -> 0.0 to ReglesEmission.HACKRF_VGA_MAX.toDouble()
+            Emetteur.BLADERF -> BladerfEmission.GAIN_MIN_DB.toDouble() to minOf(0.0, gainMaxDb)
+            else -> ReglesEmission.GAIN_MIN_DB to minOf(0.0, gainMaxDb)
+        }
+        o.put("niveauZero", niveauAZero).put("garderNiveau", garderNiveau).put("niveauBas", Math.ceil(bas)).put("niveauHaut", haut)
+            .put("refusDepart", DepartDatv.refus(indicatif(), locator(), niveauAZero) ?: "")
+            .put("refusIdentification", DepartDatv.refusIdentification(indicatif(), locator()) ?: "")
+        // The sound against the picture, the folder of videos, the simulation, the PTT output.
+        o.put("decalageSon", decalageSonMs).put("decalageSonMin", DECALAGE_SON_MIN_MS).put("decalageSonMax", DECALAGE_SON_MAX_MS)
+            .put("dossier", dossierVideos).put("dossierNb", if (source == "dossier") videosDe(File(dossierVideos)).size else JSONObject.NULL)
+            .put("simulation", simulation).put("simulationEnCours", e.emet && e.simulation)
+        val pr = ptt.reglage
+        o.put("ptt", JSONObject().put("type", pr.type.cle).put("avant", pr.avantMs).put("apres", pr.apresMs)
+            .put("actif", ptt.sequenceur.actif).put("erreur", ptt.sequenceur.erreur))
         o.put("cpu", cpu())
         o.put("resume", resume())
         o.put("banc", banc.json(cleBanc()))
@@ -949,7 +1039,37 @@ class EmissionDatvPc(
     }
 
     companion object {
-        val SOURCES = setOf("mire", "animee", "horloge", "image", "video", "camera")
+        val SOURCES = setOf("mire", "animee", "horloge", "image", "video", "dossier", "camera")
+
+        /** A file source: its own sound (when it has one), played at its own pace. */
+        fun fichierVideo(source: String) = source == "video" || source == "dossier"
+
+        /** The sound's delay against the picture (ms), « Décalage du son ». */
+        const val DECALAGE_SON_MIN_MS = -500
+        const val DECALAGE_SON_MAX_MS = 500
+        fun decalageSon(ms: Int): Int = ms.coerceIn(DECALAGE_SON_MIN_MS, DECALAGE_SON_MAX_MS)
+
+        /**
+         * ffmpeg's sound filter for [ms]: later ([ms] > 0, silence put
+         * first), earlier ([ms] < 0, its start cut); null at 0.
+         */
+        fun filtreSon(ms: Int): String? {
+            val d = decalageSon(ms)
+            return when {
+                d > 0 -> "adelay=delays=$d:all=1"
+                d < 0 -> "atrim=start=" + String.format(java.util.Locale.ROOT, "%.3f", -d / 1000.0) + ",asetpts=PTS-STARTPTS"
+                else -> null
+            }
+        }
+
+        /** The videos of [d] that "dossier" plays: by name, hidden ones left out, 500 at most. */
+        fun videosDe(d: File): List<File> =
+            (d.listFiles { f -> f.isFile && !f.name.startsWith(".") && f.extension.lowercase() in FichiersDatvPc.VIDEOS } ?: emptyArray())
+                .sortedBy { it.name.lowercase() }.take(500)
+
+        /** ffmpeg's concat list of [l] (each name quoted, a quote in it escaped). */
+        fun listeConcat(l: List<File>): String =
+            "ffconcat version 1.0\n" + l.joinToString("") { "file '" + it.absolutePath.replace("'", "'\\''") + "'\n" }
 
         /** The bladeRF's attenuation when none was set: low (66 − 50 = 16 dB of libbladeRF's overall gain). */
         const val GAIN_BLADERF_DEFAUT_DB = -50.0
@@ -1031,6 +1151,8 @@ class EmissionDatvPc(
             when (p.source) {
                 "camera" -> l += listOf("-f", "v4l2", "-framerate", "25", "-i", p.camera)
                 "video" -> l += listOf("-re", "-stream_loop", "-1", "-i", p.image!!.path)
+                // The folder's videos one after the other, the list looped.
+                "dossier" -> l += listOf("-re", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", p.image!!.path)
                 // The clock card: a fresh picture each half second through the input (the preview: its PNG looped).
                 "horloge" -> l += if (p.horloge != null) listOf("-f", "image2pipe", "-framerate", "2", "-i", "pipe:0")
                     else listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
@@ -1040,23 +1162,25 @@ class EmissionDatvPc(
             if (anime) l += listOf("-re", "-f", "lavfi", "-i", "testsrc2=size=" + (w / 3 / 2 * 2) + "x" + (h / 3 / 2 * 2) + ":rate=25")
             // The sound: the file's own, a beep each second with the animated card and the clock (time ticks), else silence.
             val entreeSon = if (anime) 2 else 1
-            if (p.son && p.source != "video") l += listOf("-re", "-f", "lavfi", "-i",
+            if (p.son && !fichierVideo(p.source)) l += listOf("-re", "-f", "lavfi", "-i",
                 if (anime || p.source == "horloge") "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
             // The overlay: the last input, laid over the picture last.
             val inc = p.incrustation
-            val entreeInc = 1 + (if (anime) 1 else 0) + (if (p.son && p.source != "video") 1 else 0)
+            val entreeInc = 1 + (if (anime) 1 else 0) + (if (p.son && !fichierVideo(p.source)) 1 else 0)
             if (inc != null) l += IncrustationDatvPc.entree(inc)
             val anim = "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H/14,format=yuv420p"
-            if (anime) l += listOf("-filter_complex", if (inc == null) "$anim[v]" else IncrustationDatvPc.filtre(anim, entreeInc, w, h),
+            if (anime) l += listOf("-filter_complex", if (inc == null) "$anim[v]" else IncrustationDatvPc.filtre(anim, entreeInc, w, h, inc.defile),
                 "-map", "[v]")
-            else if (inc != null) l += listOf("-filter_complex", IncrustationDatvPc.filtre("[0:v]$cadre", entreeInc, w, h), "-map", "[v]")
+            else if (inc != null) l += listOf("-filter_complex", IncrustationDatvPc.filtre("[0:v]$cadre", entreeInc, w, h, inc.defile), "-map", "[v]")
             else l += listOf("-map", "0:v:0")
-            if (p.son) l += listOf("-map", if (p.source == "video") "0:a:0?" else "$entreeSon:a:0")
+            if (p.son) l += listOf("-map", if (fichierVideo(p.source)) "0:a:0?" else "$entreeSon:a:0")
             if (!anime && inc == null) l += listOf("-vf", "$cadre,format=yuv420p")
             l += listOf("-r", ips.toString())
             l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=$ips:repeat-headers=1")
                 else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", ips.toString())
             l += listOf("-b:v", video.toString(), "-maxrate", video.toString(), "-bufsize", (video / 2).toString())
+            // The sound moved against the picture (« Décalage du son »), then coded.
+            if (p.son) filtreSon(p.decalageSonMs)?.let { l += listOf("-af", it) }
             if (p.son) l += listOf("-c:a", "aac", "-b:a", (bu.audioBps / 1000).toString() + "k", "-ac", "1")
             l += listOf("-f", "mpegts", "-muxrate", ts.toString(), "-mpegts_original_network_id", "1", "-mpegts_transport_stream_id", "1",
                 "-mpegts_service_id", "1", "-mpegts_pmt_start_pid", "4095", "-mpegts_start_pid", "256", "-pcr_period", "40",

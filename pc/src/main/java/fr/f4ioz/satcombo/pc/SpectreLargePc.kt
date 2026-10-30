@@ -253,6 +253,13 @@ class SpectreLargePc(
         return CreneauxDatv.calcule(srKs, alpha, l, { sg -> noms.nom(sg.centreKhz, sg.srKs, t) ?: "" }, notreDescenteKhz, indicatif)
     }
 
+    /** The free-slot hint for the uplink [monteeKhz] at [srKs] (indicative: [CreneauxDatv.indice]). */
+    fun indice(monteeKhz: Long, srKs: Int, alpha: Double, notreDescenteKhz: Long?, indicatif: String): CreneauxDatv.Creneau {
+        val t = horloge()
+        val l = if (on && frais()) signaux else null
+        return CreneauxDatv.indice(monteeKhz, srKs, alpha, l, { sg -> noms.nom(sg.centreKhz, sg.srKs, t) ?: "" }, notreDescenteKhz, indicatif)
+    }
+
     fun action(chemin: String, q: Map<String, String>): JSONObject {
         val ok = JSONObject().put("ok", true)
         when (chemin) {
