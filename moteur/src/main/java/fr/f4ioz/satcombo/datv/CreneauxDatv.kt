@@ -63,32 +63,81 @@ object CreneauxDatv {
         notreDescenteKhz: Long? = null,
         indicatif: String = "",
     ): List<Creneau> {
-        val demi = PlanQo100.occupeKhz(srKs, alpha) / 2
-        val ind = indicatif.trim().uppercase()
         // A wide channel shares its centre with a narrow one: once, with the higher rate.
         return PlanQo100.CANAUX.filter { it.srMaxKs >= srKs }.sortedWith(compareBy({ it.descenteKhz }, { -it.srMaxKs }))
-            .distinctBy { it.descenteKhz }.map { c ->
-            val interdit = PlanQo100.refus(c.monteeKhz, srKs, alpha)
-            val nous = notreDescenteKhz != null && Math.abs(notreDescenteKhz - c.descenteKhz) < demi
-            when {
-                interdit != null -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.INTERDIT, raison = interdit)
-                nous -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.NOUS, occupant = ind)
-                signaux == null -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.INCONNU)
-                else -> {
-                    val bas = c.descenteKhz - demi
-                    val haut = c.descenteKhz + demi
-                    val la = signaux.filter { !it.balise && it.debutKhz - GARDE_KHZ < haut && it.finKhz + GARDE_KHZ > bas }
-                        .maxByOrNull { minOf(haut, it.finKhz.toDouble()) - maxOf(bas, it.debutKhz.toDouble()) }
-                    when {
-                        la == null -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.LIBRE)
-                        ind.isNotEmpty() && nom(la).trim().uppercase() == ind -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.NOUS, occupant = ind)
-                        else -> Creneau(c.descenteKhz, c.monteeKhz, c.srMaxKs, Etat.OCCUPE,
-                            occupant = nom(la).trim().ifEmpty { "signal " + la.srKs + " kS/s" })
-                    }
+            .distinctBy { it.descenteKhz }.map { c -> etat(c.descenteKhz, c.srMaxKs, srKs, alpha, signaux, nom, notreDescenteKhz, indicatif) }
+    }
+
+    /** One frequency ([descenteKhz], downlink) at [srKs]: forbidden, ours, unknown, free or busy. */
+    private fun etat(descenteKhz: Long, srMaxKs: Int, srKs: Int, alpha: Double, signaux: List<SignalLarge>?, nom: (SignalLarge) -> String,
+                     notreDescenteKhz: Long?, indicatif: String): Creneau {
+        val montee = descenteKhz - PlanQo100.DECALAGE_KHZ
+        val demi = PlanQo100.occupeKhz(srKs, alpha) / 2
+        val ind = indicatif.trim().uppercase()
+        val interdit = PlanQo100.refus(montee, srKs, alpha)
+        val nous = notreDescenteKhz != null && Math.abs(notreDescenteKhz - descenteKhz) < demi
+        return when {
+            interdit != null -> Creneau(descenteKhz, montee, srMaxKs, Etat.INTERDIT, raison = interdit)
+            nous -> Creneau(descenteKhz, montee, srMaxKs, Etat.NOUS, occupant = ind)
+            signaux == null -> Creneau(descenteKhz, montee, srMaxKs, Etat.INCONNU)
+            else -> {
+                val bas = descenteKhz - demi
+                val haut = descenteKhz + demi
+                val la = signaux.filter { !it.balise && it.debutKhz - GARDE_KHZ < haut && it.finKhz + GARDE_KHZ > bas }
+                    .maxByOrNull { minOf(haut, it.finKhz.toDouble()) - maxOf(bas, it.debutKhz.toDouble()) }
+                when {
+                    la == null -> Creneau(descenteKhz, montee, srMaxKs, Etat.LIBRE)
+                    ind.isNotEmpty() && nom(la).trim().uppercase() == ind -> Creneau(descenteKhz, montee, srMaxKs, Etat.NOUS, occupant = ind)
+                    else -> Creneau(descenteKhz, montee, srMaxKs, Etat.OCCUPE,
+                        occupant = nom(la).trim().ifEmpty { "signal " + la.srKs + " kS/s" })
                 }
             }
         }
     }
+
+    /**
+     * « Créneau qui semble libre / occupé » for any uplink [monteeKhz] (a
+     * click on the spectrum, a frequency typed), on and off the band plan:
+     * the same reading as [calcule], for the page's hint only — **indicative**:
+     * the ground station's spectrum is a few seconds old, a weak station
+     * may be under its noise, and nothing here allows or forbids a start.
+     */
+    fun indice(
+        monteeKhz: Long,
+        srKs: Int,
+        alpha: Double,
+        signaux: List<SignalLarge>?,
+        nom: (SignalLarge) -> String = { "" },
+        notreDescenteKhz: Long? = null,
+        indicatif: String = "",
+    ): Creneau = etat(monteeKhz + PlanQo100.DECALAGE_KHZ, srKs, srKs, alpha, signaux, nom, notreDescenteKhz, indicatif)
+
+    /** The hint's sentence for the page, said as a guess. */
+    fun texteIndice(c: Creneau): String = when (c.etat) {
+        Etat.LIBRE -> "créneau qui semble libre"
+        Etat.OCCUPE -> "créneau qui semble occupé (" + c.occupant + ")"
+        Etat.NOUS -> "notre propre signal"
+        Etat.INTERDIT -> c.raison
+        Etat.INCONNU -> "occupation inconnue (spectre de la station sol coupé)"
+    } + if (c.etat == Etat.LIBRE || c.etat == Etat.OCCUPE) " — indicatif seulement, d’après le spectre de la station sol : écouter avant d’émettre" else ""
+
+    /**
+     * The uplink a click at [descenteKhz] (downlink) picks for [srKs]: the
+     * band plan's channel when the click falls within its occupied band,
+     * else the frequency clicked rounded to [PAS_CLIC_KHZ].
+     */
+    fun accroche(descenteKhz: Long, srKs: Int, alpha: Double): Long {
+        val demi = PlanQo100.occupeKhz(srKs, alpha) / 2
+        val c = PlanQo100.CANAUX.filter { it.srMaxKs >= srKs }.minByOrNull { Math.abs(it.descenteKhz - descenteKhz) }
+        if (c != null && Math.abs(c.descenteKhz - descenteKhz) <= demi) return c.monteeKhz
+        return Math.round((descenteKhz - PlanQo100.DECALAGE_KHZ) / PAS_CLIC_KHZ.toDouble()) * PAS_CLIC_KHZ
+    }
+
+    /** Off the band plan, a click is rounded to this (kHz). */
+    const val PAS_CLIC_KHZ = 10L
+
+    fun json(c: Creneau): JSONObject = JSONObject().put("descente", c.descenteKhz).put("montee", c.monteeKhz).put("etat", c.etat.cle)
+        .put("occupant", c.occupant).put("raison", c.raison).put("texte", texteIndice(c))
 
     /** Why [c] may not be picked for transmitting, or null. */
     fun refusChoix(c: Creneau): String? = when (c.etat) {
