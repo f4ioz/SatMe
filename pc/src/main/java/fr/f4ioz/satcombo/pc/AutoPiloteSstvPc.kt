@@ -405,12 +405,12 @@ class AutoPiloteSstvPc(
         val o = JSONObject().put("maitre", donnees.maitre)
         if (donnees.maitre) runCatching { plan() }.getOrDefault(emptyList())
             .firstOrNull { it.statut == CampagneSstv.Statut.PREVU && it.passage.losEpochMs > t }?.let { pr ->
-                o.put("prochain", JSONObject().put("campagne", pr.campagne.nom).put("sat", pr.campagne.satNom).put("aos", pr.passage.aosEpochMs)
+                o.put("prochain", JSONObject().put("campagne", pr.campagne.nom).put("fin", pr.campagne.finMs).put("sat", pr.campagne.satNom).put("aos", pr.passage.aosEpochMs)
                     .put("los", pr.passage.losEpochMs).put("el", Math.round(pr.passage.maxElevationDeg)))
             }
         ec?.let { e ->
             val s = son
-            val j = JSONObject().put("campagne", e.campagne.nom).put("sat", e.campagne.satNom).put("phase", e.phase.name)
+            val j = JSONObject().put("campagne", e.campagne.nom).put("fin", e.campagne.finMs).put("sat", e.campagne.satNom).put("phase", e.phase.name)
                 .put("aos", e.passage.aosEpochMs).put("los", e.passage.losEpochMs).put("el", Math.round(e.passage.maxElevationDeg)).put("mode", e.campagne.modeSstv)
                 .put("images", runCatching { s?.images()?.count { it.timeMs >= e.passage.aosEpochMs - 60_000L } ?: 0 }.getOrDefault(0))
             // Where the satellite is now, for the site's live block.

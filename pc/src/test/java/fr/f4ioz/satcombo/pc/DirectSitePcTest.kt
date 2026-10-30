@@ -73,6 +73,12 @@ class DirectSitePcTest {
         assertEquals(setOf("maitre", "prochain", "enCours", "derniere"), o.keySet())
         assertEquals(setOf("campagne", "sat", "aos", "los", "el"), o.getJSONObject("prochain").keySet())
         assertEquals(t + 90_000L, o.getJSONObject("enCours").getJSONObject("image").getLong("prochaine"))
+        // 30/10: the campaign stretched past its announcement's dates — its real end goes beside its name.
+        val fin = t + 86_400_000L
+        val ap2 = ap().also { it.getJSONObject("prochain").put("fin", fin); it.getJSONObject("enCours").put("fin", fin) }
+        val o2 = DirectSitePc.pilote(ap2, null, t)
+        assertEquals(fin, o2.getJSONObject("prochain").getLong("fin"))
+        assertEquals(fin, o2.getJSONObject("enCours").getLong("fin"))
     }
 
     @Test fun `the receiver's figures, never its node`() {
