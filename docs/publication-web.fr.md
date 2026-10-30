@@ -355,7 +355,7 @@ un code d'appairage, un mot de passe ou une clé.
 | `direct-efface` | JSON `{"type","version","t"}` | bouton **Effacer le direct** : oubliez tout le direct |
 
 `pilote` : `{"maitre": bool, "prochain": {"campagne","sat","aos","los","el"}, "enCours": {…, "phase","mode","images","elMaintenant","azMaintenant","image": {"phase","progression","mode","prochaine"}}, "derniere": {"sat","utc","mode"}}` (heures en ms UTC).
-`datv` : `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station"}`.
+`datv` : `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station","balayage"}`.
 
 `datv.station` (facultatif, absent quand on ne sait pas) : la station regardée,
 `{"indicatif","selection","nom","qth","carre","pays","km","azimut"}`.
@@ -369,6 +369,17 @@ SatMe-PC), sinon il n'y a que l'indicatif ; `km` et `azimut` (°) depuis la
 station, calculés sur le locator. Jamais la photo QRZ (elle appartient à son
 auteur), l'adresse électronique, la rue ni les coordonnées. Un site qui ne
 connaît pas `station` l'ignore.
+
+`datv.balayage` (facultatif, seulement quand le **Balayage auto** de l'onglet
+DATV est coché) :
+`{"on": true, "mode": "duree"|"coupure"|"tourne", "station": {"nom","khz"}, "prochain": {"nom","khz"}, "resteS", "bascule": {"t", "de": {"nom","khz"}, "vers": {"nom","khz"}}}`.
+`station` est le signal reçu maintenant (`nom` le nom de la station quand on
+le connaît, `khz` sa fréquence ciel) ; `resteS` les secondes avant le
+prochain changement minuté (« tourner », ou « x secondes sur chacun » en
+repli ; absent quand aucun n'est prévu) et `prochain` le signal suivant ;
+`bascule` le dernier changement (`t` en ms UTC). Jamais les réglages, les
+raisons, les favoris ni les autres candidats. Un site qui ne connaît pas
+`balayage` l'ignore.
 
 `balises` (facultatif, ligne **Balises QO-100**, décochée d'origine ; seulement
 quand la surveillance des balises est cochée dans l'onglet DATV) : l'état des

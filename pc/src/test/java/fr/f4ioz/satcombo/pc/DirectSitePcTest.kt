@@ -119,6 +119,40 @@ class DirectSitePcTest {
         assertFalse(DirectSitePc.datv(e, ReglageDatv(), 2.0).has("station"))
     }
 
+    @Test fun `the auto scan for the site - which signal, the countdown, the last switch, nothing else`() {
+        val m = fr.f4ioz.satcombo.datv.SecoursDatv(fr.f4ioz.satcombo.datv.SecoursDatv.Reglages(actif = true, mode = fr.f4ioz.satcombo.datv.SecoursDatv.Mode.TOURNE, dureeS = 30))
+        val iz = fr.f4ioz.satcombo.datv.SecoursDatv.Cible(10_494_750L, 333, "IZ0ZWS")
+        val ik = fr.f4ioz.satcombo.datv.SecoursDatv.Cible(10_497_000L, 333, "IK5EHI")
+        val l = listOf(iz, ik).map { fr.f4ioz.satcombo.datv.SecoursDatv.Candidat(it, fr.f4ioz.satcombo.datv.SecoursDatv.Origine.SPECTRE, 20_000, 0L, true) }
+        var t = 1_800_000_000_000L
+        fun rx(c: fr.f4ioz.satcombo.datv.SecoursDatv.Cible) = fr.f4ioz.satcombo.datv.SecoursDatv.Reception(true, true, true, c.khz, c.srKs)
+        m.tic(t, rx(iz), l, true)
+        t += 30_000L
+        m.accorde(t, m.tic(t, rx(iz), l, true)!!)
+        t += 7_000L; m.tic(t, rx(ik), l, true)
+        val e = EtatDatv(actif = true, etat = 4, merDb = 7.4, service = "IK5EHI", srTrouveKs = 333)
+        val b = DirectSitePc.datv(e, ReglageDatv(cielKhz = 10_497_000L, srKs = 333), 2.0, null, m.json(t)).getJSONObject("balayage")
+        assertEquals(DirectSitePc.CLES_BALAYAGE.getValue(""), b.keySet())
+        assertTrue(b.getBoolean("on")); assertEquals("tourne", b.getString("mode"))
+        assertEquals(23L, b.getLong("resteS"))
+        assertEquals("IK5EHI", b.getJSONObject("station").getString("nom")); assertEquals(10_497_000L, b.getJSONObject("station").getLong("khz"))
+        assertEquals("IZ0ZWS", b.getJSONObject("prochain").getString("nom"))
+        val k = b.getJSONObject("bascule")
+        assertEquals(DirectSitePc.CLES_BALAYAGE.getValue("bascule"), k.keySet())
+        assertEquals(t - 7_000L, k.getLong("t"))
+        assertEquals("IZ0ZWS", k.getJSONObject("de").getString("nom")); assertEquals("IK5EHI", k.getJSONObject("vers").getString("nom"))
+        for (s in listOf(b.getJSONObject("station"), b.getJSONObject("prochain"), k.getJSONObject("de"), k.getJSONObject("vers")))
+            assertTrue(DirectSitePc.CLES_BALAYAGE.getValue("signal").containsAll(s.keySet()))
+        // Never the settings, the reasons, the candidates.
+        for (secret in listOf("écoulées", "candidats", "attente", "pause", "favori", "raison", "journal")) assertFalse(secret, b.toString().contains(secret))
+        // Off: nothing sent; « until it drops »: no countdown, no next.
+        assertFalse(DirectSitePc.datv(e, ReglageDatv(), 2.0, null, JSONObject().put("on", false)).has("balayage"))
+        assertFalse(DirectSitePc.datv(e, ReglageDatv(), 2.0).has("balayage"))
+        m.reglages = m.reglages.copy(mode = fr.f4ioz.satcombo.datv.SecoursDatv.Mode.COUPURE)
+        val c = DirectSitePc.balayageJson(m.json(t))!!
+        assertFalse(c.has("resteS")); assertFalse(c.has("prochain")); assertTrue(c.has("bascule"))
+    }
+
     @Test fun `a spectrum line is small, scaled and the right way round`() {
         val db = FloatArray(16384) { -100f }.also { it[100] = -40f }
         val l = DirectSitePc.ligneSpectre(db, 10_489_750_000.0, -1_058_400.0)!!

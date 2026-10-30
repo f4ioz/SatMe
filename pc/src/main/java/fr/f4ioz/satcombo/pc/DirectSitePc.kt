@@ -77,8 +77,12 @@ class DirectSitePc(
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
 
-    /** The DATV receiver now, as [DatvPc] has it; [station]: the station watched, when one is known. */
-    class Datv(val etat: EtatDatv, val reglage: ReglageDatv, val marge: Double?, val image: ByteArray?, val station: StationDatv? = null)
+    /**
+     * The DATV receiver now, as [DatvPc] has it; [station]: the station watched, when one is known; [balayage]: the
+     * « Balayage auto » as [fr.f4ioz.satcombo.datv.SecoursDatv.json] says it (made public by [balayageJson]), null when off.
+     */
+    class Datv(val etat: EtatDatv, val reglage: ReglageDatv, val marge: Double?, val image: ByteArray?, val station: StationDatv? = null,
+               val balayage: JSONObject? = null)
 
     /**
      * The DATV station watched: its callsign, [selection] when it is the signal selected on the wide band
@@ -230,7 +234,7 @@ class DirectSitePc(
                     if (s.envoye) poste(s, t, "direct", JSONObject().put("t", t).put("datv", JSONObject.NULL))?.let { if (it) s.envoye = false }
                     return
                 }
-                if (poste(s, t, "direct", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge, d.station))) != true) return
+                if (poste(s, t, "direct", JSONObject().put("t", t).put("datv", datv(d.etat, d.reglage, d.marge, d.station, d.balayage))) != true) return
                 s.envoye = true
                 val img = d.image
                 if (d.etat.verrouille && img != null && img !== imageEnvoyee) {
@@ -531,7 +535,7 @@ class DirectSitePc(
          * The receiver's figures for the site: lock, the station received (its service), MER, margin, MODCOD, frequency,
          * rate; [station] ([stationDatvJson]) while locked, or before when it is the signal selected on the spectrum.
          */
-        fun datv(e: EtatDatv, r: ReglageDatv, marge: Double?, station: StationDatv? = null): JSONObject {
+        fun datv(e: EtatDatv, r: ReglageDatv, marge: Double?, station: StationDatv? = null, balayage: JSONObject? = null): JSONObject {
             val o = JSONObject().put("verrouille", e.verrouille).put("cielKhz", r.cielKhz).put("srKs", if (e.verrouille && e.srTrouveKs > 0) e.srTrouveKs else r.srKs)
             if (e.verrouille) {
                 o.put("service", e.service.take(40)).put("fournisseur", e.fournisseur.take(40)).put("modcod", e.modcod.take(24))
@@ -539,6 +543,42 @@ class DirectSitePc(
                 marge?.let { o.put("marge", it) }
             }
             if (station != null && (e.verrouille || station.selection)) stationDatvJson(station)?.let { o.put("station", it) }
+            balayage?.let { balayageJson(it) }?.let { o.put("balayage", it) }
+            return o
+        }
+
+        /** The keys [balayageJson] may write, each level by itself: what a test checks, what the documentation lists. */
+        val CLES_BALAYAGE = mapOf(
+            "" to setOf("on", "mode", "station", "prochain", "resteS", "bascule"),
+            "signal" to setOf("nom", "khz"),
+            "bascule" to setOf("t", "de", "vers"))
+
+        /**
+         * The « Balayage auto » for a public page, from the scan's own view ([fr.f4ioz.satcombo.datv.SecoursDatv.json]):
+         * its mode, the signal received ([CLES_BALAYAGE] « signal »: its name when known, its sky frequency), the seconds
+         * before the next timed switch and where to, the last switch. Never the settings, the reasons, the favourites or
+         * the candidates. Null when the scan is off.
+         */
+        fun balayageJson(b: JSONObject): JSONObject? {
+            if (!b.optBoolean("on")) return null
+            fun signal(x: JSONObject?): JSONObject? {
+                val khz = x?.optLong("khz", 0L)?.takeIf { it > 0 } ?: return null
+                return JSONObject().met("nom", mot(x.optString("nom"), 24)).put("khz", khz)
+            }
+            val ici = b.optJSONObject("courante") ?: b.optJSONObject("prefere")
+            val o = JSONObject().put("on", true).put("mode", mot(b.optString("mode"), 12))
+            signal(ici)?.let { o.put("station", it) }
+            val reste = if (b.isNull("resteS")) null else b.optLong("resteS", -1L).takeIf { it in 0..3600 }
+            if (reste != null) {
+                o.put("resteS", reste)
+                signal(b.optJSONObject("prochain"))?.let { o.put("prochain", it) }
+            }
+            b.optJSONObject("bascule")?.let { x ->
+                val vers = signal(x.optJSONObject("vers")) ?: return@let
+                val j = JSONObject().put("t", x.optLong("t")).put("vers", vers)
+                signal(x.optJSONObject("de"))?.let { j.put("de", it) }
+                o.put("bascule", j)
+            }
             return o
         }
 

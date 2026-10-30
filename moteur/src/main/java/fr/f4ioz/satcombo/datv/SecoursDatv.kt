@@ -79,8 +79,8 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
     /** Tune there, for this reason. */
     data class Action(val cible: Cible, val raison: String, val versPrefere: Boolean)
 
-    /** One move, for the page. */
-    data class Passage(val t: Long, val cible: Cible, val raison: String)
+    /** One move, for the page: [de] where the receiver was (the followed signal, or the fallback this had chosen). */
+    data class Passage(val t: Long, val cible: Cible, val raison: String, val de: Cible? = null)
 
     enum class Phase(val cle: String) { ARRET("arret"), ATTENTE("attente"), PAUSE("pause"), SUIVI("suivi"), REPLI("repli") }
 
@@ -132,11 +132,12 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
     /** [a] done: the receiver is there now. */
     @Synchronized
     fun accorde(t: Long, a: Action) {
+        val de = courante ?: prefere
         courante = if (a.versPrefere) null else a.cible
         phase = if (a.versPrefere) Phase.SUIVI else Phase.REPLI
         ici = a.cible; depuisMs = t; dernierSainMs = 0L
         if (a.versPrefere) { essaiPrefereMs = t; prefereParti = false }
-        passages.addLast(Passage(t, a.cible, a.raison)); while (passages.size > 20) passages.removeFirst()
+        passages.addLast(Passage(t, a.cible, a.raison, de)); while (passages.size > 20) passages.removeFirst()
     }
 
     /** [a] refused ([pourquoi]): that signal left alone a while, the receiver where it was. */
@@ -240,29 +241,61 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
                 return null
             }
         }
+        val suivant = suivantTour(t, la) ?: run { etat = "tour des signaux : aucun autre signal ($raison)"; return null }
+        return Action(suivant, raison + " → " + suivant.libelle, suivant.meme(pref))
+    }
+
+    /** [Mode.TOURNE]: the signal after [la] in the order (the followed one among them), those failed lately passed over. */
+    private fun suivantTour(t: Long, la: Cible): Cible? {
+        val pref = prefere ?: return null
         val l = ordre.filter { it.present != false || it.cible.meme(pref) }.map { it.cible }.let { o -> if (o.any { it.meme(pref) }) o else listOf(pref) + o }
         val i = l.indexOfFirst { it.meme(la) }
         val tour = l.drop(i + 1) + l.take(maxOf(0, i + 1))
-        val suivant = tour.firstOrNull { c -> !c.meme(la) && echecs.entries.none { it.key.meme(c) && t - it.value < ECHEC_MS } }
+        return tour.firstOrNull { c -> !c.meme(la) && echecs.entries.none { it.key.meme(c) && t - it.value < ECHEC_MS } }
             ?: tour.firstOrNull { !it.meme(la) }
-            ?: run { etat = "tour des signaux : aucun autre signal ($raison)"; return null }
-        return Action(suivant, raison + " → " + suivant.libelle, suivant.meme(pref))
     }
 
     /** The next candidate after [depuis] (the first when null), or null with a word in [etat]. */
     private fun va(t: Long, depuis: Cible?, r: Reglages, raison: String): Action? {
+        val suivant = suivantRepli(t, depuis, r) ?: run { etat = "aucun autre signal à essayer ($raison)"; return null }
+        return Action(suivant, raison + " → " + suivant.libelle, false)
+    }
+
+    /** The fallback after [depuis] (the first when null): never the followed one, those failed lately passed over unless all did. */
+    private fun suivantRepli(t: Long, depuis: Cible?, r: Reglages): Cible? {
         val pref = prefere
         val l = ordre.filter { !it.cible.meme(pref) && it.present != false }
         val libres = l.filter { c -> echecs.entries.none { it.key.meme(c.cible) && t - it.value < ECHEC_MS } }
         // All failed lately: tried again all the same rather than nothing.
         val choix = libres.ifEmpty { l }.filter { !it.cible.meme(depuis) }
-        if (choix.isEmpty()) { etat = "aucun autre signal à essayer ($raison)"; return null }
-        val suivant = if (r.mode == Mode.DUREE && depuis != null) {
+        if (choix.isEmpty()) return null
+        return if (r.mode == Mode.DUREE && depuis != null) {
             // Round: the next one after where we are in the order, back to the first.
             val i = l.indexOfFirst { it.cible.meme(depuis) }
-            (l.drop(i + 1) + l.take(maxOf(0, i + 1))).firstOrNull { c -> choix.any { it.cible.meme(c.cible) } } ?: choix.first()
-        } else choix.first()
-        return Action(suivant.cible, raison + " → " + suivant.cible.libelle, false)
+            (l.drop(i + 1) + l.take(maxOf(0, i + 1))).firstOrNull { c -> choix.any { it.cible.meme(c.cible) } }?.cible ?: choix.first().cible
+        } else choix.first().cible
+    }
+
+    /**
+     * Seconds left before the next timed move — [Mode.TOURNE], or [Mode.DUREE] while on a fallback — counted from
+     * when the receiver came where it is; null when none is planned (off, paused, held, [Mode.COUPURE], all well on
+     * the followed signal). 0 once due: the move comes at the next [tic].
+     */
+    @Synchronized
+    fun resteS(t: Long): Long? {
+        val r = reglages.borne()
+        if (!r.actif || t < pauseJusquA || (phase != Phase.SUIVI && phase != Phase.REPLI)) return null
+        if (r.mode != Mode.TOURNE && !(r.mode == Mode.DUREE && courante != null)) return null
+        return maxOf(0L, (r.dureeS * 1000L - (t - depuisMs) + 999) / 1000)
+    }
+
+    /** Where the next timed move ([resteS]) goes as things stand now, null when none is planned or nowhere else to go. */
+    @Synchronized
+    fun prochain(t: Long): Cible? {
+        if (resteS(t) == null) return null
+        val r = reglages.borne()
+        val la = courante ?: prefere ?: return null
+        return if (r.mode == Mode.TOURNE) suivantTour(t, la) else suivantRepli(t, la, r)
     }
 
     companion object {
@@ -308,5 +341,10 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
                     .put("echec", echecs.entries.any { it.key.meme(k.cible) && t - it.value < ECHEC_MS })
             }))
             .put("journal", JSONArray(passages.reversed().take(10).map { JSONObject().put("t", it.t).put("libelle", it.cible.libelle).put("raison", it.raison) }))
+            // The countdown to the next timed move (the page ticks it from [t]), where it goes, the last move made.
+            .put("t", t).put("resteS", resteS(t) ?: JSONObject.NULL).put("prochain", c(prochain(t)))
+            .put("bascule", passages.lastOrNull()?.let { p ->
+                JSONObject().put("t", p.t).put("de", c(p.de)).put("vers", c(p.cible)).put("raison", p.raison.substringBefore(" → "))
+            } ?: JSONObject.NULL)
     }
 }

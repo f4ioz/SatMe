@@ -402,6 +402,80 @@ class SecoursDatvTest {
         assertEquals("balise · 10491,500 MHz · 1500 kS/s", BALISE.libelle)
     }
 
+    @Test fun `tourner - the countdown, the next signal and the last switch for the page`() {
+        val b = Banc(Reglages(actif = true, mode = Mode.TOURNE, dureeS = 30, attenteS = 15))
+        b.bons += listOf(SUIVI, BALISE, FORT, RECENT, FAIBLE)
+        b.tic()
+        var j = b.m.json(t)
+        assertEquals(t, j.getLong("t"))
+        assertEquals(30L, j.getLong("resteS"))
+        assertTrue(j.isNull("bascule"))
+        b.avance(12)
+        j = b.m.json(t)
+        assertEquals(18L, j.getLong("resteS"))
+        // The next one as said is the one it goes to.
+        val annonce = j.getJSONObject("prochain").getLong("khz")
+        b.avance(18)
+        assertEquals(annonce, b.ici.khz)
+        j = b.m.json(t)
+        assertEquals(30L, j.getLong("resteS"))
+        val k = j.getJSONObject("bascule")
+        assertEquals(t, k.getLong("t"))
+        assertEquals(SUIVI.khz, k.getJSONObject("de").getLong("khz"))
+        assertEquals("F4AAA", k.getJSONObject("de").getString("nom"))
+        assertEquals(annonce, k.getJSONObject("vers").getLong("khz"))
+        // The reason without the « → where » the journal has.
+        assertEquals("30 s écoulées", k.getString("raison"))
+        // From a fallback: « de » is that fallback.
+        val vers = b.ici
+        b.avance(30)
+        assertEquals(vers.khz, b.m.json(t).getJSONObject("bascule").getJSONObject("de").getLong("khz"))
+        // A signal without a picture is left after the wait: the countdown stays the dwell's, never below 0.
+        b.bons.clear()
+        b.avance(14)
+        assertEquals(16L, b.m.resteS(t))
+        assertEquals(0L, b.m.resteS(t + 3_600_000L))
+    }
+
+    @Test fun `no countdown when no timed switch is planned`() {
+        // « x seconds on each » while the followed signal holds: nothing planned.
+        val d = Banc(Reglages(actif = true, mode = Mode.DUREE, dureeS = 40, retour = false))
+        d.bons += listOf(SUIVI, BALISE)
+        d.avance(5)
+        assertNull(d.m.resteS(t))
+        assertTrue(d.m.json(t).isNull("resteS")); assertTrue(d.m.json(t).isNull("prochain"))
+        // On a fallback: the dwell counted down, the next in the round said.
+        d.bons -= SUIVI
+        d.avance(15)
+        assertEquals(BALISE, d.ici)
+        assertEquals(40L, d.m.resteS(t))
+        d.avance(10)
+        assertEquals(30L, d.m.resteS(t))
+        assertEquals(RECENT.khz, d.m.json(t).getJSONObject("prochain").getLong("khz"))
+        assertEquals("le signal suivi est perdu depuis 15 s", d.m.json(t).getJSONObject("bascule").getString("raison"))
+        // « Until it drops »: on a fallback, no countdown.
+        val c = Banc(Reglages(actif = true, mode = Mode.COUPURE))
+        c.bons += BALISE
+        c.avance(16)
+        assertEquals(BALISE, c.ici)
+        assertNull(c.m.resteS(t)); assertNull(c.m.prochain(t))
+        assertEquals(BALISE.khz, c.m.json(t).getJSONObject("bascule").getJSONObject("vers").getLong("khz"))
+        // Paused by a tuning by hand, held, off: none either.
+        val p = Banc(Reglages(actif = true, mode = Mode.TOURNE, dureeS = 30))
+        p.bons += listOf(SUIVI, BALISE)
+        p.avance(3)
+        assertEquals(28L, p.m.resteS(t))          // followed from the first tic, 2 s ago
+        p.m.manuel(t, FORT); p.ici = FORT
+        p.avance(1)
+        assertNull(p.m.resteS(t))
+        p.m.reprends(); p.bloque = "enregistrement en cours"
+        p.avance(1)
+        assertNull(p.m.resteS(t))
+        p.m.active(false)
+        assertNull(p.m.resteS(t))
+        assertTrue(p.m.json(t).isNull("resteS"))
+    }
+
     @Test fun `the same station measured a little off is the same place`() {
         assertTrue(SUIVI.meme(SUIVI.khz + 200, 1500))
         assertFalse(SUIVI.meme(SUIVI.khz + 600, 1500))

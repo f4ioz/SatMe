@@ -550,6 +550,19 @@ ${STYLE_JETONS}
   .d-st .d-st-tr { font-size:.86em; font-style:italic; font-weight:500; color:#CFF6EE; }
   .d-lu { position:absolute; top:8px; right:8px; background:rgba(0,0,0,.72); color:#fff; font-weight:800; letter-spacing:1px; padding:4px 10px; border-radius:6px; font-size:15px; pointer-events:none; }
   .d-lu.sur { box-shadow:0 0 0 2px var(--vert); }
+  /* « Balayage auto » over the picture: the signal received and the countdown to the next one; a banner on each switch. */
+  .d-ba { position:absolute; left:8px; top:8px; z-index:2; max-width:calc(100% - 140px); padding:2px 9px; border-radius:10px; background:rgba(0,0,0,.66); color:#fff; font-size:var(--fs-xs); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; box-shadow:0 0 0 1px rgba(63,224,200,.45); }
+  .d-ba b { font-variant-numeric:tabular-nums; color:var(--cyan); }
+  .d-ba .d-ba-p { color:#CFE3EE; }
+  .d-haut.d-duo .d-ba { top:40px; }
+  .d-ba-bascule { position:absolute; left:50%; top:14%; z-index:3; transform:translateX(-50%); max-width:84%; padding:8px 18px; border-radius:10px; background:rgba(8,16,24,.86); color:#fff; text-align:center; pointer-events:none; box-shadow:0 0 0 2px var(--cyan), 0 6px 24px rgba(0,0,0,.5); animation:d-ba-entre .45s ease-out, d-ba-sort .6s ease-in 3.4s forwards; }
+  .d-ba-bascule b { display:block; font-size:18px; letter-spacing:.3px; }
+  .d-ba-bascule span { display:block; font-size:var(--fs-xs); color:#CFE3EE; margin-top:2px; }
+  .d-cadre:fullscreen .d-ba-bascule b, .d-cadre.d-plein .d-ba-bascule b { font-size:28px; }
+  .d-cadre:fullscreen .d-ba, .d-cadre.d-plein .d-ba { font-size:var(--fs-s); }
+  @keyframes d-ba-entre { from { opacity:0; transform:translate(-50%,-14px) scale(.96); } to { opacity:1; transform:translate(-50%,0); } }
+  @keyframes d-ba-sort { to { opacity:0; transform:translate(-50%,-8px); } }
+  @media (prefers-reduced-motion:reduce) { .d-ba-bascule { animation:none; } }
   .dt-lu { margin-top:6px; padding:6px 9px; background:#0E1720; border-radius:10px; border-left:3px solid var(--cyan); }
   .dt-lu b { font-size:20px; letter-spacing:2px; }
   .dt-lu.sur { border-left-color:var(--vert); }
@@ -3086,7 +3099,7 @@ ${OngletSked.HTML}
     <div class="d-haut">
     <div id="d-cadre-tx" class="d-cadre" hidden ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><img id="d-video-tx" alt="Image émise" hidden><div id="d-vide-tx" class="d-vide">en attente de l’image émise…</div><span class="d-nom d-nom-tx">Émis</span><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
     <div id="d-leg-tx" class="petit d-leg" hidden></div>
-    <div id="d-cadre" class="d-cadre" ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div><span class="d-nom d-nom-rx">Reçu</span><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
+    <div id="d-cadre" class="d-cadre" ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div><span class="d-nom d-nom-rx">Reçu</span><div id="d-ba" class="d-ba" hidden></div><div id="d-ba-bascule" class="d-ba-bascule" role="status" aria-live="polite" hidden></div><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
     <div id="d-leg-rx" class="petit d-leg" hidden></div>
       <div class="d-info">
     <div class="paire" style="margin-top:8px;align-items:center">

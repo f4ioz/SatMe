@@ -13,7 +13,10 @@ package fr.f4ioz.satcombo.demo
  * verdicts, their history, the alert when the fault is at the source) and
  * « Balayage auto » card (always a picture: another signal when the one
  * followed does not lock), with their code. Read from `api/datv/balises` and
- * `api/datv/secours`; settings posted there.
+ * `api/datv/secours`; settings posted there. While the scan is on, a chip over
+ * the received picture (the signal, the countdown to the next one, ticked here
+ * each second from the server's value) and a banner on each switch, the frame
+ * going full screen with them.
  */
 object BalisesQo100Js {
     const val HTML = """
@@ -43,7 +46,7 @@ object BalisesQo100Js {
         <label class="petit" style="text-transform:none;letter-spacing:0" title="Quand le signal suivi ne s’accroche pas, est perdu ou que son flux est abîmé, le récepteur passe à un autre : vos favoris ★, puis la balise, puis les stations présentes sur le spectre de la station sol (les plus fortes et les plus récemment reçues d’abord) ; et il revient au signal suivi quand il réapparaît. Un réglage à la main met le balayage en pause."><input type="checkbox" id="ba-on" onchange="baRegle('on=' + (this.checked ? 1 : 0))"> toujours une image</label>
         <span class="petit" id="ba-phase" style="text-transform:none;letter-spacing:0"></span></div>
       <div id="ba-zone" hidden>
-        <div id="ba-etat"></div>
+        <div><span id="ba-etat"></span> <span class="petit" id="ba-compte" style="color:var(--cyan)"></span></div>
         <div class="petit" id="ba-suivi"></div>
         <div class="ligne" style="flex-wrap:wrap;gap:4px 10px">
           <select id="ba-mode" onchange="baRegle('mode=' + this.value)"><option value="coupure">rester sur un signal jusqu’à la coupure</option><option value="duree">x secondes sur chacun (en repli)</option><option value="tourne">tourner : x secondes sur chacun, même si tout va bien</option></select>
@@ -65,6 +68,8 @@ object BalisesQo100Js {
     const val JS = """
 // ------------------------------------------------------------------ DATV: QO-100's beacons watched, the automatic scan
 let BQ = null, BA = null, bqN = -1;
+/** The next timed switch (client clock, ms) and the last switch already shown. */
+let baFin = 0, baVu = null;
 const BQ_COUL = { ok: 'var(--vert)', faible: 'var(--ambre)', 'pertes-ici': 'var(--ambre)', 'flux-abime': 'var(--rose)', absente: 'var(--rose)', inconnu: 'var(--gris)' };
 const BQ_CAN = { ok: '#5BD68A', faible: '#FFB454', 'pertes-ici': '#FFB454', 'flux-abime': '#E5484D', absente: '#E5484D', inconnu: '#4A5A68' };
 function bqPastille(id, a) {
@@ -129,8 +134,13 @@ async function bqRegle(q) {
 async function ticSecours() {
   if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
   let j; try { j = await (await fetch('api/datv/secours')).json(); } catch (x) { return; }
-  if (!j || !j.ok) { g('ba-carte').hidden = true; return; }
+  if (!j || !j.ok) { g('ba-carte').hidden = true; BA = null; baCadre(); return; }
   BA = j; g('ba-carte').hidden = false;
+  // The countdown's end from the server's seconds, kept as it was when it moved less than a second (no jitter from the polls).
+  const fin = j.resteS == null ? 0 : Date.now() + j.resteS * 1000;
+  baFin = !fin ? 0 : baFin && Math.abs(fin - baFin) < 1200 ? baFin : fin;
+  baBascule(j);
+  baCadre();
   g('ba-on').checked = j.on; g('ba-zone').hidden = !j.on;
   txt('ba-phase', !j.on ? '' : { pause: 'en pause', suivi: 'sur le signal suivi', repli: 'en repli', attente: 'en attente', arret: '' }[j.phase] || '');
   if (!j.on) return;
@@ -138,7 +148,8 @@ async function ticSecours() {
   g('ba-mode').value = j.mode; g('ba-duree-l').hidden = j.mode !== 'duree' && j.mode !== 'tourne';
   g('ba-retour').checked = j.retour; g('ba-balise').checked = j.balise;
   g('ba-reprends').hidden = j.phase !== 'pause';
-  txt('ba-etat', j.etat || '');
+  // The countdown ticks beside it (ba-compte): the server's « encore N s » left out.
+  txt('ba-etat', j.resteS != null ? (j.etat || '').replace(/(,| :) encore \d+ s$/, '') : j.etat || '');
   txt('ba-suivi', (j.prefere ? 'Signal suivi : ' + j.prefere.libelle : '') + (j.courante ? ' · en ce moment : ' + j.courante.libelle : ''));
   txt('ba-aide', j.spectre ? '' : 'Sans spectre de la station sol récent, seuls vos favoris ★ et la balise sont essayés.');
   g('ba-candidats').innerHTML = (j.candidats || []).map(c => '<div' + (c.ici ? ' style="color:var(--cyan)"' : c.present === false ? ' style="opacity:.5"' : '') + '>' +
@@ -148,6 +159,36 @@ async function ticSecours() {
     (j.favoris || []).map(f => '★ ' + esc(f.libelle)).join('<br>');
   g('ba-journal').innerHTML = (j.journal || []).map(p => hm(p.t, true) + ' — ' + esc(p.raison)).join('<br>') || 'aucun';
 }
+/** A signal's short name: the station when known, else its frequency. */
+const baNom = c => !c ? '' : c.nom || (c.khz / 1000).toFixed(3).replace('.', ',') + ' MHz';
+/** The chip over the picture and the card's countdown: each second. */
+function baCadre() {
+  const j = BA, e = g('d-ba');
+  if (!e) return;
+  const on = !!(j && j.on && (j.phase === 'suivi' || j.phase === 'repli'));
+  e.hidden = !on;
+  const reste = baFin ? Math.max(0, Math.ceil((baFin - Date.now()) / 1000)) : null;
+  txt('ba-compte', on && reste != null ? '· prochain changement dans ' + reste + ' s' + (j.prochain ? ' → ' + baNom(j.prochain) : '') : '');
+  if (!on) return;
+  const ici = j.courante || j.prefere;
+  const h = '↻ ' + esc(baNom(ici)) + (reste != null ? ' · <b>' + reste + ' s</b>' : '') + (j.prochain && reste != null ? ' <span class="d-ba-p">→ ' + esc(baNom(j.prochain)) + '</span>' : '');
+  if (e.innerHTML !== h) e.innerHTML = h;
+  e.title = ici ? ici.libelle : '';
+}
+/** A new switch: « Bascule : A → B » and why, over the picture for 4 s (the first reading shows only a fresh one). */
+function baBascule(j) {
+  const b = j.bascule, cle = b ? b.t + '' : '';
+  const premier = baVu === null;
+  if (cle === baVu) return;
+  baVu = cle;
+  if (!b || (premier && j.t - b.t > 6000) || !j.on) return;
+  const e = g('d-ba-bascule');
+  e.innerHTML = '<b>Bascule : ' + esc(baNom(b.de) || '?') + ' → ' + esc(baNom(b.vers)) + '</b><span>' + esc(b.raison || '') + '</span>';
+  // Hidden and shown again: the animation starts over.
+  e.hidden = true; void e.offsetWidth; e.hidden = false;
+  clearTimeout(baBascule.m); baBascule.m = setTimeout(() => { e.hidden = true; }, 4000);
+}
+setInterval(() => { if (!document.hidden && BA) baCadre(); }, 1000);
 async function baRegle(q) {
   let j = null;
   try { j = await (await fetch('api/datv/secours?' + q, { method: 'POST' })).json(); } catch (x) {}
