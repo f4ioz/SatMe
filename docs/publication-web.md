@@ -352,7 +352,7 @@ password or a key.
 | `direct-efface` | JSON `{"type","version","t"}` | the **Effacer le direct** button: forget all live data |
 
 `pilote`: `{"maitre": bool, "prochain": {"campagne","sat","aos","los","el"}, "enCours": {…, "phase","mode","images","elMaintenant","azMaintenant","image": {"phase","progression","mode","prochaine"}}, "derniere": {"sat","utc","mode"}}` (times in UTC ms).
-`datv`: `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station"}`.
+`datv`: `{"verrouille","cielKhz","srKs","service","fournisseur","modcod","mer","marge","station","balayage"}`.
 
 `datv.station` (optional, absent when unknown): the station watched,
 `{"indicatif","selection","nom","qth","carre","pays","km","azimut"}`.
@@ -365,6 +365,15 @@ its QRZ.com record when found (QRZ account in SatMe-PC), else there is the
 callsign alone; `km` and `azimut` (°) from the station, worked out from the
 locator. Never the QRZ photo (it belongs to its author), the e-mail address,
 the street or the coordinates. A site that does not know `station` ignores it.
+
+`datv.balayage` (optional, only while the DATV tab's **Balayage auto** is on):
+`{"on": true, "mode": "duree"|"coupure"|"tourne", "station": {"nom","khz"}, "prochain": {"nom","khz"}, "resteS", "bascule": {"t", "de": {"nom","khz"}, "vers": {"nom","khz"}}}`.
+`station` is the signal received now (`nom` the station's name when known,
+`khz` its sky frequency); `resteS` the seconds before the next timed switch
+(« tourner », or « x secondes sur chacun » while on a fallback; absent when
+none is planned) and `prochain` where it goes; `bascule` the last switch
+(`t` ms UTC). Never the settings, the reasons, the favourites or the other
+candidates. A site that does not know `balayage` ignores it.
 
 `balises` (optional, the **Balises QO-100** line, unticked by default; only
 while the beacon watch is ticked in the DATV tab): QO-100's beacons as the

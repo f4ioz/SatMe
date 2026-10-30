@@ -700,7 +700,8 @@ fun main(args: Array<String>) {
                 DirectSitePc.StationDatv(c, sp.isNotEmpty(), z?.fiche(c), station.etat.value.observateur)
             }
         }.getOrNull()
-        DirectSitePc.Datv(datv.etat, datv.reglage, datv.marge(), datv.image, st)
+        // The « Balayage auto »: which signal, the countdown to the next, the last switch (only while it is on).
+        DirectSitePc.Datv(datv.etat, datv.reglage, datv.marge(), datv.image, st, if (secours.on) secours.machine.json(System.currentTimeMillis()) else null)
     }
     directSite.panorama = {
         if (!sdr.surQo100) null else sdr.panorama?.let { p -> sdr.axeQo100()?.let { (c, w) -> DirectSitePc.Panorama(p, c, w) } }
