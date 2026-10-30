@@ -19,8 +19,8 @@ import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 /**
- * The SSTV pictures' learnt denoiser on this PC (« IA », never the
- * default): SCUNet (Zhang et al., 2022; code and weights Apache-2.0,
+ * The SSTV pictures' learnt denoiser on this PC (« IA », never on unless
+ * the owner says so): SCUNet (Zhang et al., 2022; code and weights Apache-2.0,
  * cszn/SCUNet), its « real-PSNR » weights as ONNX, run on the processor by
  * ONNX Runtime for Java (Microsoft, MIT).
  *
@@ -35,8 +35,12 @@ import kotlin.concurrent.thread
  * A picture of 320×256 takes 2 to 3 s on six threads of a desktop
  * processor (measured: 2.0–2.7 s on a 12-thread processor; PD 120's
  * 640×496, 7.5–8.8 s).
+ *
+ * The processor only: the ONNX Runtime downloaded is its CPU build (a GPU
+ * would need another, much larger, per maker). [filsVoulus] the threads
+ * chosen in SSTV › Réglages (0: automatic).
  */
-class IaSstvPc(dossierSatme: File) : DebruiteurIa {
+class IaSstvPc(dossierSatme: File, private val filsVoulus: () -> Int = { 0 }) : DebruiteurIa {
 
     val dossier = File(dossierSatme, "ia")
 
@@ -142,7 +146,7 @@ class IaSstvPc(dossierSatme: File) : DebruiteurIa {
     /** What the page shows: installed, the files and their sizes, the download, the model loaded. */
     fun etat(): JSONObject = JSONObject().put("installe", installe()).put("enCours", enCours).put("etape", etape).put("erreur", erreur)
         .put("recus", recus).put("total", FICHIERS.sumOf { it.octets }).put("modele", nom).put("charge", session != null)
-        .put("dernierMs", dernierMs).put("fils", fils())
+        .put("dernierMs", dernierMs).put("fils", fils()).put("processeurs", processeurs()).put("gpu", false)
         .put("fichiers", JSONArray(FICHIERS.map { f -> JSONObject().put("nom", f.nom).put("role", f.role).put("octets", f.octets)
             .put("present", fichier(f).let { it.isFile && it.length() == f.octets }).put("url", f.url) }))
 
@@ -171,18 +175,31 @@ class IaSstvPc(dossierSatme: File) : DebruiteurIa {
     @Volatile private var utiliseMs = 0L
     @Volatile var dernierMs = 0L; private set
 
-    /** Threads for one picture: half the processor's (the other half for the rest of the station), 1 to 8. */
-    fun fils(): Int = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 8)
+    /** Threads for one picture: as chosen (at most the processor's), else half the processor's (the other half for the rest of the station), 1 to 8. */
+    fun fils(): Int {
+        val n = Runtime.getRuntime().availableProcessors()
+        val v = runCatching(filsVoulus).getOrDefault(0)
+        return if (v > 0) v.coerceIn(1, n) else (n / 2).coerceIn(1, 8)
+    }
+
+    /** The processor's threads, for the page's choice. */
+    fun processeurs(): Int = Runtime.getRuntime().availableProcessors()
+
+    /** The threads the model was loaded with (0: not loaded). */
+    @Volatile private var filsCharges = 0
 
     @Synchronized private fun charge(): java.util.function.Function<Array<Any>, FloatArray> {
-        session?.let { return it }
+        // Another number of threads chosen: loaded again with it.
+        session?.let { if (filsCharges == fils()) return it else libere() }
         check(installe()) { "modèle IA non installé" }
         // One loader for the whole run: ONNX Runtime's native library loads once per process.
         val c = chargeur ?: Chargeur(fichier(FICHIERS[0]), IaSstvPc::class.java.classLoader).also { chargeur = it }
+        val f = fils()
         @Suppress("UNCHECKED_CAST")
         val s = c.loadClass(SESSION).getConstructor(String::class.java, Int::class.javaPrimitiveType)
-            .newInstance(fichier(FICHIERS[1]).absolutePath, fils()) as java.util.function.Function<Array<Any>, FloatArray>
+            .newInstance(fichier(FICHIERS[1]).absolutePath, f) as java.util.function.Function<Array<Any>, FloatArray>
         session = s
+        filsCharges = f
         // Let go once unused for a while (the weights and ONNX Runtime's memory, a few hundred Mo).
         thread(isDaemon = true, name = "satme-ia-veille") {
             while (session === s) {

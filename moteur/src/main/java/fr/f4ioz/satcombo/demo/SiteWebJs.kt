@@ -51,6 +51,9 @@ object SiteWebJs {
       <div id="site-suite" hidden>
       <div class="petit" style="margin-top:10px"><b>3. Quoi envoyer</b> — « Sur clic » : seulement avec le bouton 🌐 de chaque élément ; « Automatique » : dès qu'il arrive ; « Jamais ». Tout commence à « Sur clic ».</div>
       <table style="margin-top:6px"><thead><tr><th>Quoi</th><th>Publication</th></tr></thead><tbody id="site-modes"></tbody></table>
+      <div class="ligne" style="margin-top:6px"><span class="petit">Images SSTV : la version envoyée</span><select id="site-version-sstv" style="flex:none" onchange="sitePost('reglages', 'version_sstv=' + enc(this.value))">
+        <option value="recue">l’image reçue</option><option value="couleurs">couleurs corrigées</option><option value="ia">IA (et couleurs)</option></select></div>
+      <div class="petit aide">D’origine, l’image telle que reçue. « Couleurs corrigées » : sa version aux couleurs corrigées (SSTV › Réglages › Couleurs et IA), seulement quand une correction a vraiment changé quelque chose. « IA (et couleurs) » : sa version débruitée par l’IA (avec ses couleurs quand elles sont corrigées), seulement si elle a été faite — cochée dans la visionneuse ou par « Débruitage IA automatique ». Une image dont la version choisie n’existe pas part telle que reçue ; quand sa version IA est prête ensuite, elle repart et remplace la précédente sur votre site. Votre site reçoit <code>retouche</code> (<code>couleurs</code> ou <code>ia</code>) pour l’indiquer à côté de l’image.</div>
       <div class="petit" id="site-file" style="margin-top:8px"></div>
       <div class="ligne" id="site-file-b" hidden><button onclick="sitePost('maintenant')" title="Réessayer tout de suite ce qui attend">Réessayer maintenant</button><button onclick="if (confirm('Oublier tout ce qui attend d’être publié ?')) sitePost('vide')">Vider la file</button></div>
       <div class="petit" id="site-histo" style="margin-top:6px"></div>
@@ -90,6 +93,7 @@ async function siteCharge() {
   const m = Object.keys(SITE.modes).map(k => '<tr><td>' + esc(SITE.libelles[k]) + '</td><td><select onchange="siteMode(\'' + k + '\', this.value)">' +
     SITE_MODES.map(o => '<option value="' + o[0] + '"' + (SITE.modes[k] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></td></tr>').join('');
   if (g('site-modes').dataset.vu !== m) { g('site-modes').dataset.vu = m; g('site-modes').innerHTML = m; }
+  if (g('site-version-sstv') && document.activeElement !== g('site-version-sstv')) g('site-version-sstv').value = SITE.versionSstv || 'recue';
   const f = SITE.file || [];
   g('site-file').innerHTML = f.length ? f.length + ' en attente d’envoi' + (f[0].erreur ? ' — dernier essai : <span class="ambre">' + esc(f[0].erreur) + '</span>, prochain à ' + hm(f[0].prochain) : '') : (SITE.configure ? 'Rien en attente · ' + SITE.publies + ' envoyé(s) depuis ce PC' : '');
   g('site-file-b').hidden = !f.length;

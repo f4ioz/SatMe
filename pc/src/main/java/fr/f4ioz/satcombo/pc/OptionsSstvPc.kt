@@ -31,8 +31,10 @@ import java.io.File
  * QSL picture and the ARISS award pack (downloads; nothing is sent).
  *
  * `/api/sstv-options`: GET the settings, the retention's plan, the last
- * notices; GET `/qualite`, `/qsl?nom=&dispo=&jpeg=`, `/ariss.zip?noms=`;
- * POST `/reglage?k=&v=`, `/retention` (applied now), `/garde?nom=&on=`.
+ * notices; GET `/qualite`, `/qsl?nom=&dispo=&jpeg=`, `/ariss.zip?noms=`,
+ * `/ia` (the model, the automatic IA, the trial), `/ia/essai-avant.png`,
+ * `/ia/essai-apres.png`; POST `/reglage?k=&v=`, `/retention` (applied now),
+ * `/garde?nom=&on=`, `/ia/installer`, `/ia/supprimer`, `/ia/essai?nom=`.
  */
 class OptionsSstvPc(
     private val station: StationPc,
@@ -52,6 +54,9 @@ class OptionsSstvPc(
     /** The pictures' « IA » ([IaSstvPc]), set by Main; [iaPrete] told when it is installed or removed. */
     @Volatile var ia: IaSstvPc? = null
     @Volatile var iaPrete: (Boolean) -> Unit = {}
+    /** The pictures' finish and the automatic IA, set by Main (« Tester sur une image », what the automatic IA did last). */
+    @Volatile var retouches: fr.f4ioz.satcombo.sstv.RetouchesGalerie? = null
+    @Volatile var iaAuto: fr.f4ioz.satcombo.sstv.IaAuto? = null
 
     /** A sentence said aloud (when the announcements are on), set by Main. */
     @Volatile var annonce: (String) -> Unit = {}
@@ -246,6 +251,72 @@ class OptionsSstvPc(
         }
     }
 
+    // ------------------------------------------------------------------ the IA: automatic, tried on a picture
+
+    /** What the automatic IA is doing: pictures waiting, the last one's outcome and noise. */
+    private fun etatAuto(): JSONObject {
+        val a = iaAuto ?: return JSONObject().put("present", false)
+        val (nom, issue, bruit) = a.dernier
+        return JSONObject().put("present", true).put("enAttente", a.enAttente).put("dernier", nom).put("issue", issue)
+            .put("bruit", if (bruit < 0) JSONObject.NULL else Math.round(bruit * 10) / 10.0)
+    }
+
+    /** The last pictures received, to try the IA on (the newest first). */
+    private fun imagesEssai(): JSONArray = JSONArray(runCatching { son.images() }.getOrDefault(emptyList()).filter { it.source != SstvPc.ESSAI }
+        .sortedByDescending { it.timeMs }.take(30).map { JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode) })
+
+    /** « Tester sur une image »: the picture tried, under way, its time, its error; [version] changes with each new trial. */
+    private class Essai {
+        @Volatile var nom = ""
+        @Volatile var enCours = false
+        @Volatile var ms = 0L
+        @Volatile var bruit = -1.0
+        @Volatile var couleur = false
+        @Volatile var erreur = ""
+        @Volatile var version = 0L
+        @Volatile var reglages = ""
+        fun json(): JSONObject = JSONObject().put("nom", nom).put("enCours", enCours).put("ms", ms).put("erreur", erreur).put("version", version)
+            .put("couleur", couleur).put("reglages", reglages).put("bruit", if (bruit < 0) JSONObject.NULL else Math.round(bruit * 10) / 10.0)
+    }
+    private val essai = Essai()
+
+    /**
+     * Picture [nom] of the gallery tried with the IA as now set (its colour
+     * as its own switches say): both versions written in `ia/` (the last trial
+     * only), in the background. Null when started, else why not.
+     */
+    @Synchronized fun essaie(nom: String): String? {
+        val r = retouches ?: return "absent"
+        val modele = ia ?: return "absent"
+        if (r.ia == null || !modele.installe()) return "modèle IA non installé"
+        if (essai.enCours) return "un essai est déjà en cours"
+        val (f, _) = image(nom) ?: return "image introuvable"
+        if (fr.f4ioz.satcombo.sstv.CorrectionsGalerie.estTraitee(f)) return "image introuvable"
+        essai.enCours = true; essai.nom = f.name; essai.erreur = ""
+        val galerie = f.parentFile
+        Thread({
+            try {
+                val e = r.effet(galerie, f.name)
+                val reglages = options.reglagesIa
+                val a = r.apercu(f, e, reglages) ?: throw IllegalStateException("essai impossible")
+                fun ecrit(px: IntArray, n: String) {
+                    val b = java.awt.image.BufferedImage(a.w, a.h, java.awt.image.BufferedImage.TYPE_INT_RGB)
+                    b.setRGB(0, 0, a.w, a.h, px, 0, a.w)
+                    val t = File(modele.dossier, "$n.tmp")
+                    javax.imageio.ImageIO.write(b, "png", t)
+                    val d = File(modele.dossier, n); if (!t.renameTo(d)) { d.delete(); t.renameTo(d) }
+                }
+                ecrit(a.sans, "essai-avant.png"); ecrit(a.avec, "essai-apres.png")
+                essai.ms = a.ms; essai.couleur = a.couleur; essai.reglages = reglages.code()
+                essai.bruit = r.bruit(f) ?: -1.0
+                essai.version = horloge()
+            } catch (x: Exception) {
+                essai.erreur = x.message ?: x.javaClass.simpleName
+            } finally { essai.enCours = false }
+        }, "satme-ia-essai").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
+        return null
+    }
+
     // ------------------------------------------------------------------ the page
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
@@ -266,7 +337,11 @@ class OptionsSstvPc(
                 val (b, n) = qsl(p("nom"), d, jpeg) ?: return refus("image introuvable")
                 if (p("voir") == "1") ReponseWeb("200 OK", if (jpeg) "image/jpeg" else "image/png", b) else fichier(b, n, if (jpeg) "image/jpeg" else "image/png")
             }
-            "/ia" -> json(ia?.etat()?.put("ok", true) ?: JSONObject().put("ok", false).put("erreur", "absent"))
+            "/ia" -> json(ia?.etat()?.put("ok", true)?.put("auto", etatAuto())?.put("essai", essai.json())?.put("images", imagesEssai()) ?: JSONObject().put("ok", false).put("erreur", "absent"))
+            "/ia/essai-avant.png", "/ia/essai-apres.png" -> {
+                val f = File(ia?.dossier ?: return refus("absent"), route.removePrefix("/ia/"))
+                if (!f.isFile) refus("pas d’essai") else ReponseWeb("200 OK", "image/png", f.readBytes(), "Cache-Control: no-store\r\n")
+            }
             "/ariss.zip" -> {
                 val noms = if (p("serie") == "1") meilleuresDeLaSerie() else p("noms").split(',').map { it.trim() }.filter { it.isNotEmpty() }
                 val (b, n) = pack(noms) ?: return refus("aucune image")
@@ -295,6 +370,14 @@ class OptionsSstvPc(
                     "c_chroma" -> o.couleurChroma = on
                     "c_niveaux" -> o.couleurNiveaux = on
                     "c_saturation" -> o.couleurSaturation = on
+                    "ia_auto" -> o.iaAuto = on
+                    "ia_seuil_on" -> o.iaSeuilActif = on
+                    "ia_seuil" -> o.iaSeuil = v.replace(',', '.').toDoubleOrNull() ?: fr.f4ioz.satcombo.sstv.IaAuto.SEUIL_DEFAUT
+                    "ia_force" -> o.iaForce = v.toIntOrNull() ?: 100
+                    "ia_tuile" -> o.iaTuile = v.toIntOrNull() ?: fr.f4ioz.satcombo.sstv.IaSstv.TUILE
+                    "ia_recouvrement" -> o.iaRecouvrement = v.toIntOrNull() ?: fr.f4ioz.satcombo.sstv.IaSstv.RECOUVREMENT
+                    "ia_avant" -> o.iaAvantCouleur = on
+                    "ia_fils" -> o.iaFils = v.toIntOrNull() ?: 0
                     else -> return refus("réglage inconnu")
                 }
                 json(json())
@@ -311,6 +394,11 @@ class OptionsSstvPc(
                 iaPrete(false)
                 if (!x.supprime()) { if (x.installe()) iaPrete(true); return refus("modèle en cours d’utilisation : le supprimer après un redémarrage de SatMe-PC") }
                 json(JSONObject().put("ok", true))
+            }
+            // « Tester sur une image »: the picture without and with the IA as now set, in the background; nothing kept in the gallery.
+            "/ia/essai" -> {
+                val e = essaie(p("nom"))
+                if (e != null) refus(e) else json(JSONObject().put("ok", true))
             }
             "/garde" -> {
                 val n = File(p("nom")).name
@@ -341,6 +429,8 @@ class OptionsSstvPc(
                 .put("redecode", o.redecodeFin).put("dispo", o.qslDisposition.name).put("satme", o.qslSatme).put("jpeg", o.qslJpeg)
                 .put("couleur", o.couleurDefaut).put("c_dominante", o.couleurDominante).put("c_chroma", o.couleurChroma)
                 .put("c_niveaux", o.couleurNiveaux).put("c_saturation", o.couleurSaturation)
+                .put("ia_auto", o.iaAuto).put("ia_seuil_on", o.iaSeuilActif).put("ia_seuil", o.iaSeuil).put("ia_force", o.iaForce)
+                .put("ia_tuile", o.iaTuile).put("ia_recouvrement", o.iaRecouvrement).put("ia_avant", o.iaAvantCouleur).put("ia_fils", o.iaFils)
                 .put("activites", station.settings.activitesOn).put("indicatif", station.settings.callsign).put("locator", station.etat.value.locator))
             .put("enregistreMaintenant", runCatching { enregistreSerie() }.getOrDefault(false))
             .put("prochaines", JSONArray(prochaines(t).map { a ->

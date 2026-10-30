@@ -64,6 +64,17 @@ class MetaSitePcTest {
     }
 
     @Test
+    fun `a retouched SSTV picture says so - couleurs or ia, its model`() {
+        // As received: nothing added.
+        assertEquals(0, MetaSitePc.retouche(JSONObject(), "").length())
+        assertEquals(0, MetaSitePc.retouche(JSONObject(), "autre").length())
+        val c = MetaSitePc.retouche(JSONObject(), "couleurs")
+        assertEquals("couleurs", c.getString("retouche")); assertFalse(c.has("ia")); assertFalse(c.has("modeleIa"))
+        val i = MetaSitePc.retouche(JSONObject(), "ia", "SCUNet real-PSNR")
+        assertEquals("ia", i.getString("retouche")); assertTrue(i.getBoolean("ia")); assertEquals("SCUNet real-PSNR", i.getString("modeleIa"))
+    }
+
+    @Test
     fun `a journal video says its pass, the auto-pilot and its planches`() {
         val v = MetaSitePc.video("SatMe_ISS_20261003_134930Z_passage.mp4")
         assertNotNull(v); v!!

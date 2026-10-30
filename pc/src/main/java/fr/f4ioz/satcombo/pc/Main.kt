@@ -648,11 +648,17 @@ fun main(args: Array<String>) {
     serveur.optionsSstv = optionsSstv
     // The pictures' finish: their colour set right (SSTV › Réglages' defaults, picture by picture), and the « IA » once
     // its model is installed (ia/, downloaded only when asked).
-    val iaSstv = IaSstvPc(dossier)
+    val iaSstv = IaSstvPc(dossier) { optionsSstv.options.iaFils }
     val retouches = classement.corrections.retouches { optionsSstv.options.defautsRetouche }
     if (iaSstv.installe()) retouches.ia = iaSstv
     optionsSstv.ia = iaSstv
+    optionsSstv.retouches = retouches
     optionsSstv.iaPrete = { pret -> retouches.ia = if (pret) iaSstv else null }
+    // « Débruitage IA automatique » (off by default): each noisy picture received, in the background; the site told when done.
+    var siteIa: (String) -> Unit = {}
+    val iaAuto = fr.f4ioz.satcombo.sstv.IaAuto(retouches, { optionsSstv.options.regleIaAuto },
+        fini = { png, issue -> if (issue == fr.f4ioz.satcombo.sstv.IaAuto.FAITE) siteIa(png) })
+    optionsSstv.iaAuto = iaAuto
     // « Réglages › Envoyer vers un site web »: the SSTV pictures, planches, reports, contacts and videos sent to the owner's site (or a folder),
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
     val site = SitePc(station.stockage, dossier)
@@ -662,7 +668,11 @@ fun main(args: Array<String>) {
     telemesure.paquets.assemblage.surAjout = { ph -> site.nouveauPaquetSsdv(ph.id, ph.complete) }
     site.sources = { g, ref -> sourcesSite.contenu(g, ref) }
     site.planchesRemplies = { planche.planches().filter { it.images.isNotEmpty() }.map { it.id } }
-    son.sstv.nouvelleImage = { nom, _ -> site.nouvelleImage(nom) }
+    // The site gets the version chosen as it is now (as received while the IA is still to come), then the IA's once made.
+    sourcesSite.versionSstv = { site.versionSstv }
+    siteIa = { png -> runCatching { site.iaFaite(png) } }
+    classement.corrections.api.iaFaite = { png -> siteIa(png) }
+    son.sstv.nouvelleImage = { nom, _ -> site.nouvelleImage(nom); iaAuto.demande(son.sstv.dossier, nom) }
     carnet.ecouteurs += { c -> site.nouveauContact(c.timeMs) }
     journalWeb.videoFaite = { f -> site.nouvelleVideo(f.name) }
     serveur.site = site

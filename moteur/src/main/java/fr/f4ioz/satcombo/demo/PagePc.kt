@@ -1404,9 +1404,10 @@ ${EncartSstvJs.CSS}  #i-galerie .petit { font-size:11px; line-height:1.3; }
   .cl-badge.grand { top:8px; right:8px; font-size:16px; padding:2px 9px; }
   #i-galerie a { position:relative; }
   /* Corrected pictures (kept apart from those received): the viewer's comparison, the gallery's marks. */
-  #vi-cadre { position:relative; display:inline-block; max-width:100%; }
-  #vi-img2 { position:absolute; left:0; top:0; width:100%; border-radius:6px; pointer-events:none; }
-  #vi-trait { position:absolute; top:0; bottom:0; width:2px; background:#FFD54F; pointer-events:none; box-shadow:0 0 3px #000; }
+  #vi-cadre, #so-ia-essai-cadre { position:relative; display:inline-block; max-width:100%; }
+  #vi-img2, #so-ia-essai-b { position:absolute; left:0; top:0; width:100%; border-radius:6px; pointer-events:none; }
+  #vi-trait, #so-ia-essai-trait { position:absolute; top:0; bottom:0; width:2px; background:#FFD54F; pointer-events:none; box-shadow:0 0 3px #000; }
+  #so-ia-essai-a { display:block; width:min(100%, 640px); border-radius:6px; image-rendering:pixelated; cursor:ew-resize; }
   .vi-etiq { position:absolute; bottom:6px; background:rgba(0,0,0,.72); color:#fff; border-radius:6px; padding:1px 6px; font-size:11px; pointer-events:none; }
   #vi-corr .seg button { border-radius:0; margin:0; } #vi-corr .seg button:first-child { border-radius:6px 0 0 6px; } #vi-corr .seg button:last-child { border-radius:0 6px 6px 0; }
   #vi-corr .seg button.actif { background:var(--accent, #4FC3F7); color:#000; }
@@ -2806,11 +2807,29 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
         <label class="petit" title="Noir et blanc étirés quand les deux restent en deçà (jamais plus de ×1,6)"><input type="checkbox" id="so-c_niveaux" onchange="soReglage('c_niveaux', this.checked ? 1 : 0)"> niveaux</label>
         <label class="petit" title="Des couleurs délavées ravivées (jamais plus de ×1,5)"><input type="checkbox" id="so-c_saturation" onchange="soReglage('c_saturation', this.checked ? 1 : 0)"> saturation</label></div>
       <div class="petit aide">Tout est mesuré sur l’image (visionneuse › 📊 Analyse) et corrigé d’une même règle pour tous les pixels : rien n’est inventé, une étape dont la mesure n’est pas nette n’est pas appliquée. Une version à part dans corrigees/ ; le pack ARISS prend toujours l’image reçue.</div>
-      <div class="t" style="margin-top:10px">Débruitage <b class="badge-ia">IA</b> <span class="petit" style="font-weight:400">facultatif, jamais par défaut</span></div>
+      <div class="t" style="margin-top:10px">Débruitage <b class="badge-ia">IA</b> <span class="petit" style="font-weight:400">facultatif, jamais d’origine</span></div>
       <div class="petit" id="so-ia-etat"></div>
       <div id="so-ia-barre-f" style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden" hidden><div id="so-ia-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
       <div class="ligne"><button class="primaire" id="so-ia-installer" onclick="soIaInstalle()">Installer</button><button id="so-ia-supprimer" onclick="soIaSupprime()" hidden>Supprimer</button></div>
-      <div class="petit aide">Un réseau appris qui retire le bruit d’une image (cochez « IA » dans la visionneuse, image par image). Il dessine ce qu’il croit voir : une image passée par l’IA est toujours marquée « IA » (galerie, planches, site web), après les couleurs et sans les remplacer, jamais dans le pack ARISS.
+      <div id="so-ia-reglages" hidden>
+      <label class="petit" style="display:block;margin-top:8px" title="Chaque image reçue en direct passe par l’IA toute seule, en arrière-plan, une à la fois, sur un fil de basse priorité : le décodage et l’auto-pilote n’attendent jamais. Elle est alors marquée « IA » partout, comme cochée à la main ; une image décochée dans la visionneuse reste sans. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-ia_auto" onchange="soReglage('ia_auto', this.checked ? 1 : 0)"> <b>Débruitage IA automatique</b> <span class="petit">(décoché d’origine ; les images reçues à partir de maintenant)</span></label>
+      <div class="ligne" style="margin-top:2px"><label class="petit" title="Une image propre n’est pas touchée. Le bruit est celui de 📊 Analyse (visionneuse) : l’écart type de la luminance, en niveaux. Sur 215 images de l’ISS : médiane 4 ; sous 5 la note moyenne est de 80 à 85, à partir de 5 de 65."><input type="checkbox" id="so-ia_seuil_on" onchange="soReglage('ia_seuil_on', this.checked ? 1 : 0)"> seulement si le bruit atteint</label>
+        <input id="so-ia_seuil" type="number" min="0" max="30" step="0.5" style="max-width:64px" onchange="soReglage('ia_seuil', this.value)"> <span class="petit">niveaux (σ de la luminance, comme 📊 Analyse › Bruit)</span></div>
+      <div class="petit" id="so-ia-auto-etat"></div>
+      <div class="ligne" style="margin-top:8px"><span class="petit" title="L’image débruitée mêlée à l’image d’avant : 100 % l’IA seule, 50 % moitié-moitié (un grain plus naturel), 0 % rien">Force</span>
+        <input type="range" id="so-ia_force" min="0" max="100" step="5" style="width:140px" oninput="txt('so-ia_force-v', this.value + ' %')" onchange="soReglage('ia_force', this.value)"><span class="petit" id="so-ia_force-v" style="min-width:40px"></span>
+        <span class="petit">Ordre</span><select id="so-ia_avant" style="flex:none" onchange="soReglage('ia_avant', this.value)" title="Avec « Couleurs corrigées » : l’IA après (les couleurs mesurées sur l’image reçue), ou avant (mesurées sur l’image débruitée, plus nette)"><option value="0">après les couleurs</option><option value="1">avant les couleurs</option></select></div>
+      <div class="ligne"><span class="petit" title="Le côté d’une tuile au plus : une image plus grande est découpée. Plus petit : moins de mémoire, plus de temps. 640 : toute image SSTV jusqu’au PD 120 en une seule tuile">Tuiles</span><select id="so-ia_tuile" style="flex:none" onchange="soReglage('ia_tuile', this.value)"></select>
+        <span class="petit" title="Le chevauchement des tuiles, fondu : plus large, des raccords moins visibles">recouvrement</span><select id="so-ia_recouvrement" style="flex:none" onchange="soReglage('ia_recouvrement', this.value)"></select>
+        <span class="petit" title="Les fils du processeur pour l’IA. Automatique : la moitié, 8 au plus (l’autre moitié pour le reste de la station)">fils de calcul</span><select id="so-ia_fils" style="flex:none" onchange="soReglage('ia_fils', this.value)"></select></div>
+      <div class="petit aide">Sur le processeur seulement : l’ONNX Runtime téléchargé est sa version processeur (une carte graphique en demanderait une autre, bien plus lourde). Un réglage changé refait les versions IA quand on les redemande ; il vaut pour l’IA automatique comme pour celle cochée à la main.</div>
+      <div class="ligne" style="margin-top:8px"><span class="petit"><b>Tester sur une image</b></span><select id="so-ia-essai-nom" style="flex:1;min-width:160px"></select><button id="so-ia-essai-b-l" onclick="soIaEssai()" title="L’image choisie sans et avec l’IA, avec les réglages ci-dessus (ses couleurs comme elle les a) : rien n’est gardé dans la galerie">Tester</button></div>
+      <div class="petit" id="so-ia-essai-etat"></div>
+      <div id="so-ia-essai-zone" hidden><div id="so-ia-essai-cadre"><img id="so-ia-essai-a" alt="Avant"><img id="so-ia-essai-b" alt="Après"><div id="so-ia-essai-trait"></div>
+        <span class="vi-etiq" style="left:6px">Avant</span><span class="vi-etiq" style="right:6px">Après · <b class="badge-ia">IA</b></span></div>
+        <div><input type="range" id="so-ia-essai-curseur" min="0" max="100" value="50" style="width:200px" oninput="soIaEssaiCurseur()"></div></div>
+      </div>
+      <div class="petit aide">Un réseau appris qui retire le bruit d’une image : cochez « IA » dans la visionneuse, image par image, ou « Débruitage IA automatique » ci-dessus. Il dessine ce qu’il croit voir : une image passée par l’IA est toujours marquée « IA » (galerie, planches, site web), jamais dans le pack ARISS ; votre site reçoit sa version IA seulement si vous le choisissez (Réglages › Envoyer vers un site web).
         Modèle : <a href="https://github.com/cszn/SCUNet" target="_blank" rel="noopener noreferrer">SCUNet</a> (K. Zhang et al., 2022), poids « real-PSNR » sous licence Apache-2.0, en ONNX (<a href="https://huggingface.co/Heliosoph/scunet-onnx" target="_blank" rel="noopener noreferrer">Heliosoph/scunet-onnx</a>), exécuté sur le processeur par ONNX Runtime (Microsoft, licence MIT). Rien n’est fourni avec SatMe-PC : téléchargé au clic dans ia/ (environ 170 Mo), chaque fichier vérifié (SHA-256). 2 à 3 s par image de 320×256, 8 s pour un PD 120.</div>
     </div>
     <div class="carte" id="sstv-redec-carte">
@@ -5232,7 +5251,7 @@ ${DemarragePagePc.DIALOGUES}
     <span class="petit" id="vi-corr-txt" style="flex:1;min-width:200px"></span></div>
   <div class="ligne" id="vi-ret" style="margin-top:6px" hidden>
     <label class="petit" title="Dominante de couleur, couleur décalée par rapport à l’image, niveaux : mesurés sur l’image et corrigés d’une même règle pour tous les pixels, rien n’est inventé. Une version à part (corrigees/), utilisée aussi par les planches et le site web : l’image reçue n’est jamais modifiée. Pour cette image (le réglage par défaut est dans SSTV › Réglages)."><input type="checkbox" id="vi-ret-couleur" onchange="viRetReglage('couleur', this.checked ? 1 : 0)"> 🎨 Couleurs corrigées</label>
-    <label class="petit" id="vi-ret-ia-l"><input type="checkbox" id="vi-ret-ia" onchange="viRetReglage('ia', this.checked ? 1 : 0)"> <b class="badge-ia">IA</b> débruitage</label>
+    <label class="petit" id="vi-ret-ia-l"><input type="checkbox" id="vi-ret-ia" onchange="viRetReglage('ia', this.checked ? 1 : 0)"> <b class="badge-ia">IA</b> débruitage <span class="petit" id="vi-ret-ia-auto"></span></label>
     <button id="vi-v-ret" onclick="viMontre(viVue === 'ret' ? viRetBase : 'ret')" title="Cette version sans et avec ses retouches (couleurs, IA) : glisser sur l’image" hidden>Avant | Après</button>
     <button class="discret" id="vi-ret-analyse-b" onclick="viRetAnalyseOuvre()" aria-expanded="false" title="Ce qui a été mesuré sur cette image : dominante, couleur décalée, niveaux, saturation, bruit, note">📊 Analyse</button>
     <span class="petit" id="vi-ret-txt" style="flex:1;min-width:160px"></span></div>
@@ -10361,7 +10380,7 @@ function rendSon() {
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? clJour(i.t) + '/' + new Date(i.t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(i.t) + (utc() ? ' UTC' : '') : '') + (i.complete ? '' : ' · partielle') +
       (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
-      (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="Débruitage appris (IA) demandé pour cette image">IA</b>' : '') + '</div></a>').join('') ||
+      (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="' + (i.iaAuto ? 'Débruitage appris (IA), fait automatiquement' : 'Débruitage appris (IA) demandé pour cette image') + '">IA</b>' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
   if (g('visionneuse').open) voisOutils();
@@ -10437,7 +10456,7 @@ function clGalerie(filtre) {
           '<img src="sstv/' + enc(i.nom) + '" loading="lazy">' + (i.note >= 0 ? '<span class="cl-note' + cl + '">' + i.note + '</span>' : '') + clBadge(gr) +
           (gr.traite && gr.traite.corrigees.includes(i.nom) ? '<span class="cl-corr" title="Une version corrigée existe (à part ; celle-ci est la réception brute)">✨</span>' : '') +
           '<div class="petit">' + (i.t ? clJour(i.t) + ' ' + hm(i.t) + clZ() : '') + (im.complete === false ? ' · partielle' : '') + (i.groupeMain ? ' · groupée à la main' : '') +
-          (im.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (im.ia ? ' · <b class="badge-ia" title="Débruitage appris (IA) demandé pour cette image">IA</b>' : '') + '</div></a>';
+          (im.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (im.ia ? ' · <b class="badge-ia" title="' + (im.iaAuto ? 'Débruitage appris (IA), fait automatiquement' : 'Débruitage appris (IA) demandé pour cette image') + '">IA</b>' : '') + '</div></a>';
       }).join('') + '</div></div>';
   }).join('') || '<div class="petit">aucune image</div>';
 }
@@ -10913,8 +10932,9 @@ function viRetRend() {
   g('vi-ret-couleur').checked = r.effet.couleur;
   g('vi-ret-ia').checked = r.effet.ia;
   g('vi-ret-ia').disabled = !r.iaPossible && !r.effet.ia;
-  g('vi-ret-ia-l').title = r.iaPossible ? 'Débruitage appris (SCUNet, sur le processeur, 2 à 3 s) : il dessine ce qu’il croit voir. Jamais par défaut ; l’image est alors marquée « IA » partout (galerie, planches, site web). Après les couleurs, sans les remplacer ; l’image reçue n’est jamais modifiée.'
+  g('vi-ret-ia-l').title = r.iaPossible ? 'Débruitage appris (SCUNet, sur le processeur, 2 à 3 s) : il dessine ce qu’il croit voir. Jamais d’origine : coché ici pour cette image, ou par « Débruitage IA automatique » (SSTV › Réglages › Couleurs et IA) ; décoché ici, cette image reste sans. L’image est alors marquée « IA » partout (galerie, planches, site web si vous l’avez choisi). L’image reçue n’est jamais modifiée.'
     : 'Modèle IA non installé : SSTV › Réglages › Couleurs et IA › Installer';
+  txt('vi-ret-ia-auto', r.reglage.ia == null && r.reglage.iaAuto ? '(automatique)' : '');
   g('vi-v-ret').hidden = !viRetFinie();
   txt('vi-ret-txt', viRetDit());
   if (!g('vi-analyse').hidden) g('vi-analyse').innerHTML = viRetAnalyse();
@@ -11009,8 +11029,12 @@ async function soCharge() {
   g('so-carte').hidden = false;
   const r = SO.reglages;
   g('so-couleur-carte').hidden = false;
-  [['so-couleur', r.couleur], ['so-c_dominante', r.c_dominante], ['so-c_chroma', r.c_chroma], ['so-c_niveaux', r.c_niveaux], ['so-c_saturation', r.c_saturation]]
+  [['so-couleur', r.couleur], ['so-c_dominante', r.c_dominante], ['so-c_chroma', r.c_chroma], ['so-c_niveaux', r.c_niveaux], ['so-c_saturation', r.c_saturation],
+    ['so-ia_auto', r.ia_auto], ['so-ia_seuil_on', r.ia_seuil_on]]
     .forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = !!b; });
+  [['so-ia_seuil', r.ia_seuil], ['so-ia_force', r.ia_force], ['so-ia_avant', r.ia_avant ? '1' : '0']].forEach(([i, x]) => { if (document.activeElement !== g(i)) g(i).value = x; });
+  txt('so-ia_force-v', r.ia_force + ' %'); g('so-ia_seuil').disabled = !r.ia_seuil_on;
+  soIaR = r;
   soIaCharge();
   [['so-alerte', r.alerte], ['so-enreg', r.enreg], ['so-redecode', r.redecode], ['so-journal', r.journal], ['so-satme', r.satme], ['so-jpeg', r.jpeg]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
   [['so-avant', r.avant], ['so-note', r.note], ['so-jours', r.jours], ['so-mo', r.mo], ['so-dispo', r.dispo]].forEach(([i, v]) => { if (document.activeElement !== g(i)) g(i).value = v; });
@@ -11023,7 +11047,7 @@ async function soCharge() {
   txt('so-station', 'Indicatif et locator de la QSL : ceux de l’image, sinon Réglages › Ma station (' + (r.indicatif || '—') + ', ' + (r.locator || '—') + ').');
   viQslMaj();
 }
-async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); if (k === 'couleur' || k.startsWith('c_')) viRetCle = ''; }
+async function soReglage(k, v) { await post('api/sstv-options/reglage?k=' + k + '&v=' + enc(String(v))); soCharge(); if (k === 'couleur' || k.startsWith('c_') || k.startsWith('ia_')) viRetCle = ''; }
 // The « IA »'s model: its files, their sizes, the download (asked again while it runs).
 let soIaMinuterie = 0;
 async function soIaCharge() {
@@ -11039,8 +11063,53 @@ async function soIaCharge() {
   g('so-ia-barre-f').hidden = !j.enCours; g('so-ia-barre').style.width = (j.total ? 100 * j.recus / j.total : 0) + '%';
   g('so-ia-installer').hidden = j.installe; g('so-ia-installer').disabled = j.enCours; txt('so-ia-installer', j.enCours ? 'Installation…' : 'Installer (' + mo(j.total) + ')');
   g('so-ia-supprimer').hidden = !j.installe || j.enCours;
-  if (j.enCours) soIaMinuterie = setTimeout(soIaCharge, 1000);
+  // Installed: the automatic IA, its settings, the trial.
+  g('so-ia-reglages').hidden = !j.installe;
+  if (j.installe) soIaReglages(j);
+  if (j.enCours || (j.essai && j.essai.enCours)) soIaMinuterie = setTimeout(soIaCharge, 1000);
 }
+let soIaR = null, soIaVu = 0;
+const SO_IA_ISSUES = { faite: 'débruitée', propre: 'assez propre, laissée', choisie: 'réglée à la main, laissée', sans_modele: 'modèle absent', coupe: 'IA automatique coupée', illisible: 'image illisible', echec: 'échec' };
+function soIaOptions(id, l, v) {
+  const h = l.map(o => '<option value="' + o[0] + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+  if (g(id).dataset.vu !== h && document.activeElement !== g(id)) { g(id).dataset.vu = h; g(id).innerHTML = h; }
+}
+function soIaReglages(j) {
+  const r = soIaR || {};
+  soIaOptions('so-ia_tuile', [256, 320, 384, 448, 512, 640, 768, 1024].map(x => [x, x + ' px']), r.ia_tuile);
+  soIaOptions('so-ia_recouvrement', [8, 16, 32, 48, 64].filter(x => x <= (r.ia_tuile || 640) / 4).map(x => [x, x + ' px']), r.ia_recouvrement);
+  const f = [[0, 'automatique (' + Math.max(1, Math.min(8, Math.floor(j.processeurs / 2))) + ')']];
+  for (let k = 1; k <= j.processeurs; k++) f.push([k, String(k)]);
+  soIaOptions('so-ia_fils', f, r.ia_fils || 0);
+  const a = j.auto || {};
+  txt('so-ia-auto-etat', !r.ia_auto ? '' : (a.enAttente ? a.enAttente + ' image(s) en attente · ' : '') +
+    (a.dernier ? 'Dernière : ' + a.dernier + ' — ' + (SO_IA_ISSUES[a.issue] || a.issue) + (a.bruit != null ? ' (bruit ' + String(a.bruit).replace('.', ',') + ')' : '') : 'Aucune image traitée depuis le démarrage.'));
+  const imgs = j.images || [], sel = g('so-ia-essai-nom'), e = j.essai || {};
+  const h = imgs.map(i => '<option value="' + esc(i.nom) + '">' + esc((i.sat || '?') + ' · ' + i.mode + ' · ' + acJourLoc(i.t) + ' ' + acHmLoc(i.t)) + '</option>').join('');
+  // The picture chosen kept; at first the one last tried, else the one open in the viewer.
+  if (sel.dataset.vu !== h && document.activeElement !== sel) { const avant = sel.dataset.vu ? sel.value : (e.nom || viNom || ''); sel.dataset.vu = h; sel.innerHTML = h; if (avant) sel.value = avant; if (!sel.value && imgs.length) sel.value = imgs[0].nom; }
+  g('so-ia-essai-b-l').disabled = !imgs.length || !!e.enCours;
+  txt('so-ia-essai-etat', e.enCours ? 'Essai en cours sur ' + e.nom + '…' : e.erreur ? '✗ ' + e.erreur : e.version ? e.nom + ' — IA ' + (e.ms / 1000).toFixed(1).replace('.', ',') + ' s' +
+    (e.bruit != null ? ', bruit ' + String(e.bruit).replace('.', ',') : '') + (e.couleur ? ', couleurs corrigées aussi' : '') + '. Glisser sur l’image : avant à gauche, après à droite.' : imgs.length ? '' : 'Aucune image dans la galerie.');
+  g('so-ia-essai-zone').hidden = !e.version || e.enCours;
+  if (e.version && e.version !== soIaVu) {
+    soIaVu = e.version;
+    g('so-ia-essai-a').src = 'api/sstv-options/ia/essai-avant.png?v=' + e.version;
+    g('so-ia-essai-b').src = 'api/sstv-options/ia/essai-apres.png?v=' + e.version;
+    soIaEssaiCurseur();
+  }
+}
+async function soIaEssai() { const n = g('so-ia-essai-nom').value; if (!n) return; await post('api/sstv-options/ia/essai?nom=' + enc(n)); soIaCharge(); }
+function soIaEssaiCurseur() {
+  const x = +g('so-ia-essai-curseur').value;
+  g('so-ia-essai-b').style.clipPath = 'inset(0 0 0 ' + x + '%)';
+  g('so-ia-essai-trait').style.left = 'calc(' + x + '% - 1px)';
+}
+g('so-ia-essai-cadre').addEventListener('pointermove', e => {
+  if (!(e.buttons & 1) && e.pointerType !== 'mouse') return;
+  const r = g('so-ia-essai-a').getBoundingClientRect();
+  g('so-ia-essai-curseur').value = String(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100)); soIaEssaiCurseur();
+});
 async function soIaInstalle() { await post('api/sstv-options/ia/installer'); soIaCharge(); }
 async function soIaSupprime() {
   if (!confirm('Supprimer le modèle IA (environ 170 Mo dans ia/) ? Les images déjà passées par l’IA restent ; aucune nouvelle ne l’est plus.')) return;

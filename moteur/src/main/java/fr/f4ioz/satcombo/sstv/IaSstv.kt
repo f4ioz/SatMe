@@ -12,8 +12,9 @@ package fr.f4ioz.satcombo.sstv
  * A learnt denoiser, run on the station's own processor (SatMe-PC: SCUNet
  * through ONNX Runtime, downloaded when asked). Unlike [CouleurSstv] and
  * [CorrectionSstv] it does draw what it believes was there: always shown
- * as « IA », never the default, never in the place of the classic
- * corrections.
+ * as « IA », never on unless the owner says so (picture by picture, or
+ * « Débruitage IA automatique » in SSTV › Réglages), never in the place of
+ * the classic corrections.
  */
 interface DebruiteurIa {
     /** Its name as said under a picture and in the sidecars (« SCUNet real-PSNR »). */
@@ -46,20 +47,56 @@ object IaSstv {
     /** Overlap between tiles, blended. */
     const val RECOUVREMENT = 32
 
+    /**
+     * How the denoiser is run (SSTV › Réglages › Couleurs et IA):
+     *  - [force]: 0 to 100 %, the denoised picture blended over the one
+     *    given (0: the picture as given, the model not even run);
+     *  - [tuile]: a tile's side at most (a multiple of [MULTIPLE], 128 to
+     *    1024): smaller takes less memory, more tiles and time;
+     *  - [recouvrement]: the overlap between tiles (8 to a quarter of a tile);
+     *  - [avantCouleur]: the IA before the colour correction (its measures
+     *    then taken on the denoised picture), else after (the default).
+     * [borne] keeps each in its range.
+     */
+    data class Reglages(
+        val force: Int = 100,
+        val tuile: Int = TUILE,
+        val recouvrement: Int = RECOUVREMENT,
+        val avantCouleur: Boolean = false,
+    ) {
+        fun borne(): Reglages {
+            val t = (tuile.coerceIn(TUILE_MIN, TUILE_MAX) / MULTIPLE) * MULTIPLE
+            return Reglages(force.coerceIn(0, 100), t, recouvrement.coerceIn(RECOUVREMENT_MIN, t / 4), avantCouleur)
+        }
+
+        /** What the sidecars keep: another code makes the pictures again (the threads are not in it: the same picture). */
+        fun code(): String = "f" + force + "t" + tuile + "r" + recouvrement + (if (avantCouleur) "a" else "p")
+    }
+
+    const val TUILE_MIN = 128
+    const val TUILE_MAX = 1024
+    const val RECOUVREMENT_MIN = 8
+
     private fun arrondi(v: Int) = (v + MULTIPLE - 1) / MULTIPLE * MULTIPLE
 
-    /** [px] ARGB [w]×[h] denoised by [m], tile by tile; the same size back. */
-    fun applique(m: DebruiteurIa, px: IntArray, w: Int, h: Int): IntArray {
+    /**
+     * [px] ARGB [w]×[h] denoised by [m], tile by tile, as [reglages] say
+     * (kept in their ranges); the same size back.
+     */
+    fun applique(m: DebruiteurIa, px: IntArray, w: Int, h: Int, reglages: Reglages = Reglages()): IntArray {
+        val r = reglages.borne()
+        if (r.force == 0) return px.copyOf()
+        val tuile = r.tuile; val recouvrement = r.recouvrement
         val acc = FloatArray(3 * w * h)
         val poids = FloatArray(w * h)
-        val pasX = if (w <= TUILE) w else TUILE - RECOUVREMENT
-        val pasY = if (h <= TUILE) h else TUILE - RECOUVREMENT
+        val pasX = if (w <= tuile) w else tuile - recouvrement
+        val pasY = if (h <= tuile) h else tuile - recouvrement
         var y0 = 0
         while (true) {
-            val th = if (h <= TUILE) h else minOf(TUILE, h - y0)
+            val th = if (h <= tuile) h else minOf(tuile, h - y0)
             var x0 = 0
             while (true) {
-                val tw = if (w <= TUILE) w else minOf(TUILE, w - x0)
+                val tw = if (w <= tuile) w else minOf(tuile, w - x0)
                 val pw = arrondi(tw); val ph = arrondi(th)
                 val entree = FloatArray(3 * pw * ph)
                 for (y in 0 until ph) for (x in 0 until pw) {
@@ -73,21 +110,29 @@ object IaSstv {
                 require(sortie.size == entree.size) { "tile ${pw}x$ph: ${sortie.size} values back" }
                 for (y in 0 until th) for (x in 0 until tw) {
                     // A tile's border counts less where another tile covers it.
-                    val bord = minOf(if (x0 > 0) x + 1 else RECOUVREMENT, if (x0 + tw < w) tw - x else RECOUVREMENT,
-                        if (y0 > 0) y + 1 else RECOUVREMENT, if (y0 + th < h) th - y else RECOUVREMENT)
-                    val p = bord.coerceIn(1, RECOUVREMENT).toFloat()
+                    val bord = minOf(if (x0 > 0) x + 1 else recouvrement, if (x0 + tw < w) tw - x else recouvrement,
+                        if (y0 > 0) y + 1 else recouvrement, if (y0 + th < h) th - y else recouvrement)
+                    val p = bord.coerceIn(1, recouvrement).toFloat()
                     val i = y * pw + x; val o = (y0 + y) * w + x0 + x
                     for (k in 0..2) acc[k * w * h + o] += sortie[k * pw * ph + i] * p
                     poids[o] += p
                 }
                 if (x0 + tw >= w) break
-                x0 = minOf(x0 + pasX, w - TUILE)
+                x0 = minOf(x0 + pasX, w - tuile)
             }
             if (y0 + th >= h) break
-            y0 = minOf(y0 + pasY, h - TUILE)
+            y0 = minOf(y0 + pasY, h - tuile)
         }
+        // Blended over the picture given at [Reglages.force].
+        val f = r.force / 100f
         return IntArray(w * h) { o ->
-            fun c(k: Int) = (acc[k * w * h + o] / poids[o] * 255f).let { if (it.isNaN()) 0 else Math.round(it).coerceIn(0, 255) }
+            val e = px[o]
+            fun c(k: Int): Int {
+                val d = acc[k * w * h + o] / poids[o] * 255f
+                if (d.isNaN()) return 0
+                val avant = ((e shr (16 - 8 * k)) and 0xFF).toFloat()
+                return Math.round(avant + (d - avant) * f).coerceIn(0, 255)
+            }
             (0xFF shl 24) or (c(0) shl 16) or (c(1) shl 8) or c(2)
         }
     }

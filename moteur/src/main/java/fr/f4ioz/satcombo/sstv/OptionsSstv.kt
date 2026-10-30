@@ -17,6 +17,10 @@ import fr.f4ioz.satcombo.plateforme.Stockage
  */
 class OptionsSstv(private val prefs: Stockage) {
 
+    companion object {
+        const val IA_FILS_MAX = 32
+    }
+
     /** « Diapo manquante attendue »: on by default (it follows « Activités à venir »'s switch too). */
     var alerteDiapo: Boolean
         get() = prefs.getBoolean("sstvo_alerte", true)
@@ -55,7 +59,8 @@ class OptionsSstv(private val prefs: Stockage) {
      * « Corriger les couleurs » ([CouleurSstv], [RetouchesGalerie]): every
      * picture without a switch of its own has its colour set right where it
      * goes out (viewer, sheets, web site) — off by default; and which steps.
-     * The « IA » is never a default: picture by picture only.
+     * The « IA » is never on by default: picture by picture, or every noisy
+     * picture once the owner switches [iaAuto] on.
      */
     var couleurDefaut: Boolean
         get() = prefs.getBoolean("sstvo_couleur", false)
@@ -73,8 +78,47 @@ class OptionsSstv(private val prefs: Stockage) {
         get() = prefs.getBoolean("sstvo_couleur_saturation", false)
         set(v) { prefs.edit().putBoolean("sstvo_couleur_saturation", v).apply() }
 
+    /**
+     * « Débruitage IA automatique » ([IaAuto]): off by default, and never on
+     * by itself — the owner switches it on. Only with the model installed;
+     * with [iaSeuilActif] (on), only the pictures whose noise is at least
+     * [iaSeuil] (luma σ, levels).
+     */
+    var iaAuto: Boolean
+        get() = prefs.getBoolean("sstvo_ia_auto", false)
+        set(v) { prefs.edit().putBoolean("sstvo_ia_auto", v).apply() }
+    var iaSeuilActif: Boolean
+        get() = prefs.getBoolean("sstvo_ia_seuil_on", true)
+        set(v) { prefs.edit().putBoolean("sstvo_ia_seuil_on", v).apply() }
+    /** Kept in tenths of a level. */
+    var iaSeuil: Double
+        get() = prefs.getInt("sstvo_ia_seuil", (IaAuto.SEUIL_DEFAUT * 10).toInt()).coerceIn(0, (IaAuto.SEUIL_MAX * 10).toInt()) / 10.0
+        set(v) { prefs.edit().putInt("sstvo_ia_seuil", Math.round(v.coerceIn(IaAuto.SEUIL_MIN, IaAuto.SEUIL_MAX) * 10).toInt()).apply() }
+
+    val regleIaAuto: IaAuto.Regle get() = IaAuto.Regle(iaAuto, iaSeuilActif, iaSeuil)
+
+    /** How the IA is run, whoever asked it ([IaSstv.Reglages]: strength, tiles, before or after the colour), each kept in its range. */
+    var iaForce: Int
+        get() = prefs.getInt("sstvo_ia_force", 100).coerceIn(0, 100)
+        set(v) { prefs.edit().putInt("sstvo_ia_force", v.coerceIn(0, 100)).apply() }
+    var iaTuile: Int
+        get() = IaSstv.Reglages(tuile = prefs.getInt("sstvo_ia_tuile", IaSstv.TUILE)).borne().tuile
+        set(v) { prefs.edit().putInt("sstvo_ia_tuile", IaSstv.Reglages(tuile = v).borne().tuile).apply() }
+    var iaRecouvrement: Int
+        get() = IaSstv.Reglages(tuile = iaTuile, recouvrement = prefs.getInt("sstvo_ia_recouvrement", IaSstv.RECOUVREMENT)).borne().recouvrement
+        set(v) { prefs.edit().putInt("sstvo_ia_recouvrement", IaSstv.Reglages(tuile = iaTuile, recouvrement = v).borne().recouvrement).apply() }
+    var iaAvantCouleur: Boolean
+        get() = prefs.getBoolean("sstvo_ia_avant", false)
+        set(v) { prefs.edit().putBoolean("sstvo_ia_avant", v).apply() }
+    /** The processor's threads for the IA: 0 automatic (half the processor's, 8 at most), else 1 to [IA_FILS_MAX]. */
+    var iaFils: Int
+        get() = prefs.getInt("sstvo_ia_fils", 0).coerceIn(0, IA_FILS_MAX)
+        set(v) { prefs.edit().putInt("sstvo_ia_fils", v.coerceIn(0, IA_FILS_MAX)).apply() }
+
+    val reglagesIa: IaSstv.Reglages get() = IaSstv.Reglages(iaForce, iaTuile, iaRecouvrement, iaAvantCouleur).borne()
+
     val defautsRetouche: RetouchesGalerie.Defauts get() =
-        RetouchesGalerie.Defauts(couleurDefaut, CouleurSstv.Options(couleurDominante, couleurChroma, couleurNiveaux, couleurSaturation))
+        RetouchesGalerie.Defauts(couleurDefaut, CouleurSstv.Options(couleurDominante, couleurChroma, couleurNiveaux, couleurSaturation), reglagesIa)
 
     /** Retention: days (0 for ever) and size (MB, 0 no limit); both off by default. */
     var retentionJours: Int

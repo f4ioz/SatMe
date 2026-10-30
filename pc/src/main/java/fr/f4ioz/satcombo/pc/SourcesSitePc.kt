@@ -39,6 +39,9 @@ class SourcesSitePc(
     private val ssdv: fr.f4ioz.satcombo.telemesure.AssemblageSsdv? = null,
     private val dossierSsdv: File? = null,
 ) {
+    /** Which version of an SSTV picture goes ([SitePc.versionSstv]), set by Main. */
+    @Volatile var versionSstv: () -> fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite = { fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.RECUE }
+
     /** A journal's pass with its FT8 / FT4 messages, by its id ([Ft8SitePc.contenu]), set by Main. */
     @Volatile var ft8: (String) -> SitePc.Contenu? = { null }
 
@@ -49,10 +52,11 @@ class SourcesSitePc(
         SitePc.Genre.SSTV -> {
             val f0 = sstv.fichier(ref)?.takeIf { it.name.endsWith(".png") }
             val s0 = sstv.images().firstOrNull { it.fileName == ref }
-            // As the picture's switches ask: its colour set right, the « IA » (always said in its words).
-            val (f, s) = if (f0 == null || s0 == null) f0 to s0
-                else runCatching { src.corrections()?.retouchee(ref, f0 to s0) }.getOrNull() ?: (f0 to s0)
-            if (f == null || s == null) null else SitePc.Contenu(f.readBytes(), null, "image/png", metaSstv(s))
+            // The version chosen for the site, when there is one (else as received): its colour set right, the « IA » (always said).
+            val v = if (f0 == null || s0 == null) null
+                else runCatching { src.corrections()?.pourSite(ref, f0 to s0, versionSstv()) }.getOrNull()
+                    ?: fr.f4ioz.satcombo.demo.ApiCorrectionSstv.PourSite(f0, s0)
+            if (v == null) null else SitePc.Contenu(v.fichier.readBytes(), null, "image/png", metaSstv(v.shot, v.retouche, v.modeleIa))
         }
         SitePc.Genre.PLANCHE -> planche.planches().firstOrNull { it.id == ref }?.let { m ->
             planche.image(ref, 1600)?.let { img ->
@@ -151,7 +155,7 @@ class SourcesSitePc(
         return SitePc.Contenu(jpeg, null, "image/jpeg", o)
     }
 
-    private fun metaSstv(s: SstvMeta.SstvShot): JSONObject {
+    private fun metaSstv(s: SstvMeta.SstvShot, retouche: String = "", modeleIa: String = ""): JSONObject {
         val o = JSONObject().put("satellite", s.satName).put("utc", iso(s.timeMs)).put("mode", s.mode)
             .put("station", listOf(s.callsign.ifBlank { station.settings.callsign }, s.locator.ifBlank { station.settings.manualLocator }).filter { it.isNotBlank() }.joinToString(" · "))
             .put("titre", listOf(s.satName, s.mode).filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { s.fileName })
@@ -162,6 +166,8 @@ class SourcesSitePc(
         // Not as received: what was done (« couleur corrigée », « IA »), and the learnt denoiser said apart.
         if (s.traitement.isNotEmpty()) o.put("traitement", s.traitement)
         if (s.retoucheIa) o.put("ia", true)
+        // The picture retouched: « couleurs » or « ia » (with its model), for the site to say so.
+        MetaSitePc.retouche(o, retouche, modeleIa)
         // Its pass and the auto-pilot.
         runCatching {
             val catnum = src.catnumDe(s.satName)

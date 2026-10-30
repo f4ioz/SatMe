@@ -140,7 +140,8 @@ object ApiSon {
                     .put("source", it.source).put("enregistrement", it.recording).put("redecode", it.redecodeMs > 0L)
                 // Its own finish (« IA », colour) for the gallery's badges.
                 val r = fr.f4ioz.satcombo.sstv.RetouchesGalerie.reglageDe(d, it.fileName)
-                if (r.ia) o.put("ia", true)
+                if (r.iaVoulue) o.put("ia", true)
+                if (r.ia == null && r.iaAuto) o.put("iaAuto", true)
                 if (r.couleur != null) o.put("couleur", r.couleur)
             }
             o
