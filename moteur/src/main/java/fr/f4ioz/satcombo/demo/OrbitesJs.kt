@@ -12,7 +12,7 @@ package fr.f4ioz.satcombo.demo
  * The « Orbites » tab, the globe of the Suivi tab and the journal's globe:
  * the Earth in 3D with the satellites going round it, the map of their
  * footprints, a pass played as an animation, a pass of the journal replayed
- * with its contacts and pictures. Six looks drawn from SatMe's own coastline;
+ * with its contacts and pictures. Seven looks drawn from SatMe's own coastline;
  * cities, mountains, landmarks and scenery from [GlobeDonnees] (the page's
  * `GLOBE_MONDE`); the contacts of the log as dots, callsigns or squares.
  * The Earth is drawn by three.js and the orbits worked out by satellite.js,
@@ -446,6 +446,15 @@ const Orbites = (function () {
         grain(x, w, h, .25, 2);
         const v = x.createRadialGradient(w / 2, h / 2, h * .3, w / 2, h / 2, w * .62); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(90,55,20,.35)');
         x.fillStyle = v; x.fillRect(0, 0, w, h);
+      } },
+    /* The globe of a web page's « over my station » card: on the globe each pixel lit (matBleuNuit); here, for the flat map, the day's colours halfway up. */
+    bleunuit: { nom: 'Bleu nuit', fond: '#050A12', etoiles: 0xdfe8ff, nuit: 'rgba(2,6,13,.88)', encre: null, ville: '#E8F0F7', relief: null,
+      peint(x, w, h) {
+        x.fillStyle = '#144066'; x.fillRect(0, 0, w, h);
+        const t = chemin(w, h);
+        x.fillStyle = '#397460'; x.fill(t);
+        grille(x, w, h, 'rgba(140,180,230,.13)', 30, w / 1800);
+        x.save(); x.lineJoin = 'round'; x.strokeStyle = 'rgba(150,230,215,.5)'; x.lineWidth = w / 1600; x.stroke(t); x.restore();
       } }
   };
   const textures = {};
@@ -487,6 +496,39 @@ const Orbites = (function () {
       blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: dos ? THREE.BackSide : THREE.FrontSide
     });
     return new THREE.Mesh(new THREE.SphereGeometry(r || 1.002, 96, 64), m);
+  }
+  /* « Bleu nuit »'s land in red, coastline in green, grid (every 30°) in blue: what matBleuNuit lights. */
+  let masqueBN = null;
+  function masqueBleuNuit() {
+    if (!masqueBN) {
+      const c = document.createElement('canvas'); c.width = 4096; c.height = 2048; const x = c.getContext('2d'), w = 4096, h = 2048, t = chemin(w, h);
+      x.fillStyle = '#000'; x.fillRect(0, 0, w, h); x.globalCompositeOperation = 'lighter';
+      x.fillStyle = '#f00'; x.fill(t);
+      grille(x, w, h, '#00f', 30, w / 1800);
+      x.lineJoin = 'round'; x.strokeStyle = '#0f0'; x.lineWidth = w / 1600; x.stroke(t);
+      masqueBN = c;
+    }
+    return masqueBN;
+  }
+  /*
+   * « Bleu nuit »: each pixel lit by the Sun at [s] (the scene's, followed as it moves) — the ocean and the land from their
+   * dark shade to their day one as the Sun climbs, darker toward the rim, the night side deep with a soft twilight band —,
+   * then the coastline and the grid over it, unlit.
+   */
+  function matBleuNuit(s, anisotropie) {
+    const tex = new THREE.CanvasTexture(masqueBleuNuit()); tex.anisotropy = anisotropie;
+    return new THREE.ShaderMaterial({
+      uniforms: { m: { value: tex }, s: { value: s } },
+      vertexShader: 'varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){ u = uv; nw = mat3(modelMatrix)*normal; n = normalMatrix*normal; vec4 q = modelViewMatrix*vec4(position,1.0); v = -q.xyz; gl_Position = projectionMatrix*q; }',
+      fragmentShader: 'uniform sampler2D m; uniform vec3 s; varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){' +
+        ' vec3 k = texture2D(m, u).rgb; float h = dot(normalize(nw), normalize(s));' +
+        ' float jour = clamp((h + .1) / .22, 0., 1.), mi = clamp(.25 + .75 * max(0., h), 0., 1.) * jour;' +
+        ' vec3 c = mix(mix(vec3(.039, .122, .220), vec3(.090, .247, .227), k.r), mix(vec3(.102, .337, .518), vec3(.310, .592, .478), k.r), mi);' +
+        ' c *= .72 + .28 * max(0., dot(normalize(n), normalize(v)));' +
+        ' c = mix(c, vec3(.008, .024, .051), (1. - jour) * .88);' +
+        ' c = mix(c, vec3(.588, .902, .843), k.g * .5); c = mix(c, vec3(.549, .706, .902), k.b * .13);' +
+        ' gl_FragColor = vec4(c, 1.); }'
+    });
   }
   function nuages() {
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d');
@@ -531,6 +573,7 @@ const Orbites = (function () {
       if (genre === 'fort') { x.fillStyle = couleur; x.strokeStyle = style === 'cartoon' ? '#0a1230' : '#ffffff'; x.lineWidth = 4; x.beginPath(); if (x.roundRect) x.roundRect(2, 2, w - 4, H - 4, H / 2 - 2); else x.rect(2, 2, w - 4, H - 4); x.fill(); x.stroke(); x.fillStyle = '#0a1230'; }
       else if (style === 'cartoon') { x.fillStyle = '#fff'; x.strokeStyle = '#0a1230'; x.lineWidth = 4; x.beginPath(); if (x.roundRect) x.roundRect(2, 2, w - 4, H - 4, H / 2 - 2); else x.rect(2, 2, w - 4, H - 4); x.fill(); x.stroke(); x.fillStyle = '#0a1230'; }
       else if (style === 'vintage') { x.fillStyle = 'rgba(239,224,184,.9)'; x.fillRect(0, 4, w, H - 8); x.fillStyle = '#4a2e14'; }
+      else if (style === 'bleunuit') { x.lineJoin = 'round'; x.lineWidth = 7; x.strokeStyle = 'rgba(4,8,16,.78)'; x.textBaseline = 'middle'; x.strokeText(texte, 13, H / 2 + 1); x.fillStyle = couleur; }
       else { x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, 4, w, H - 8); x.fillStyle = couleur; }
       x.textBaseline = 'middle'; x.fillText(texte, 13, H / 2 + 1);
     }
@@ -835,6 +878,7 @@ const Orbites = (function () {
       else if (k === 'cartoon') { mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toon() }); amb.intensity = .55; soleil.intensity = .8; }
       else if (k === 'vintage') { mat = new THREE.MeshLambertMaterial({ map: tex }); amb.intensity = .65; soleil.intensity = .55; soleil.color.set(0xffe6c0); }
       else if (k === 'points') mat = new THREE.MeshBasicMaterial({ color: 0x050915 });
+      else if (k === 'bleunuit') { mat = matBleuNuit(soleil.position, tex.anisotropy); tex.dispose(); }
       else mat = new THREE.MeshBasicMaterial({ map: tex });
       sol = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), mat); terre.add(sol);
       const ajoute = (o, parent) => { (parent || scene).add(o); extras.push(o); };
@@ -843,6 +887,7 @@ const Orbites = (function () {
       if (k === 'holo') { mat.transparent = true; mat.opacity = .92; ajoute(bord('#3fe8ff', 2.2, 1.4)); ajoute(bord('#3fe8ff', 2.5, .6, 1.06, true)); }
       if (k === 'points') { ajoute(pointsTerre(), terre); ajoute(bord('#5f86ff', 2.5, 1.2)); ajoute(bord('#3f5fff', 3, .5, 1.07, true)); }
       if (k === 'radar') ajoute(bord('#3cff7a', 2.4, 1.1));
+      if (k === 'bleunuit') { ajoute(bord('#46a0ff', 3.2, .55)); ajoute(bord('#46a0ff', 2.4, .75, 1.12, true)); }
       scene.background = new THREE.Color(STYLES[k].fond);
       etoiles.material.color.set(STYLES[k].etoiles);
       sc.objets.forEach(o => o.restyle());
@@ -1474,7 +1519,7 @@ const Orbites = (function () {
 
     private const val TRACES = """  /* ------------------------------------------------------------ the tracks, as marked as asked (« Traces ») */
   /* Under a track, a halo [r, g, b, opacity]: dark on the light looks (and on the real Earth), light and fainter on the dark ones. */
-  const HALO_TRACE = { cartoon: [.03, .06, .18, 1], vintage: [.18, .09, .02, 1], realiste: [0, .02, .07, 1], holo: [.86, 1, 1, .4], points: [.92, .95, 1, .4], radar: [.86, 1, .9, .4] };
+  const HALO_TRACE = { cartoon: [.03, .06, .18, 1], vintage: [.18, .09, .02, 1], realiste: [0, .02, .07, 1], holo: [.86, 1, 1, .4], points: [.92, .95, 1, .4], radar: [.86, 1, .9, .4], bleunuit: [.016, .03, .06, .8] };
   /** How marked the tracks are: [k] 0 (discreet, a thin line) … 1 (very marked, thick, haloed, opaque). */
   function reglageTrace(k) {
     return { larg: 1.2 + 3.6 * k, halo: k < .05 ? 0 : .8 + 2.4 * k, haloA: Math.min(.8, 1.2 * k), alpha: .7 + .3 * k, passe: .45 + .25 * k };

@@ -48,7 +48,7 @@ import kotlin.math.sqrt
 /**
  * The journal's globe, for its pictures, GIFs and videos: the Earth seen
  * from space (orthographic), turned to keep the station and the satellite
- * in view, lit by the Sun of the moment, in the page's six looks
+ * in view, lit by the Sun of the moment, in the page's seven looks
  * ([fr.f4ioz.satcombo.demo.OrbitesJs] STYLES). Over it the ground track
  * (gone solid, to come dashed), the footprint, the satellite at its
  * height, the line to it while it is up, the station and the contacts.
@@ -61,7 +61,7 @@ import kotlin.math.sqrt
  */
 object GlobeRenduPc {
 
-    val STYLES = listOf("cartoon", "realiste", "holo", "points", "radar", "vintage")
+    val STYLES = listOf("cartoon", "realiste", "holo", "points", "radar", "vintage", "bleunuit")
     const val DEFAUT = "cartoon"
 
     /** The globe asked by a request (`vue=globe`, `style=`): its look; null: the sky or the map. */
@@ -408,7 +408,42 @@ object GlobeRenduPc {
             bandes(90.0 to 0x28ff6e, -90.0 to 0x28ff6e), .07, 0x3cff7a, 2.4, 1.1, 0x2fff66, 0x5dff8f, .25),
         "vintage" to Look(0x140e08, 0xf0d9a0, 0x3c230a, .30, 0x6b3f17, bandes(90.0 to 0xdcc79a, -90.0 to 0xdcc79a),
             bandes(90.0 to 0xefe0b8, -90.0 to 0xefe0b8), 1.0, null, 0.0, 0.0, 0xc9a874, 0x5a3a1c, .4),
+        // The ocean and the land in their dark shade (their day one: [BN_MER_JOUR], [BN_TERRE_JOUR]); each pixel lit in [pixelBleuNuit].
+        "bleunuit" to Look(0x050a12, 0xdfe8ff, 0x02060d, .88, 0x3fe0c8, bandes(90.0 to 0x0a1f38, -90.0 to 0x0a1f38),
+            bandes(90.0 to 0x173f3a, -90.0 to 0x173f3a), 1.0, null, 0.0, 0.0, 0x46a0ff, 0x96e6d7, .2),
     )
+
+    /** « Bleu nuit »'s ocean and land in full day. */
+    private const val BN_MER_JOUR = 0x1a5684
+    private const val BN_TERRE_JOUR = 0x4f977a
+
+    /**
+     * A pixel of « Bleu nuit », as a web page's globe draws it: the ocean and the land ([terreF]) from their dark
+     * shade to their day one as the Sun climbs ([ds], its height's sine), darker toward the rim ([wz]), the night
+     * side deep past a soft twilight band, [dessous] (the world's drawings) lit with them; then [dessus] (the grid,
+     * the coast), unlit.
+     */
+    private fun pixelBleuNuit(lk: Look, terreF: Double, ds: Double, wz: Double, dessous: Int, dessus: Int): Int {
+        val jour = ((ds + 0.1) / 0.22).coerceIn(0.0, 1.0)
+        val mi = (0.25 + 0.75 * max(0.0, ds)).coerceIn(0.0, 1.0) * jour
+        val bord = 0.72 + 0.28 * wz; val nuit = (1 - jour) * lk.nuitA
+        val terre = lk.terre!![0]
+        return canalBleuNuit(lk, 16, terre, terreF, mi, bord, nuit, dessous, dessus) or canalBleuNuit(lk, 8, terre, terreF, mi, bord, nuit, dessous, dessus) or
+            canalBleuNuit(lk, 0, terre, terreF, mi, bord, nuit, dessous, dessus)
+    }
+
+    /** One channel (at bit [s]) of [pixelBleuNuit], in place. */
+    private fun canalBleuNuit(lk: Look, s: Int, terre: Int, terreF: Double, mi: Double, bord: Double, nuit: Double, dessous: Int, dessus: Int): Int {
+        fun c(x: Int) = ((x shr s) and 255).toDouble()
+        val sombre = c(lk.mer[0]) + (c(terre) - c(lk.mer[0])) * terreF
+        val clair = c(BN_MER_JOUR) + (c(BN_TERRE_JOUR) - c(BN_MER_JOUR)) * terreF
+        var v = sombre + (clair - sombre) * mi
+        v += (c(dessous) * (0.3 + 0.7 * mi) - v) * (dessous ushr 24) / 255.0
+        v *= bord
+        v += (c(lk.nuit) - v) * nuit
+        v += (c(dessus) - v) * (dessus ushr 24) / 255.0
+        return v.toInt().coerceIn(0, 255) shl s
+    }
 
     /** A drawing's colour in a look: as drawn on the cartoon, toned down, inked or glowing on the others. */
     private fun teinte(style: String, rgb: Int, a: Int = 255): Color {
@@ -416,7 +451,7 @@ object GlobeRenduPc {
         val l = (0.3 * r + 0.59 * g + 0.11 * b) / 255
         return when (style) {
             "cartoon" -> Color(r, g, b, a)
-            "realiste" -> { val m = l * 255; Color((r * .75 + m * .25).toInt(), (g * .75 + m * .25).toInt(), (b * .75 + m * .25).toInt(), (a * .9).toInt()) }
+            "realiste", "bleunuit" -> { val m = l * 255; Color((r * .75 + m * .25).toInt(), (g * .75 + m * .25).toInt(), (b * .75 + m * .25).toInt(), (a * .9).toInt()) }
             "vintage" -> { val c = melange(0x4a2e14, 0xf3e6c4, l.pow(0.8)); Color((c shr 16) and 255, (c shr 8) and 255, c and 255, (a * .92).toInt()) }
             "holo" -> Color(127, 244, 255, (a * (.25 + .6 * l)).toInt())
             "radar" -> Color(93, 255, 143, (a * (.25 + .6 * l)).toInt())
@@ -469,8 +504,10 @@ object GlobeRenduPc {
         g.color = couleur(lk.fond); g.fill(Rectangle2D.Float(0f, 0f, w, h))
         if (style == "cartoon") g.paint = RadialGradientPaint(w / 2, h / 2, max(w, h) * 0.7f, floatArrayOf(0f, 1f), arrayOf(Color(0x1b2f7a), Color(0x0a1438)))
         if (style == "cartoon") g.fill(Rectangle2D.Float(0f, 0f, w, h))
+        // « Bleu nuit »: a faint blue glow in the middle, few stars.
+        if (style == "bleunuit") { g.paint = RadialGradientPaint(w / 2, h / 2, max(w, h) * 0.6f, floatArrayOf(0f, 1f), arrayOf(Color(111, 140, 255, 36), Color(111, 140, 255, 0))); g.fill(Rectangle2D.Float(0f, 0f, w, h)) }
         val r = java.util.Random(7)
-        val n = (w * h / (2600 * dp * dp / 4)).toInt().coerceIn(60, 900)
+        val n = (w * h / (2600 * dp * dp / 4)).toInt().coerceIn(60, 900) / if (style == "bleunuit") 3 else 1
         repeat(n) {
             val x = r.nextFloat() * w; val y = r.nextFloat() * h; val a = 60 + r.nextInt(170); val s = (0.5f + r.nextFloat() * r.nextFloat() * 1.6f) * dp
             g.color = couleur(lk.etoiles, a)
@@ -483,6 +520,12 @@ object GlobeRenduPc {
 
     private fun lueurExterieure(g: Graphics2D, cam: Camera, lk: Look, style: String) {
         val c = lk.lueur ?: return
+        // « Bleu nuit »: the atmosphere fading from the rim to 1.16 radii.
+        if (style == "bleunuit") {
+            val r1 = cam.r * 1.16f
+            g.paint = RadialGradientPaint(cam.ox, cam.oy, r1, floatArrayOf(0.96f / 1.16f, 1f), arrayOf(couleur(c, 97), couleur(c, 0)))
+            g.fill(Ellipse2D.Float(cam.ox - r1, cam.oy - r1, 2 * r1, 2 * r1)); return
+        }
         val r1 = cam.r * if (style == "cartoon") 1.06f else 1.10f
         val a = when (style) { "realiste" -> 150; "holo" -> 120; "points" -> 110; "radar" -> 90; "cartoon" -> 70; else -> 80 }
         g.paint = RadialGradientPaint(cam.ox, cam.oy, r1, floatArrayOf(cam.r / r1 * 0.97f, cam.r / r1, 1f), arrayOf(couleur(c, a), couleur(c, a), couleur(c, 0)))
@@ -527,15 +570,18 @@ object GlobeRenduPc {
                 }
                 "holo" -> { grille(this, cam, 10, Color(60, 230, 255, 56), max(0.7f, unDeg * 0.15f), null); grille(this, cam, 30, Color(60, 230, 255, 102), max(1f, unDeg * 0.25f), null) }
                 "radar" -> grille(this, cam, 15, Color(60, 255, 120, 64), max(0.8f, unDeg * 0.2f), floatArrayOf(unDeg * 1.2f, unDeg * 1.2f))
+                // « Bleu nuit »: the world under the light (the night hides it), the coast and the grid over it.
+                "bleunuit" -> if (detail > 0) monde(this, cam, style, dp, detail, o)
             }
             dispose()
         }
         val dessus = BufferedImage(dw, dh, BufferedImage.TYPE_INT_ARGB)
         dessus.createGraphics().apply {
             lisse(); translate(-x0.toDouble(), -y0.toDouble())
+            if (style == "bleunuit") grille(this, cam, 30, Color(140, 180, 230, 33), max(0.7f, unDeg * 0.17f), null)
             lk.cote?.let { c ->
                 if (style == "holo" || style == "radar") { color = couleur(c, 70); stroke = BasicStroke(max(2f, unDeg * 0.9f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND); draw(cote) }
-                color = couleur(c, if (style == "realiste") 0 else 255)
+                color = couleur(c, when (style) { "realiste" -> 0; "bleunuit" -> 128; else -> 255 })
                 stroke = BasicStroke(max(0.8f, unDeg * lk.coteL.toFloat() * if (style == "cartoon") 0.75f else 1f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
                 if (style != "realiste") draw(cote)
             }
@@ -543,7 +589,7 @@ object GlobeRenduPc {
                 color = couleur(0x8fb0ff); val s = max(1.3f, cam.r * 0.0085f)
                 for (p in points) if (cam.profondeur(p) > 0.02) fill(Ellipse2D.Float(cam.x(p) - s / 2, cam.y(p) - s / 2, s, s))
             }
-            if (detail > 0) monde(this, cam, style, dp, detail, o)
+            if (detail > 0 && style != "bleunuit") monde(this, cam, style, dp, detail, o)
             dispose()
         }
 
@@ -572,6 +618,11 @@ object GlobeRenduPc {
                 val la = asin(pz.coerceIn(-1.0, 1.0)) / D2R
                 val li = ((90 - la) * 10).toInt().coerceIn(0, 1800)
                 val k = j * dw + i
+                if (style == "bleunuit") {
+                    val ds = px * soleil[0] + py * soleil[1] + pz * soleil[2]
+                    out[k] = ((bordA * 255).toInt() shl 24) or pixelBleuNuit(lk, (m[k].toInt() and 255) / 255.0, ds, wz, s0[k], s1[k])
+                    continue
+                }
                 var oc = mer[li]
                 var cr = ((oc shr 16) and 255).toDouble(); var cg = ((oc shr 8) and 255).toDouble(); var cb = (oc and 255).toDouble()
                 if (style == "radar") { val f = 1 - 0.75 * rr * rr; cr *= f; cg = 12 + (cg - 12) * f; cb *= f }
@@ -909,6 +960,8 @@ object GlobeRenduPc {
         val l = g.fontMetrics.stringWidth(s) + 12 * dp; val h = 18 * dp
         val bx = if (aDroite) x - l else x; val by = y - h / 2
         if (!dessine) return Rectangle2D.Float(bx, by, l, h)
+        // « Bleu nuit »: the name alone, ringed with the night.
+        if (style == "bleunuit") { texteCerne(g, s, bx + 6 * dp, by + h / 2 + g.fontMetrics.ascent * 0.36f, c, Color(4, 8, 16, 200), f, 3f * dp); return Rectangle2D.Float(bx, by, l, h) }
         val boite = RoundRectangle2D.Float(bx, by, l, h, if (style == "cartoon") h else 4 * dp, if (style == "cartoon") h else 4 * dp)
         when (style) {
             "cartoon" -> { g.color = Color.WHITE; g.fill(boite); g.color = Color(0x0a1230); g.stroke = BasicStroke(1.6f * dp); g.draw(boite); g.color = Color(0x0a1230) }
@@ -926,7 +979,7 @@ object GlobeRenduPc {
         val qth = sc.qth?.let { vec(it.first, it.second) }
         val encre = lk.encre?.let { couleur(it) }
         val coulTrace = encre ?: RenduPc.CYAN
-        val coulSat = RenduPc.ISS
+        val coulSat = if (style == "bleunuit") EMPREINTE else RenduPc.ISS
         // Places kept for the station's and the satellite's names first.
         val satP = sous?.let { (s, alt) -> val k = 1 + alt / RE; doubleArrayOf(s[0] * k, s[1] * k, s[2] * k) }
         val satVu = satP != null && cam.voit(satP)
@@ -1029,7 +1082,7 @@ object GlobeRenduPc {
         // The station.
         if (qth != null && cam.profondeur(qth) > 0.02) {
             val x = cam.x(qth); val y = cam.y(qth)
-            epingle(g, x, y, STATION, dp)
+            if (style == "bleunuit") pastille(g, x, y, STATION, dp) else epingle(g, x, y, STATION, dp)
             sc.etiquetteQth?.takeIf { it.isNotBlank() }?.let { boites += etiquette(g, it, x - 10 * dp, y - 14 * dp, STATION, style, dp, aDroite = true) }
         }
 
@@ -1047,7 +1100,14 @@ object GlobeRenduPc {
             g.draw(Line2D.Float(sx, sy, x, y))
             g.color = Color(0, 0, 0, 120); g.fill(rond(sx, sy, 3.5f * dp)); g.color = coulSat; g.fill(rond(sx, sy, 2.2f * dp))
         }
-        if (satVu) {
+        if (satVu && style == "bleunuit") {
+            // A bright point in its halo, as on a web page's globe.
+            val r1 = 11f * dp
+            g.paint = RadialGradientPaint(x, y, r1, floatArrayOf(0f, 1f), arrayOf(Color(coulSat.red, coulSat.green, coulSat.blue, 115), Color(coulSat.red, coulSat.green, coulSat.blue, 0)))
+            g.fill(rond(x, y, r1))
+            g.color = coulSat; g.fill(rond(x, y, 3.4f * dp))
+            etiquette(g, nom, x + 8 * dp, y - 8 * dp, coulSat, style, dp)
+        } else if (satVu) {
             val r1 = 16f * dp
             g.paint = RadialGradientPaint(x, y, r1, floatArrayOf(0f, 0.3f, 1f), arrayOf(Color(255, 255, 255, 230), Color(coulSat.red, coulSat.green, coulSat.blue, 170), Color(coulSat.red, coulSat.green, coulSat.blue, 0)))
             g.fill(rond(x, y, r1))
@@ -1078,6 +1138,12 @@ object GlobeRenduPc {
         val pin = Path2D.Float().apply { moveTo(x, y); curveTo(x - 9 * dp, y - 12 * dp, x - 7 * dp, y - 22 * dp, x, y - 22 * dp); curveTo(x + 7 * dp, y - 22 * dp, x + 9 * dp, y - 12 * dp, x, y); closePath() }
         g.color = c; g.fill(pin); g.color = Color(0x0a1230); g.stroke = BasicStroke(1.4f * dp); g.draw(pin)
         g.color = Color.WHITE; g.fill(rond(x, y - 15 * dp, 3f * dp))
+    }
+
+    /** A station as a point with a ring round it, in its colour [c] (« Bleu nuit »). */
+    private fun pastille(g: Graphics2D, x: Float, y: Float, c: Color, dp: Float) {
+        g.color = Color(c.red, c.green, c.blue, 115); g.stroke = BasicStroke(1.4f * dp); g.draw(rond(x, y, 10f * dp))
+        g.color = c; g.fill(rond(x, y, 3.4f * dp))
     }
 
     /** A footprint: the circle seen from [alt] km over [s], filled with [c] at [fond], its edge at [trait]. */
@@ -1335,7 +1401,7 @@ object GlobeRenduPc {
         }
         station(g, cam, s.moi, true, style, dp)
         station(g, cam, s.autre, false, style, dp)
-        if (sous != null && satP != null) satellite(g, cam, sous.first, satP, cam.voit(satP), s.satellite, if (deux) VERT_SKED else RenduPc.ISS, style, dp)
+        if (sous != null && satP != null) satellite(g, cam, sous.first, satP, cam.voit(satP), s.satellite, if (deux) VERT_SKED else if (style == "bleunuit") EMPREINTE else RenduPc.ISS, style, dp)
     }
 
     /** A sked's station: its pin, its label on the left ([aGauche]) or the right. The label's box (empty when hidden). */
@@ -1343,7 +1409,7 @@ object GlobeRenduPc {
         val p = vec(st.lat, st.lon)
         if (cam.profondeur(p) <= 0.02) return Rectangle2D.Float()
         val x = cam.x(p); val y = cam.y(p)
-        if (dessine) epingle(g, x, y, st.couleur, dp)
+        if (dessine) { if (style == "bleunuit") pastille(g, x, y, st.couleur, dp) else epingle(g, x, y, st.couleur, dp) }
         if (st.etiquette.isBlank()) return Rectangle2D.Float(x, y, 0f, 0f)
         return etiquette(g, st.etiquette, if (aGauche) x - 10 * dp else x + 10 * dp, y - 14 * dp, st.couleur, style, dp, aDroite = aGauche, dessine = dessine)
     }

@@ -2271,7 +2271,7 @@ ${rail()}
         <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
         <canvas id="st-globe" hidden title="Glisser pour tourner, molette pour zoomer"></canvas>
-        <select id="st-globe-styles" class="st-globe-styles ob-style-choix" hidden aria-label="Rendu du globe" onchange="Orbites.style(this.value)"><option value="cartoon">Dessin animé</option><option value="realiste">Réaliste</option><option value="holo">Hologramme</option><option value="points">Globe à points</option><option value="radar">Radar rétro</option><option value="vintage">Carte ancienne</option></select>
+        <select id="st-globe-styles" class="st-globe-styles ob-style-choix" hidden aria-label="Rendu du globe" onchange="Orbites.style(this.value)"><option value="cartoon">Dessin animé</option><option value="realiste">Réaliste</option><option value="holo">Hologramme</option><option value="points">Globe à points</option><option value="radar">Radar rétro</option><option value="vintage">Carte ancienne</option><option value="bleunuit">Bleu nuit</option></select>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="petit" id="ciel-plan" style="text-align:center" title="Le plan du rotor pour ce passage. Violet : le rotor prévu ; ambre : retourné (par-dessus le zénith) ; rouge : un changement (retournement, déroulement) et son heure ; gris : les zones cachées"></div>
