@@ -36,6 +36,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Phonie → texte : 15 langues de plus à traduire** — danois, suédois, norvégien, finnois, estonien, letton, lituanien, slovaque, hongrois, roumain, bulgare, slovène, grec, turc et catalan, en passant par l'anglais comme les autres. Les cocher dans *Réglages › Phonie → texte*, puis **Installer la traduction** (environ 65 à 150 Mo par langue).
 - **Balises QO-100 : verdict plus juste** — « Signal juste : des trames sont perdues chez vous » n'apparaît plus quand aucun paquet n'est perdu : le drapeau FEC du récepteur seul ne compte plus (il faut des blocs vraiment non corrigés), et quelques erreurs du décodeur sur un flux reçu entier laissent « image correcte ».
 - **Phonie → texte : l'arabe et 11 autres langues de la zone de QO-100 à traduire** — arabe (la vidéo de la balise QARS), persan, hébreu, hindi, ourdou, bengali, azéri, albanais, galicien, basque, thaï et espéranto. Les cocher dans *Réglages › Phonie → texte*, puis **Installer la traduction** (environ 65 à 115 Mo par langue).
+- **Mon site web : une image n'est plus perdue quand le site bloque l'adresse un moment** — elle reste dans la file d'envoi et repart dès le blocage levé, au lieu d'être comptée comme refusée.
 
 ### en
 - **SSTV: colour analysed and corrected, and an optional AI denoiser.** In the viewer, **📊 Analyse** says what is measured on the picture: colour cast (and the tuning error it amounts to), colour shifted against the picture (to a tenth of a pixel), levels, saturation, noise, mark. **🎨 Couleurs corrigées** sets them right, nothing invented (a step whose measure is not clear is not applied, a picture already right comes out unchanged); **Avant | Après** compares. The default and the steps: *SSTV › Réglages › Couleurs et IA*. The picture as received is never changed; the finished version also goes to the sheets and the web site.
@@ -58,6 +59,7 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 - **Speech to text: 15 more languages can be translated** — Danish, Swedish, Norwegian, Finnish, Estonian, Latvian, Lithuanian, Slovak, Hungarian, Romanian, Bulgarian, Slovenian, Greek, Turkish and Catalan, through English like the others. Tick them in *Settings › Speech to text*, then **Install translation** (about 65 to 150 MB per language).
 - **QO-100 beacons: a fairer verdict** — « Weak signal: frames are lost at your end » no longer shows when no packet is lost: the receiver's FEC flag alone no longer counts (blocks must really be left uncorrected), and a few decoder errors on a stream received whole leave « picture fine ».
 - **Speech to text: Arabic and 11 more languages of QO-100's footprint can be translated** — Arabic (the QARS beacon's video), Persian, Hebrew, Hindi, Urdu, Bengali, Azerbaijani, Albanian, Galician, Basque, Thai and Esperanto. Tick them in *Settings › Speech to text*, then **Install translation** (about 65 to 115 MB per language).
+- **My website: a picture is no longer lost while the site bans the address for a while** — it stays in the send queue and goes once the ban is lifted, instead of being counted as refused.
 
 ## 2026.10.34
 

@@ -175,6 +175,20 @@ class SitePcTest {
         assertEquals(recus[0].entetes["x-satme-id"], recus[1].entetes["x-satme-id"])
     }
 
+    @Test fun `the site's ban of this address is not a refusal - the item waits and goes once lifted`() {
+        val s = site(); regle(s)
+        // 30/10: the address banned for 4 h, a SSTV picture lost.
+        reponse = { 403 to "403 — accès refusé (adresse bloquée jusqu'au 30/10/2026 11:59 UTC).\n" }
+        s.publie(SitePc.Genre.SSTV, "f.png", true)
+        assertEquals(0, s.envoieDus())
+        val file = s.json().getJSONArray("file")
+        assertEquals(1, file.length()); assertTrue(file.getJSONObject(0).getString("erreur").contains("adresse bloquée"))
+        reponse = { 201 to "{\"ok\":true,\"id\":\"00000000000000bb\"}" }
+        t += 31_000L
+        assertEquals(1, s.envoieDus())
+        assertEquals(0, s.json().getJSONArray("file").length())
+    }
+
     @Test fun `a refusal is final, not retried`() {
         val s = site(); regle(s)
         reponse = { 415 to "{\"ok\":false,\"erreur\":\"contenu non reconnu\"}" }

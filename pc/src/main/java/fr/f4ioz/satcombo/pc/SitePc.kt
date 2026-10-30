@@ -344,13 +344,18 @@ class SitePc(
                         return n
                     }
                     // Refused for good (kind, size, format, an address that redirects): kept out of the queue, said on the card.
-                    (r.first in 300..499 && r.first != 408 && r.first != 429) -> {
+                    // The site's ban of this address is for a while: the item waits and goes when it is lifted.
+                    (r.first in 300..499 && r.first != 408 && r.first != 429 && !bloquee(r)) -> {
                         if (e.temporaire) File(e.fichier).delete()
                         note("refusé (" + r.first + ") : " + e.titre + " — " + if (r.first < 400) "redirection : vérifier l'adresse" else raison(r.second))
                     }
                     else -> {
                         val k = e.essais + 1
-                        file.add(0, e.copy(essais = k, prochainMs = horloge() + attente(k), erreur = if (r.first == 0) r.second.take(160) else "HTTP " + r.first))
+                        file.add(0, e.copy(essais = k, prochainMs = horloge() + attente(k), erreur = when {
+                            r.first == 0 -> r.second.take(160)
+                            bloquee(r) -> "HTTP 403 : adresse bloquée par le site pour un temps, nouvel essai"
+                            else -> "HTTP " + r.first
+                        }))
                         ecritDisque()
                         return n
                     }
@@ -359,6 +364,9 @@ class SitePc(
             }
         }
     }
+
+    /** The site's 403 to a banned address (its bare text, before any page): lifted in time, unlike a refusal. */
+    private fun bloquee(r: Pair<Int, String>) = r.first == 403 && r.second.contains("adresse bloquée")
 
     /** The v1 meta of [e]: SatMe's words, its kind, id, key and file. */
     fun meta(e: Envoi, nom: String, f: File): JSONObject = JSONObject(e.meta.toString()).put("version", VERSION_API).put("type", e.genre.nom)
