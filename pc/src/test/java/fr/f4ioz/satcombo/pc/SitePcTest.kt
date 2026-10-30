@@ -148,6 +148,35 @@ class SitePcTest {
         assertEquals("qso:43", recus.last().meta.getString("cle"))
     }
 
+    @Test fun `the SSTV version for the site - as received by default, chosen on the page, the IA's sent again once made`() {
+        val s = site(); regle(s)
+        assertEquals(fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.RECUE, s.versionSstv)
+        assertEquals("recue", s.json().getString("versionSstv"))
+        s.sert("/api/site/reglages", "POST") { k -> if (k == "version_sstv") "ia" else "" }
+        assertEquals(fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.IA, s.versionSstv)
+        // An unknown word: as received.
+        s.sert("/api/site/reglages", "POST") { k -> if (k == "version_sstv") "autre" else "" }
+        assertEquals(fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.RECUE, s.versionSstv)
+        s.versionSstv = fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.IA
+        s.regleMode(SitePc.Genre.SSTV, SitePc.Mode.AUTO)
+        // A picture never sent is not sent because its IA was made.
+        assertFalse(s.iaFaite("jamais.png"))
+        assertEquals(0, s.envoieDus())
+        // Received: sent at once (as received while its IA is to come), then again with the IA's, the same key.
+        s.nouvelleImage("c.png")
+        assertTrue(s.iaFaite("c.png"))
+        assertEquals(1, s.envoieDus())
+        assertTrue(s.iaFaite("c.png"))
+        assertEquals(1, s.envoieDus())
+        assertEquals(listOf("sstv:c.png", "sstv:c.png"), recus.map { it.meta.getString("cle") })
+        // Another version chosen, or « Jamais »: nothing more.
+        s.versionSstv = fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.COULEURS
+        assertFalse(s.iaFaite("c.png"))
+        s.versionSstv = fr.f4ioz.satcombo.demo.ApiCorrectionSstv.VersionSite.IA
+        s.regleMode(SitePc.Genre.SSTV, SitePc.Mode.JAMAIS)
+        assertFalse(s.iaFaite("c.png"))
+    }
+
     @Test fun `while the site does not answer, the item waits on disk and is sent later`() {
         val dossier = tmp.newFolder("pc")
         val st = StockageFichier(File(dossier, "r.properties"))

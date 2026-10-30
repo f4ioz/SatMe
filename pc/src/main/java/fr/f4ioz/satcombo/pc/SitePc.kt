@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.demo.ApiCorrectionSstv
 import fr.f4ioz.satcombo.demo.ModulesStation
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.plateforme.Stockage
@@ -181,6 +182,15 @@ class SitePc(
 
     fun mode(g: Genre): Mode = Mode.de(stockage.getString("site_mode_" + g.nom, null)) ?: g.parDefaut
     fun regleMode(g: Genre, m: Mode) { stockage.edit().putString("site_mode_" + g.nom, m.nom).apply() }
+
+    /**
+     * Which version of an SSTV picture goes: as received (the default), its
+     * colour corrected, or its IA's (with its colour when corrected) — each
+     * when there is one, else as received ([ApiCorrectionSstv.pourSite]).
+     */
+    var versionSstv: ApiCorrectionSstv.VersionSite
+        get() = ApiCorrectionSstv.VersionSite.de(stockage.getString(CLE_VERSION_SSTV, null))
+        set(v) { stockage.edit().putString(CLE_VERSION_SSTV, v.code).apply() }
 
     /** « Publication web » switched on in Réglages › Modules: else nothing goes out. */
     val actif: Boolean get() = runCatching { module() }.getOrDefault(false)
@@ -551,6 +561,19 @@ class SitePc(
         return l
     }
 
+    /**
+     * Picture [nom]'s IA version just made (by itself or asked in the viewer):
+     * when the site takes the IA's version and the picture already went (or
+     * waits to go) as received, it goes again — the same `cle`, the site
+     * replaces it. A picture never sent is not sent for this; « Jamais » stays.
+     */
+    fun iaFaite(nom: String): Boolean {
+        if (!actif || versionSstv != ApiCorrectionSstv.VersionSite.IA || mode(Genre.SSTV) == Mode.JAMAIS) return false
+        chargeDisque()
+        val partie = publication(Genre.SSTV, nom) != null || synchronized(this) { file.any { it.genre == Genre.SSTV && it.ref == nom } }
+        return partie && publie(Genre.SSTV, nom, true) == null
+    }
+
     fun nouveauContact(t: Long) { publie(Genre.QSO, t.toString(), false) }
     fun nouvelleVideo(nom: String) { publie(Genre.VIDEO, nom, false) }
 
@@ -562,6 +585,7 @@ class SitePc(
             .put("modele", TYPE in url).put("jeton", jeton.isNotEmpty())
             .put("pret", pret).put("configure", configure).put("demo", demo())
             .put("modes", JSONObject(Genre.values().associate { it.nom to mode(it).nom }))
+            .put("versionSstv", versionSstv.code)
             .put("libelles", JSONObject(Genre.values().associate { it.nom to it.libelle }))
             .put("publies", publies.size)
         direct?.let { o.put("direct", it.json()) }
@@ -595,6 +619,7 @@ class SitePc(
             "/reglages" -> {
                 regleCible(p)
                 Genre.values().forEach { g -> Mode.de(p("mode_" + g.nom))?.let { regleMode(g, it) } }
+                p("version_sstv").takeIf { it.isNotEmpty() }?.let { versionSstv = ApiCorrectionSstv.VersionSite.de(it) }
                 reveille()
                 rep(json())
             }
@@ -631,6 +656,7 @@ class SitePc(
         const val CLE_PRET = "site_pret"
         const val CLE_CIBLE = "site_cible"
         const val CLE_DOSSIER = "site_dossier"
+        const val CLE_VERSION_SSTV = "site_sstv_version"
         /** 1: the address is the whole receiving address (`{type}` or one address), no longer a root. */
         const val CLE_FORMAT = "site_format"
         private const val OU = "Réglages › Services en ligne › Envoyer vers un site web"

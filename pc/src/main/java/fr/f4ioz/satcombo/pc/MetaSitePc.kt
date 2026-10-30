@@ -41,6 +41,19 @@ object MetaSitePc {
     private fun el(v: Double) = Math.round(v * 10.0) / 10.0
     private fun normal(s: String) = s.uppercase().replace(Regex("\\(.*?\\)"), "").replace(Regex("[^A-Z0-9]"), "")
 
+    /**
+     * [o] of an SSTV picture not as received: `retouche` « couleurs » (its
+     * colour set right, nothing invented) or « ia » (the learnt denoiser, its
+     * colour too when corrected), `modeleIa` the model; nothing when [retouche]
+     * is "" (as received). The site says so beside the picture.
+     */
+    fun retouche(o: JSONObject, retouche: String, modeleIa: String = ""): JSONObject {
+        if (retouche != "couleurs" && retouche != "ia") return o
+        o.put("retouche", retouche)
+        if (retouche == "ia") { o.put("ia", true); if (modeleIa.isNotEmpty()) o.put("modeleIa", modeleIa) }
+        return o
+    }
+
     /** A pass's id, the same in every item about it: « 25544-20261003T1351Z » (the satellite's NORAD number, its AOS to the minute, UTC). */
     @Synchronized fun idPassage(catnum: Int, aosMs: Long): String = catnum.toString() + "-" + minute.format(Date(aosMs))
 

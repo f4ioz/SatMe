@@ -130,6 +130,8 @@ Depending on the type, when SatMe-PC knows them:
 | `incomplete` | boolean | `true` | sstv-image partly received |
 | `traitement` | string | `"corrigée · couleur corrigée · IA"` | sstv-image not as received: what was done to it |
 | `ia` | boolean | `true` | sstv-image through the learnt denoiser (AI): to be said beside the picture; planche: at least one box (`imagesIa`: how many) |
+| `retouche` | string | `"couleurs"`, `"ia"` | sstv-image not as received (the version chosen in SatMe-PC): `couleurs` its colour set right (nothing invented), `ia` through the learnt denoiser (its colour too when corrected); absent: as received. To be said beside the picture (« couleurs corrigées », « débruitée par IA ») |
+| `modeleIa` | string | `"SCUNet real-PSNR"` | sstv-image with `retouche` `ia`: the model |
 | `indicatif` | string | `"EA4ABC"` | qso: the station worked |
 | `locator` | string | `"IN80DD"` | qso: its locator |
 

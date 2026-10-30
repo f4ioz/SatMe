@@ -73,11 +73,11 @@ class RedecodageAuto(
         /**
          * One daemon thread at the lowest priority, the jobs one after the
          * other; [preparation] runs on it first (the phone lowers it further,
-         * to the background class).
+         * to the background class); [nom] the thread's.
          */
-        fun filBas(preparation: () -> Unit = {}): (Runnable) -> Unit {
+        fun filBas(nom: String = "sstv-redecodage-auto", preparation: () -> Unit = {}): (Runnable) -> Unit {
             val ex = Executors.newSingleThreadExecutor { r ->
-                Thread({ runCatching(preparation); r.run() }, "sstv-redecodage-auto").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+                Thread({ runCatching(preparation); r.run() }, nom).apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
             }
             return { ex.execute(it) }
         }
