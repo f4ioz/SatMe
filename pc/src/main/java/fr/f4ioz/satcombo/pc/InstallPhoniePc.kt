@@ -414,7 +414,9 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
             "nl" to "néerlandais", "pt" to "portugais", "ru" to "russe", "uk" to "ukrainien", "cs" to "tchèque",
             "sk" to "slovaque", "da" to "danois", "sv" to "suédois", "nb" to "norvégien", "fi" to "finnois", "et" to "estonien",
             "lv" to "letton", "lt" to "lituanien", "hu" to "hongrois", "ro" to "roumain", "bg" to "bulgare", "sl" to "slovène",
-            "el" to "grec", "tr" to "turc", "ca" to "catalan", "fr" to "français")
+            "el" to "grec", "tr" to "turc", "ca" to "catalan", "ar" to "arabe", "fa" to "persan", "he" to "hébreu",
+            "hi" to "hindi", "ur" to "ourdou", "bn" to "bengali", "az" to "azéri", "sq" to "albanais", "gl" to "galicien",
+            "eu" to "basque", "th" to "thaï", "eo" to "espéranto", "fr" to "français")
         /** The languages a translation can be written in. */
         val CIBLES = linkedMapOf("fr" to "français", "en" to "anglais", "de" to "allemand", "es" to "espagnol", "it" to "italien",
             "nl" to "néerlandais", "pl" to "polonais", "pt" to "portugais")
@@ -424,6 +426,8 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
             "uk_en" to 76, "cs_en" to 71, "fr_en" to 67,
             "sk_en" to 68, "da_en" to 66, "sv_en" to 91, "nb_en" to 64, "fi_en" to 66, "et_en" to 149, "lv_en" to 68,
             "lt_en" to 68, "hu_en" to 68, "ro_en" to 67, "bg_en" to 69, "sl_en" to 69, "el_en" to 69, "tr_en" to 115, "ca_en" to 72,
+            "ar_en" to 78, "fa_en" to 112, "he_en" to 110, "hi_en" to 97, "ur_en" to 66, "bn_en" to 67, "az_en" to 115, "sq_en" to 67,
+            "gl_en" to 72, "eu_en" to 72, "th_en" to 68, "eo_en" to 113,
             "en_fr" to 65, "en_de" to 151, "en_es" to 88, "en_it" to 88, "en_nl" to 72, "en_pl" to 67, "en_pt" to 66)
 
         /** The pairs to translate [langues] into [cible]: each through English (the index has no direct pair between two others). */
