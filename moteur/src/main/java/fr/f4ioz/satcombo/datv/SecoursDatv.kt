@@ -20,7 +20,9 @@ import org.json.JSONObject
  * lately first) — and back to the followed one when it returns.
  *
  * Two ways to go round: [Mode.DUREE] stays [Reglages.dureeS] on each one,
- * [Mode.COUPURE] stays on one while it holds. A signal that failed is left
+ * [Mode.COUPURE] stays on one while it holds. A third, [Mode.TOURNE], is a
+ * scan rather than a fallback: [Reglages.dureeS] on each signal in turn, the
+ * followed one included, even while all is well. A signal that failed is left
  * alone [ECHEC_MS] (unless nothing else is left).
  *
  * It never fights the operator: a tuning by hand ([manuel], or the receiver
@@ -34,7 +36,7 @@ import org.json.JSONObject
  */
 class SecoursDatv(var reglages: Reglages = Reglages()) {
     enum class Mode(val cle: String) {
-        DUREE("duree"), COUPURE("coupure");
+        DUREE("duree"), COUPURE("coupure"), TOURNE("tourne");
         companion object { fun de(s: String?) = values().firstOrNull { it.cle == s } ?: COUPURE }
     }
 
@@ -187,6 +189,7 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
             !rx.verrouille -> "est perdu"
             else -> "a un flux abîmé"
         }
+        if (r.mode == Mode.TOURNE) return tourne(t, rx, r, sansMs, attenteMs, pourquoi)
         val cour = courante
         if (cour == null) {
             phase = Phase.SUIVI
@@ -218,6 +221,32 @@ class SecoursDatv(var reglages: Reglages = Reglages()) {
             else -> "repli sur " + cour.libelle + " : encore " + ((r.dureeS * 1000L - (t - depuisMs) + 999) / 1000) + " s"
         }
         return null
+    }
+
+    /**
+     * [Mode.TOURNE]: [Reglages.dureeS] on each signal in turn (the followed one among them, at its place in the
+     * order), the next one sooner when this one gives no picture within [Reglages.attenteS].
+     */
+    private fun tourne(t: Long, rx: Reception, r: Reglages, sansMs: Long, attenteMs: Long, pourquoi: String): Action? {
+        val pref = prefere!!
+        val la = courante ?: pref
+        phase = if (courante == null) Phase.SUIVI else Phase.REPLI
+        val raison = when {
+            !rx.sain && sansMs >= attenteMs -> { echecs[la] = t; la.libelle + " $pourquoi depuis " + (sansMs / 1000) + " s" }
+            t - depuisMs >= r.dureeS * 1000L -> r.dureeS.toString() + " s écoulées"
+            else -> {
+                etat = "tour des signaux : " + la.libelle + (if (rx.sain) "" else " (pas encore d’image)") +
+                    ", encore " + ((r.dureeS * 1000L - (t - depuisMs) + 999) / 1000) + " s"
+                return null
+            }
+        }
+        val l = ordre.filter { it.present != false || it.cible.meme(pref) }.map { it.cible }.let { o -> if (o.any { it.meme(pref) }) o else listOf(pref) + o }
+        val i = l.indexOfFirst { it.meme(la) }
+        val tour = l.drop(i + 1) + l.take(maxOf(0, i + 1))
+        val suivant = tour.firstOrNull { c -> !c.meme(la) && echecs.entries.none { it.key.meme(c) && t - it.value < ECHEC_MS } }
+            ?: tour.firstOrNull { !it.meme(la) }
+            ?: run { etat = "tour des signaux : aucun autre signal ($raison)"; return null }
+        return Action(suivant, raison + " → " + suivant.libelle, suivant.meme(pref))
     }
 
     /** The next candidate after [depuis] (the first when null), or null with a word in [etat]. */

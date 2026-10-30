@@ -67,6 +67,24 @@ class SecoursDatvTest {
         Candidat(RECENT, Origine.SPECTRE, 16_000, t - 600_000L, true),
         if (sansSuivi) null else Candidat(SUIVI, Origine.SPECTRE, 25_000, 0L, true))
 
+    @Test fun `tourner - x seconds on each in turn, the followed one included, even while all is well`() {
+        // 30/10: « x secondes sur chacun » only moved when the followed signal failed; the owner wanted a scan.
+        val b = Banc(Reglages(actif = true, mode = SecoursDatv.Mode.TOURNE, dureeS = 30, attenteS = 15))
+        b.bons += listOf(SUIVI, BALISE, FORT, RECENT, FAIBLE)
+        b.tic()
+        b.avance(29); assertTrue(b.accords.isEmpty())
+        // The order: the beacon, the one received lately, then the strongest — the followed one at its place.
+        val vus = ArrayList<Cible>()
+        repeat(5) { b.avance(30); vus += b.ici }
+        assertEquals(listOf(FAIBLE, BALISE, RECENT, FORT, SUIVI).map { it.khz }, vus.map { it.khz })
+        assertTrue(b.accords.last().versPrefere)
+        // One without a picture is left after [attenteS], not [dureeS].
+        b.bons.remove(FAIBLE)
+        b.avance(1); assertEquals(FAIBLE.khz, b.ici.khz)
+        b.avance(14); assertEquals(FAIBLE.khz, b.ici.khz)
+        b.avance(1); assertEquals(BALISE.khz, b.ici.khz)
+    }
+
     @Test fun `off, it never moves`() {
         val b = Banc(Reglages(actif = false))
         b.avance(600)

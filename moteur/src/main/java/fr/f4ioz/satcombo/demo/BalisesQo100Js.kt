@@ -46,7 +46,7 @@ object BalisesQo100Js {
         <div id="ba-etat"></div>
         <div class="petit" id="ba-suivi"></div>
         <div class="ligne" style="flex-wrap:wrap;gap:4px 10px">
-          <select id="ba-mode" onchange="baRegle('mode=' + this.value)"><option value="coupure">rester sur un signal jusqu’à la coupure</option><option value="duree">x secondes sur chacun</option></select>
+          <select id="ba-mode" onchange="baRegle('mode=' + this.value)"><option value="coupure">rester sur un signal jusqu’à la coupure</option><option value="duree">x secondes sur chacun (en repli)</option><option value="tourne">tourner : x secondes sur chacun, même si tout va bien</option></select>
           <span class="petit" id="ba-duree-l"><input id="ba-duree" style="width:48px" onchange="baRegle('duree=' + enc(this.value))"> s sur chacun</span>
           <span class="petit" title="Sans image correcte (pas d’accroche, signal perdu, flux abîmé) pendant ce temps : signal suivant"><input id="ba-attente" style="width:40px" onchange="baRegle('attente=' + enc(this.value))"> s sans image</span>
           <span class="petit" title="Après un réglage à la main, le balayage attend ce temps"><input id="ba-pause" style="width:40px" onchange="baRegle('pause=' + enc(this.value))"> min de pause après un réglage à la main</span></div>
@@ -135,7 +135,7 @@ async function ticSecours() {
   txt('ba-phase', !j.on ? '' : { pause: 'en pause', suivi: 'sur le signal suivi', repli: 'en repli', attente: 'en attente', arret: '' }[j.phase] || '');
   if (!j.on) return;
   ['duree', 'attente', 'pause'].forEach(k => { if (document.activeElement !== g('ba-' + k)) g('ba-' + k).value = j[k]; });
-  g('ba-mode').value = j.mode; g('ba-duree-l').hidden = j.mode !== 'duree';
+  g('ba-mode').value = j.mode; g('ba-duree-l').hidden = j.mode !== 'duree' && j.mode !== 'tourne';
   g('ba-retour').checked = j.retour; g('ba-balise').checked = j.balise;
   g('ba-reprends').hidden = j.phase !== 'pause';
   txt('ba-etat', j.etat || '');
