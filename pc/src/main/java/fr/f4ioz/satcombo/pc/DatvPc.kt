@@ -180,7 +180,7 @@ class DatvPc(
             .put("verrouille", e.verrouille).put("mer", nul(e.merDb?.takeIf { e.verrouille })).put("marge", nul(marge(e)))
             .put("seuil", nul(fr.f4ioz.satcombo.datv.QualiteDatv.seuilDb(e.modcod, e.etat, e.trames)?.takeIf { e.verrouille }))
             .put("modcod", if (e.verrouille) e.modcod else "").put("service", e.service)
-            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("balise", Math.abs(r.cielKhz - Datv.BALISE_KHZ) <= 100)
+            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("lnb", r.lnb).put("balise", Math.abs(r.cielKhz - Datv.BALISE_KHZ) <= 100)
             .put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
             .put("niveau", nul(niv)).put("zone", nul(niv?.let { fr.f4ioz.satcombo.datv.NiveauAgc.zone(it) })).put("agc1", e.agc1).put("agc2", e.agc2)
             .put("erreur", e.erreur).put("pointage", pointage.json(t))
@@ -254,7 +254,8 @@ class DatvPc(
         srKs = stockage.getInt("datv_sr", 1500),
         olKhz = stockage.getLong("datv_ol_khz", 9_750_000L),
         entreeB = stockage.getBoolean("datv_entree_b", false),
-        lnb = "",   // never kept: the supply is asked for each time
+        // Kept (13 V, 18 V or none): a restart, the beacon's watch or the scan must not leave the LNB unpowered.
+        lnb = stockage.getString("datv_lnb", "")?.takeIf { it == "v" || it == "h" } ?: "",
         son = stockage.getBoolean("datv_son", true),
         balayage = Datv.balayageDe(stockage.getString("datv_balayage", "")),
         demiLargeur = Datv.demiLargeurDe(stockage.getString("datv_demi_largeur", "")),
@@ -263,8 +264,14 @@ class DatvPc(
     private fun garde(r: ReglageDatv) {
         stockage.edit().putLong("datv_ciel_khz", r.cielKhz).putInt("datv_sr", r.srKs).putLong("datv_ol_khz", r.olKhz)
             .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).putString("datv_balayage", r.balayage.joinToString(","))
-            .putString("datv_demi_largeur", if (r.demiLargeur > 0) r.demiLargeur.toString() else "").putInt("datv_attente_ts", r.attenteMs).apply()
+            .putString("datv_demi_largeur", if (r.demiLargeur > 0) r.demiLargeur.toString() else "").putInt("datv_attente_ts", r.attenteMs)
+            .putString("datv_lnb", r.lnb).putBoolean("datv_voulue", true).apply()
     }
+
+    /** The reception was running when SatMe-PC stopped (not stopped by hand): taken up again at the next launch. */
+    var voulue: Boolean
+        get() = stockage.getBoolean("datv_voulue", false)
+        set(v) { stockage.edit().putBoolean("datv_voulue", v).apply() }
 
     /** The receiver: [Datv.MINITIOUNER] (LongMynd), [Datv.PLUTO] or [Datv.BLADERF] (SatMe's demodulator); taken at the next start. */
     var recepteur: String

@@ -2050,7 +2050,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val r0 = d.reglage
                 fun khz(k: String) = q[k]?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1000.0) }
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
-                    entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "",
+                    entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: r0.lnb,
                     son = q["son"]?.let { it == "1" } ?: r0.son, balayage = q["balayage"]?.let { Datv.balayageDe(it) } ?: r0.balayage,
                     demiLargeur = q["demi"]?.let { Datv.demiLargeurDe(it) } ?: r0.demiLargeur, attenteMs = q["attente"]?.let { Datv.attenteDe(it) } ?: r0.attenteMs)
                 q["relance"]?.let { d.relanceAuto = it == "1" }
@@ -2059,7 +2059,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 secours?.manuel(r); balises?.manuel()
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
-            "/api/datv/arrete" -> { large?.veilleArrete("arrêtée : réception arrêtée"); datv?.arrete(); balises?.arretDemande() }
+            "/api/datv/arrete" -> { large?.veilleArrete("arrêtée : réception arrêtée"); datv?.arrete(); datv?.voulue = false; balises?.arretDemande() }
             // Transmission: the parameters (kept), the start (confirmed on the page), the stop, the page's heartbeat, the gain.
             "/api/datv/emission/reglage" -> {
                 val e = emission ?: return JSONObject().put("ok", false)

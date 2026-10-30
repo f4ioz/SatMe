@@ -106,7 +106,7 @@ class MondeCommandesPc(
 
     override fun regleDatv(on: Boolean): CommandesPc.Refus? {
         module("datv", "DATV")?.let { return it }
-        if (!on) { datv.arrete(); return null }
+        if (!on) { datv.arrete(); datv.voulue = false; return null }
         if (datv.etat.actif) return null
         if (datv.reglage.cielKhz <= 0) return CommandesPc.Refus("Aucune fréquence DATV réglée : la choisir une fois dans l'onglet DATV.",
             "No DATV frequency set: choose one once in the DATV tab.")

@@ -182,4 +182,36 @@ class DatvPcTest {
             assertEquals("", d.etat.erreur)
         } finally { d.arrete(); serveur.stop(0) }
     }
+
+    @Test
+    fun la_tension_du_lnb_et_la_reception_survivent_au_redemarrage() {
+        // 30/10: SatMe-PC restarted, the reception not taken up, and the LNB's 18 V back to none.
+        val serveur = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        serveur.createContext("/") { x ->
+            val p = x.requestURI.path
+            val corps = when (p) {
+                "/noeud/api" -> "{\"noeud\":true,\"nom\":\"essai\"}"
+                "/noeud/entrer" -> "{\"ok\":true,\"cle\":\"k\"}"
+                "/noeud/datv/demarre" -> "{\"ok\":true}"
+                "/noeud/datv" -> "{\"actif\":true}"
+                else -> ""
+            }.toByteArray()
+            x.sendResponseHeaders(if (corps.isEmpty()) 404 else 200, if (corps.isEmpty()) -1 else corps.size.toLong()); x.responseBody.use { it.write(corps) }
+        }
+        serveur.start()
+        val st = StockageMemoire()
+        val d = DatvPc(st, File(System.getProperty("java.io.tmpdir")))
+        try {
+            assertEquals(null, d.rejoins("127.0.0.1:" + serveur.address.port, "1234"))
+            assertEquals(null, d.demarre(ReglageDatv(cielKhz = 10_491_500, srKs = 1500, olKhz = 9_750_000, lnb = "h")))
+            assertTrue(d.voulue)
+            // Read back as SatMe-PC starts again: the 18 V kept, the reception to take up.
+            val d2 = DatvPc(st, File(System.getProperty("java.io.tmpdir")))
+            assertEquals("h", d2.reglage.lnb)
+            assertTrue(d2.voulue)
+            // Stopped by hand: not taken up.
+            d2.voulue = false
+            assertEquals(false, DatvPc(st, File(System.getProperty("java.io.tmpdir"))).voulue)
+        } finally { d.arrete(); serveur.stop(0) }
+    }
 }

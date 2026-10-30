@@ -470,6 +470,11 @@ fun main(args: Array<String>) {
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
     serveur.accordUdp = AccordUdpPc(station.stockage, reseau, { datv.reglage },
         { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); secours.manuel(r); balises.manuel(); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
+    // The DATV reception running when SatMe-PC stopped (not stopped by hand): taken up again, with its LNB supply.
+    if (datv.voulue) kotlin.concurrent.thread(isDaemon = true, name = "satme-datv-reprise") {
+        Thread.sleep(3_000L)
+        if (!datv.etat.actif) recoisDatv(datv.reglage)?.let { println("DATV : reprise au lancement impossible : $it") }
+    }
     // The IC-9700 transmitting (PTT held by a page's button, its microphone, the power): nothing keyed until asked.
     val emissionPoste = EmissionPostePc(station, { son.carteDuPoste() })
     emissionPoste.leila = { qo100.leilaEntendue() }

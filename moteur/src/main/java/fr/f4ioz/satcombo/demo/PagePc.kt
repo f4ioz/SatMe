@@ -8312,6 +8312,8 @@ async function ticDatv(premier) {
       g('d-ciel').value = mhz3(D.ciel); g('d-ol').value = mhz3(D.ol); g('d-entree').value = D.entree; g('d-son').checked = D.son; dSr = D.sr;
       dBal = String(D.balayage || '').split(',').map(Number).filter(x => x > 0);
       g('d-recepteur').value = D.recepteur || 'minitiouner'; dRecepteurVu();
+      // The LNB supply kept from the last reception, so that « Recevoir » does not cut it.
+      if (D.lnb != null && g('d-recepteur').value === 'minitiouner') { g('d-lnb').value = D.lnb; dLnb(); }
       g('d-canal').innerHTML = '<option value="">—</option><option value="' + mhz3(D.balise) + '">Balise ' + mhz3(D.balise) + '</option>' +
         D.canaux.map(k => '<option value="' + mhz3(k) + '">' + mhz3(k) + '</option>').join('');
     }
