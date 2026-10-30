@@ -67,6 +67,16 @@ class BalisesQo100Test {
         assertEquals(Statut.OK, BalisesQo100.large(Large(true, 8.5, recue(Flux(9_000, 0, 400, 0, imagesParS = 0.0)).copy(depuisMs = 12_000L), null)).statut)
     }
 
+    @Test fun `the decoder complaining on a whole stream is never a loss here - ok with pictures, the encoder without`() {
+        // 30/10: not a packet lost in 20 min, MER 8,7 dB, the receiver's FEC flag up, a few decoder errors.
+        val f = Flux(paquetsEs = 15_000, ccEs = 0, paquetsAutres = 500, ccAutres = 0, tei = 0, videoMin = 9.0, imagesParS = 25.0)
+        val a = BalisesQo100.large(Large(true, 8.5, recue(f, marge = 4.0, fec = true), null))
+        assertEquals(Statut.OK, a.statut)
+        assertTrue(a.texte, a.texte.contains("image correcte") && !a.texte.contains("chez vous"))
+        val b = BalisesQo100.large(Large(true, 8.5, recue(f.copy(imagesParS = 3.0), marge = 4.0), null))
+        assertEquals(Statut.FLUX_ABIME, b.statut); assertEquals(Cause.SOURCE, b.cause)
+    }
+
     @Test fun `no lock - the ground station's spectrum says where`() {
         val r = recue(Flux(), verrou = false)
         val absente = BalisesQo100.large(Large(false, null, r, 20.0))

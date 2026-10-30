@@ -110,7 +110,8 @@ class BalisesQo100Pc(
             if (q != null && qualites.lastOrNull()?.second !== q) { qualites.addLast(t to q); while (qualites.isNotEmpty() && t - qualites.first().first > 11_000L) qualites.removeFirst() }
             val avant = qualites.firstOrNull()?.second?.takeIf { qualites.size > 1 }
             val flux = q?.let { BalisesQo100.flux(avant, it, if (it.isNull("imagesS")) null else it.optDouble("imagesS")) } ?: BalisesQo100.Flux()
-            val fec = q?.opt("fec")?.let { it as? Boolean }
+            // The FEC failing: blocks left uncorrected in the last second, not the receiver's flag alone (it stays up with none).
+            val fec = q?.takeIf { !it.isNull("fec") }?.let { it.optDouble("bchS", 0.0) > 0.0 }
             val ratio = q?.takeIf { !it.isNull("ratio") }?.optDouble("ratio")?.takeIf { !it.isNaN() }
             BalisesQo100.Reception(t - surBaliseMs, e.verrouille, e.merDb?.takeIf { e.verrouille }, datv.marge(e), fec, ratio, flux)
         } else { surBaliseMs = 0L; qualites.clear(); null }

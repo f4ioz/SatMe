@@ -57,6 +57,8 @@ object BalisesQo100 {
     const val MARGE_BONNE_DB = 1.0
     /** The share of a video/sound PID's packets missing that makes a picture break up. */
     const val TAUX_ABIME = 0.002
+    /** Under this many pictures a second, a stream whole here but whose decoder complains is broken at the encoder. */
+    const val IMAGES_PEU = 10.0
     /** Seconds on the beacon before the receiver's figures count. */
     const val ESSAI_MS = 10_000L
 
@@ -104,7 +106,9 @@ object BalisesQo100 {
             val f = r.flux
             val m = r.margeDb
             val mer = r.merDb?.let { " (MER " + f1(it) + " dB" + (m?.let { x -> ", marge " + f1(x) + " dB" } ?: "") + ")" }.orEmpty()
-            val abime = (f.ccEs >= 3 && f.tauxEs >= TAUX_ABIME) || f.videoMin > 6.0
+            // Holes in the stream as received; the decoder's complaints alone (the stream whole here) are not.
+            val abime = f.ccEs >= 3 && f.tauxEs >= TAUX_ABIME
+            val decodeur = !abime && f.videoMin > 6.0
             val signalJuste = m != null && m < MARGE_BONNE_DB
             if (abime) {
                 // Whole at our end: no transport error, the FEC clean, margin enough, every packet the sender's clock
@@ -124,7 +128,9 @@ object BalisesQo100 {
             if (signalJuste) return Avis(Statut.FAIBLE, Cause.ICI, "Image correcte, mais signal juste$mer : chez vous (pointage, pluie, LNB)")
             if (f.imagesParS != null && f.imagesParS < 0.1 && r.depuisMs >= 2 * ESSAI_MS) return Avis(Statut.FLUX_ABIME, Cause.SOURCE,
                 "Flux reçu entier$mer mais aucune image décodable : le codeur de la balise — pas chez vous")
-            return Avis(Statut.OK, Cause.AUCUNE, "Balise reçue$mer, image correcte")
+            if (decodeur && f.imagesParS != null && f.imagesParS < IMAGES_PEU) return Avis(Statut.FLUX_ABIME, Cause.SOURCE,
+                "Flux reçu entier$mer, sans paquet perdu, mais l’image se décode mal : le codeur de la balise — pas chez vous")
+            return Avis(Statut.OK, Cause.AUCUNE, "Balise reçue$mer, image correcte" + if (decodeur) " (quelques erreurs du décodeur, flux reçu entier)" else "")
         }
         return when (sol) {
             false -> Avis(Statut.ABSENTE, Cause.SOURCE, "Balise absente du spectre de la station sol — défaut à la source, pas chez vous")
