@@ -78,7 +78,7 @@ class FichesSatPc(private val dossier: File,
         if (e == null) return reponse(o)
         o.put("cle", e.cle).put("nom", e.nom)
         o.put("faits", JSONObject().put("pays", e.pays).put("operateur", e.operateur).put("lancement", e.lancement)
-            .put("mission", e.mission).put("orbite", e.orbite).put("anecdote", e.anecdote))
+            .put("mission", e.mission).put("orbite", e.orbite).put("anecdote", e.anecdote).put("taille", e.taille))
         val cache = lisCache(e)
         if (internet && (cache == null || horloge() - cache.optLong("t") > VALIDITE_MS)) demande(e)
         if (cache == null) { o.put("attente", e.cle in enCours); return reponse(o) }

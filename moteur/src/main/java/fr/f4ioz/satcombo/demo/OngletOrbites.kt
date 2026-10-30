@@ -772,7 +772,7 @@ function obCarteSat(s, d, o) {
     : '<figure class="ob-photo ob-dessin">' + obDessinSat(s.couleur) + '<figcaption>Dessin SatMe' + (d && d.attente ? ' · photo en chemin…' : '') + '</figcaption></figure>';
   const gr = [], ligne = (a, b) => { if (b) gr.push('<span>' + a + '</span><b>' + esc(b) + '</b>'); };
   const tout = !o.court && !o.grand;
-  if (f) { if (!o.court) ligne('Pays', f.pays); if (tout) ligne('Opérateur', f.operateur); ligne('Lancement', f.lancement); ligne('Mission', f.mission); if (tout) ligne('Orbite', f.orbite); }
+  if (f) { if (!o.court) ligne('Pays', f.pays); if (tout) ligne('Opérateur', f.operateur); ligne('Lancement', f.lancement); if (tout) ligne('Format', /^\d+([.,]\d+)?U$/.test(f.taille || '') ? f.taille + ' CubeSat' : f.taille); ligne('Mission', f.mission); if (tout) ligne('Orbite', f.orbite); }
   const fq = o.court ? '' : ((d && d.frequences) || []).filter(q => q.dl).slice(0, 4)
     .map(q => esc(q.desc) + ' : ' + Number(q.dl).toFixed(3) + ' MHz' + (q.mode ? ' (' + esc(q.mode) + ')' : '')).join('<br>');
   const r = d && d.resume, ex = r && r.extrait ? (r.extrait.length > 320 ? r.extrait.slice(0, 300).replace(/\s+\S*$/, '') + '…' : r.extrait) : '';

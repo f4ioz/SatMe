@@ -82,6 +82,30 @@ class FichesSatPcTest {
         assertEquals("qo100", FichesSat.cherche(0, "QO-100")!!.cle)
         assertNull(FichesSat.cherche(99999, "OBJET INCONNU"))
         assertNull(FichesSat.cherche(0, "AO"))
+        assertEquals("umka1", FichesSat.cherche(0, "UmKA 1 (RS40S)")!!.cle)
+        assertEquals("qmrkwt2", FichesSat.cherche(0, "RS95S (QMR-KWT-2)")!!.cle)
+        assertEquals("hadessa", FichesSat.cherche(68446, "")!!.cle)
+    }
+
+    @Test fun lesSatellitesDImagesOntLeurFiche() {
+        // Every picture satellite of SatMe has a card, with at least its launch, its operator and its mission.
+        for (i in fr.f4ioz.satcombo.data.SatellitesImages.LISTE) {
+            val f = FichesSat.cherche(i.catnum, i.nom)
+            assertNotNull(i.nom, f)
+            assertTrue(i.nom, f!!.lancement.isNotBlank() && f.operateur.isNotBlank() && f.pays.isNotBlank() && f.mission.isNotBlank())
+        }
+        // One card per key and per number; a size in CubeSat units written « 3U », else in words.
+        assertEquals(FichesSat.toutes.size, FichesSat.toutes.map { it.cle }.toSet().size)
+        val numeros = FichesSat.toutes.flatMap { it.catnums }
+        assertEquals(numeros.size, numeros.toSet().size)
+        for (f in FichesSat.toutes) assertTrue(f.cle + ": " + f.taille, f.taille.isEmpty() || Regex("^\\d+U$").matches(f.taille) || f.taille.length > 4)
+        assertEquals("1U", FichesSat.cherche(43017, "")!!.taille)
+    }
+
+    @Test fun laTailleDansLaFiche() {
+        val f = FichesSatPc(dossier, telecharge = { throw IOException("hors ligne") }, lance = { it() })
+        assertEquals("6U", JSONObject(String(f.json(59112, "SONATE-2").corps)).getJSONObject("faits").getString("taille"))
+        assertEquals("", JSONObject(String(f.json(7530, "AO-07").corps)).getJSONObject("faits").getString("taille"))
     }
 
     @Test fun recupereEtGarde() {
