@@ -6644,7 +6644,7 @@ async function importe(input) {
 }
 
 /*
- * SatMe-PC updated or restarted while this page stays open: the page sees its new start (api/demarrage, every
+ * SatMe-PC updated or restarted while this page stays open: the page sees its new start (api/lancement, every
  * 20 s and when it comes back in view) and reloads by itself — never while anything transmits, nor while
  * something is being typed: then a banner offers it.
  */
@@ -6653,7 +6653,7 @@ async function verifieDemarrage(force) {
   if (!force && (document.hidden || Date.now() - demarrageT < 20000)) return;
   demarrageT = Date.now();
   let j = null;
-  try { j = await (await fetch('api/demarrage', { cache: 'no-store' })).json(); } catch (x) { return; }
+  try { j = await (await fetch('api/lancement', { cache: 'no-store' })).json(); } catch (x) { return; }
   if (!j || !j.id) return;
   if (demarrageVu === null) { demarrageVu = j.id; return; }
   if (j.id === demarrageVu) return;

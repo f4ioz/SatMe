@@ -246,7 +246,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete",
         "/api/be/emission/demarre", "/api/be/emission/vie", "/api/be/emission/arrete")
 
-    /** This start of SatMe-PC (`api/demarrage`). */
+    /** This start of SatMe-PC (`api/lancement`). */
     private val lancement = java.lang.Long.toString(System.currentTimeMillis(), 36)
 
     private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
@@ -1207,7 +1207,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", capacites().toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
             // This SatMe-PC's start: a page left open sees a new one (updated, restarted) and reloads, never while transmitting.
-            "/api/demarrage" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+            "/api/lancement" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("id", lancement).put("emet", emetQuelqueChose()).toString().toByteArray())
             // The satellite link: on or not, its port, who listens.
             "/api/lien" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (lien?.let { l ->
