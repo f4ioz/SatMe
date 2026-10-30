@@ -520,8 +520,9 @@ const Orbites = (function () {
     const tex = new THREE.CanvasTexture(masqueBleuNuit()); tex.anisotropy = anisotropie;
     return new THREE.ShaderMaterial({
       uniforms: { m: { value: tex }, s: { value: s }, a: { value: 1 } },
-      vertexShader: 'varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){ u = uv; nw = mat3(modelMatrix)*normal; n = normalMatrix*normal; vec4 q = modelViewMatrix*vec4(position,1.0); v = -q.xyz; gl_Position = projectionMatrix*q; }',
-      fragmentShader: 'uniform sampler2D m; uniform vec3 s; uniform float a; varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){' +
+      // The renderer's logarithmic depth written like the other materials': else the Earth hides nothing behind it.
+      vertexShader: '#include <common>\n#include <logdepthbuf_pars_vertex>\nvarying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){ u = uv; nw = mat3(modelMatrix)*normal; n = normalMatrix*normal; vec4 q = modelViewMatrix*vec4(position,1.0); v = -q.xyz; gl_Position = projectionMatrix*q;\n#include <logdepthbuf_vertex>\n}',
+      fragmentShader: '#include <logdepthbuf_pars_fragment>\nuniform sampler2D m; uniform vec3 s; uniform float a; varying vec2 u; varying vec3 nw; varying vec3 n; varying vec3 v; void main(){\n#include <logdepthbuf_fragment>\n' +
         ' vec3 k = texture2D(m, u).rgb; float h = dot(normalize(nw), normalize(s));' +
         ' float jour = clamp((h + .1) / .22, 0., 1.), mi = clamp(.25 + .75 * max(0., h), 0., 1.) * jour;' +
         ' vec3 c = mix(mix(vec3(.039, .122, .220), vec3(.090, .247, .227), k.r), mix(vec3(.102, .337, .518), vec3(.310, .592, .478), k.r), mi);' +
@@ -1168,6 +1169,9 @@ const Orbites = (function () {
         n2.visible = false; n.visible = true; n.position.copy(p.clone().multiplyScalar(1 + .06 / p.length()));
         n.scale.set(.028 * n.userData.ratio * k, .028 * k, 1); n.center.set(-.08, .5);
         n.material.opacity = efface && !discret ? .8 : 1;
+        // Behind the Earth from where we look: with the globe opaque (« Transparence » at 0) its name goes like its
+        // light; seen through, it fades with the globe.
+        if (derriereTerre(cam.pos, p)) { if (OB.transparence === 0) n.visible = false; else n.material.opacity *= Math.min(1, .25 + OB.transparence / 80); }
         poseCalotte(o.cal.geometry, o.bordCal, e.lat, e.lon, Math.acos(RE / (RE + e.alt)));
         // A session's companions: their footprints when asked, faint.
         const tache = discret && mode === 'rejeu' && !!(sc.rj && sc.rj.taches);
@@ -1608,6 +1612,12 @@ const Orbites = (function () {
   /** A polyline [pts] as segments, for [ruban]. */
   function enSegments(pts) { const seg = []; for (let i = 1; i < pts.length; i++) seg.push(pts[i - 1], pts[i]); return seg; }
   /** The « Traces » setting (0 … 100), kept in this browser; the boxes showing it follow, the orbits' tubes and the Sked's common window are redrawn. */
+  /** Whether the Earth (radius 1 at the centre) stands between the camera [c] and the point [p]. */
+  function derriereTerre(c, p) {
+    const d = p.clone().sub(c), l2 = d.lengthSq(), t0 = -c.dot(d) / l2;
+    if (!(t0 > 0 && t0 < 1)) return false;
+    return c.clone().addScaledVector(d, t0).lengthSq() < 1;
+  }
   function prendTransparence(n) {
     OB.transparence = Math.max(0, Math.min(80, Math.round(+n || 0))); garde('ob-transparence', String(OB.transparence));
     document.querySelectorAll('.ob-transparence-choix').forEach(s => { if (+s.value !== OB.transparence) s.value = String(OB.transparence); });
