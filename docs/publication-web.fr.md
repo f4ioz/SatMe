@@ -129,6 +129,8 @@ Selon le type, quand SatMe-PC les connaît :
 | `incomplete` | booléen | `true` | sstv-image reçue en partie |
 | `traitement` | texte | `"corrigée · couleur corrigée · IA"` | sstv-image qui n'est pas telle que reçue : ce qui lui a été fait |
 | `ia` | booléen | `true` | sstv-image passée par le débruitage appris (IA) : à dire à côté de l'image ; planche : une case au moins (`imagesIa` : combien) |
+| `retouche` | texte | `"couleurs"`, `"ia"` | sstv-image qui n'est pas telle que reçue (la version choisie dans SatMe-PC) : `couleurs` ses couleurs corrigées (rien d'inventé), `ia` passée par le débruitage appris (ses couleurs aussi quand elles sont corrigées) ; absent : telle que reçue. À dire à côté de l'image (« couleurs corrigées », « débruitée par IA ») |
+| `modeleIa` | texte | `"SCUNet real-PSNR"` | sstv-image avec `retouche` `ia` : le modèle |
 | `indicatif` | texte | `"EA4ABC"` | qso : la station contactée |
 | `locator` | texte | `"IN80DD"` | qso : son locator |
 
