@@ -2066,7 +2066,7 @@ ${rail()}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
-<div id="ap-bandeau" class="ap-bandeau" hidden role="status" aria-live="polite"><b>🤖 Auto-pilote :</b><span id="ap-b-t"></span>
+<div id="ap-bandeau" class="ap-bandeau" hidden role="status" aria-live="polite"><b id="ap-b-poignee" title="Glisser pour déplacer le bandeau (double-clic : le remettre en place)">🤖 Auto-pilote :</b><span id="ap-b-t"></span>
   <a href="#" onclick="event.preventDefault(); apOuvre()">Voir</a><button class="arret" onclick="apStop()" title="Arrêter ce passage : l'enregistrement s'arrête, la réception est remise comme avant">■ STOP</button></div>
 <div id="mu-pop" class="sp-pop" hidden role="dialog" aria-label="Décodeurs multiples">
   <div class="t sp-pop-t">Décodeurs multiples<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-pop').hidden = true" aria-label="Fermer">✕</button></div>
@@ -15655,10 +15655,31 @@ function apTete() {
   b.classList.toggle('on', AP.maitre && !e); b.classList.toggle('encours', !!e);
   txt('h-ap-t', e ? e.sat + ' SSTV' : AP.maitre ? 'Auto-pilote' : 'Auto-pilote coupé');
   g('ap-bandeau').hidden = !e;
-  // Just under the header strip, however many lines it takes.
-  if (e) g('ap-bandeau').style.top = (g('tete').offsetHeight + 6) + 'px';
+  // Just under the header strip, however many lines it takes — or where it was moved to.
+  if (e) apBandeauPlace();
   apBandeau();
 }
+/* The banner moved (it may hide a tab's buttons): dragged by its « 🤖 Auto-pilote », kept in this browser; a double click puts it back. */
+let apPos = null;
+try { apPos = JSON.parse(localStorage.getItem('ap-bandeau-pos') || 'null'); } catch (x) {}
+function apBandeauPlace() {
+  const b = g('ap-bandeau');
+  if (apPos) {
+    const x = Math.max(0, Math.min(innerWidth - 80, apPos.x)), y = Math.max(0, Math.min(innerHeight - 40, apPos.y));
+    b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.transform = 'none';
+  } else { b.style.left = ''; b.style.transform = ''; b.style.top = (g('tete').offsetHeight + 6) + 'px'; }
+}
+(function () {
+  const h = g('ap-b-poignee'), b = g('ap-bandeau');
+  if (!h) return;
+  h.style.cursor = 'move'; h.style.touchAction = 'none';
+  let dep = null;
+  h.addEventListener('pointerdown', e => { const r = b.getBoundingClientRect(); dep = { dx: e.clientX - r.left, dy: e.clientY - r.top }; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove', e => { if (!dep) return; apPos = { x: e.clientX - dep.dx, y: e.clientY - dep.dy }; apBandeauPlace(); });
+  h.addEventListener('pointerup', () => { if (!dep) return; dep = null; try { localStorage.setItem('ap-bandeau-pos', JSON.stringify(apPos)); } catch (x) {} });
+  h.addEventListener('dblclick', () => { apPos = null; try { localStorage.removeItem('ap-bandeau-pos'); } catch (x) {} apBandeauPlace(); });
+  addEventListener('resize', () => { if (!b.hidden) apBandeauPlace(); });
+})();
 /* The banner's words, counted down every second with the header (the AOS to come, the LOS of the pass running). */
 function apBandeau() {
   const e = AP && AP.enCours; if (!e || g('ap-bandeau').hidden) return;
