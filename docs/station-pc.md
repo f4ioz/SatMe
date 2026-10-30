@@ -30,7 +30,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 18. [Ships (AIS)](#ships-ais)
 19. [Space weather](#space-weather)
 20. [Montage: the station chain](#montage-the-station-chain) — diagram, editing, catalogue, functions, profiles
-21. [Réglages (settings)](#réglages-settings) — rig and rotator, IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
+21. [Réglages (settings)](#réglages-settings) — rig and rotator, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
 22. [More of the PC](#more-of-the-pc)
 23. [Hardware safety](#hardware-safety)
 24. [Before the first try](#before-the-first-try)
@@ -1061,6 +1061,27 @@ The rig's model (IC-9700, IC-9100, IC-910H, TS-2000, two rigs FT-817 / IC-705, T
 **Calibrer le rotor…** (Réglages › Poste et rotor › Rotor): a step-by-step assistant, tracking stopped while it is open (given back as it was afterwards), the controller's raw `C2` reading and SatMe's side by side, a **STOP** always on screen, and nothing moved but on a click. Over GS-232 it sends the controller's own calibrations, as the K3NG firmware implements them: `O2` with the boom at a real 0° (inclinometer), `F2` at the real top — F2 makes the current position the firmware's *maximum* elevation (ELEVATION_MAXIMUM_DEGREES, 180), so if the real top is not 180° it says so and offers the alternatives (firmware setting, or SatMe's correction) — then `O` / `F` at the full CCW / CW azimuth stops, as set (north or south stop). Each waits for its keystroke and "Wrote to memory"; `?>` (another firmware, no pot sensor) and rotctld (no such command) are told, and only the software correction applies there. A **verification** sends test positions (el 45/90/135, az 90/180/270) on click; the inclinometer or compass reading entered, the table shows the error. **Software correction**, per axis, controller reading ↔ real angle (`read:real;…`, e.g. `0:0;180:160`; one point an offset, two a scale, more piecewise): built from the table or typed, applied both ways, the limits staying in real degrees and the controller never sent beyond its travel; empty by default, reset in one click. Power-cycle the controller afterwards and read again to check the EEPROM kept it. The page the phone serves has the same assistant; the phone's Rotor screen shows and edits the correction.
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Settings: the rig (CAT) and the rotator, their ports and connection"></p>
+
+### IC-9700 on Windows: the USB driver and the rig's settings
+
+The IC-9700's USB cable carries two things: a **Silicon Labs CP2102N** serial bridge (VID 10C4, PID EA60), which gives the rig's two COM ports (CI-V and data), and a **USB Audio CODEC** sound card (Burr-Brown / TI, VID 08BB), which takes Windows' own audio driver. The bridge needs the **Silicon Labs CP210x driver** — the one Icom redistributes as "USB Driver (Serial Port)". Without it, Windows says "CP2102N driver unavailable", creates no COM port, and SatMe-PC has nothing to open.
+
+SatMe-PC notices (Windows only: on Linux and macOS the driver is part of the system, nothing shows): under the port choice, in *Réglages › Poste et rotor*, a box says **« Un poste Icom (CP2102N) est branché mais Windows n'a pas son pilote. »** (an Icom rig is plugged in but Windows has no driver for it) and offers:
+
+- **Ouvrir la page du pilote**: Silicon Labs' official page ([USB to UART Bridge VCP Drivers](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers)); next to it, [Icom's firmware and software page](https://www.icomjapan.com/support/firmware_driver/).
+- **Installer le pilote**: after a confirmation, SatMe-PC downloads the "CP210x Universal Windows Driver" from silabs.com, checks the archive (a .zip with its .inf and signed .cat catalogue), then installs it with `pnputil /add-driver … /install`. Windows asks for permission (User Account Control): answer **Yes**. Nothing is downloaded or installed without that click, and the driver does not ship with SatMe. Only from the page open on the station's own PC.
+- **Choisir le zip téléchargé…**: if silabs.com refuses the direct download, download the zip from its page with the browser and hand it over here; the rest is the same.
+- **Rechercher à nouveau**: reads the serial ports and sound cards again. If Windows asks, restart; the IC-9700's sound card may need SatMe-PC to be restarted.
+
+If nothing changes: **switch the IC-9700 on before plugging the USB cable in** (with the rig off, Windows sees only part of its devices), then unplug and plug the cable again. *Settings › Windows Update › Advanced options › Optional updates › Driver updates* often offers the Silicon Labs driver too.
+
+On the rig (**MENU › SET › Connectors › CI-V**):
+
+- **CI-V USB Port**: **Unlink from [REMOTE]** — the USB port gets its own CI-V, separate from the REMOTE jack;
+- **CI-V USB Baud Rate**: a fixed speed (115200 for instance), and **the same in SatMe-PC** (*Poste* › speed);
+- **CI-V USB Echo Back**: **OFF**.
+
+Of the rig's two COM ports, CI-V is the first ("… (A)" in SatMe-PC's list, from the rig's serial number).
 
 ### The IC-9700 over the network
 

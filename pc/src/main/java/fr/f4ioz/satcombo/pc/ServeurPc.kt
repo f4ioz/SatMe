@@ -74,6 +74,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The IC-9700 by the network: settings, status, scope (set before [demarre]). */
     @Volatile var icomReseau: IcomReseauPc? = null
 
+    /** The rig's USB driver on Windows: found missing, installed on a click (set before [demarre]). */
+    @Volatile var piloteUsb: PiloteUsbPc? = null
+
     /** QO-100's wide band spectrum from the ground station, its signals and the « veille » (set before [demarre]). */
     @Volatile var large: SpectreLargePc? = null
     /** The wide band from our own SDR (DATV tab), off unless chosen. */
@@ -741,6 +744,25 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 chemin == "/api/icomreseau/cartes" -> ir.cartes()
                 r.methode == "POST" -> runCatching { ir.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 else -> ir.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The rig's USB driver (Windows): what is missing; installing only from this PC, on a click, from this page.
+        if (chemin == "/api/pilote-usb" || chemin.startsWith("/api/pilote-usb/")) {
+            val pu = piloteUsb
+            val o = when {
+                pu == null || !pu.actif -> JSONObject().put("windows", false)
+                r.methode != "POST" -> pu.json()
+                chemin == "/api/pilote-usb/rechercher" -> { pu.rafraichis(force = true); pu.json() }
+                !local -> JSONObject().put("ok", false).put("erreur", "seulement depuis le PC de la station (Windows y demande l'autorisation)")
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> JSONObject().put("ok", false).put("erreur", "origine refusée")
+                chemin == "/api/pilote-usb/installer" -> pu.installe()?.let { JSONObject().put("ok", false).put("erreur", it) } ?: pu.json().put("ok", true)
+                chemin == "/api/pilote-usb/zip" -> {
+                    val b = if (r.longueur <= 0) null else RequeteHttp.corps(c.getInputStream(), r, DetectionPiloteUsb.ZIP_MAX)
+                    if (b == null) JSONObject().put("ok", false).put("erreur", "fichier vide ou trop gros")
+                    else pu.installeZip(b)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: pu.json().put("ok", true)
+                }
+                else -> JSONObject().put("ok", false).put("erreur", "inconnu")
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }

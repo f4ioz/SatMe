@@ -30,7 +30,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 18. [Navires (AIS)](#navires-ais)
 19. [Météo spatiale](#météo-spatiale)
 20. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
-21. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), trafic satellite (préréglages, SO-50, mémoires CW et vocales, APRS par l'ISS), polarisation d'antenne (boîtier ESP32, sondage H/V), table des convertisseurs et transverters, calibration de la clé SDR, alignement d'un transpondeur, éléments orbitaux, journal Doppler, lien satellite, rigctld, publication web vers votre site, molette USB (Windows, relais vers une autre station), annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
+21. [Réglages](#réglages) — poste et rotor, IC-9700 sous Windows (pilote USB), IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), trafic satellite (préréglages, SO-50, mémoires CW et vocales, APRS par l'ISS), polarisation d'antenne (boîtier ESP32, sondage H/V), table des convertisseurs et transverters, calibration de la clé SDR, alignement d'un transpondeur, éléments orbitaux, journal Doppler, lien satellite, rigctld, publication web vers votre site, molette USB (Windows, relais vers une autre station), annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
 22. [Encore sur le PC](#encore-sur-le-pc)
 23. [Sécurité du matériel](#sécurité-du-matériel)
 24. [Avant le premier essai](#avant-le-premier-essai)
@@ -1062,6 +1062,27 @@ Le modèle du poste (IC-9700, IC-9100, IC-910H, TS-2000, deux postes FT-817 / IC
 **Calibrer le rotor…** (Réglages › Poste et rotor › Rotor) : un assistant pas à pas, le suivi arrêté tant qu'il est ouvert (rendu tel qu'il était ensuite), la lecture brute du contrôleur (`C2`) à côté de celle de SatMe, un **STOP** toujours à l'écran, et rien ne bouge sans un clic. En GS-232, il envoie les calibrations du contrôleur lui-même, telles que le firmware K3NG les fait : `O2` le boom à 0° réels (inclinomètre), `F2` en butée haute réelle — F2 fait de la position actuelle l'élévation *maximale* du firmware (ELEVATION_MAXIMUM_DEGREES, 180) : si la butée réelle n'est pas à 180°, il le dit et propose les autres voies (réglage du firmware, ou la correction de SatMe) — puis `O` / `F` aux butées gauche (CCW) et droite (CW) de l'azimut, selon la butée réglée (nord ou sud). Chacune attend sa touche et « Wrote to memory » ; `?>` (autre firmware, pas de capteur à potentiomètre) et rotctld (pas de telles commandes) sont signalés, seule la correction logicielle s'applique alors. Une **vérification** envoie des positions d'essai (él 45/90/135, az 90/180/270) sur un clic ; la lecture de l'inclinomètre ou de la boussole entrée, le tableau montre l'écart. **Correction logicielle**, par axe, lecture du contrôleur ↔ angle réel (`lu:réel;…`, par ex. `0:0;180:160` ; un point : un décalage, deux : une échelle, plus : par morceaux) : tirée du tableau ou tapée, appliquée dans les deux sens, les limites restant en degrés réels et le contrôleur ne recevant jamais plus que sa course ; vide d'origine, remise à zéro d'un clic. Éteindre puis rallumer le contrôleur ensuite, et relire : l'EEPROM doit l'avoir gardée. La page servie par le téléphone a le même assistant ; l'écran Rotor du téléphone montre et modifie la correction.
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Réglages : le poste (CAT) et le rotor, leurs ports et leur connexion"></p>
+
+### IC-9700 sous Windows : le pilote USB et les réglages du poste
+
+Le câble USB de l'IC-9700 porte deux choses : un pont série **Silicon Labs CP2102N** (VID 10C4, PID EA60), qui donne les deux ports COM du poste (CI-V et données), et une carte son **USB Audio CODEC** (Burr-Brown / TI, VID 08BB), qui prend le pilote audio de Windows lui-même. Le pont, lui, demande le **pilote CP210x de Silicon Labs** — celui qu'Icom redistribue comme « USB Driver (Serial Port) ». Sans lui, Windows dit « pilote CP2102N indisponible », ne crée aucun port COM et SatMe-PC n'a rien à ouvrir.
+
+SatMe-PC le voit (Windows seulement : sous Linux et macOS le pilote est dans le système, rien ne s'affiche) : sous le choix du port, dans *Réglages › Poste et rotor*, un cadre dit **« Un poste Icom (CP2102N) est branché mais Windows n'a pas son pilote. »** et propose :
+
+- **Ouvrir la page du pilote** : la page officielle de Silicon Labs ([USB to UART Bridge VCP Drivers](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers)) ; à côté, la page [firmware et logiciels d'Icom](https://www.icomjapan.com/support/firmware_driver/).
+- **Installer le pilote** : après confirmation, SatMe-PC télécharge le « CP210x Universal Windows Driver » depuis silabs.com, vérifie l'archive (un .zip avec son .inf et son catalogue signé .cat), puis l'installe avec `pnputil /add-driver … /install`. Windows demande l'autorisation (contrôle du compte d'utilisateur) : répondre **Oui**. Rien n'est téléchargé ni installé sans ce clic, et le pilote n'est pas fourni avec SatMe. Seulement depuis la page ouverte sur le PC de la station.
+- **Choisir le zip téléchargé…** : si silabs.com refuse le téléchargement direct, télécharger le zip depuis sa page avec le navigateur, puis le donner ici ; la suite est la même.
+- **Rechercher à nouveau** : relit les ports série et les cartes son. Si Windows le demande, redémarrer ; la carte son de l'IC-9700 peut demander de relancer SatMe-PC.
+
+Si rien ne change : **allumer l'IC-9700 avant de brancher le câble USB** (poste éteint, Windows ne voit qu'une partie de ses appareils), puis débrancher et rebrancher le câble. *Paramètres › Windows Update › Options avancées › Mises à jour facultatives › Mises à jour de pilotes* propose souvent aussi le pilote Silicon Labs.
+
+Sur le poste (**MENU › SET › Connectors › CI-V**) :
+
+- **CI-V USB Port** : **Unlink from [REMOTE]** — le port USB a son propre CI-V, séparé de la prise REMOTE ;
+- **CI-V USB Baud Rate** : une vitesse fixe (115200 par exemple), et **la même dans SatMe-PC** (*Poste* › vitesse) ;
+- **CI-V USB Echo Back** : **OFF**.
+
+Des deux ports COM du poste, le CI-V est le premier (« … (A) » dans la liste de SatMe-PC, d'après le numéro de série du poste).
 
 ### L'IC-9700 par le réseau
 

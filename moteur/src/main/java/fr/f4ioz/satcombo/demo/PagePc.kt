@@ -4595,6 +4595,18 @@ ${DemarragePagePc.CARTES}
       <div class="ligne"><span class="petit" id="cat-port-nom" style="min-width:34px"></span><select id="cat-port"></select>
         <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
         <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
+      <div id="pu-carte" hidden style="margin-top:8px;padding:8px;border:1px solid var(--ambre);border-radius:6px">
+        <b class="ambre" id="pu-titre"></b>
+        <div class="petit" id="pu-codec" hidden style="margin-top:4px"></div>
+        <div class="petit aide" id="pu-aide" style="margin-top:4px">Sans lui, Windows ne crée pas les deux ports COM du poste (CI-V et données) et SatMe-PC n'a rien à ouvrir. C'est le pilote Silicon Labs CP210x, le même que le « USB Driver (Serial Port) » d'Icom. Avant tout : l'IC-9700 <b>allumé</b>, puis le câble USB branché. Windows Update peut aussi le proposer : <i>Paramètres › Windows Update › Options avancées › Mises à jour facultatives › Mises à jour de pilotes</i>.</div>
+        <div class="ligne"><a class="bouton" id="pu-page" target="_blank" rel="noopener noreferrer">Ouvrir la page du pilote</a>
+          <a class="petit" id="pu-icom" target="_blank" rel="noopener noreferrer">page d'Icom (firmware et pilotes)</a></div>
+        <div class="ligne"><button class="primaire" id="pu-installe" onclick="puInstalle()" title="Télécharge le pilote officiel depuis silabs.com et l'installe ; Windows demande l'autorisation">Installer le pilote</button>
+          <button onclick="g('pu-zip').click()" title="Le zip « CP210x Universal Windows Driver » téléchargé depuis la page de Silicon Labs">Choisir le zip téléchargé…</button>
+          <input type="file" id="pu-zip" accept=".zip,application/zip" hidden onchange="puZip(this)">
+          <button onclick="puRecherche()" title="Relire les ports série et les cartes son">Rechercher à nouveau</button></div>
+        <div class="etat" id="pu-etat"></div>
+      </div>
       <div class="ligne" id="cat-tx-ligne"><span class="petit" style="min-width:34px">TX</span><select id="cat-port-tx"></select>
         <select id="cat-tx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select></div>
       <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
@@ -7043,6 +7055,68 @@ async function chargePorts() {
   if (a) g('cat-port').value = a;
   if (c) g('cat-port-tx').value = c;
   if (b) g('rot-port').value = b; else if (E && E.rotor) g('rot-port').value = String(E.rotor.port);
+  puCharge();
+}
+// ------------------------------------------------------------------ the rig's USB driver (Windows only)
+// SatMe-PC on Windows says when an IC-9700's CP2102N (or its codec) is plugged in without a working driver;
+// elsewhere (Linux, macOS, the phone's page) the answer is « windows: false » or nothing, and the notice stays hidden.
+let PU = null, puFil = null;
+async function puCharge() {
+  try { PU = await (await fetch('api/pilote-usb')).json(); } catch (x) { PU = null; }
+  puRend();
+}
+function puRend() {
+  const c = g('pu-carte'), i = PU && PU.installation;
+  const appareils = (PU && PU.appareils) || [];
+  const montre = !!(PU && PU.windows && (appareils.length || (i && (i.enCours || i.erreur || i.fini))));
+  c.hidden = !montre;
+  if (!montre) return;
+  const ponts = appareils.filter(a => a.type === 'PONT_SERIE'), codecs = appareils.filter(a => a.type === 'CODEC_SON');
+  txt('pu-titre', ponts.some(a => a.sansPilote) ? 'Un poste Icom (CP2102N) est branché mais Windows n’a pas son pilote.'
+    : ponts.length ? 'Un poste Icom (CP2102N) est branché mais son pilote ne démarre pas (code ' + ponts[0].code + ' dans Windows).'
+    : codecs.length ? 'La carte son USB d’un poste Icom est branchée mais Windows la signale en erreur.'
+    : i && i.fini ? 'Pilote du poste installé.' : 'Pilote du poste');
+  g('pu-codec').hidden = !(codecs.length && ponts.length);
+  txt('pu-codec', 'Sa carte son USB (USB Audio CODEC) est aussi en erreur (code ' + (codecs[0] ? codecs[0].code : '') + ') : elle prend le pilote audio de Windows lui-même, souvent remis en place en débranchant puis rebranchant le câble, poste allumé.');
+  g('pu-aide').hidden = !ponts.length;
+  if (PU.liens) { g('pu-page').href = PU.liens.silabs; g('pu-icom').href = PU.liens.icom; }
+  g('pu-installe').disabled = !!(i && i.enCours) || !ponts.length;
+  let e = '';
+  if (PU.recherche) e = 'recherche en cours…';
+  else if (i && i.enCours) e = i.etape + '…';
+  else if (i && i.erreur) e = 'Échec : ' + i.erreur;
+  else if (i && i.fini) e = i.message + (i.redemarrer ? '' : '. Si le poste n’apparaît pas dans la liste : débrancher puis rebrancher le câble (poste allumé), « Rechercher à nouveau », et au besoin redémarrer Windows. La carte son de l’IC-9700 peut demander de relancer SatMe-PC.');
+  txt('pu-etat', e);
+}
+/** Follows an installation or a search until it ends, then reads the ports and the sound cards again. */
+function puSuit() {
+  if (puFil) clearInterval(puFil);
+  puFil = setInterval(async () => {
+    await puCharge();
+    if (PU && (PU.recherche || (PU.installation && PU.installation.enCours))) return;
+    clearInterval(puFil); puFil = null;
+    chargePorts();
+    try { S = await (await fetch('api/son')).json(); rendSon(); } catch (x) {}
+    irCartes();
+  }, 1500);
+}
+async function puInstalle() {
+  if (!confirm('SatMe-PC va télécharger le pilote officiel « CP210x Universal Windows Driver » depuis silabs.com, vérifier l’archive, puis l’installer avec pnputil.\n\nWindows va demander l’autorisation (contrôle du compte d’utilisateur) : répondre « Oui ».\n\nContinuer ?')) return;
+  const j = await post('api/pilote-usb/installer');
+  if (j && j.ok) { PU = j; puRend(); puSuit(); }
+}
+async function puZip(input) {
+  const f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  if (!confirm('Installer le pilote contenu dans « ' + f.name + ' » ? Windows va demander l’autorisation : répondre « Oui ».')) return;
+  let j = null;
+  try { j = await (await fetch('api/pilote-usb/zip', { method: 'POST', body: f })).json(); } catch (x) {}
+  if (!j || j.ok === false) { alert((j && j.erreur) || 'envoi impossible'); return; }
+  PU = j; puRend(); puSuit();
+}
+async function puRecherche() {
+  try { PU = await (await fetch('api/pilote-usb/rechercher', { method: 'POST' })).json(); } catch (x) {}
+  puRend(); puSuit();
 }
 function avertCat() {
   const m = g('cat-modele').value;
