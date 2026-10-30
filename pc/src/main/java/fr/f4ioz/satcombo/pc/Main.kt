@@ -878,6 +878,8 @@ fun main(args: Array<String>) {
         runCatching { adsb.arrete() }
         runCatching { ais.arrete() }
         runCatching { emission.arrete("SatMe-PC fermé") }
+        // The DATV PTT output at rest at once (no delay to wait: the RF is off), its port let go.
+        runCatching { emission.ptt.ferme() }
         // No hackrf_transfer outlives SatMe-PC.
         runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
         runCatching { journal.ferme() }

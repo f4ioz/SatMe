@@ -319,6 +319,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
     }
 
+    /**
+     * « Créneau qui semble libre / occupé » for the DATV uplink set now, from
+     * the ground station's spectrum: a hint for the page, never a permission.
+     */
+    private fun indiceDatv(e: EmissionDatvPc): JSONObject {
+        val l = large
+        val notre = if (e.etat.emet && !e.etat.chargeFictive && !e.etat.interieur) e.etat.frequenceKhz + fr.f4ioz.satcombo.datv.PlanQo100.DECALAGE_KHZ else null
+        val k = if (e.etat.emet) e.etat.frequenceKhz else e.frequenceKhz
+        val c = l?.indice(k, e.srKs, e.rolloffEffectif.alpha, notre, station.settings.callsign)
+            ?: fr.f4ioz.satcombo.datv.CreneauxDatv.indice(k, e.srKs, e.rolloffEffectif.alpha, null, notreDescenteKhz = notre, indicatif = station.settings.callsign)
+        return fr.f4ioz.satcombo.datv.CreneauxDatv.json(c)
+    }
+
     /** The decoded line the page answers (double-click): its text, callsigns, grid, SNR, frequency and slot. */
     private fun recuFt8(q: Map<String, String>, mode: String): fr.f4ioz.satcombo.domain.Ft8Qso.Recu {
         val t = q["t"]?.toLongOrNull() ?: error("créneau de la ligne manquant")
@@ -780,6 +793,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 l == null -> JSONObject().put("ok", false)
                 r.methode == "POST" -> runCatching { l.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 else -> l.json(q["depuis"]?.toLongOrNull() ?: -1L).put("rapport", rapportDatv())
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The DATV transmission's PTT/sequencer output: its settings and a one-second test (no RF), from this PC only.
+        if (chemin == "/api/datv/emission/ptt") {
+            val e = emission
+            val o = when {
+                e == null -> JSONObject().put("ok", false).put("absent", true)
+                r.methode != "POST" -> e.ptt.json(e.etat.emet)
+                !local -> JSONObject().put("ok", false).put("erreur", "seulement depuis le PC de la station")
+                q["test"] == "1" -> e.ptt.teste(e.etat.emet)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: e.ptt.json(false)
+                else -> e.ptt.regle(q, e.etat.emet)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: e.ptt.json(false)
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
@@ -1306,6 +1331,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     val cr = l?.creneaux(e.srKs, e.rolloffEffectif.alpha, notre, station.settings.callsign)
                         ?: fr.f4ioz.satcombo.datv.CreneauxDatv.calcule(e.srKs, e.rolloffEffectif.alpha, null, notreDescenteKhz = notre, indicatif = station.settings.callsign)
                     o.put("creneaux", fr.f4ioz.satcombo.datv.CreneauxDatv.json(cr)).put("creneauxSpectre", l != null && l.on && l.frais())
+                    // The free-slot hint for the frequency set (indicative only), and who drives the transmission, for this tab.
+                    o.put("indice", indiceDatv(e))
+                    q["client"]?.takeIf { it.isNotBlank() }?.let { id ->
+                        o.put("controle", controle.json(fr.f4ioz.satcombo.datv.ControleEmission.Client(id.take(40), !local, c.inetAddress?.hostAddress.orEmpty())))
+                    }
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
@@ -2047,7 +2077,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["courtes"]?.let { e.courtes = it == "1" }
                 q["pilotes"]?.let { e.pilotes = it == "1" }
                 q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceKhz = Math.round(it * 1000.0) }
+                // A click on the wide band spectrum (downlink kHz): the band plan's channel under it, else the frequency rounded. Nothing transmitted.
+                q["clicDescenteKhz"]?.toLongOrNull()?.let { k ->
+                    if (e.etat.emet) return JSONObject().put("ok", false).put("erreur", "fréquence : arrêter l’émission d’abord")
+                    e.frequenceKhz = fr.f4ioz.satcombo.datv.CreneauxDatv.accroche(k, e.srKs, e.rolloffEffectif.alpha)
+                    return ok.put("khz", e.frequenceKhz).put("indice", indiceDatv(e))
+                }
+                // The level: a gain set by the operator takes it off 0; « niveau 0 » puts it back; kept after a stop only when asked.
                 q["gain"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.regleGain(it) }
+                if (q["niveauZero"] == "1" && !e.etat.emet) e.niveauZero()
+                q["garderNiveau"]?.let { e.garderNiveau = it == "1" }
+                // The sound against the picture (clamped), the folder of videos, the simulation (not while transmitting).
+                q["decalageSon"]?.trim()?.toIntOrNull()?.let { if (!e.etat.emet) e.decalageSonMs = it }
+                q["dossier"]?.let { if (!e.etat.emet) e.dossierVideos = it }
+                q["simulation"]?.let { if (!e.etat.emet) e.simulation = it == "1" }
                 entier("duree")?.let { e.dureeS = it * 60 }
                 q["source"]?.let { e.source = it }
                 q["image"]?.let { e.image = it }
