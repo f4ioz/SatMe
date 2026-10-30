@@ -41,7 +41,7 @@ object OngletOrbites {
     <canvas id="ob-2d" hidden aria-label="La carte des satellites et de leurs empreintes"></canvas>
     <div class="ob-haut">
       <div class="ob-seg ob-tb-garde" role="group" aria-label="Vue"><button type="button" data-ob-vue="globe">Globe 3D</button><button type="button" data-ob-vue="carte">Carte 2D</button><button type="button" data-ob-vue="passage">Passage</button></div>
-      <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, Soleil et Lune, météo spatiale). Échap pour sortir">⛶ Tableau</button><label id="ob-theme-l" hidden title="L'allure du tableau de bord">Thème <select id="ob-theme" onchange="obTheme(this.value)"></select></label><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
+      <div class="ob-seg ob-tb"><button type="button" id="ob-tableau-b" onclick="obTableau(true)" title="Tableau de bord : le globe en plein écran, avec les informations choisies (heure, prochains passages, satellite, station, Soleil et Lune, météo spatiale). Échap pour sortir">⛶ Tableau</button><label id="ob-theme-l" hidden title="L'allure du tableau de bord">Thème <select id="ob-theme" onchange="obTheme(this.value)"></select></label><label id="ob-globe-l" hidden title="Le rendu du globe dans ce thème (gardé pour chaque thème)">Globe <select id="ob-globe" onchange="obGlobe(this.value)"></select></label><button type="button" id="ob-infos-b" hidden aria-expanded="false" aria-controls="ob-infos" title="Les informations affichées sur le globe">Informations ▾</button><button type="button" id="ob-sortir" hidden onclick="obTableau(false)" title="Quitter le tableau de bord (Échap)">✕ Quitter</button>
         <div class="ob-infos" id="ob-infos" role="dialog" aria-label="Informations du tableau de bord" hidden></div></div>
       <div class="ob-seg" id="ob-styles" role="group" aria-label="Rendu de la Terre"></div>
       <div class="ob-seg"><label title="Villes, montagnes, monuments et décor (bateaux, forêts…) du dessin animé">Détails <select id="ob-detail"><option value="0">simples</option><option value="1">normaux</option><option value="2">riches</option></select></label><label title="Toutes les villes, les capitales des pays seulement, ou aucune">Villes <select id="ob-villes"><option value="toutes">toutes</option><option value="capitales">capitales</option><option value="aucune">aucune</option></select></label><label title="Le nom des villes, le drapeau de leur pays (capitales), ou les deux">Noms <select id="ob-etiq"><option value="nom">nom</option><option value="drapeau">drapeau</option><option value="nomdrapeau">nom et drapeau</option></select></label><label title="Les contacts du carnet qui ont un locator">Contacts <select id="ob-contacts"><option value="aucun">aucun</option><option value="points">points</option><option value="indicatifs">points et indicatifs</option><option value="locators">locators</option></select></label><label title="Les monuments célèbres : aucun, les plus connus, ou tous (un à quelques-uns par pays)">Monuments <select id="ob-monuments" class="ob-mon-choix"><option value="aucun">aucun</option><option value="principaux">principaux</option><option value="tous">tous</option></select></label><label title="La taille des monuments sur le globe et la carte (plus grands : lisibles de loin)">Taille <select id="ob-montaille" class="ob-montaille-choix"><option value="0.7">petite</option><option value="1">normale</option><option value="1.6">grande</option><option value="2.4">très grande</option></select></label><label title="Les traces au sol des satellites, sur le globe et la carte : de discrètes (à gauche) à très marquées (épaisses, foncées, détourées)">Traces <input type="range" id="ob-traces" class="ob-traces-choix" min="0" max="100" step="5" aria-label="Traces au sol : discrètes à très marquées"></label><span class="ob-tb"><button type="button" id="ob-montypes-b" aria-expanded="false" aria-controls="ob-montypes" title="Les familles de monuments montrées">Types ▾</button><div class="ob-infos" id="ob-montypes" role="dialog" aria-label="Familles de monuments" hidden></div></span></div>
@@ -186,6 +186,8 @@ object OngletOrbites {
   .ob-seg .ob-tb > button { border:0; }
   #ob-theme-l { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
   #ob-theme-l[hidden] { display:none; }
+  #ob-globe-l { display:flex; align-items:center; gap:6px; padding:0 6px; font-size:var(--fs-s); color:var(--texte-2); }
+  #ob-globe-l[hidden] { display:none; }
   /* The dashboard's extras: the Moon's face, the Kp bars, the ticker, the explanations. */
   .ob-lune { width:2.2em; height:2.2em; flex:none; vertical-align:middle; }
   .ob-defile .ob-lune { width:1.2em; height:1.2em; vertical-align:-.2em; }
@@ -371,6 +373,7 @@ const OB_THEMES = {
   classique: { nom: 'Classique radioamateur', style: 'realiste', vue: 'carte', off: ['photo'] },
   nuit: { nom: 'Nuit (sobre)', style: 'points', vue: 'globe', off: ['astres', 'espace', 'defile', 'photo'] },
   retro: { nom: 'Rétro', style: 'vintage', vue: 'carte', off: ['espace'] },
+  bleunuit: { nom: 'Bleu nuit', style: 'bleunuit', vue: 'globe', tourne: true, off: ['photo'] },
   pedago: { nom: 'Pédagogique', style: 'cartoon', vue: 'globe', tourne: true, pedago: true, off: ['station', 'astres', 'espace', 'sat', 'photo'] },
   // A stand's poster (a club's day, a fair): big, turning by itself, its own cards one after another; nothing to touch.
   vitrine: { nom: 'Vitrine (stand, forum)', style: 'cartoon', vue: 'globe', tourne: true, vitrine: true, off: ['horloge', 'station', 'astres', 'passages', 'sat', 'photo', 'espace'] }
@@ -397,6 +400,8 @@ const OB_SAVAIS = [
   'La Terre fait un tour sur elle-même en 23\u00a0h\u00a056\u00a0min : c’est pour ça que les satellites semblent se décaler vers l’ouest.'
 ];
 let obInfos = {}, obTbT = 0, obCalmeT = 0, obBulT = 0, obTh = 'cartoon', obVues = {}, obPeda = {}, obFiche = 0, obSav = Math.floor(Math.random() * OB_SAVAIS.length);
+let obStyles = {};
+try { obStyles = JSON.parse(localStorage.getItem('ob-th-styles')) || {}; } catch (x) {}
 try { obInfos = JSON.parse(localStorage.getItem('ob-infos2')) || {}; obVues = JSON.parse(localStorage.getItem('ob-th-vues')) || {}; obPeda = JSON.parse(localStorage.getItem('ob-pedago')) || {};
   obTh = localStorage.getItem('ob-theme') || 'cartoon'; } catch (x) {}
 if (!OB_THEMES[obTh]) obTh = 'cartoon';
@@ -406,10 +411,22 @@ const obInfo = k => { const v = obInfos[obTh + '.' + k]; return v != null ? v : 
 const obPedaOn = k => obPeda[k] !== false;
 Object.keys(OB_THEMES).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = OB_THEMES[k].nom; g('ob-theme').appendChild(o); });
 g('ob-theme').value = obTh;
+/** The globe's look in the dashboard: the theme's own, or one of the tab's, kept for each theme. */
+function obGlobeListe() {
+  const sel = g('ob-globe'), T = OB_THEMES[obTh], noms = Orbites.styles ? Orbites.styles() : [];
+  const nom = k => (noms.find(x => x[0] === k) || [k, k])[1];
+  sel.innerHTML = '<option value="">' + nom(T.style) + ' (thème)</option>' + noms.filter(x => x[0] !== T.style).map(x => '<option value="' + x[0] + '">' + x[1] + '</option>').join('');
+  sel.value = obStyles[obTh] && obStyles[obTh] !== T.style ? obStyles[obTh] : '';
+}
+function obGlobe(k) {
+  if (k) obStyles[obTh] = k; else delete obStyles[obTh];
+  obGarde('ob-th-styles', obStyles);
+  if (g('v-orbites').classList.contains('ob-tableau')) Orbites.tableauMode(obThOpts());
+}
 /** What the globe takes from the look: its Earth, its view (as last chosen in it), turning by itself, the Sun and Moon, the explanations. */
 function obThOpts() {
   const T = OB_THEMES[obTh];
-  return { style: T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago, vitrine: !!T.vitrine, place: obPlace,
+  return { style: obStyles[obTh] || T.style, vue: obVues[obTh] || T.vue, tourne: !!T.tourne, astres: obInfo('astres') || !!T.pedago, pedago: !!T.pedago, vitrine: !!T.vitrine, place: obPlace,
     surVue: v => { if (v !== 'passage') { obVues[obTh] = v; obGarde('ob-th-vues', obVues); } } };
 }
 function obTableau(on) {
@@ -430,7 +447,8 @@ function obTableau(on) {
     Orbites.tableauMode(null);
   }
   const t = v.classList.contains('ob-tableau');
-  g('ob-tableau-b').hidden = t; g('ob-infos-b').hidden = g('ob-sortir').hidden = g('ob-theme-l').hidden = !t;
+  g('ob-tableau-b').hidden = t; g('ob-infos-b').hidden = g('ob-sortir').hidden = g('ob-theme-l').hidden = g('ob-globe-l').hidden = !t;
+  if (t) obGlobeListe();
   g('ob-infos-b').setAttribute('aria-expanded', !g('ob-infos').hidden);
   obTbMaj();
   if (t) g('ob-sortir').focus(); else g('ob-tableau-b').focus();
@@ -440,7 +458,7 @@ function obTableau(on) {
 function obTheme(k) {
   if (!OB_THEMES[k]) return;
   const v = g('v-orbites');
-  v.classList.remove('ob-th-' + obTh); obTh = k; obGarde('ob-theme', k); g('ob-theme').value = k;
+  v.classList.remove('ob-th-' + obTh); obTh = k; obGarde('ob-theme', k); g('ob-theme').value = k; obGlobeListe();
   if (!v.classList.contains('ob-tableau')) return;
   v.classList.add('ob-th-' + k); g('ob-bulles').innerHTML = ''; g('ob-vitrine').innerHTML = ''; obVitT = 0;
   v.querySelectorAll('.ob-w').forEach(w => { w.dataset.h = ''; });
