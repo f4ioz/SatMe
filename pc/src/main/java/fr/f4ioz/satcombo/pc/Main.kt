@@ -763,6 +763,8 @@ fun main(args: Array<String>) {
     fluide.tolerant = { datv.decodageTolerant }
     fluide.sonNavigateur = { ici, page -> datv.sonNavigateur(ici, page) }
     serveur.fluideDatv = fluide
+    // The JPEG stream at each browser's « Qualité », its re-encoded levels counted with the fluid playing's (two at most).
+    serveur.imagesDatv = ImagesDatvPc({ datv.image }, { datv.etat.actif }, { datv.etat.images.toLong() }, fluide.partage)
     fluide.demarre()
     // « FT8/FT4 » (off by default): each slot decoded sent live (direct-ft8), a journal's pass with its messages (ft8-passage).
     val ft8Site = Ft8SitePc()

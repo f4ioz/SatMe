@@ -517,6 +517,7 @@ ${STYLE_JETONS}
   .d-agrandir { position:absolute; right:8px; bottom:8px; z-index:3; padding:1px 8px; font-size:16px; line-height:1.3; background:rgba(0,0,0,.55); color:#fff; border-radius:6px; opacity:.55; }
   .d-agrandir:hover, .d-agrandir:focus-visible { opacity:1; }
   .d-plein-arret { display:none; }
+  .d-qual { gap:6px; flex-wrap:wrap; } .d-qual select { padding:1px 4px; font-size:var(--fs-xs); }
   .d-leg { margin-top:-2px; min-height:1.3em; overflow-wrap:anywhere; }
   .d-haut.d-duo { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"tx rx" "ltx lrx" "info info"; gap:4px 10px; }
   .d-haut.d-duo #d-cadre-tx { grid-area:tx; }
@@ -3122,6 +3123,9 @@ ${OngletSked.HTML}
     <div id="d-cadre" class="d-cadre" ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div><span class="d-nom d-nom-rx">Reçu</span><div id="d-ba" class="d-ba" hidden></div><div id="d-ba-bascule" class="d-ba-bascule" role="status" aria-live="polite" hidden></div><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
     <div id="d-leg-rx" class="petit d-leg" hidden></div>
       <div class="d-info">
+    <div class="ligne d-qual" id="d-qual"><label class="petit" title="La taille de l’image DATV dans ce navigateur, retenue pour lui seul (une tablette peut rester en 480p pendant que ce PC garde la source). Source : l’image telle que reçue. 720p, 480p, 360p : réencodée plus petite et plus légère par SatMe-PC (deux tailles réencodées à la fois au plus ; une troisième demandée reçoit la plus proche). Auto : descend d’un cran quand ce navigateur perd des images ou prend du retard, remonte après un moment de calme. À droite : le débit reçu et les images perdues.">Qualité
+      <select id="d-qualite" onchange="dQualite(this.value)"><option value="source">Source</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option><option value="auto">Auto</option></select></label>
+      <span class="petit" id="d-qual-etat"></span></div>
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
       <span>MER <b class="val" id="d-mer">—</b></span>
@@ -8451,7 +8455,7 @@ async function ticDatv(premier) {
   const vign = MD && !dDirect && D.actif && D.images;
   g('d-direct').hidden = !(MD && D.actif && D.images); txt('d-direct', dDirect ? 'Vignettes' : '▶ Vidéo en direct');
   if (vign && !mdSaute('vign', 2000)) { v.dataset.vign = '1'; v.src = 'api/datv/image.jpg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
-  if (D.actif && D.images && !vign && (v.style.display !== 'block' || v.dataset.vign)) { delete v.dataset.vign; v.src = 'api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  if (D.actif && D.images && !vign && (v.style.display !== 'block' || v.dataset.vign || dQualRelance())) { delete v.dataset.vign; v.src = dQualMjpeg(); v.style.display = 'block'; g('d-vide').hidden = true; }
   if (!D.actif && v.style.display === 'block') { v.removeAttribute('src'); v.style.display = 'none'; }
   if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' :
     D.telephone ? (D.verrouille ? 'accroché : l’image est sur l’écran DATV du téléphone' : D.libelle + '…') : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
@@ -8508,6 +8512,9 @@ function dReduit() {
 }
 // ------------------------------------------------------------------ DATV: « Lecture fluide », the picture and its sound together in a <video>
 ${LecteurFluideJs.CODE}
+// « Qualité » of the DATV picture, per browser: Source, 720p, 480p, 360p or Auto (QualiteDatvJs), its measures.
+${QualiteDatvJs.CODE}
+${QualiteDatvJs.PAGE}
 // ------------------------------------------------------------------ DATV reception quality
 let qEm = null, qEmPs = null;
 const fr1 = x => x == null ? '—' : x.toFixed(1).replace('.', ',');
