@@ -31,6 +31,11 @@ import java.util.concurrent.TimeUnit
  * session opened with the password over HTTP or HTTPS), the codecs in a header to set up its MediaSource. The
  * stream ends when the coding changes (another station, H.264 → H.265) or ffmpeg stops: the page asks again.
  *
+ * « Qualité » (per browser): a page may ask a smaller level ([NiveauDatvPc], `?q=480`): its own ffmpeg then, shared
+ * by all the pages asking it, re-encoding in H.264 at that size and rate; two such levels at most at once
+ * ([PartageNiveauxDatvPc], with the JPEG stream's), a third asked gets the nearest one running. Source alone
+ * re-encodes nothing more than before.
+ *
  * The sound: a page on this PC playing it asks the PC's own players (ffplay, « Vumètre et volume ») to be quiet
  * meanwhile ([sonNavigateur]), so it is not heard twice and out of step; its levels, « Écouter ici », the
  * subtitles and the translation keep their own decoders. The JPEG pictures go on as before (the snapshots, the
@@ -39,6 +44,8 @@ import java.util.concurrent.TimeUnit
 class LecteurFluideDatvPc(
     private val ffmpeg: () -> String? = { RenduPc.ffmpeg() },
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** The re-encoded levels' bookkeeping, shared with the JPEG stream's. */
+    val partage: PartageNiveauxDatvPc = PartageNiveauxDatvPc(horloge = horloge),
 ) {
     /** Where the stream comes from (set by Main): the DATV receiver, or the demonstration's test picture. */
     @Volatile var source: VideoSitePc.SourceTs? = null
@@ -50,10 +57,12 @@ class LecteurFluideDatvPc(
     @Volatile var sonNavigateur: (Boolean, Boolean) -> Unit = { _, _ -> }
 
     @Volatile var erreur = ""; private set
-    @Volatile private var session: Session? = null
+    /** The ffmpeg of each level played (Source: the picture copied, or re-encoded when not H.264). */
+    private val encodages = java.util.concurrent.ConcurrentHashMap<NiveauDatvPc, Session>()
     private val attente = CopyOnWriteArrayList<Client>()
     @Volatile private var dernierBlocMs = 0L
     @Volatile private var besoinMs = 0L
+    @Volatile private var besoinSourceMs = 0L
     @Volatile private var branche = false
     private val recents = ArrayDeque<ByteArray>()
     private var recentsOctets = 0
@@ -70,7 +79,7 @@ class LecteurFluideDatvPc(
             recents.addLast(b); recentsOctets += b.size
             while (recentsOctets > RECENTS_MAX && recents.size > 1) recentsOctets -= recents.removeFirst().size
         }
-        session?.donne(b)
+        encodages.values.forEach { it.donne(b) }
     }
 
     private fun recentsAlignes(): ByteArray = aligne(synchronized(recents) { concat(recents.toList()) })
@@ -89,23 +98,26 @@ class LecteurFluideDatvPc(
     private var sonTous = false
     private var sonOffDepuis = 0L
 
-    /** Four times a second: the source taken or left, ffmpeg started, watched, stopped. */
+    /** Four times a second: the source taken or left, each level's ffmpeg started, watched, stopped. */
     internal fun tic() {
         val t = horloge()
-        val s = session
-        val voulu = attente.isNotEmpty() || (s != null && s.clients.isNotEmpty())
-        if (voulu) besoinMs = t
+        val voulus = (attente.map { it.niveau } + encodages.filterValues { it.clients.isNotEmpty() }.keys).toSet()
+        if (voulus.isNotEmpty()) besoinMs = t
+        if (NiveauDatvPc.SOURCE in voulus) besoinSourceMs = t
         val besoin = t - besoinMs < GARDE_MS
         val src = source
         if (besoin && !branche && src != null) { branche = true; src.branche { bloc(it) } }
         if (!besoin && branche) { branche = false; src?.branche(null); synchronized(recents) { recents.clear(); recentsOctets = 0 } }
+        // The levels nobody watches any more (10 s), Source among them.
+        val finis = partage.aArreter(SORTE) + listOfNotNull(NiveauDatvPc.SOURCE.takeIf { t - besoinSourceMs >= GARDE_MS })
+        finis.forEach { n -> encodages.remove(n)?.ferme("plus personne") }
         // The demonstration's test picture starts when asked.
         if (besoin) runCatching { src?.verrouille() }
-        if (!besoin) { s?.ferme("plus personne"); session = null; codecVu = null; majSon(t); return }
+        if (!besoin) { encodages.values.forEach { it.ferme("plus personne") }; encodages.clear(); codecVu = null; majSon(t); return }
         // What the stream carries now (its PMT), each second.
         if (t - codecVuMs >= 1000L) { codecVuMs = t; VideoSitePc.codecsTs(recentsAlignes())?.let { codecVu = it.substringBefore(',') } }
         val flux = t - dernierBlocMs < 2000L
-        if (s != null) {
+        for ((n, s) in encodages) {
             val pourquoi = when {
                 s.finie -> s.cause.ifEmpty { "ffmpeg arrêté" }
                 codecVu != null && s.codecTs != null && codecVu != s.codecTs -> "codage changé : " + s.codecTs + " → " + codecVu
@@ -113,26 +125,30 @@ class LecteurFluideDatvPc(
                 s.init != null && flux && t - s.dernierFragmentMs > 6000L -> "ffmpeg figé"
                 else -> null
             }
-            if (pourquoi != null) { s.ferme(pourquoi); session = null; erreur = pourquoi }
+            if (pourquoi != null) { s.ferme(pourquoi); encodages.remove(n); erreur = pourquoi }
         }
-        // Started once the stream flows and its coding is known (or not found within 3 s: re-encoded, whatever it is).
+        // Started once the stream flows and its coding is known (or not found within 3 s: re-encoded, whatever it is);
+        // a smaller level only while it holds its place among the re-encoded ones.
         if (!flux) debutFluxMs = null else if (debutFluxMs == null) debutFluxMs = t
-        if (session == null && voulu && flux && (codecVu != null || t - (debutFluxMs ?: t) >= 3000L)) lance(codecVu)
+        if (flux && (codecVu != null || t - (debutFluxMs ?: t) >= 3000L))
+            for (n in voulus) if (encodages[n] == null && (n == NiveauDatvPc.SOURCE || n in partage.actifs(SORTE))) lance(n, codecVu)
         majSon(t)
     }
     private var debutFluxMs: Long? = null
 
-    private fun lance(codec: String?) {
+    private fun lance(n: NiveauDatvPc, codec: String?) {
         val ff = cheminFfmpeg ?: ffmpeg()?.also { cheminFfmpeg = it } ?: run { erreur = "ffmpeg introuvable (" + OutilsPc.conseil("ffmpeg") + ")"; return }
-        val copie = copie(codec)
-        val s = Session(ff, copie, codec)
+        val copie = n == NiveauDatvPc.SOURCE && copie(codec)
+        val s = Session(ff, n, copie, codec)
         try { s.lance(recentsAlignes()) } catch (e: Exception) { erreur = "ffmpeg : " + (e.message ?: ""); s.ferme("ne démarre pas"); return }
-        session = s; sessions++; erreur = ""
+        encodages[n] = s; sessions++; erreur = ""
     }
+
+    private fun clients(): List<Client> = encodages.values.flatMap { it.clients } + attente
 
     /** The sound in the browsers: on at once, off after [GRACE_SON_MS] (a page reconnecting does not wake the PC's own). */
     private fun majSon(t: Long) {
-        val tous = (session?.clients.orEmpty() + attente).filter { it.son && !it.ferme }
+        val tous = clients().filter { it.son && !it.ferme }
         val local = tous.any { it.local }
         val any = tous.isNotEmpty()
         if (local || any) sonOffDepuis = t
@@ -144,7 +160,7 @@ class LecteurFluideDatvPc(
     // ------------------------------------------------------------------ the pages
 
     /** A page watching: its fragments queue (a page too slow is let go: it asks again). */
-    class Client(val id: String, val local: Boolean, @Volatile var son: Boolean) {
+    class Client(val id: String, val local: Boolean, @Volatile var son: Boolean, val niveau: NiveauDatvPc = NiveauDatvPc.SOURCE) {
         val file = ArrayBlockingQueue<ByteArray>(400)
         @Volatile var ferme = false
         fun donne(b: ByteArray) { if (!ferme && !file.offer(b)) ferme = true }
@@ -152,17 +168,23 @@ class LecteurFluideDatvPc(
 
     /**
      * `/api/datv/fluide.mp4`: waits (10 s at most) for ffmpeg's first fragments, then sends the stream until the
-     * page goes or the stream ends. 503 with a reason when nothing comes.
+     * page goes or the stream ends. 503 with a reason when nothing comes. [voulu]: the page's « Qualité »; the level
+     * served (another when two are re-encoded already) said in `X-Satme-Niveau`, and why in `X-Satme-Repli`.
      */
-    fun sert(sortie: OutputStream, id: String, local: Boolean, son: Boolean) {
-        val c = Client(id.take(40), local, son)
+    fun sert(sortie: OutputStream, id: String, local: Boolean, son: Boolean, voulu: NiveauDatvPc = NiveauDatvPc.SOURCE) {
+        val n = partage.prend(SORTE, voulu)
+        try { sertNiveau(sortie, Client(id.take(40), local, son, n), voulu) } finally { partage.rend(SORTE, n) }
+    }
+
+    private fun sertNiveau(sortie: OutputStream, c: Client, voulu: NiveauDatvPc) {
         attente += c
         besoinMs = horloge()
+        if (c.niveau == NiveauDatvPc.SOURCE) besoinSourceMs = besoinMs
         val debut = horloge()
         var s: Session? = null
         try {
             while (horloge() - debut < 10_000L) {
-                s = session?.takeIf { it.init != null && !it.finie }
+                s = encodages[c.niveau]?.takeIf { it.init != null && !it.finie }
                 if (s != null) break
                 Thread.sleep(50)
             }
@@ -175,7 +197,9 @@ class LecteurFluideDatvPc(
             return
         }
         try {
+            val repli = partage.raison(voulu, c.niveau)
             sortie.write(("HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nX-Satme-Codecs: ${s.codecs}\r\nX-Satme-Mode: ${if (s.copie) "copie" else "h264"}\r\n" +
+                "X-Satme-Niveau: ${c.niveau.code}\r\n" + (if (repli.isEmpty()) "" else "X-Satme-Repli: " + java.net.URLEncoder.encode(repli, "UTF-8") + "\r\n") +
                 "Cache-Control: no-store\r\nX-Accel-Buffering: no\r\nConnection: close\r\n\r\n").toByteArray())
             sortie.flush()
             while (!c.ferme) {
@@ -195,23 +219,26 @@ class LecteurFluideDatvPc(
 
     /** A page's sound turned on or off (its own volume stays in the page). */
     fun son(id: String, on: Boolean): Boolean {
-        val c = (session?.clients.orEmpty() + attente).firstOrNull { it.id == id } ?: return false
-        c.son = on
+        val l = clients().filter { it.id == id }
+        if (l.isEmpty()) return false
+        l.forEach { it.son = on }
         majSon(horloge())
         return true
     }
 
     fun json(): JSONObject {
-        val s = session
+        val s = encodages[NiveauDatvPc.SOURCE] ?: encodages.values.firstOrNull()
+        val niveaux = org.json.JSONArray()
+        encodages.forEach { (n, e) -> niveaux.put(JSONObject().put("niveau", n.code).put("clients", e.clients.size).put("enMarche", e.init != null && !e.finie)) }
         return JSONObject().put("ok", true).put("demo", demo).put("flux", horloge() - dernierBlocMs < 2000L)
             .put("enMarche", s?.init != null && s.finie.not()).put("mode", if (s == null) "" else if (s.copie) "copie" else "h264")
-            .put("codecs", s?.codecs.orEmpty()).put("clients", s?.clients?.size ?: 0).put("erreur", erreur)
-            .put("sonPc", sonLocal).put("sessions", sessions)
+            .put("codecs", s?.codecs.orEmpty()).put("clients", encodages.values.sumOf { it.clients.size }).put("erreur", erreur)
+            .put("sonPc", sonLocal).put("sessions", sessions).put("niveaux", niveaux)
     }
 
     // ------------------------------------------------------------------ one ffmpeg
 
-    private inner class Session(val ff: String, val copie: Boolean, val codecTs: String?) {
+    private inner class Session(val ff: String, val niveau: NiveauDatvPc, val copie: Boolean, val codecTs: String?) {
         val debutMs = horloge()
         val blocs = ArrayBlockingQueue<ByteArray>(4096)
         val clients = CopyOnWriteArrayList<Client>()
@@ -227,7 +254,7 @@ class LecteurFluideDatvPc(
         private var gopOctets = 0
 
         fun lance(debut: ByteArray) {
-            val q = ProcessBuilder(commande(ff, copie, tolerant())).redirectError(JOURNAL).start()
+            val q = ProcessBuilder(commande(ff, copie, tolerant(), niveau)).redirectError(JOURNAL).start()
             p = q
             if (debut.isNotEmpty()) blocs.offer(debut)
             Thread({ nourrit(q.outputStream) }, "satme-datv-fluide-ts").apply { isDaemon = true; start() }
@@ -348,22 +375,31 @@ class LecteurFluideDatvPc(
         private const val RECENTS_MAX = 512 * 1024
         private const val GOP_MAX = 6 shl 20
 
+        /** The sort of [PartageNiveauxDatvPc] for these encoders. */
+        const val SORTE = "mp4"
+
         /** The picture copied as it is when it is H.264 (or unknown before the start: re-encoded then). */
         fun copie(codecTs: String?): Boolean = codecTs?.startsWith("avc1") == true
 
         /**
          * ffmpeg's command: the transport stream on its input, fragmented MP4 on its output — the H.264 copied
          * ([copie]), else re-encoded in H.264 (deinterlaced when the picture says it is interlaced, 720 lines at
-         * most, a key frame each second); the sound in AAC (none when the stream has none).
+         * most, a key frame each second); the sound in AAC (none when the stream has none). A smaller [niveau]: always
+         * re-encoded, at its size, its rate at most, its bit rate and profile.
          */
-        fun commande(ff: String, copie: Boolean, tolerant: Boolean): List<String> {
+        fun commande(ff: String, copie: Boolean, tolerant: Boolean, niveau: NiveauDatvPc = NiveauDatvPc.SOURCE): List<String> {
             val a = arrayListOf(ff, "-hide_banner", "-loglevel", "error")
             a += DatvPc.lecteurEntree(tolerant)
             a += listOf("-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0?")
-            if (copie) a += listOf("-c:v", "copy")
-            else a += listOf("-vf", "yadif=deint=interlaced,scale=-2:'min(720,ih)',format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
+            val n = niveau
+            if (n == NiveauDatvPc.SOURCE && copie) a += listOf("-c:v", "copy")
+            else if (n == NiveauDatvPc.SOURCE) a += listOf("-vf", "yadif=deint=interlaced,scale=-2:'min(720,ih)',format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
                 "-tune", "zerolatency", "-profile:v", "main", "-crf", "23", "-maxrate", "4000k", "-bufsize", "4000k",
                 "-g", "25", "-keyint_min", "25", "-sc_threshold", "0", "-force_key_frames", "expr:gte(t,n_forced*1)")
+            else a += listOf("-vf", "yadif=deint=interlaced,scale=-2:'min(${n.lignes},ih)',format=yuv420p", "-fpsmax", n.ips.toString(),
+                "-c:v", "libx264", "-preset", n.preset, "-tune", "zerolatency", "-profile:v", n.profil, "-crf", "23",
+                "-maxrate", "${n.kbps}k", "-bufsize", "${n.kbps}k", "-g", n.ips.toString(), "-keyint_min", n.ips.toString(), "-sc_threshold", "0",
+                "-force_key_frames", "expr:gte(t,n_forced*1)")
             a += listOf("-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000")
             a += listOf("-max_muxing_queue_size", "1024", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof",
                 "-frag_duration", "200000", "-flush_packets", "1", "pipe:1")

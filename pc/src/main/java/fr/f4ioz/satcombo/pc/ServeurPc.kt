@@ -70,6 +70,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** « Lecture fluide » of the DATV tab: the picture and its sound as fragmented MP4 (set before [demarre]). */
     @Volatile var fluideDatv: LecteurFluideDatvPc? = null
+    /** The DATV tab's JPEG stream at each browser's « Qualité » (Main gives one sharing the fluid playing's levels). */
+    @Volatile var imagesDatv: ImagesDatvPc? = datv?.let { d -> ImagesDatvPc({ d.image }, { d.etat.actif }, numeroSource = { d.etat.images.toLong() }) }
 
     /** The IC-9700 by the network: settings, status, scope (set before [demarre]). */
     @Volatile var icomReseau: IcomReseauPc? = null
@@ -576,27 +578,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return
         }
         fluideDatv?.takeIf { chemin.startsWith("/api/datv/fluide") }?.let { f -> fluideDatv(c, r, chemin, q, sortie, local, f); return }
-        if (chemin == "/api/datv/video.mjpeg" && datv != null) {
-            // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video).
-            c.soTimeout = 0
-            sortie.write(("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=satme\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
-            var vu: ByteArray? = null
-            var calme = 0
-            while (true) {
-                val img = datv.image
-                if (img != null && img !== vu) {
-                    vu = img; calme = 0
-                    val ok = runCatching {
-                        sortie.write(("--satme\r\nContent-Type: image/jpeg\r\nContent-Length: ${img.size}\r\n\r\n").toByteArray())
-                        sortie.write(img); sortie.write("\r\n".toByteArray()); sortie.flush()
-                    }.isSuccess
-                    if (!ok) return
-                } else {
-                    // Nothing new for a long while and the reception stopped: the page asks again when it starts.
-                    if (!datv.etat.actif && ++calme > 600) return
-                    Thread.sleep(20)
-                }
-            }
+        imagesDatv?.takeIf { datv != null }?.let { im ->
+            // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video), at the page's « Qualité ».
+            if (chemin == "/api/datv/video.mjpeg") { c.soTimeout = 0; im.sert(sortie, q["id"].orEmpty(), NiveauDatvPc.de(q["q"])); return }
+            if (chemin == "/api/datv/video/mesure") { envoie(sortie, "200 OK", "application/json; charset=utf-8", im.mesure(q["id"].orEmpty()).toString().toByteArray()); return }
         }
         if (chemin == "/api/datv/emission/vue.mjpeg" && emission != null) {
             // The picture being transmitted, decoded here from a copy of the stream (display only), while transmitting.
@@ -1565,7 +1550,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun fluideDatv(c: Socket, r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, local: Boolean, f: LecteurFluideDatvPc) {
         val json = "application/json; charset=utf-8"
         when {
-            chemin == "/api/datv/fluide.mp4" && r.methode == "GET" -> { c.soTimeout = 0; f.sert(sortie, q["id"].orEmpty(), local, q["son"] == "1") }
+            chemin == "/api/datv/fluide.mp4" && r.methode == "GET" -> { c.soTimeout = 0; f.sert(sortie, q["id"].orEmpty(), local, q["son"] == "1", NiveauDatvPc.de(q["q"])) }
             chemin == "/api/datv/fluide/son" && r.methode == "POST" -> {
                 val o = if (!SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"])) JSONObject().put("ok", false).put("erreur", "origine refusée")
                     else JSONObject().put("ok", f.son(q["id"].orEmpty(), q["on"] == "1"))

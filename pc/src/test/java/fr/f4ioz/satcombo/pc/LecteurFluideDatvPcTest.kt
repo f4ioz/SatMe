@@ -177,6 +177,56 @@ class LecteurFluideDatvPcTest {
         }
     }
 
+    @Test fun `a smaller level - its own ffmpeg in H264 Baseline at 360 lines, shared, Source untouched`() {
+        val f = ts("libx264"); assumeTrue("ffmpeg with libx264", f != null)
+        val octets = f!!.readBytes()
+        val lecteur = LecteurFluideDatvPc()
+        val vers = java.util.concurrent.atomic.AtomicReference<((ByteArray) -> Unit)?>(null)
+        lecteur.source = object : VideoSitePc.SourceTs {
+            override fun branche(f: ((ByteArray) -> Unit)?) { vers.set(f) }
+            override fun verrouille() = true
+            override fun service() = "essai"
+            override fun kbps() = 1000
+        }
+        val fil = Thread {
+            var o = 0
+            while (!Thread.currentThread().isInterrupted) {
+                val v = vers.get()
+                if (v == null) { try { Thread.sleep(50) } catch (_: InterruptedException) { break }; continue }
+                val n = minOf(188 * 7 * 4, octets.size - o)
+                v(octets.copyOfRange(o, o + n)); o = (o + n) % octets.size
+                try { Thread.sleep(20) } catch (_: InterruptedException) { break }
+            }
+        }.apply { isDaemon = true; start() }
+        lecteur.demarre()
+        val st = StationPc(fr.f4ioz.satcombo.plateforme.StockageMemoire(), Catalogue(tmp.newFolder(), enLigne = false), PortsSeriePc(), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default))
+        val s = ServeurPc(st, 0)
+        s.fluideDatv = lecteur
+        s.demarre()
+        try {
+            val base = "http://127.0.0.1:${s.portReel}"
+            fun page(q: String) = (URL("$base/api/datv/fluide.mp4?id=p$q&son=0&q=$q").openConnection() as HttpURLConnection).apply { readTimeout = 20_000 }
+            val a = page("360"); val b = page("360")
+            assertEquals(200, a.responseCode); assertEquals(200, b.responseCode)
+            assertEquals("360", a.getHeaderField("X-Satme-Niveau")); assertEquals("h264", a.getHeaderField("X-Satme-Mode"))
+            // H.264 Constrained Baseline.
+            assertTrue(a.getHeaderField("X-Satme-Codecs"), a.getHeaderField("X-Satme-Codecs").startsWith("avc1.42"))
+            val e = a.inputStream
+            val buf = ByteArray(65536); var total = 0; val t0 = System.currentTimeMillis()
+            while (System.currentTimeMillis() - t0 < 2000) { val n = e.read(buf); if (n < 0) break; total += n }
+            assertTrue("$total bytes", total > 5_000)
+            // One ffmpeg for both pages, and none for Source (nobody asked it).
+            val j = JSONObject(URL("$base/api/datv/fluide").readText())
+            val niveaux = j.getJSONArray("niveaux")
+            assertEquals(1, niveaux.length()); assertEquals("360", niveaux.getJSONObject(0).getString("niveau"))
+            assertEquals(2, niveaux.getJSONObject(0).getInt("clients"))
+            assertEquals(setOf(NiveauDatvPc.P360), lecteur.partage.actifs(LecteurFluideDatvPc.SORTE))
+            a.disconnect(); b.disconnect()
+        } finally {
+            s.arrete(); fil.interrupt()
+        }
+    }
+
     @Test fun `nobody watching - the source never taken`() {
         val lecteur = LecteurFluideDatvPc(horloge = System::currentTimeMillis)
         var pris = false
