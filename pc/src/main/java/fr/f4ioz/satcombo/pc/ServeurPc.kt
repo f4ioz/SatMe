@@ -246,6 +246,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete",
         "/api/be/emission/demarre", "/api/be/emission/vie", "/api/be/emission/arrete")
 
+    /** This start of SatMe-PC (`api/demarrage`). */
+    private val demarrage = java.lang.Long.toString(System.currentTimeMillis(), 36)
+
     private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true ||
         emissionBe?.emet == true || ft8Tx?.arme == true ||
         traficLeo?.emet == true
@@ -1203,6 +1206,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // Every tab here but the functions not about satellites left unticked; the phone offers some of them.
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", capacites().toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
+            // This SatMe-PC's start: a page left open sees a new one (updated, restarted) and reloads, never while transmitting.
+            "/api/demarrage" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                JSONObject().put("id", demarrage).put("emet", emetQuelqueChose()).toString().toByteArray())
             // The satellite link: on or not, its port, who listens.
             "/api/lien" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (lien?.let { l ->
                 JSONObject().put("on", l.actif).put("port", l.port).put("ecoute", l.ecoute).put("clients", l.nbClients)

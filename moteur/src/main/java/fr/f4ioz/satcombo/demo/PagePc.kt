@@ -543,6 +543,7 @@ ${STYLE_JETONS}
   #q-pids td, #q-pids th { padding:2px 6px; text-align:right; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
   #q-pids th { color:var(--gris); font-weight:400; }
   #q-pids td:nth-child(2), #q-pids th:nth-child(2) { text-align:left; font-family:inherit; }
+  .maj-page { position:fixed; z-index:9999; left:50%; bottom:16px; transform:translateX(-50%); display:flex; align-items:center; gap:12px; padding:10px 14px; border:1px solid var(--cyan, #3FE0C8); border-radius:10px; background:#131C24; color:#E8F0F7; box-shadow:0 8px 24px rgba(0,0,0,.4); }
   .d-st { position:absolute; left:2%; right:2%; bottom:4%; display:flex; flex-direction:column; align-items:center; gap:.25em; pointer-events:none; font-size:18px; z-index:2; }
   .d-st div { background:rgba(0,0,0,.76); color:#fff; font-size:1em; font-weight:600; line-height:1.25; padding:.12em 14px; border-radius:6px; text-align:center; text-shadow:0 1px 2px #000; max-width:100%; box-sizing:border-box; }
   .d-st .l { display:block; white-space:nowrap; }
@@ -6641,6 +6642,34 @@ async function importe(input) {
   input.value = ''; g('indicatif').value = ''; g('locator').value = '';
   setTimeout(() => { tic(); chargeListe(); }, 1500);
 }
+
+/*
+ * SatMe-PC updated or restarted while this page stays open: the page sees its new start (api/demarrage, every
+ * 20 s and when it comes back in view) and reloads by itself — never while anything transmits, nor while
+ * something is being typed: then a banner offers it.
+ */
+let demarrageVu = null, demarrageT = 0, demarrageOffert = false;
+async function verifieDemarrage(force) {
+  if (!force && (document.hidden || Date.now() - demarrageT < 20000)) return;
+  demarrageT = Date.now();
+  let j = null;
+  try { j = await (await fetch('api/demarrage', { cache: 'no-store' })).json(); } catch (x) { return; }
+  if (!j || !j.id) return;
+  if (demarrageVu === null) { demarrageVu = j.id; return; }
+  if (j.id === demarrageVu) return;
+  const a = document.activeElement, saisie = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|number|password|email|url|tel)$/.test(a.type))) && a.value;
+  if (!j.emet && !saisie) { location.reload(); return; }
+  if (demarrageOffert) return;
+  demarrageOffert = true;
+  const b = document.createElement('div');
+  b.className = 'maj-page'; b.setAttribute('role', 'status');
+  b.innerHTML = '<span>SatMe-PC a été mis à jour ou redémarré.</span><button type="button">Recharger la page</button>';
+  b.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(b);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verifieDemarrage(true); });
+setInterval(verifieDemarrage, 5000);
+verifieDemarrage(true);
 
 async function tic() {
   // The stream keeps E fresh: only drawn again (an action's result comes by the stream within a moment).
