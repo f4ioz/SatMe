@@ -211,6 +211,17 @@ fun main(args: Array<String>) {
         fr.f4ioz.satcombo.telemesure.RecepteurPaquets.Contexte(if (essai) e.satellite else s?.name.orEmpty(), if (essai) 0 else s?.catalogNumber ?: 0,
             e.cielHz, e.reposHz, essai)
     }
+    // Or from the TS-2000's 9600 output on a sound card (ACC2, its external TNC speed at 9600 bps): the frequency is the CAT's.
+    telemesure.contextePaquetsSon = { essai ->
+        val e = station.etat.value
+        val s = e.suivi
+        val tx = station.emetteurChoisi()
+        val repos = e.repos ?: tx?.downlinkLowHz?.let { lo -> (lo + (tx.downlinkHighHz ?: lo)) / 2 } ?: 0L
+        fr.f4ioz.satcombo.telemesure.RecepteurPaquets.Contexte(if (essai) "Essai" else s?.name.orEmpty(), if (essai) 0 else s?.catalogNumber ?: 0,
+            station.stationCat.etat.value.descenteHz ?: 0L, if (essai) 0L else repos, essai)
+    }
+    telemesure.cartes = { son.son.appareils().map { it.nom } }
+    telemesure.ouvreCarte = { nom, recoit -> son.son.capture(nom, recoit).let { (r, err) -> r?.second to err } }
     telemesure.emetteurPaquets = {
         val e = station.etat.value
         val choisi = station.emetteurChoisi()
@@ -231,6 +242,8 @@ fun main(args: Array<String>) {
     telemesure.enregistrement = { nom -> son.fichierEnregistrement(nom) }
     telemesure.enregistrements = { son.enregistrements().filter { it.name.endsWith(".wav") }.map { it.name } }
     son.son.auditeurs += { pcm, n, rate -> runCatching { telemesure.ecouteCarte(pcm, n, rate) } }
+    // The packets' sound card, when chosen (nothing opened otherwise).
+    runCatching { telemesure.appliqueSonPaquets() }
     // SSDV through an FM repeater in AFSK 1200 (IO-86): the APRS decoder's frames searched.
     son.aprs.surOctets = { o -> runCatching { telemesure.trameAfsk(o) } }
     telemesure.station = {

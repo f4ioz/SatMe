@@ -4535,10 +4535,16 @@ ${Ft8SiteJs.HTML}    </div>
 <div class="grille2">
   <div class="carte">
     <div class="t">Paquets FSK · GMSK <span id="tp-pastille" class="pastille coupe">coupé</span></div>
-    <div class="petit aide">Les cubesats en FSK ou GMSK de 1200 à 9600 bit/s, dont le « G3RUH » à 9600 bit/s : embrouilleur 1 + x¹² + x¹⁷, NRZI, trames HDLC (CRC-16) le plus souvent en AX.25. SatMe démodule les échantillons I/Q bruts du récepteur SDR principal, pas le son : discriminateur FM, rattrapage de fréquence résiduel (±12 kHz autour du Doppler suivi par SatMe), récupération d'horloge, puis deux lectures (avec et sans embrouilleur).</div>
+    <div class="petit aide">Les cubesats en FSK ou GMSK de 1200 à 9600 bit/s, dont le « G3RUH » à 9600 bit/s : embrouilleur 1 + x¹² + x¹⁷, NRZI, trames HDLC (CRC-16) le plus souvent en AX.25. Source « Récepteur SDR » : SatMe démodule les échantillons I/Q bruts du récepteur SDR principal, pas le son : discriminateur FM, rattrapage de fréquence résiduel (±12 kHz autour du Doppler suivi par SatMe), récupération d'horloge, puis deux lectures (avec et sans embrouilleur). Source « Carte son » : la sortie 9600 d'un TS-2000 (son discriminateur, sans désaccentuation), le Doppler corrigé par la CAT ; SatMe en retire le continu, la filtre, récupère l'horloge et lit les mêmes trames (la polarité du discriminateur n'y change rien).</div>
     <div class="petit aide">Le débit vient de l'émetteur SatNOGS DB du satellite suivi (mode FSK, GFSK, GMSK, MSK et sa vitesse), ou se choisit à la main. Les trames AX.100 « mode 5 » (ASM + Golay) et les protocoles propres à un satellite ne sont pas lus. Réception seulement.</div>
     <div class="petit aide">Les trames sont gardées par passage dans le dossier de données (telemesure/paquets : une ligne JSON par trame, et un fichier KISS si coché) ; les images SSDV dans telemesure/ssdv. Les signaux du générateur d'essai et des enregistrements rejoués ne sont ni gardés ni partagés.</div>
-    <label style="display:block"><input type="checkbox" id="tp-on" onchange="tlmPost('paquets?on=' + (this.checked ? 1 : 0))"> <b>Décoder les paquets</b> <span class="petit">— récepteur SDR, hors QO-100</span></label>
+    <label style="display:block"><input type="checkbox" id="tp-on" onchange="tlmPost('paquets?on=' + (this.checked ? 1 : 0))"> <b>Décoder les paquets</b> <span class="petit">— récepteur SDR (hors QO-100) ou carte son</span></label>
+    <div class="ligne"><span class="petit">Source</span><select id="tp-source" style="flex:none" onchange="tlmPost('paquets/source?v=' + this.value)"><option value="sdr">Récepteur SDR (I/Q)</option><option value="son">Carte son : bande de base 9600 (TS-2000, prise ACC2)</option></select></div>
+    <div id="tp-son" hidden>
+      <div class="ligne"><span class="petit">Carte</span><select id="tp-carte" style="flex:1;min-width:160px" title="La carte son branchée sur la sortie 9600 du poste" onchange="tlmPost('paquets/carte?v=' + encodeURIComponent(this.value))"></select></div>
+      <div class="ligne"><span class="petit">Niveau</span><div style="flex:1;height:10px;background:#0E1720;border-radius:5px;overflow:hidden"><div id="tp-niveau" style="height:100%;width:0;background:var(--vert)"></div></div><span class="petit" id="tp-niveau-t" style="flex:none"></span></div>
+      <div class="petit aide">Le câblage (TS-2000, prise <b>ACC2</b> à 13 broches à l'arrière) : broche <b>3</b> (MANO, sortie du récepteur principal, ≈ 10 kΩ) — ou broche <b>1</b> (SANO) pour le sous-récepteur — vers l'entrée ligne de la carte son, la masse sur la broche <b>4</b> (ou 8, 12). Rien d'autre : ni PKS (broche 9) ni SS (broche 13), qui mettent le poste en émission, ni PKD (broche 11, l'entrée de modulation). Menus du poste : <b>50F</b> (débit du TNC extérieur) sur <b>9600</b>, <b>50E</b> sur MAIN ou SUB selon la broche, <b>50C</b> (ou 50D) pour le niveau de sortie. La carte : entrée ligne (pas micro), sans contrôle automatique de gain ni « amélioration » du son, à 48 kHz (44,1 et 96 kHz vont aussi) ; le niveau ici vers 30 à 60 %, jamais au plafond. Le poste en FM sur la descente, la CAT de SatMe en corrige le Doppler. Réception seulement : SatMe ne commande jamais l'émission du poste par cette voie.</div>
+    </div>
     <div class="ligne"><span class="petit">Débit</span><select id="tp-debit" style="flex:none" onchange="tlmPost('paquets/debit?v=' + this.value)"><option value="0">selon l’émetteur</option><option value="1200">1200 bit/s</option><option value="2400">2400 bit/s</option><option value="4800">4800 bit/s</option><option value="9600">9600 bit/s</option></select>
       <label class="petit"><input type="checkbox" id="tp-kiss" onchange="tlmPost('paquets/kiss?on=' + (this.checked ? 1 : 0))"> fichier KISS</label></div>
     <div class="petit" id="tp-em"></div>
@@ -13440,15 +13446,32 @@ function tpRend(p) {
   if (document.activeElement !== g('tp-on')) g('tp-on').checked = !!p.option;
   if (document.activeElement !== g('tp-debit')) g('tp-debit').value = String(p.choisi || 0);
   g('tp-kiss').checked = !!p.kiss; g('tp-essai').disabled = !!p.essaiEnCours;
-  const pa = g('tp-pastille'), pt = !p.option ? 'coupé' : !e.actif ? 'en attente du SDR' : recent ? 'trames reçues' : e.signal ? 'signal tenu' : e.presence ? 'signal vu' : 'à l’écoute';
+  const sonP = p.source === 'son';
+  if (document.activeElement !== g('tp-source')) g('tp-source').value = sonP ? 'son' : 'sdr';
+  g('tp-son').hidden = !sonP;
+  if (sonP) {
+    const lc = JSON.stringify(p.cartes || []) + '|' + (p.carte || '');
+    if (g('tp-carte').dataset.vu !== lc) {
+      g('tp-carte').dataset.vu = lc;
+      const l = (p.cartes || []).slice();
+      if (p.carte && l.indexOf(p.carte) < 0) l.push(p.carte);
+      g('tp-carte').innerHTML = '<option value="">la carte de l’onglet Son</option>' + l.map(n => '<option value="' + escA(n) + '">' + esc(nomCarte(n)) + '</option>').join('');
+    }
+    if (document.activeElement !== g('tp-carte')) g('tp-carte').value = p.carte || '';
+    const cr = e.source === 'son' && e.actif ? (e.crete || 0) : 0;
+    g('tp-niveau').style.width = Math.round(Math.min(1, cr) * 100) + '%';
+    g('tp-niveau').style.background = cr > 0.9 ? 'var(--rose)' : cr < 0.05 ? 'var(--warn)' : 'var(--vert)';
+    txt('tp-niveau-t', p.erreurCarte ? p.erreurCarte : !p.option ? '' : e.source === 'son' && e.rate ? Math.round(cr * 100) + ' % · ' + (e.rate / 1000).toString().replace('.', ',') + ' kHz' + (cr > 0.9 ? ' · trop fort' : cr < 0.05 ? ' · trop faible' : '') : 'en attente du son');
+  }
+  const pa = g('tp-pastille'), pt = !p.option ? 'coupé' : !e.actif ? (sonP ? 'en attente du son' : 'en attente du SDR') : recent ? 'trames reçues' : e.signal ? 'signal tenu' : e.presence ? 'signal vu' : 'à l’écoute';
   if (pa.textContent !== pt) pa.textContent = pt;
   pa.className = 'pastille ' + (p.option ? 'marche' : 'coupe');
   const em = p.emetteur;
   txt('tp-em', p.essaiEnCours ? 'Essai en cours…' : (em ? 'Émetteur du satellite suivi : ' + em.description + ' (' + em.mode + ', ' + em.debit + ' bit/s)' + (em.note ? ' — ' + em.note : '') + '. ' : 'Aucun émetteur FSK/GMSK connu pour le satellite suivi. ') +
     'Décodage à ' + p.debit + ' bit/s.');
   const it = (v, l, c) => '<span><span class="val' + (c ? ' ' + c : '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
-  tlmPose('tp-etat', p.option && e.actif ? it(e.trames, 'trames') + it(e.crcFaux, 'CRC faux') + it((e.afcHz > 0 ? '+' : '') + e.afcHz + ' Hz', 'AFC', e.presence ? 'cyan' : '') +
-    it(Math.round(e.niveauDb - e.plancherDb) + ' dB', 'au-dessus du bruit') + (e.perdus ? it(e.perdus, 'blocs perdus') : '') : '');
+  tlmPose('tp-etat', p.option && e.actif ? it(e.trames, 'trames') + it(e.crcFaux, 'CRC faux') + (e.source === 'son' ? it(Math.round(e.niveauDb) + ' dBFS', 'son', e.signal ? 'cyan' : '') :
+    it((e.afcHz > 0 ? '+' : '') + e.afcHz + ' Hz', 'AFC', e.presence ? 'cyan' : '') + it(Math.round(e.niveauDb - e.plancherDb) + ' dB', 'au-dessus du bruit')) + (e.perdus ? it(e.perdus, 'blocs perdus') : '') : '');
   const s = p.sids || {};
   if (document.activeElement !== g('tp-sids')) g('tp-sids').checked = !!s.option;
   txt('tp-sids-etat', !s.option ? '' : (s.indicatif ? 'Indicatif ' + s.indicatif + ' · ' : 'Indicatif manquant (Réglages) · ') + s.envoyees + ' envoyée' + (s.envoyees > 1 ? 's' : '') +
