@@ -4175,7 +4175,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
-        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="noeud" class="r-noeud">SDR du SatMe-Node (réseau)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="bb60">Signal Hound BB60 (BB60C/BB60D)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="noeud" class="r-noeud">SDR du SatMe-Node (réseau)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
       <div class="ligne" id="r-fichier-l" hidden><span class="petit" style="min-width:70px">Fichier</span><b class="petit" id="r-fichier-nom" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
         <button onclick="rqOuvre(this)" title="Les enregistrements I/Q : en choisir un à rejouer">Choisir…</button></div>
       <div class="ligne" id="r-gen-l" hidden><span class="petit" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
@@ -4187,7 +4187,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
         <div id="r-fi-aide" hidden>Le poste réglé sur <b>IF</b> (Réglages › Poste › Son du poste) envoie sa dernière FI, centrée sur 12 kHz ; SatMe la démodule comme les échantillons d'une clé : cascade, USB, LSB, CW, FM, AM, nettoyage, décodeurs, enregistrement. Le centre de la cascade est le cadran RX du poste lu par le CAT ; le Doppler continue d'accorder le poste et l'axe le suit. Un clic sur la cascade accorde l'écoute dans la FI sans toucher au poste : ±3,6 kHz par le réseau (son à 16 kHz, FI repliée), ±7,5 kHz par la carte son USB (48 kHz). « Recentrer le poste » : le clic déplace plutôt la réception du poste (décalage RX du satellite, par le CAT), l'écoute revient au milieu. Réception seulement.</div>
       </div>
       <div id="r-materiel">
-      <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
+      <div class="ligne" id="r-gain-l"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button>
         <button onclick="calOuvre()" title="Mesurer l'erreur de la clé sur une fréquence connue (balise QO-100, GSM, balise locale)">Calibrer…</button></div>
@@ -4209,6 +4209,15 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
         <div class="ligne"><input id="r-bladerf-outil" placeholder="vide : bladeRF-cli du PATH" onchange="rRegle('bladerfOutil=' + enc(v('r-bladerf-outil')))"></div>
         <div class="petit" id="r-bladerf-prog"></div>
         <div class="petit aide" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
+      </details>
+      <details style="margin-top:6px" id="r-liaison-bb60" hidden open><summary class="petit" style="cursor:pointer">Signal Hound BB60 (bibliothèque du SDK)</summary>
+        <div class="ligne"><span class="petit" id="r-bb60-info" style="flex:1"></span><button onclick="rDetecteBb60()" title="Charge la bibliothèque Signal Hound, ouvre le BB60 (3 s), lit son modèle, son numéro, son firmware, sa température et son alimentation USB, puis le referme ; ne reçoit rien">Détecter</button></div>
+        <div class="ligne"><span class="petit" style="min-width:70px">Référence</span><select id="r-bb60-ref" onchange="rRegle('bb60Ref=' + this.value)" title="Niveau de référence : environ 5 dB au-dessus du signal le plus fort attendu ; règle gain et atténuation quand ils sont automatiques"></select>
+          <select id="r-bb60-gain" onchange="rRegle('bb60Gain=' + this.value)" title="Gain forcé (BB60D : 0, 5, 15, 20 dB ; BB60C : 0, 5, 30, 35 dB). Forcé seulement si l'atténuation l'est aussi"></select>
+          <select id="r-bb60-atten" onchange="rRegle('bb60Atten=' + this.value)" title="Atténuation forcée (0, 10, 20, 30 dB). Forcée seulement si le gain l'est aussi"></select></div>
+        <div class="ligne"><input id="r-bb60-biblio" placeholder="vide : bb_api du système" title="Le fichier de la bibliothèque (libbb_api.so, bb_api.dll) ou son dossier" onchange="rRegle('bb60Biblio=' + enc(v('r-bb60-biblio')))"></div>
+        <div class="petit" id="r-bb60-diag"></div>
+        <div class="petit aide" style="margin-top:4px">De 9 kHz à 6 GHz, sur un port USB 3. La bibliothèque vient du SDK de Signal Hound, à installer soi-même : SatMe ne la fournit pas. Débit pris à 40 MS/s ÷ 2ⁿ, filtré par la bibliothèque puis ramené ici à 1,058 MS/s. Réception seulement.</div>
       </details>
       <details style="margin-top:6px" id="r-liaison-noeud" hidden open><summary class="petit" style="cursor:pointer">SDR du SatMe-Node</summary>
         <div class="ligne"><span class="petit" id="r-noeud-info" style="flex:1"></span>
@@ -13605,6 +13614,27 @@ function remplitGain(pluto) {
     l.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
   g('r-gain').dataset.src = pluto === 'bladerf' ? 'bladerf' : pluto ? 'pluto' : 'rtl';
 }
+async function rDetecteBb60() {
+  txt('r-bb60-info', 'lecture (ouverture du BB60, 3 s)…');
+  try { await post('api/sdr/bb60'); } catch (x) {}
+  ticSdr();
+}
+// The BB60's settings and, while it receives, its diagnostics (temperature, USB supply, losses).
+function rendBb60(b) {
+  const opt = (id, l) => { if (!g(id).options.length) g(id).innerHTML = l.map(([x, t]) => '<option value="' + x + '">' + t + '</option>').join(''); };
+  opt('r-bb60-ref', Array.from({ length: 25 }, (_, k) => 20 - 5 * k).map(x => [x, (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x) + ' dBm']));
+  opt('r-bb60-gain', [[-1, 'gain auto']].concat([0, 1, 2, 3].map(k => [k, 'gain ' + k])));
+  opt('r-bb60-atten', [[-1, 'att. auto']].concat([0, 10, 20, 30].map((d, k) => [k, 'att. ' + d + ' dB'])));
+  const val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
+  val('r-bb60-ref', b.ref); val('r-bb60-gain', b.gain); val('r-bb60-atten', b.atten); val('r-bb60-biblio', b.biblio || '');
+  txt('r-bb60-info', b.flux || b.lu ? (b.libelle || b.message) : 'non détecté (bouton Détecter)');
+  const fr = (x, n) => x.toLocaleString('fr-FR', { maximumFractionDigits: n });
+  const d = b.diag, f = b.flux, l = [];
+  if (d) l.push(fr(d.temperature, 1) + ' °C', 'USB ' + fr(d.tension, 2) + ' V ' + fr(d.courant, 2) + ' A');
+  if (f && f.decimation) l.push(fr(f.debitApi / 1e6, 4) + ' MS/s (÷' + f.decimation + ', filtre ' + fr(f.bandeApi / 1e6, 2) + ' MHz) → ' + fr(f.sortie / 1e6, 4) + ' MS/s',
+    'pertes ' + f.pertesApi + ' (API) ' + f.pertesIci + ' (ici)' + (f.saturations ? ' · saturations ' + f.saturations : '') + (f.reprises ? ' · reprises ' + f.reprises : ''));
+  txt('r-bb60-diag', l.join(' · '));
+}
 async function rDetecteBladerf() {
   txt('r-bladerf-info', 'lecture (bladeRF-cli -e info)…');
   try { await post('api/sdr/bladerf'); } catch (x) {}
@@ -13637,8 +13667,9 @@ function rendSdr() {
   if (g('r-gain').dataset.src !== (blade ? 'bladerf' : pluto ? 'pluto' : 'rtl')) remplitGain(blade ? 'bladerf' : pluto);
   const fictif = r.recepteur === 'fichier' || r.recepteur === 'generateur';
   const fi = r.recepteur === 'fiposte';
-  txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' : fi ? 'IC-9700 FI' :
-    noeud ? 'SDR du SatMe-Node' : blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif || fi ? 'Le récepteur' : 'La clé');
+  const bb = r.recepteur === 'bb60';
+  txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' : fi ? 'IC-9700 FI' : bb ? 'Signal Hound BB60' :
+    noeud ? 'SDR du SatMe-Node' : blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif || fi || bb ? 'Le récepteur' : 'La clé');
   if (r.generateur !== undefined) rendFictif(r);
   // The rig's IF: no gain nor link here (the rig tunes itself); the view narrowed to its span once at each start.
   g('r-fi-l').hidden = !fi; if (fi) g('r-materiel').hidden = true; else if (!fictif) g('r-materiel').hidden = false;
@@ -13650,6 +13681,9 @@ function rendSdr() {
     : 'La FI de l’IC-9700 (poste réglé sur IF), démodulée ici ; centrée sur le cadran du poste.');
   g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade || noeud;
   g('r-liaison-noeud').hidden = !noeud;
+  // The BB60: its own level (reference, gain, attenuation) in place of the gain list; no rtl_tcp link.
+  g('r-liaison-bb60').hidden = !bb; g('r-gain-l').hidden = bb; if (bb) g('r-liaison').hidden = true;
+  if (bb && r.bb60) rendBb60(r.bb60);
   if (blade && !noeud && r.bladerf) {
     txt('r-bladerf-info', !r.bladerf.lu ? 'non détecté (bouton Détecter)' : r.bladerf.libelle || r.bladerf.message);
     txt('r-bladerf-prog', r.bladerfProgramme ? 'bladeRF-cli : ' + r.bladerfProgramme : r.bladerfConseil);

@@ -1990,6 +1990,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["plutoHote"]?.let { d.plutoHote = it }
                 q["plutoPort"]?.toIntOrNull()?.let { d.plutoPort = it }
                 q["bladerfOutil"]?.let { d.bladerfOutil = it }
+                q["bb60Biblio"]?.let { d.bb60Biblio = it }
+                q["bb60Serie"]?.toIntOrNull()?.let { d.bb60Serie = it }
+                // The BB60's level: reference (dBm), gain and attenuation steps (−1: automatic); applied at once.
+                if (q["bb60Ref"] != null || q["bb60Gain"] != null || q["bb60Atten"] != null) {
+                    val r = d.reglagesBb60
+                    d.reglagesBb60 = r.copy(referenceDbm = q["bb60Ref"]?.toDoubleOrNull() ?: r.referenceDbm,
+                        gain = q["bb60Gain"]?.toIntOrNull() ?: r.gain, attenuation = q["bb60Atten"]?.toIntOrNull() ?: r.attenuation)
+                }
                 q["bias"]?.let { d.biasTee = it == "1" }
                 q["fiRecentre"]?.let { d.recentrePoste = it == "1" }
             }
@@ -2005,6 +2013,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val d = sdr ?: return JSONObject().put("ok", false)
                 val i = d.detecteBladerf()
                 return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
+            }
+            // The BB60 read (its library loaded, the device opened, read, closed): receives nothing, sends nothing.
+            "/api/sdr/bb60" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val i = d.detecteBb60()
+                return ok.put("message", i.message).put("libelle", i.libelle)
             }
             // A function not about satellites ticked or not; unticked while it runs: stopped once confirmed (the receiver given back).
             "/api/nonsat" -> {
@@ -2891,6 +2905,25 @@ object JsonPc {
     /** The dongle's sound cleaning. */
     fun nettoyage(d: SdrPc): JSONObject = fr.f4ioz.satcombo.demo.ApiSdr.nettoyage(d.modeNettoyage(), d.nettoyages, d.notchesVus, d.tauxBlanc)
 
+    /** The Signal Hound BB60: its settings, what « Détecter » read, and while it receives its live diagnostics. */
+    fun bb60(d: SdrPc): JSONObject {
+        val r = d.reglagesBb60
+        val i = d.infoBb60
+        val o = JSONObject().put("biblio", d.bb60Biblio).put("serie", d.bb60Serie).put("ref", Math.round(r.referenceDbm))
+            .put("gain", r.gain).put("atten", r.attenuation).put("lu", i.lu).put("message", i.message).put("libelle", i.libelle).put("version", i.versionApi)
+        val diag = { g: fr.f4ioz.satcombo.sdr.Bb60Sdr.Diagnostic? -> g?.let { JSONObject().put("temperature", Math.round(it.temperatureC * 10) / 10.0)
+            .put("tension", Math.round(it.tensionV * 100) / 100.0).put("courant", Math.round(it.courantA * 100) / 100.0) } ?: JSONObject.NULL }
+        o.put("diag", diag(i.diagnostic))
+        d.bb60?.let { s ->
+            val p = s.plan
+            o.put("libelle", s.appareil.libelle).put("version", s.appareil.versionApi).put("diag", diag(s.diagnostic))
+                .put("flux", JSONObject().put("decimation", p?.decimation ?: 0).put("debitApi", s.debitApi).put("bandeApi", s.bandeApi)
+                    .put("sortie", p?.sortieHz ?: 0.0).put("pertesApi", s.pertesApi).put("pertesIci", s.pertesIci)
+                    .put("saturations", s.saturations).put("reprises", s.reprises).put("horodatage", s.horodatageNs / 1_000_000L))
+        }
+        return o
+    }
+
     /** The dongle: its state and its settings. */
     fun sdr(d: SdrPc): JSONObject {
         val e = d.etat.value
@@ -2911,6 +2944,7 @@ object JsonPc {
             .put("fi", d.fiPoste?.let { f -> JSONObject().put("transport", f.transport).put("demiHz", Math.round(f.plan.demiUtileHz)) } ?: JSONObject.NULL)
             .put("bladerfOutil", d.bladerfOutil).put("bladerfProgramme", d.programmeBladerf() ?: "").put("bladerfConseil", d.conseilBladerf())
             .put("bladerf", d.infoBladerf.let { i -> JSONObject().put("lu", i.lu).put("message", i.message).put("libelle", i.carte?.libelle ?: "") })
+            .put("bb60", bb60(d))
             // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.
             .put("modeEff", d.modeEffectif()).put("loupe", st.sdrLoupe).put("loupeSpan", st.sdrLoupeSpanHz)
             .put("vernier", st.sdrVernier).put("ratio", st.sdrVernierHzParCm).put("calageVoix", st.sdrCalageVoix)

@@ -51,6 +51,7 @@ celle de la tradition du logiciel radioamateur.
 | Material Symbols (dessins, dans la page de SatMe-PC) | Apache-2.0 | Icônes des onglets de SatMe-PC, celles du téléphone |
 | `com.google.android.gms:play-services-code-scanner` | Propriétaire Google | Scan du QR code de SatMe-PC (sans permission caméra) |
 | LongMynd (BATC), lancé comme programme à part, non inclus | GPL-3.0 | Pilotage du MiniTiouner (DATV), SatMe-PC et SatMe-Node |
+| API du Signal Hound BB60 (`bb_api`, avec sa bibliothèque FTDI), **non incluse** : installée par l'utilisateur depuis le SDK de Signal Hound, chargée à l'exécution si elle est là | Licence propre de Signal Hound (propriétaire) | SatMe-PC seulement : le récepteur BB60C / BB60D |
 | FFmpeg (`ffmpeg`, `ffplay`), programmes à part, joints au seul paquet Windows | GPL-3.0 | Vidéos, GIF, images et son DATV ; construction BtbN/FFmpeg-Builds, sources indiquées dans `outils/SOURCES.txt` |
 | rtl-sdr (`rtl_tcp`, `rtl_test`), programmes à part, joints au seul paquet Windows | GPL-2.0 | Clé RTL-SDR ; github.com/rtlsdrblog/rtl-sdr-blog |
 | Java (Eclipse Temurin), joint au seul paquet Windows | GPL-2.0 avec exception « Classpath » | Fait tourner SatMe-PC |
@@ -59,6 +60,11 @@ celle de la tradition du logiciel radioamateur.
 | JUnit, Robolectric (essais seulement) | EPL-1.0, Apache-2.0 | Bancs d'essai |
 | `ft8_lib` de Kārlis Goba (tables du code correcteur, recopiées) | MIT | Décodage FT8 et FT4 |
 | Police Twemoji Country Flags (`drapeaux.woff2`, de country-flag-emoji-polyfill 0.1.10 ; dessins des drapeaux de Twemoji, Twitter, Inc. et contributeurs ; `drapeaux-LICENCE.txt` à côté) et ses drapeaux dessinés en images (`pc/src/main/resources/…/pc/drapeaux/drapeaux.png`, faite par `tools/drapeaux/genere-atlas.mjs`, `LICENCE.txt` à côté) | CC BY 4.0 | Les drapeaux des pays dans les pages ; les mêmes dans les vidéos et images de SatMe-PC (journal : cadre FT4/FT8, capitales du globe) |
+
+**Sur la bibliothèque de Signal Hound.** SatMe ne fournit rien du SDK de
+Signal Hound — ni bibliothèque, ni en-tête, ni code. SatMe-PC cherche seulement
+la bibliothèque que l'utilisateur a installée et appelle ses fonctions
+documentées ; sans elle, le BB60 n'est simplement pas disponible.
 
 **Sur LAME et la LGPL.** La bibliothèque native est embarquée en tant que
 `.so` distinct, non fusionné au reste de l'application. C'est ce qui permet à

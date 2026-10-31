@@ -26,7 +26,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 14. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV (sur plusieurs passages ; SO-127 en BLU, IO-86, Geoscan), FUNcube, SatNOGS
 15. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
 16. [Le récepteur SDR](#le-récepteur-sdr) — échelle des satellites, mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
-17. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
+17. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, Signal Hound BB60, HackRF One, la FI de l'IC-9700
 18. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
 19. [Navires (AIS)](#navires-ais)
 20. [Météo spatiale](#météo-spatiale)
@@ -998,6 +998,7 @@ Le *Récepteur* de l'onglet **SDR** choisit le récepteur ; tout marche pareil a
 | Clé **RTL-SDR** | rtl_tcp, sur ce PC (démarré pour vous) ou sur le réseau | environ 24 MHz – 1,7 GHz | — |
 | **ADALM-PLUTO** | réseau (câble USB : 192.168.2.1, port 30431 ; ou Wi-Fi / Ethernet) | 70 MHz – 6 GHz | DATV, SSTV |
 | **bladeRF 2.0** micro | USB 3, par bladeRF-cli (Linux) | 70 MHz – 6 GHz | DATV, SSTV |
+| **Signal Hound BB60C / BB60D** | USB 3, par la bibliothèque du SDK de Signal Hound (à installer) | 9 kHz – 6 GHz | — |
 | **HackRF One** | USB, par hackrf_transfer | — | essais DATV seulement (intérieur, charge) |
 | **MiniTiouner** | USB, par LongMynd (ou un SatMe-Node) | DVB-S / S2 | — |
 | **IC-9700 FI** | le son du poste réglé en FI (réseau ou carte son USB) | la FI de 12 kHz, ±3,6 ou ±7,5 kHz | — |
@@ -1019,6 +1020,18 @@ Un **Nuand bladeRF 2.0** (micro xA4…) sur un port **USB 3**, piloté par l'out
 - **En réception** : comme le Pluto, 2,1168 MS/s ramenés à 1,0584 MS/s, 12 bits gardés ; gain *automatique* (CAG de l'AD9361) ou de 0 à 60 dB. Seulement des commandes RX1 ; muet trop longtemps ou débranché, la réception s'arrête et dit pourquoi.
 - **En émission** : les règles du Pluto (même AD9361), QO-100 compris. Le gain est une atténuation (bladeRF-cli reçoit 66 + gain), **−50 dB d'origine**, jamais au-dessus du maximum des Réglages, **bridé à −40 dB** sur charge et en intérieur. Chaque réglage est vérifié dans la réponse de bladeRF-cli avant `tx start` ; une fois le flux parti, le gain est relu. Arrêt : `tx stop`, tube fermé, `quit`, puis l'outil terminé. Un bladeRF qui reçoit n'émet pas, et inversement.
 - **Windows** : bladeRF-cli.exe ne peut pas écrire dans un tube nommé : le bladeRF n'est pour l'instant utilisable que sous Linux ; la page le dit.
+
+### Signal Hound BB60 (BB60C, BB60D)
+
+Un analyseur de spectre temps réel **Signal Hound BB60C ou BB60D** (9 kHz – 6 GHz) sur un port **USB 3**, comme récepteur de l'onglet SDR : *Récepteur* › **Signal Hound BB60 (BB60C/BB60D)**. SatMe passe par la bibliothèque de Signal Hound (`bb_api`), qu'il ne fournit pas : elle vient du **SDK de Signal Hound**, sous sa propre licence, à télécharger et installer soi-même.
+
+- **Installation (Linux).** Télécharger le SDK sur le site de Signal Hound (section logiciels, « SDK »), puis suivre le README de son dossier Linux : copier `libbb_api.so*` (et la bibliothèque FTDI `libftd2xx.so` fournie) dans `/usr/local/lib`, `sudo ldconfig`, installer `libusb-1.0-0` (`sudo apt install libusb-1.0-0`) et la **règle udev** du SDK pour l'accès sans root (puis débrancher et rebrancher). Le SDK est donné pour Ubuntu 64 bits (18.04 à 22.04 dans sa documentation) ; une version plus récente devrait aller (non vérifié). Sans être root, Linux ne laisse pas la bibliothèque monter la priorité de ses fils USB : avec un processeur chargé, des pertes sont possibles (Signal Hound le dit) — elles se comptent dans la carte.
+- **Installation (Windows).** `bb_api.dll` et `ftd2xx.dll` du SDK (x64) dans un même dossier, et le redistribuable Visual C++ 2019 de Microsoft ; donner ce dossier dans la carte (*bb_api du système* sinon). Non essayé sous Windows.
+- **Java 21 ou plus** (le paquet Windows en embarque un) : SatMe appelle la bibliothèque par l'API « foreign function » de Java, sans rien compiler. Absente, trop ancienne ou Java trop vieux : la carte le dit (« bibliothèque Signal Hound absente — installer le SDK ») et rien d'autre ne change.
+- **Détecter** charge la bibliothèque, ouvre le BB60 (environ 3 s), lit son modèle, son numéro de série, son micrologiciel, sa température et son alimentation USB (tension, courant), puis le referme. En réception, la carte montre en direct la température, l'USB, le débit et le filtre de la bibliothèque, les pertes (de la bibliothèque, et ici quand la page prend du retard), les saturations du CAN et les reprises.
+- **En réception.** La bibliothèque donne 40 MS/s divisés par une puissance de deux, filtrés sur le PC ; pour l'onglet SDR, SatMe prend **2,5 MS/s** (filtre 0,95 MHz) et les ramène à 1,0584 MS/s (interpolation cubique), en 16 bits. Le **niveau de référence** (−100 à +20 dBm, environ 5 dB au-dessus du signal le plus fort) règle gain et atténuation, ou les deux sont forcés (gain 0 à 3 — BB60D : 0, 5, 15, 20 dB —, atténuation 0, 10, 20, 30 dB). Une nouvelle fréquence de l'oscillateur relance le flux (la bibliothèque ne prend ses réglages qu'à ce moment) : la part logicielle du Doppler les rend rares. La correction en ppm décale la fréquence demandée. Le spectre DATV « Mon spectre » s'en sert aussi (2,4 MS/s tirés de 5 MS/s).
+- **Débranché** : la réception attend, dit pourquoi, et rouvre le BB60 toute seule (après 1, 2, 4… jusqu'à 10 s). Une autre erreur l'arrête, avec le message de la bibliothèque.
+- **Processeur et USB.** Le BB60 envoie tout son flux par l'USB 3 et la bibliothèque filtre et décime sur le PC : Signal Hound conseille un Intel i5/i7 4ᵉ génération ou plus (deux cœurs au minimum, quatre conseillés) ; un Raspberry Pi n'est pas prévu. Réception seulement : le BB60 n'émet pas, SatMe n'en pilote ni les ports d'entrée-sortie ni l'UART.
 
 ### HackRF One (émetteur d'essai)
 

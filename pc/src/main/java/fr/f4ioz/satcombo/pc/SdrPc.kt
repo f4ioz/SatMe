@@ -10,6 +10,9 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.domain.DopplerTuner
 import fr.f4ioz.satcombo.plateforme.Stockage
+import fr.f4ioz.satcombo.sdr.Bb60
+import fr.f4ioz.satcombo.sdr.Bb60Natif
+import fr.f4ioz.satcombo.sdr.Bb60Sdr
 import fr.f4ioz.satcombo.sdr.Dsp
 import fr.f4ioz.satcombo.sdr.Bladerf
 import fr.f4ioz.satcombo.sdr.BladerfSdr
@@ -42,6 +45,9 @@ import kotlin.concurrent.thread
  *   cable); it gives the same rate as the dongle, in 16 bits.
  * - **A bladeRF 2.0** on USB, through `bladeRF-cli` ([BladerfSdr]): the
  *   same rate, in 16 bits, as the Pluto.
+ * - **A Signal Hound BB60** (BB60C, BB60D) on USB 3, through Signal Hound's
+ *   own library, installed by the user ([Bb60Sdr], [Bb60Ffm]): resampled to
+ *   the same rate, in 16 bits.
  * - **The frequency** is the followed satellite's downlink with its Doppler,
  *   asked every 250 ms; between blocks, [DopplerTuner] decides whether the
  *   software mixer absorbs it (no click) or the PLL must move.
@@ -215,7 +221,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     var biasTee: Boolean
         get() = stockage.getBoolean(CLE_BIAS, false)
         set(v) { stockage.edit().putBoolean(CLE_BIAS, v).apply(); (cle as? RtlTcp)?.let { runCatching { it.setBiasTee(v) } } }
-    /** The receiver: [RTL] (the dongle, rtl_tcp), [PLUTO], [BLADERF], the rig's IF [FI_POSTE], or no hardware: [FICHIER], [GENERATEUR]; taken at the next start. */
+    /** The receiver: [RTL] (the dongle, rtl_tcp), [PLUTO], [BLADERF], [BB60], the rig's IF [FI_POSTE], or no hardware: [FICHIER], [GENERATEUR]; taken at the next start. */
     var recepteur: String
         get() = stockage.getString(CLE_RECEPTEUR, RTL).takeIf { it in RECEPTEURS } ?: RTL
         set(v) { stockage.edit().putString(CLE_RECEPTEUR, if (v in RECEPTEURS) v else RTL).apply() }
@@ -327,6 +333,61 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun conseilBladerf(): String = if (OutilsPc.windows)
         "bladeRF-cli.exe introuvable ; et sous Windows SatMe ne sait pas encore lui passer les échantillons (tube nommé) : bladeRF sous Linux"
         else "bladeRF-cli introuvable : installer bladerf (sudo apt install bladerf), ou donner son chemin ci-dessous"
+    // ------------------------------------------------------------ the Signal Hound BB60
+
+    /** Where Signal Hound's library is (the file or its folder); empty: the system's library path. */
+    var bb60Biblio: String
+        get() = stockage.getString(CLE_BB60_BIBLIO, "") ?: ""
+        set(v) { stockage.edit().putString(CLE_BB60_BIBLIO, v.trim()).apply() }
+    /** The BB60's serial number to open, 0: the first found. */
+    var bb60Serie: Int
+        get() = stockage.getInt(CLE_BB60_SERIE, 0)
+        set(v) { stockage.edit().putInt(CLE_BB60_SERIE, maxOf(0, v)).apply() }
+    /** Its settings: reference level (dBm), gain and attenuation (−1: automatic, else 0 to 3); applied at once while it receives. */
+    var reglagesBb60: Bb60Sdr.Reglages
+        get() = Bb60Sdr.Reglages(stockage.getInt(CLE_BB60_REF, -30).toDouble(), stockage.getInt(CLE_BB60_GAIN, -1), stockage.getInt(CLE_BB60_ATTEN, -1))
+        set(v) {
+            stockage.edit().putInt(CLE_BB60_REF, Math.round(v.referenceDbm.coerceIn(Bb60.REFERENCE_MIN_DBM, Bb60.REFERENCE_MAX_DBM)).toInt())
+                .putInt(CLE_BB60_GAIN, v.gain.coerceIn(-1, 3)).putInt(CLE_BB60_ATTEN, v.attenuation.coerceIn(-1, 3)).apply()
+            bb60?.reglages = reglagesBb60
+        }
+    /** Loads Signal Hound's library ([Bb60Ffm]; the tests give a fake), or throws [fr.f4ioz.satcombo.sdr.Bb60Absent]. */
+    @Volatile var chargeBb60: (String) -> Bb60Natif = { Bb60Ffm.charge(it) }
+    /** The BB60 receiving here now, or null. */
+    val bb60: Bb60Sdr? get() = cle as? Bb60Sdr
+
+    /** The last look at the BB60 (« Détecter »): what it is, or why not. */
+    data class InfoBb60(val libelle: String = "", val message: String = "", val lu: Boolean = false, val versionApi: String = "",
+                        val diagnostic: Bb60Sdr.Diagnostic? = null)
+    @Volatile var infoBb60 = InfoBb60(); private set
+
+    /**
+     * The library loaded, the BB60 opened (about 3 s), read and closed: its
+     * model, serial number, firmware, temperature and USB supply. Nothing
+     * else; not while it receives here (its live values are shown then).
+     */
+    @Synchronized fun detecteBb60(): InfoBb60 {
+        val i = if (ModeDemo.actif) InfoBb60(message = ModeDemo.refus("le BB60").orEmpty(), lu = true)
+        else bb60?.let { InfoBb60(it.appareil.libelle, "", true, it.appareil.versionApi, it.diagnostic) }
+        ?: try {
+            val n = chargeBb60(bb60Biblio)
+            val version = runCatching { n.versionApi() }.getOrDefault("?")
+            val liste = n.appareils()
+            if (liste.isEmpty()) InfoBb60(message = "bibliothèque $version chargée ; aucun BB60 branché (USB 3, LED verte ; règle udev sous Linux)", lu = true, versionApi = version)
+            else {
+                val s = Bb60Sdr.ouvre(n, bb60Serie)
+                try {
+                    InfoBb60(s.appareil.libelle + (if (liste.size > 1) " (" + liste.size + " branchés)" else ""), "", true, version,
+                        s.diagnosticImmediat())
+                } finally { s.close() }
+            }
+        } catch (x: java.io.IOException) {
+            InfoBb60(message = x.message ?: Bb60Ffm.ABSENTE, lu = true)
+        }
+        infoBb60 = i
+        return i
+    }
+
     var plutoHote: String
         get() = stockage.getString(CLE_PLUTO_HOTE, PlutoSdr.HOTE) ?: PlutoSdr.HOTE
         set(v) { stockage.edit().putString(CLE_PLUTO_HOTE, v.trim().ifEmpty { PlutoSdr.HOTE }).apply() }
@@ -351,7 +412,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
         ?: if (choixFictif() || recepteur == FI_POSTE) 24_000_000L..12_000_000_000L
         else if (estPluto() || recepteur == NOEUD) 70_000_000L..6_000_000_000L
-        else if (estBladerf()) BladerfSdr.FREQ_MIN_HZ..BladerfSdr.FREQ_MAX_HZ else 24_000_000L..1_766_000_000L
+        else if (estBladerf()) BladerfSdr.FREQ_MIN_HZ..BladerfSdr.FREQ_MAX_HZ
+        else if (recepteur == BB60) Bb60.FREQ_MIN_HZ..Bb60.FREQ_MAX_HZ else 24_000_000L..1_766_000_000L
     /** "AUTO": the transmitter's mode; or NFM, USB, LSB, AM. */
     var modeChoisi: String
         get() = stockage.getString(CLE_MODE, "AUTO") ?: "AUTO"
@@ -590,7 +652,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (recepteur == GENERATEUR) centreGenerateurHz = if (pourQo100()) station.qo100.etat.value.let { it.descenteHz + it.calageHz } else manuelleHz
         val r = runCatching { connecte() }.getOrElse { e ->
             arreteProcessus()
-            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable"
+            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable" else if (recepteur == BB60) "BB60 injoignable"
                 else if (recepteur == FI_POSTE) "FI de l'IC-9700 indisponible" else if (recepteur == NOEUD) "SatMe-Node injoignable" else "rtl_tcp injoignable") }
             return false
         }
@@ -603,7 +665,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             if (biasTee && r is RtlTcp) r.setBiasTee(true)
         }
         cibleMaintenant()
-        val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; is BladerfSdr -> r.description
+        val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; is BladerfSdr -> r.description; is Bb60Sdr -> r.description
             is fr.f4ioz.satcombo.sdr.SourceNoeudIq -> r.description
             is fr.f4ioz.satcombo.sdr.SourceFichierIq -> "Fichier I/Q " + r.donnees.name.removeSuffix(fr.f4ioz.satcombo.sdr.SigMF.EXT_DATA)
             is fr.f4ioz.satcombo.sdr.GenerateurIq -> "Générateur d'essai"
@@ -688,6 +750,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             val prog = programmeBladerf() ?: throw java.io.IOException(conseilBladerf())
             val c = infoBladerf.carte
             return BladerfSdr.ouvre(prog, c?.serie.orEmpty(), c?.libelle ?: "bladeRF 2.0")
+        }
+        if (recepteur == BB60) {
+            // Signal Hound's library, installed by the user: absent, said, nothing else touched.
+            val n = chargeBb60(bb60Biblio)
+            return Bb60Sdr.ouvre(n, bb60Serie, reglagesBb60)
         }
         if (estPluto()) {
             if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
@@ -895,6 +962,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (n < 0) {
                     val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison"
                         else if (r is BladerfSdr) r.erreur ?: "bladeRF-cli s'est arrêté"
+                        else if (r is Bb60Sdr) r.erreur ?: "le BB60 s'est arrêté"
                         else if (r is fr.f4ioz.satcombo.sdr.SourceNoeudIq) r.erreur ?: "le SatMe-Node a coupé la liaison"
                         else if (fichier != null) "lecture terminée (fin de l'enregistrement)"
                         else if (essai) "générateur arrêté" else if (fi != null) "la FI du poste ne vient plus" else "rtl_tcp a coupé la liaison"
@@ -990,7 +1058,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     val st = chaine.subTone
                     _etat.update { it.copy(statut = statut, pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
                         ctcssHz = st.hz, ctcssConfiance = st.confiance, ctcssDevHz = st.deviationHz, tonFerme = chaine.toneSquelchClosed,
-                        debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement
+                        debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement; is Bb60Sdr -> r.avertissement
                             is fr.f4ioz.satcombo.sdr.SourceNoeudIq -> r.avertissement
                             is fr.f4ioz.satcombo.sdr.SourceFiPoste -> r.avertissement()
                                 ?: if (!cadranLu) "cadran du poste non lu (CAT non connecté) : l'axe suit la fréquence visée" else ""
@@ -1024,9 +1092,16 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_PLUTO_PORT = "pc_sdr_pluto_port"
         const val CLE_COUPE_TX = "pc_sdr_pluto_coupe_tx"
         const val CLE_BLADERF_OUTIL = "pc_sdr_bladerf_outil"
+        const val CLE_BB60_BIBLIO = "pc_sdr_bb60_biblio"
+        const val CLE_BB60_SERIE = "pc_sdr_bb60_serie"
+        const val CLE_BB60_REF = "pc_sdr_bb60_ref"
+        const val CLE_BB60_GAIN = "pc_sdr_bb60_gain"
+        const val CLE_BB60_ATTEN = "pc_sdr_bb60_atten"
         const val RTL = "rtl"
         const val PLUTO = "pluto"
         const val BLADERF = "bladerf"
+        /** A Signal Hound BB60 (BB60C, BB60D), through Signal Hound's library. */
+        const val BB60 = "bb60"
         /** A recording played back (« Fichier I/Q »). */
         const val FICHIER = "fichier"
         /** The test generator: noise and test signals, no hardware. */
@@ -1036,7 +1111,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_FI_RECENTRE = "pc_sdr_fi_recentre"
         /** A SatMe-Node's SDR (its bladeRF or Pluto), over the network. */
         const val NOEUD = "noeud"
-        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, FICHIER, GENERATEUR, FI_POSTE, NOEUD)
+        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, BB60, FICHIER, GENERATEUR, FI_POSTE, NOEUD)
         const val CLE_FICHIER = "pc_sdr_fichier_iq"
         const val CLE_FICHIER_DEBIT = "pc_sdr_fichier_debit"
         const val CLE_FICHIER_FREQ = "pc_sdr_fichier_freq"

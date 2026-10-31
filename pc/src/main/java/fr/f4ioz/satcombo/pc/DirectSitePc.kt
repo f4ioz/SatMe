@@ -588,7 +588,7 @@ class DirectSitePc(
 
         /** The receiver's public name, from SatMe's codes ([SdrPc.recepteur]). */
         fun nomSdr(code: String): String = when (code) {
-            SdrPc.RTL -> "RTL-SDR"; SdrPc.PLUTO -> "ADALM-PLUTO"; SdrPc.BLADERF -> "bladeRF"; SdrPc.NOEUD -> "SatMe-Node"
+            SdrPc.RTL -> "RTL-SDR"; SdrPc.PLUTO -> "ADALM-PLUTO"; SdrPc.BLADERF -> "bladeRF"; SdrPc.BB60 -> "Signal Hound BB60"; SdrPc.NOEUD -> "SatMe-Node"
             SdrPc.FI_POSTE -> "FI du poste"; SdrPc.FICHIER -> "enregistrement I/Q"; SdrPc.GENERATEUR -> "générateur d'essai"; else -> "SDR"
         }
 
