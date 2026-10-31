@@ -1314,6 +1314,7 @@ ${OngletOrbites.CSS}
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
 ${Ft8EmissionJs.CSS}
 ${AprsCarteJs.CSS}
+${MessagesAprsJs.CSS}
 ${TraficLeoJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
   .ck-l button { padding:2px 7px !important; }
   .ck-texte { margin-top:4px; height:120px; overflow-y:auto; padding:6px 8px; border-radius:8px; background:#0E1720; font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.45; word-break:break-word; }
@@ -2050,6 +2051,7 @@ ${ConversionPagePc.CSS}
   @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
 ${DemarragePagePc.CSS}
 ${IssDirectJs.CSS}
+${IssOeilNuJs.CSS}
 ${RembobinageJs.STYLE}
 </style></head>
 <body>
@@ -2292,7 +2294,7 @@ ${rail()}
   <!-- Passes -->
   <div class="col1" data-pli-col="c1" data-pli-nom="Prochains passages">
     <div class="carte" data-pli="passages" data-pli-nom="Prochains passages (24 h)">
-      <div class="t">Prochains passages (24 h)</div>
+      <div class="t">Prochains passages (24 h)${IssOeilNuJs.CHIP}</div>
       <div class="ligne" style="margin-top:0">
         <input id="filtre" placeholder="Filtrer : ISS, SO-50, RS-44…">
         <label class="petit"><input type="checkbox" id="utc"> UTC</label>
@@ -3587,7 +3589,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
         </div>
         <div class="tq-etat" id="tq-etapes"></div>
         <div class="avert" id="tq-msg"></div>
-        <div class="ligne" id="tq-datv-l" hidden style="margin-top:2px"><button class="primaire" id="tq-datv" onclick="tqRendDatv()" title="Arrêter la réception DATV (réception seulement), puis démarrer QO-100 sur ce récepteur">■ Arrêter la DATV, puis QO-100</button></div>
+${SoleilQo100Js.LIGNE}        <div class="ligne" id="tq-datv-l" hidden style="margin-top:2px"><button class="primaire" id="tq-datv" onclick="tqRendDatv()" title="Arrêter la réception DATV (réception seulement), puis démarrer QO-100 sur ce récepteur">■ Arrêter la DATV, puis QO-100</button></div>
         <div class="tq-urgence" id="tq-urgence" hidden></div>
         <div class="tq-freq">
           <div>
@@ -3897,7 +3899,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
       <div class="carte">
         <div class="t">Réglage initial · pointage et Soleil</div>
         <div id="o-ciel" class="petit"></div>
-      </div>
+${SoleilQo100Js.TABLEAU}      </div>
         </div>
       </div>
     </div>
@@ -4954,7 +4956,7 @@ ${DemarragePagePc.CARTES}
       <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
       <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
     </div>
-  </div>
+${FrequencesJs.CARTE}  </div>
   <div>
     <div class="carte">
       <div class="t">Rotor <span id="rot-pastille" class="pastille coupe">déconnecté</span></div>
@@ -4977,7 +4979,7 @@ ${DemarragePagePc.CARTES}
         <input id="rot-az" placeholder="az" style="max-width:70px"><input id="rot-el" placeholder="el" style="max-width:70px">
         <button onclick="post('api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
       </div>
-      <div class="paire" style="margin-top:8px">
+${AstreRotorJs.HTML}      <div class="paire" style="margin-top:8px">
         <span class="petit">Pylône <span class="val" id="rot-pos">—</span></span>
         <span class="petit">Cible <span class="val" id="rot-cible">—</span></span>
       </div>
@@ -5969,7 +5971,7 @@ const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, locator, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'modules', nom: 'Modules', ico: 'view_quilt', desc: 'Ce qui t’intéresse : QO-100, DATV, SSTV, SDR, avions, navires… et les profils', cartes: ['Modules'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, polarisation d’antenne, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Polarisation', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
-  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage, fréquences SatPC32 / Gpredict', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100', 'Fréquences : SatPC32 et Gpredict'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, envoi vers votre site web (module)', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Envoyer vers un site web'] },
@@ -19708,6 +19710,11 @@ setInterval(dessinePassages, 5000);
 ${DemarragePagePc.JS}
 ${BalisesQo100Js.JS}
 ${IssDirectJs.JS}
+${SoleilQo100Js.JS}
+${AstreRotorJs.JS}
+${IssOeilNuJs.JS}
+${MessagesAprsJs.JS}
+${FrequencesJs.JS}
 </script>
 </body></html>
 """

@@ -12,17 +12,17 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 
 1. [Installing it](#installing-it) — options, the page on other machines and its password
 2. [The tabs at a glance](#the-tabs-at-a-glance) — workspaces, header, « Son », shortcuts, built-in manual (F1)
-3. [Station and passes](#station-and-passes) — transmitters and another frequency, the rotator's plan, automatic mode, SSTV campaigns and their auto-pilot, upcoming activities (online sources, one-click auto-pilot), awards, sked on the map or the globe and its video, preparing a pass, recording, calendar, horizon
+3. [Station and passes](#station-and-passes) — transmitters and another frequency, the rotator's plan, automatic mode, SSTV campaigns and their auto-pilot, upcoming activities (online sources, one-click auto-pilot), awards, sked on the map or the globe and its video, the ISS with the naked eye, preparing a pass, recording, calendar, horizon
 4. [Orbites: the Earth in 3D](#orbites-the-earth-in-3d) — 3D globe, seven looks, details, cities, relief, contacts, landmarks, tracks, 2D map, a pass live or played fast, seen from the satellite, the ISS live, the full-screen board (Vitrine, Pédagogique…), the Suivi globe
 5. [The log (Carnet)](#the-log-carnet) — which satellite, correcting a contact, compound callsigns, a contact's pass and rotator path
 6. [SatMe on the phone](#satme-on-the-phone)
 7. [Pass journal](#pass-journal) — speeds, sped-up sound, skipping the silences, closing summary, FT4 / FT8 decodes on the replay, globe view, sessions of several passes and their video, pass report
-8. [QO-100: the cockpit](#qo-100-the-cockpit) — multiple decoders, PSK31 and RTTY, beacon, a drifting LNB, LNB and GPSDO reference, narrow-band transmitting (the Pluto direct or the IC-9700, fixed / portable profiles)
+8. [QO-100: the cockpit](#qo-100-the-cockpit) — multiple decoders, PSK31 and RTTY, beacon, Sun outages, a drifting LNB, LNB and GPSDO reference, narrow-band transmitting (the Pluto direct or the IC-9700, fixed / portable profiles)
 9. [DATV: reception](#datv-reception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, wide band, my spectrum, quality, pointing and history, level, beacon calibration, subtitles, spoken translation, summary
 10. [DATV: transmission](#datv-transmission) — DVB-S2 and DVB-S, free slots, signal summary, encoder test, live clock, gain ramp and calibrated power, the station, the rules, the indoor test, card and chat
 11. [SSTV](#sstv) — reception, the followed satellite's inset, countdown, pictures by slide (series 33 and 34), corrected picture, colour and AI, transmission
 12. [FT8 / FT4](#ft8--ft4) — receiving, transmitting through the IC-9700 (never unattended), first on-air test, passes to your site
-13. [APRS](#aprs) — map of the stations heard (symbols, heading, trails, how each was heard), list and filters, satellite passes, station card
+13. [APRS](#aprs) — map of the stations heard (symbols, heading, trails, how each was heard), list and filters, satellite passes, station card, messages for me
 14. [Telemetry](#telemetry) — 1200 to 9600 bit/s packets, SSDV pictures (over several passes; SO-127 in USB, IO-86, Geoscan), FUNcube, SatNOGS
 15. [Voice to text (Phonie → texte)](#voice-to-text-phonie--texte) — written and spoken translation
 16. [The SDR receiver](#the-sdr-receiver) — satellite scale, memories, band plan, display, sound cleaning, CTCSS, scanning, I/Q, test generator, measurements
@@ -31,7 +31,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 19. [Ships (AIS)](#ships-ais)
 20. [Space weather](#space-weather)
 21. [Montage: the station chain](#montage-the-station-chain) — diagram, editing, catalogue, functions, profiles
-22. [Réglages (settings)](#réglages-settings) — rig and rotator, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
+22. [Réglages (settings)](#réglages-settings) — rig and rotator, the rotator on the Sun or the Moon, SatPC32 / Gpredict frequency files, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
 23. [More of the PC](#more-of-the-pc)
 24. [Hardware safety](#hardware-safety)
 25. [Before the first try](#before-the-first-try)
@@ -219,6 +219,14 @@ The same mode is on the phone (*Settings → Recording / SSTV & NOAA → Automat
 - **Vidéo**: an MP4 of the window as shown, in the format chosen beside the button — **16:9** (1920×1080), **16:9 · 720p** or **9:16** (phone upright) —, on the map or on the globe with its look, camera and settings: both stations named (you in amber with callsign · locator, the other with its locator), the satellite and its footprint, the track with the common window in green, the line to each station that sees it, both skies and a band (satellite, date and UTC times, highest elevations, « vous le voyez tous deux », SatMe). The still globe (*both stations*, *from my station*) takes about ten seconds on a PC, one to two minutes on a Raspberry Pi 4; a moving camera draws the Earth again for each frame: 30 s to 1 min 30 on a PC, 5 to 15 min on a Pi (*Carte ancienne* the slowest). It needs ffmpeg.
 - **Globe animé (comme à l'écran)** (animated globe, as on screen; on the globe): the browser films the video from the page's real globe — relief, clouds, landmarks, the cartoon's animated scenery, the look and camera of *Réglages du globe*: 24 s of the pass then 3 s of the window, with the same band and both skies. A panel shows the picture and the progress (**Annuler** cancels); **keep the tab visible** (≈ 30 s), else the browser pauses the recording. SatMe-PC then makes it an MP4 (H.264) kept with the others; should that fail, the video as recorded (WebM or MP4) can be downloaded. It needs a recent browser (Chrome, Edge, Firefox) with WebGL; otherwise the box is greyed out and **Vidéo** makes SatMe's own.
 
+### The ISS with the naked eye
+
+In the title of **Prochains passages** (Suivi tab), the **👁 ISS** chip gives the next pass visible with the naked eye and its brightness ("👁 ISS demain 06:12 · −3,1"); a click opens the three days' list, over the card: where it **appears**, where it is **highest**, where it **vanishes** (direction and elevation, 🌑 when it fades into the Earth's shadow before the horizon), its **estimated magnitude** and a word (*brillante*, *très brillante*, *éblouissante*).
+
+- **Visible**: the sky dark enough here (the Sun below −6°, the end of civil twilight), the ISS still in sunlight, at least 10° up. Each pass is followed every 10 s.
+- **The magnitude** is an estimate: −1.8 at 1000 km half lit, corrected for distance and phase (a diffusing sphere); within half a magnitude. Its panels can flare brighter.
+- **API** (read only, for a web site): `GET /api/iss/visible?jours=3` (1 to 10) → `passages` [{`debut`, `max`, `fin`: {`t` (UTC ms), `utc` (ISO), `az`, `el`, `dir`}, `magnitude`, `eclat`, `ombre`, `dureeS`}], `conditions`; `inconnu` without a position, `sansElements` without ISS elements.
+
 ### Recording the sound
 
 - **● Record the sound** in Suivi, Carnet and Son: a WAV named after the satellite (`SatMe_RS-44_20261013_203051Z.wav`), as on the phone.
@@ -388,6 +396,17 @@ The **QO-100** tab is the narrow band transponder on one screen: the receiver, t
 <p align="center"><img src="images/pc-qo100-multiples.png" width="49%" alt="QO-100 cockpit: the Multiple decoders menu, up to four channels, the FT8 + CW + voice and FT8 + FT4 presets"></p>
 
 <p align="center"><img src="images/pc-qo100-cockpit.webp" width="100%" alt="QO-100 cockpit, receiver stopped: the four steps, the receiver and its tuning, the decoder dock, the log entry, the band plan with its segments over the waterfall, the automatic beacon calibration"></p>
+
+### QO-100 Sun outages
+
+Twice a year, around the equinoxes (late February – early March, October as seen from France), the Sun passes behind QO-100 as seen from the station: for a few minutes a day, a few days in a row, the dish looks at the Sun and its X-band noise drowns the downlink. **It is not a fault.**
+
+- **The threshold** comes from the dish: the Sun disturbs as soon as it enters the main lobe, i.e. a Sun–satellite separation under half the −3 dB beamwidth (70 λ/D at 10.5 GHz) plus the Sun's radius (0.27°). The diameter is the one typed in *Mesures › Bruit solaire*; without it, **80 cm** (2.5° lobe, 1.52° threshold) — the threshold used is shown.
+- **QO-100 tab**: a line under the receiver's state during an outage ("☀ Éblouissement solaire en cours jusqu'à 12:47 (11:47 UTC) — normal, pas une panne") or when the next one is less than ten days away; the **Pointage** sub-tab (*Réglage initial · pointage et Soleil*) has the table of the coming days: local time and UTC, minutes, the time of the maximum and the separation reached.
+- **« Pourquoi rien ? »** for the narrow band (beacon not seen, weak) and DATV (no lock) says "Éblouissement solaire en cours jusqu'à 12:47 — normal, pas une panne" instead of blaming the LNB or the pointing. A locked DATV receiver stays "locked".
+- **A free pointing check**: the noise rises then falls, and its peak comes at the "Max à" time when the dish is aimed right. A peak a few minutes early or late: the dish looks a little east or west of the satellite. For the fine alignment (the feed's shadow in the middle), the 1° dates stay under *Passages du Soleil derrière le satellite*.
+- **API** (read only, for a web site): `GET /api/qo100/soleil` → `parabole` {`diametreCm`, `parDefaut`, `lobeDeg`, `seuilDeg`}, `enCours` (or `null`), `prochaine`, `periodes` [{`debut`, `fin`, `max` (UTC ms), `debutUtc`/`finUtc`/`maxUtc` (ISO), `debutLocal`/`finLocal`/`maxLocal` (HH:MM, `zone`), `minutes`, `ecartDeg`, `az`, `el`, `jour`}], `conseil`; `inconnu` without a position, `calcul` during the first computation (under a second).
+- **Web publishing**: with the *Balises QO-100* line ticked (unticked by default), `balises` also carries `soleil` {`enCours`, `fin`, `texte`} during an outage, so the site does not show it as a fault.
 
 ### A drifting LNB
 
@@ -826,6 +845,7 @@ The **APRS** tab (workspace **Modes**) shows who was heard, where, and how. The 
 - **The station card** (click or tap a station on the map or in the list): what its symbol means, in words; its callsign with links to **QRZ.com** and **aprs.fi**; its comment and status; **distance and bearing** from your station; **locator**; course, speed, altitude; **when it was last heard each way** (direct, digipeater, satellite, internet: separate dated facts); the **path** (digipeaters used); the number of packets; the **weather** values a weather station sends (only those present); its last **message** and **telemetry**; the **last raw packet**.
 - **Kept**: SatMe-PC keeps what it hears as before (`aprs/AAAA-MM-JJ.txt` in its data folder, 7 days read back at start). The map and list use the **last 48 hours** (up to 20 000 frames), read back from the same files after a restart.
 - **Below**: the **KISS radio** card, the **APRS trophies**, and **Trames reçues**, the raw frames of the last 7 days with their filter.
+- **Messages** (tab beside *Trophées*): the APRS messages addressed to **your callsign, whatever the SSID** (F4XYZ, F4XYZ-7, F4XYZ-9…) and the **bulletins** (BLN0…BLN9, BLNA…, BLN1CLUB…), newest first, those received **through a satellite** marked ("via ISS"). A repeated message (the sender retries until acknowledged) is counted once ("×2"). The unread count shows on the tab; **notifier** (unticked by default) shows a browser notification when a message for you arrives. **Receive only**: SatMe sends **no acknowledgement**; to answer, use your rig or your APRS software. API: `GET /api/aprs/messages` → `moi`, `pourMoi`, `bulletins`, `messages` [{`t`, `de`, `a`, `texte`, `id`, `genre` (`moi`, `bulletin`), `sat`, `fois`}] (7 days).
 - API: `GET /api/aprs/stations?heures=48` (1 to 48): `stations` (each with `id`, `call`, `sym`, `symNom`, `genre`, `voie`, `lat`, `lon`, `loc`, `km`, `az`, `cap`, `kmh`, `alt`, `com`, `statut`, `vus` {`direct`, `digi`, `satellite`, `internet`: last time, ms}, `chemin`, `digis`, `brut`, `n`, `meteo`, `msg`, `tlm`, `trace` [[ms, lat, lon]…]), `passages` (satellite passes as heard), `stats`, `moi`. `GET /api/aprs` (the frames) is unchanged.
 
 ## Telemetry
@@ -1120,6 +1140,23 @@ The rig's model (IC-9700, IC-9100, IC-910H, TS-2000, two rigs FT-817 / IC-705, T
 **Calibrer le rotor…** (Réglages › Poste et rotor › Rotor): a step-by-step assistant, tracking stopped while it is open (given back as it was afterwards), the controller's raw `C2` reading and SatMe's side by side, a **STOP** always on screen, and nothing moved but on a click. Over GS-232 it sends the controller's own calibrations, as the K3NG firmware implements them: `O2` with the boom at a real 0° (inclinometer), `F2` at the real top — F2 makes the current position the firmware's *maximum* elevation (ELEVATION_MAXIMUM_DEGREES, 180), so if the real top is not 180° it says so and offers the alternatives (firmware setting, or SatMe's correction) — then `O` / `F` at the full CCW / CW azimuth stops, as set (north or south stop). Each waits for its keystroke and "Wrote to memory"; `?>` (another firmware, no pot sensor) and rotctld (no such command) are told, and only the software correction applies there. A **verification** sends test positions (el 45/90/135, az 90/180/270) on click; the inclinometer or compass reading entered, the table shows the error. **Software correction**, per axis, controller reading ↔ real angle (`read:real;…`, e.g. `0:0;180:160`; one point an offset, two a scale, more piecewise): built from the table or typed, applied both ways, the limits staying in real degrees and the controller never sent beyond its travel; empty by default, reset in one click. Power-cycle the controller afterwards and read again to check the EEPROM kept it. The page the phone serves has the same assistant; the phone's Rotor screen shows and edits the correction.
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Settings: the rig (CAT) and the rotator, their ports and connection"></p>
+
+### The rotator on the Sun or the Moon
+
+In the **Rotor** card (Réglages › Poste et rotor), **☀ Soleil** and **☾ Lune** point the rotator **once** at the body as seen from here at that instant (true azimuth, elevation raised by refraction; the Moon computed to 0.3°, seen from the Earth's surface rather than its centre: up to 1° lower). The line shows where they are now. With **suivre** ticked, the rotator is re-aimed every 20 s until **Arrêter le suivi**, **Stop**, **Parquer**, **Aller**, *Suivre le satellite*, a disconnection, or the body setting.
+
+- **Only on a click**: nothing moves by itself, satellite tracking is stopped, the rotator's limits apply (a direction out of reach is refused, never clamped to the end stop); below the horizon or the rotator's minimum elevation: "Soleil sous l'horizon (−12,3°)", nothing is sent.
+- **What for**: aligning the dish on the Sun's noise (*Mesures › Bruit solaire* measures the rise; its raster finds where the dish really looks), or on the Moon with a big antenna.
+- API: `GET /api/rotor/astre` (read: positions, follow state); `POST /api/rotor/astre?quoi=soleil|lune&suivre=0|1`, `POST /api/rotor/astre?arreter=1`.
+
+### Frequencies: SatPC32 and Gpredict
+
+The **Fréquences : SatPC32 et Gpredict** card (Réglages › Satellites) swaps satellite frequencies with these two programs.
+
+- **Export** the ★ favourites, the satellite followed, or all those SatMe knows frequencies for (SatNOGS DB already downloaded, plus what was imported): SatPC32's **Doppler.SQF** (one line per frequency: `name,downlink kHz,uplink kHz,downlink mode,uplink mode,NOR|REV,RX offset Hz,TX offset Hz,remark`; a linear transponder by its middle, USB down, LSB up when inverting) or Gpredict's **.trsp** (one `NNNNN.trsp` file per satellite, named by its NORAD number, in a .zip: a `[name]` section per transponder with `UP_LOW`, `UP_HIGH`, `DOWN_LOW`, `DOWN_HIGH` in Hz, `INVERT`, `MODE`, `BAUD`; goes in `~/.config/Gpredict/trsp/`).
+- **Import** one or more files: SQF lines are matched to the catalogue by name (AO-7 is AO-07, ISS is ISS (ZARYA)); a `.trsp` by the number in its file name. The result tells how many frequencies for which satellites, **the names with no satellite found** and the unreadable lines. Imported frequencies join their satellite's list (Suivi › Fréquences) after SatNOGS DB's, marked "(SatPC32)" or "(Gpredict)"; a new import replaces what an earlier one gave the same satellite; **Oublier** removes them all. An import sends nothing to the rig.
+- Formats described from their public documentation. Limits: an SQF keeps one frequency per side (a transponder comes back as one frequency, without its width), and an SQF's CTCSS and offsets are not applied.
+- API: `GET /api/frequences/doppler.sqf?quoi=favoris|suivi|tous`, `GET /api/frequences/trsp?catnum=25544`, `GET /api/frequences/trsp.zip?quoi=…`, `POST /api/frequences/import?nom=<file>` (the file as the body), `POST /api/frequences/oublie`, `GET /api/frequences`.
 
 ### IC-9700 on Windows: the USB driver and the rig's settings
 

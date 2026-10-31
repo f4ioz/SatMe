@@ -368,7 +368,8 @@ class DirectSitePc(
             if (s.envoye) poste(s, t, "direct", JSONObject().put("t", t).put("balises", JSONObject.NULL))?.let { if (it) { s.envoye = false; s.dernier = "" } }
             return
         }
-        val cle = listOf("large", "etroites").joinToString("|") { k -> b.optJSONObject(k)?.let { it.optString("statut") + "/" + it.optString("cause") }.orEmpty() }
+        val cle = listOf("large", "etroites").joinToString("|") { k -> b.optJSONObject(k)?.let { it.optString("statut") + "/" + it.optString("cause") }.orEmpty() } +
+            "|" + b.has("soleil")
         if (s.envoye && cle == s.dernier && t - s.dernierMs < periode(Canal.BALISES) * 1000L) return
         if (poste(s, t, "direct", JSONObject().put("t", t).put("balises", b)) == true) { s.envoye = true; s.dernier = cle; s.dernierMs = t }
     }

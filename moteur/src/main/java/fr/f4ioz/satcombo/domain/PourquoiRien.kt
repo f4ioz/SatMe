@@ -303,7 +303,12 @@ object PourquoiRien {
     const val LARGE_BAS_KHZ = 10_491_000L
     const val LARGE_HAUT_KHZ = 10_499_000L
 
-    fun datv(t: Long, d: Datv): Diagnostic {
+    /**
+     * DATV. [soleilFinMs]: the end of the Sun outage under way
+     * ([EblouissementQo100]), null when none: then a receiver that does not
+     * lock is told it is the Sun, not a fault.
+     */
+    fun datv(t: Long, d: Datv, soleilFinMs: Long? = null, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Diagnostic {
         d.noeudMuetMs?.let { return Diagnostic(Gravite.PANNE, "Le node ne répond plus depuis ${duree(t - it)} : réseau, Raspberry Pi ou SatMe-Node arrêté ?") }
         if (!d.actif) return Diagnostic(Gravite.INFO, if (d.erreur.isNotBlank()) "Réception arrêtée : ${d.erreur}" else "Réception DATV arrêtée.")
         val ici = String.format(FR, "%s MHz, %d kS/s", mhz(d.cielKhz * 1000), d.srKs)
@@ -312,6 +317,7 @@ object PourquoiRien {
             val ref = d.balise?.let { (mer, ms) -> " (balise : ${db(mer)} dB, ${ilYa(t - ms)})" }.orEmpty()
             return Diagnostic(Gravite.OK, "${d.libelle.replaceFirstChar { it.uppercase() }} sur $ici depuis ${duree(t - d.verrouDepuisMs.coerceAtLeast(d.depuisMs))}.$m$ref".trim())
         }
+        soleilFinMs?.takeIf { it > t }?.let { return Diagnostic(Gravite.INFO, EblouissementQo100.texteEnCours(it, zone)) }
         val cherche = t - d.depuisMs
         if (cherche < 10_000L) return Diagnostic(Gravite.INFO, "Recherche sur $ici…")
         val pas = "Pas d'accroche sur $ici depuis ${duree(cherche)}"
@@ -330,13 +336,17 @@ object PourquoiRien {
     /**
      * QO-100's narrow band from the SDR: the dongle running, on the
      * transponder, the beacon last measured ([baliseDb] over the noise, at
-     * [baliseMs]; null: never).
+     * [baliseMs]; null: never); [soleilFinMs] the end of a Sun outage under
+     * way ([EblouissementQo100]), which explains a beacon gone.
      */
-    fun qo100(t: Long, sdr: Sdr?, surTranspondeur: Boolean, baliseDb: Double?, baliseMs: Long): Diagnostic {
+    fun qo100(t: Long, sdr: Sdr?, surTranspondeur: Boolean, baliseDb: Double?, baliseMs: Long,
+              soleilFinMs: Long? = null, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Diagnostic {
         val s = sdr ?: return Diagnostic(Gravite.INFO, "Pas de récepteur SDR : le spectre de QO-100 vient de la clé SDR.")
         if (s.erreur.isNotBlank()) return Diagnostic(Gravite.PANNE, "Clé SDR en erreur : ${s.erreur}")
         if (!s.actif) return Diagnostic(Gravite.INFO, "La clé SDR est arrêtée : pas de spectre (onglet QO-100, Écouter).")
         if (!surTranspondeur) return Diagnostic(Gravite.INFO, "La clé SDR écoute ${mhz(s.cielHz)} MHz, pas QO-100.")
+        // The Sun behind the satellite: the beacon fades or goes, and that is expected.
+        soleilFinMs?.takeIf { it > t }?.let { return Diagnostic(Gravite.INFO, EblouissementQo100.texteEnCours(it, zone)) }
         if (baliseDb == null || baliseMs <= 0L) return Diagnostic(Gravite.ATTENTION,
             "Balise de QO-100 jamais vue : alimentation du LNB (bias-T), pointage, ou oscillateur du LNB hors de la fenêtre de recherche.")
         val age = t - baliseMs

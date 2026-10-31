@@ -66,7 +66,28 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private val trafic: TraficQo100Pc? = null) {
 
     /** « Pourquoi rien ? »: why each receiver decodes nothing, from what SatMe-PC holds (GET /api/pourquoi). */
-    private val pourquoi by lazy { PourquoiRienPc(station, son, sdr, datv, { telemesure }, qo100, { large }, { balises }) }
+    private val pourquoi by lazy { PourquoiRienPc(station, son, sdr, datv, { telemesure }, qo100, { large }, { balises }, soleilFin = { t -> eblouissement.finEnCours(t) }) }
+
+    /** QO-100's Sun outages from here, the dish typed in Mesures › Bruit solaire (GET /api/qo100/soleil). */
+    val eblouissement by lazy { EblouissementPc({ station.etat.value.observateur }, { soleil?.diametreCm ?: 0 }) }
+
+    /** Réglages › « Fréquences : SatPC32 et Gpredict »: export and import of Doppler.SQF and .trsp files. */
+    val frequences: FrequencesPc = FrequencesPc(station.stockage, { station.etat.value.satellites }, { station.emetteursConnus() },
+        { station.etat.value.favoris }, { station.etat.value.suivi?.catalogNumber }, { station.relisEmetteurs(it) }).also { f ->
+        station.frequencesImportees = { f.pour(it) }
+        // The satellite followed before this was set: its list read again with its imported frequencies.
+        if (f.satellitesImportes().isNotEmpty()) station.relisEmetteurs(f.satellitesImportes())
+    }
+
+    /** « L'ISS visible à l'œil nu » (GET /api/iss/visible?jours=3). */
+    val issVisible by lazy { IssVisiblePc({ station.etat.value.observateur }, { station.etat.value.satellites }) }
+
+    /** « Soleil » / « Lune » in the rotor card: pointed only on the page's click (POST /api/rotor/astre), followed until stopped. */
+    val astre by lazy {
+        val r = station.stationRotor
+        AstreRotorPc({ station.etat.value.observateur }, { r.etat.value.rotorConnected }, { maxOf(0, r.etat.value.rotorMinEl).toDouble() },
+            { az, el -> kotlinx.coroutines.runBlocking { r.vers(az, el) } })
+    }
 
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
@@ -682,6 +703,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (if (err == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", err)).toString().toByteArray())
             return
         }
+        // A SatPC32 Doppler.SQF or a Gpredict .trsp sent by the page (its name in « nom »): imported into the transmitter lists.
+        if (r.methode == "POST" && chemin == "/api/frequences/import") {
+            val corps = RequeteHttp.corps(c.getInputStream(), r, 4L * 1024 * 1024)
+            val res = if (corps == null) JSONObject().put("ok", false).put("erreur", "fichier trop gros ou coupé")
+                else {
+                    // SatPC32 writes in Windows' code page; a file that reads as UTF-8 is taken as such.
+                    val t = String(corps, Charsets.UTF_8).takeIf { !it.contains('\uFFFD') } ?: String(corps, charset("windows-1252"))
+                    frequences.importe(q["nom"].orEmpty(), t, q["catnum"]?.toIntOrNull())
+                }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
+            return
+        }
         if (r.methode == "POST" && chemin == "/api/import/adif") {
             val corps = RequeteHttp.corps(c.getInputStream(), r, 50L * 1024 * 1024)
             val b = if (corps == null || importPc == null) null else importPc.depuisAdif(String(corps, Charsets.UTF_8), q["enLigne"] == "1")
@@ -1268,6 +1301,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (qo100?.signaux?.let { it.demande(); it.json() } ?: JSONObject().put("actif", false).put("absent", true)).toString().toByteArray())
             "/api/qo100/trafic" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (trafic?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
+            // The Sun behind QO-100: the outages to come, the one under way (read only; for the page and a web site).
+            // The APRS messages to the station's callsign (any SSID) and the bulletins: a reading list, nothing sent.
+            "/api/aprs/messages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (son?.aprs?.let { a ->
+                val moi = station.settings.callsign
+                fr.f4ioz.satcombo.aprs.MessagesAprs.json(fr.f4ioz.satcombo.aprs.MessagesAprs.boite(a.paquets, moi), moi)
+            } ?: JSONObject().put("present", false).put("messages", JSONArray())).toString().toByteArray())
+            "/api/frequences" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", frequences.json().toString().toByteArray())
+            "/api/frequences/doppler.sqf" -> envoie(sortie, "200 OK", "text/plain; charset=windows-1252", frequences.sqf(q["quoi"]).toByteArray(charset("windows-1252")),
+                "Content-Disposition: attachment; filename=\"Doppler.SQF\"\r\n")
+            "/api/frequences/trsp" -> {
+                val n = q["catnum"]?.toIntOrNull() ?: station.etat.value.suivi?.catalogNumber ?: 0
+                envoie(sortie, "200 OK", "text/plain; charset=utf-8", frequences.trsp(n).toByteArray(), "Content-Disposition: attachment; filename=\"$n.trsp\"\r\n")
+            }
+            "/api/frequences/trsp.zip" -> envoie(sortie, "200 OK", "application/zip", frequences.trspZip(q["quoi"]),
+                "Content-Disposition: attachment; filename=\"satme-trsp.zip\"\r\n")
+            "/api/iss/visible" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", issVisible.json(q["jours"]?.toIntOrNull() ?: 3).toString().toByteArray())
+            "/api/rotor/astre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", astre.json().toString().toByteArray())
+            "/api/qo100/soleil" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", eblouissement.json().toString().toByteArray())
             "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
             "/api/sdr/nettoyage" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
@@ -1922,10 +1973,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 rotor.setRotorAutoPort(false)
                 rotor.connectRotor()
             }
-            "/api/rotor/deconnecter" -> rotor.disconnectRotor()
-            "/api/rotor/suivre" -> rotor.setRotorEnabled(q["on"] == "1")
-            "/api/rotor/parquer" -> rotor.rotorParkNow()
-            "/api/rotor/stop" -> rotor.rotorStopNow()
+            "/api/frequences/oublie" -> frequences.oublie()
+            "/api/rotor/deconnecter" -> { astre.arrete(); rotor.disconnectRotor() }
+            "/api/rotor/suivre" -> { if (q["on"] == "1") astre.arrete("arrêté : le rotor suit le satellite"); rotor.setRotorEnabled(q["on"] == "1") }
+            "/api/rotor/parquer" -> { astre.arrete(); rotor.rotorParkNow() }
+            "/api/rotor/stop" -> { astre.arrete(); rotor.rotorStopNow() }
+            // « Soleil » / « Lune »: the click itself (quoi, suivre=1 to keep on it; arreter=1 stops the follow, nothing moved).
+            "/api/rotor/astre" -> return if (q["arreter"] == "1") { astre.arrete(); JSONObject().put("ok", true) } else astre.vise(q["quoi"], q["suivre"] == "1")
             "/api/sdr/demarrer" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)
                 if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
@@ -2685,6 +2739,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["zones"]?.let { rotor.setRotorZones(it) }
             }
             "/api/rotor/aller" -> {
+                astre.arrete()
                 entier("az")?.let { rotor.setRotorManualAz(it) }
                 entier("el")?.let { rotor.setRotorManualEl(it) }
                 rotor.rotorGotoManual()

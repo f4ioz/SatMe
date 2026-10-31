@@ -741,7 +741,8 @@ fun main(args: Array<String>) {
             enEmission = emission.etat.emet || emissionSstv.etat.emet || emissionPoste.poste.etat.emet || emissionBe.emet || ft8Tx.emet,
             passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
     }
-    directSite.balises = { balises.siteJson() }
+    // With « Balises QO-100 » on: the Sun outage under way too (`soleil`, its end and its words), so the site does not read it as a fault.
+    directSite.balises = { balises.siteJson()?.also { o -> serveur.eblouissement.siteJson()?.let { o.put("soleil", it) } } }
     // « Bande large QO-100 (DATV) »: the ground station's strip and our reception on it, while the DATV receiver is on; the
     // spectrum kept connected for it then (one connection, SatMe-PC's own: the site's visitors never reach the ground station).
     directSite.large = { large.pourSite() }
