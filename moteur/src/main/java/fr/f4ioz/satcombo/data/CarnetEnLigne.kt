@@ -26,7 +26,12 @@ import java.net.URL
  */
 object CarnetEnLigne {
 
-    /** What the server knows about a grid square. */
+    /**
+     * What the server knows about a grid square. Note: Wavelog answers
+     * "Confirmed" only when asked about one service (`cnfm`: qsl, lotw or
+     * eqsl), and never says which; SatMe-PC counts confirmations by source
+     * from the QSL flags instead ([fr.f4ioz.satcombo.domain.Confirmations]).
+     */
     enum class Etat { INCONNU, TRAVAILLE, CONFIRME, JAMAIS }
 
     private val cache = HashMap<String, Etat>()

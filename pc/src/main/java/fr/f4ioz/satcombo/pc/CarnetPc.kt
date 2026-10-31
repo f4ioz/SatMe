@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.data.LogEntry
 import fr.f4ioz.satcombo.data.LogStore
 import fr.f4ioz.satcombo.data.Qrz
 import fr.f4ioz.satcombo.domain.ChoixCarnet
+import fr.f4ioz.satcombo.domain.ModifEnvoi
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.ProfilsStation
 import fr.f4ioz.satcombo.domain.QrzReponse
@@ -259,7 +260,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         // A contact changed while it waits: its delay starts again.
         modifies[timeMs] = horloge()
         store.update(timeMs) {
-            it.copy(callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
+            it.copy(envoiAdif = gardeEnvoi(it), callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
                 note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
                 nom = m.nom.trim(), qth = m.qth.trim(), courriel = m.courriel.trim(),
                 locatorOrigine = if (m.theirLocator.trim().uppercase() == it.theirLocator) it.locatorOrigine else m.locatorOrigine)
@@ -286,7 +287,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         if (apres == avant) return avant
         // As any edit: a contact waiting for the automatic upload gets its delay again.
         modifies[timeMs] = horloge()
-        store.update(timeMs) { apres }
+        store.update(timeMs) { apres.copy(envoiAdif = gardeEnvoi(avant)) }
         oublieMemoire()
         return apres
     }
@@ -304,12 +305,24 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             sat?.let { station.contactApres(it.catalogNumber, t, "-", "", "", "", "", "") }?.let { it.azimuthDeg to it.elevationDeg }
         } ?: return null
         if (r.contact.timeMs == timeMs) return r
-        store.save(r.log)
+        val avant = store.load().firstOrNull { it.timeMs == timeMs }
+        store.save(r.log.map { if (avant != null && it.timeMs == r.contact.timeMs) it.copy(envoiAdif = gardeEnvoi(avant)) else it })
         // As any edit, under its new key: a contact waiting for the automatic upload gets its delay again.
         modifies.remove(timeMs); modifies[r.contact.timeMs] = horloge()
         oublieMemoire()
         return r
     }
+
+    /**
+     * What the online log has of [e] (its record's fields), kept at the first
+     * edit of a contact uploaded before SatMe kept it at the upload: the
+     * best known — the contact as it was until this edit.
+     */
+    private fun gardeEnvoi(e: LogEntry): String =
+        if (e.envoyeMs > 0 && e.envoiAdif.isBlank()) ModifEnvoi.ecrit(ModifEnvoi.empreinte(e)) else e.envoiAdif
+
+    /** The record's fields as they leave now: kept with the contact once the server took it. */
+    private fun envoi(e: LogEntry): String = ModifEnvoi.ecrit(ModifEnvoi.empreinte(e))
 
     fun supprime(timeMs: Long) { store.delete(timeMs); oublieMemoire() }
 
@@ -383,13 +396,16 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         if (s.carnetUrl.isBlank() || s.carnetCle.isBlank())
             return "renseigne l'adresse et une clé en écriture du carnet en ligne"
         val e = store.load().firstOrNull { it.timeMs == timeMs } ?: return "contact introuvable"
+        // Already there: never posted again (a duplicate, or skipped). A change goes through « Mettre à jour ».
+        if (e.envoyeMs > 0) return "${e.callsign} est déjà dans le carnet en ligne" +
+            (if (ModifEnvoi.modifie(e)) " : modifié depuis l'envoi, à mettre à jour (pas renvoyé)" else "")
         if (profils.isEmpty()) releveProfils()
         val profil = profilPour(e) ?: return "aucun profil Wavelog pour " + ProfilsStation.nomEmplacement(lieuDe(e)) + " : le choisir ou le créer dans Réglages"
         val adif = Adif.enregistrement(e, stationDuProfil(profil), s.callsign)
         if (adif.isBlank()) return "contact incomplet"
         val r = CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, profil, adif)
         val pris = CarnetEnLigne.accepte(r) || CarnetEnLigne.doublon(r)
-        if (pris) store.marqueEnvoye(timeMs, horloge())
+        if (pris) store.marqueEnvoye(timeMs, horloge(), envoi(e))
         return if (pris) "${e.callsign} déposé au carnet en ligne" else CarnetEnLigne.raison(r)
     }
 
@@ -550,8 +566,8 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
                 val r = kotlinx.coroutines.runBlocking { CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, profil, adif) }
                 val issue = CarnetEnLigne.issue(r)
                 autoEtat = when {
-                    CarnetEnLigne.doublon(r) -> { store.marqueEnvoye(e.timeMs, horloge()); "${e.callsign} déjà dans le carnet en ligne" }
-                    issue == CarnetEnLigne.Issue.PRIS -> { store.marqueEnvoye(e.timeMs, horloge()); "${e.callsign} envoyé au carnet en ligne" }
+                    CarnetEnLigne.doublon(r) -> { store.marqueEnvoye(e.timeMs, horloge(), envoi(e)); "${e.callsign} déjà dans le carnet en ligne" }
+                    issue == CarnetEnLigne.Issue.PRIS -> { store.marqueEnvoye(e.timeMs, horloge(), envoi(e)); "${e.callsign} envoyé au carnet en ligne" }
                     issue == CarnetEnLigne.Issue.REFUS -> {
                         // Held back: sent again, it would be refused again.
                         val pourquoi = CarnetEnLigne.raison(r)
@@ -584,6 +600,50 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             n++
         }
         return "$n déposé(s)"
+    }
+
+    // ------------------------------------------- a contact changed after its upload
+
+    /**
+     * Tells the online log of the changes made to [timeMs] since its upload,
+     * through Wavelog's APIv2 (a `wl2_` token in Réglages): the contact found
+     * by its **old** call and time — exactly one, or nothing is changed —
+     * then the changed fields PATCHed. Never a new upload. What APIv2 cannot
+     * change (a line of locators, the e-mail, my fields) stays marked, to do
+     * by hand. A sentence for the page.
+     */
+    suspend fun metAJour(timeMs: Long): String = withContext(Dispatchers.IO) {
+        ModeDemo.refus("la mise à jour du carnet en ligne")?.let { return@withContext it }
+        val s = station.settings
+        val e = store.load().firstOrNull { it.timeMs == timeMs } ?: return@withContext "contact introuvable"
+        val l = ModifEnvoi.ecarts(e)
+        if (l.isEmpty()) return@withContext "rien à mettre à jour"
+        val main = "à mettre à jour dans Wavelog à la main : " + ModifEnvoi.texte(l)
+        if (s.carnetUrl.isBlank() || s.carnetJetonV2.isBlank())
+            return@withContext "$main (ou un jeton APIv2 de Wavelog dans Réglages pour le faire d'ici)"
+        val corps = ModifEnvoi.corpsV2(e, l) ?: return@withContext main
+        val avant = ModifEnvoi.lit(e.envoiAdif) ?: return@withContext main
+        val quand = fr.f4ioz.satcombo.data.AdifImport.instant(avant["QSO_DATE"].orEmpty(), avant["TIME_ON"].orEmpty()) ?: return@withContext main
+        val r = WavelogV2Pc.cherche(s.carnetUrl, s.carnetJetonV2, avant["CALL"].orEmpty(),
+            ModifEnvoi.jourV2(quand - ModifEnvoi.ECART_V2_MS), ModifEnvoi.jourV2(quand + ModifEnvoi.ECART_V2_MS))
+        if (r.code !in 200..299) return@withContext "Wavelog (APIv2) : " + (if (r.code > 0) "HTTP ${r.code} " else "") + ModifEnvoi.raisonV2(r.corps)
+        val liste = ModifEnvoi.litListeV2(r.corps)
+        val q = ModifEnvoi.trouveV2(avant, liste)
+            ?: return@withContext (if (liste.count { it.call.equals(avant["CALL"].orEmpty(), true) } > 1) "plusieurs contacts de Wavelog y ressemblent : "
+                else "contact introuvable dans Wavelog : ") + main
+        val p = WavelogV2Pc.corrige(s.carnetUrl, s.carnetJetonV2, q.id, corps.toString())
+        if (p.code !in 200..299 || !p.corps.contains("\"data\"")) return@withContext "Wavelog a refusé la mise à jour : " +
+            (if (p.code > 0) "HTTP ${p.code} " else "") + ModifEnvoi.raisonV2(p.corps)
+        store.fixeEnvoi(timeMs, ModifEnvoi.ecrit(ModifEnvoi.apresV2(e, avant, l)))
+        val reste = l.filterNot { it.modifiable }
+        "${e.callsign} mis à jour dans Wavelog" + (if (reste.isEmpty()) "" else " ; à la main : " + ModifEnvoi.texte(reste))
+    }
+
+    /** The operator corrected it in Wavelog by hand: what SatMe has now is what Wavelog has. */
+    fun corrigeALaMain(timeMs: Long): Boolean {
+        val e = store.load().firstOrNull { it.timeMs == timeMs && it.envoyeMs > 0 } ?: return false
+        store.fixeEnvoi(timeMs, envoi(e))
+        return true
     }
 
     companion object {

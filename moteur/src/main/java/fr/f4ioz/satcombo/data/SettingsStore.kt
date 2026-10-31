@@ -603,6 +603,15 @@ class SettingsStore(
         get() = prefs.getString("carnet_cle", "") ?: ""
         set(v) { prefs.edit().putString("carnet_cle", v.trim()).apply() }
 
+    /**
+     * A Wavelog APIv2 token (`wl2_…`, scopes qso:read and qso:write), only to
+     * change a contact already uploaded ([fr.f4ioz.satcombo.domain.ModifEnvoi]):
+     * the v1 key above cannot. Empty: such changes are listed, made by hand.
+     */
+    var carnetJetonV2: String
+        get() = prefs.getString("carnet_jeton_v2", "") ?: ""
+        set(v) { prefs.edit().putString("carnet_jeton_v2", v.trim()).apply() }
+
     var carnetSlug: String
         get() = prefs.getString("carnet_slug", "") ?: ""
         set(v) { prefs.edit().putString("carnet_slug", v.trim()).apply() }

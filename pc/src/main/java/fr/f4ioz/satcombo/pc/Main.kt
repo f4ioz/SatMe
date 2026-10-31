@@ -823,6 +823,7 @@ fun main(args: Array<String>) {
             }
         },
         contacts = { carnet.contacts() },
+        confirmations = { carnet.qsl.associes() },
         activites = { runCatching { activites.liste() }.getOrDefault(emptyList()) },
         infosImage = { optionsSstv.infosImage(it) },
         fictifs = if (ModeDemo.actif) GenerateurDemo::diplomes else { _ -> emptyList() }, enLigneAutorise = !ModeDemo.actif)

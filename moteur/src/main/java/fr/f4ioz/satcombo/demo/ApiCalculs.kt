@@ -103,7 +103,9 @@ object ApiCalculs {
      * The squares worked (4 characters), from the log: how many contacts,
      * the first one, who, on which satellites, how far; and mine.
      */
-    fun carres(contacts: List<LogEntry>, monLocator: String, obs: Observer?): JSONObject {
+    /** [conf]: each grid's confirmations by source ([fr.f4ioz.satcombo.domain.Confirmations]), absent when not read. */
+    fun carres(contacts: List<LogEntry>, monLocator: String, obs: Observer?,
+               conf: Map<String, Set<fr.f4ioz.satcombo.domain.Confirmations.Source>>? = null): JSONObject {
         val l = contacts.filter { it.theirLocator.length >= 4 && Maidenhead.centre(it.theirLocator.take(4)) != null }
         val parCarre = l.groupBy { it.theirLocator.take(4).uppercase() }
         return JSONObject().put("mon", monLocator.take(4).uppercase()).put("lat", obs?.latDeg ?: JSONObject.NULL).put("lon", obs?.lonDeg ?: JSONObject.NULL)
@@ -113,6 +115,7 @@ object ApiCalculs {
                 JSONObject().put("c", k).put("n", q.size).put("premier", q.minOf { it.timeMs }).put("dernier", q.maxOf { it.timeMs })
                     .put("indicatifs", JSONArray(q.map { it.callsign }.distinct().take(12)))
                     .put("sats", JSONArray(q.map { it.satName }.distinct()))
+                    .also { o -> conf?.let { m -> o.put("conf", fr.f4ioz.satcombo.domain.Confirmations.json(m[k].orEmpty())) } }
                     .put("km", if (obs != null && centre != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, centre.first, centre.second)) else JSONObject.NULL)
             }))
     }

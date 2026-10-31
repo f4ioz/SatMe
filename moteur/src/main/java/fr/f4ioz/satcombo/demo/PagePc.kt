@@ -497,6 +497,7 @@ ${STYLE_JETONS}
   .qp { display:inline-block; font-size:10px; line-height:13px; padding:0 4px; border-radius:8px; background:var(--s3); color:var(--gris); white-space:nowrap; }
   .qp.ok { background:rgba(91,214,138,.18); color:var(--vert); }
   .qp.attente { background:rgba(255,180,84,.14); color:var(--ambre); }
+  .c-modif { color:var(--ambre); font-size:11px; padding:1px 6px; min-height:0; }
   .fd-grille { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px; max-height:50vh; overflow:auto; margin-top:6px; }
   .fd-el { background:var(--fond); border:1px solid var(--bord); border-radius:8px; padding:4px; cursor:pointer; font-size:11px; overflow:hidden; position:relative; }
   .fd-el:hover { border-color:var(--cyan); }
@@ -2024,6 +2025,7 @@ ${ConversionPagePc.CSS}
   @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
 ${DemarragePagePc.CSS}
 ${IssDirectJs.CSS}
+${RembobinageJs.STYLE}
 </style></head>
 <body>
 ${rail()}
@@ -2500,7 +2502,8 @@ ${TraficLeoJs.HTML}
       <div class="t">Carnet</div>
       <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
         <span><span class="val" id="c-carres">0</span> <span class="petit">locators</span></span>
-        <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span></div>
+        <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span>
+        <span id="c-modifies-b" hidden title="Modifiés dans SatMe après leur envoi : à mettre à jour dans Wavelog (bouton « modifié » de chaque ligne)"><span class="val ambre" id="c-modifies">0</span> <span class="petit">modifiés depuis l'envoi</span></span></div>
       <div class="ligne"><a href="carnet.adi" download><button>Exporter en ADIF</button></a>
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
       <div class="petit" id="c-auto"></div>
@@ -2514,6 +2517,7 @@ ${TraficLeoJs.HTML}
     <div class="carte" id="c-qsl" hidden>
       <div class="t">QSL reçues <span class="petit" id="c-qsl-quand"></span></div>
       <div id="c-qsl-res" class="c-qsl-res"></div>
+      <div id="c-qsl-conf" class="c-qsl-res" style="margin-top:6px"></div>
       <div class="ligne"><button onclick="releveQsl(0)" title="Lit au carnet en ligne les contacts nouveaux et leurs confirmations (une fois par jour, tout le carnet)">Relever les QSL</button>
         <button class="discret petit" onclick="releveQsl(1)" title="Relit tout le carnet en ligne : les confirmations arrivent sur d'anciens contacts">tout relire</button>
         <label class="petit"><input type="checkbox" id="c-qsl-attente" onchange="if (this.checked) vueCarnet('contacts'); dessineCarnet()"> en attente seulement</label></div>
@@ -3097,6 +3101,7 @@ ${DiplomesJs.HTML}</div>
         <span><span class="val" id="q-champs">0</span> <span class="petit">locators à 2 lettres</span></span>
         <span><span class="val ambre" id="q-loin">—</span> <span class="petit">km au plus loin</span></span>
       </div>
+      <div id="q-conf" class="petit" hidden style="margin-top:4px"></div>
       <div class="ligne"><input id="q-filtre" placeholder="Filtrer : locator, indicatif, satellite…"></div>
       <div style="max-height:calc(100vh - 230px);overflow:auto;margin-top:6px">
         <table><thead><tr><th>Locator</th><th>QSO</th><th>km</th><th>Stations</th></tr></thead><tbody id="q-liste"></tbody></table>
@@ -5009,6 +5014,8 @@ ${DemarragePagePc.CARTES}
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
       <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
       <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" type="hidden"></div>
+      <div class="ligne"><input id="carnetJetonV2" type="password" placeholder="Jeton APIv2 (wl2_…, facultatif)" title="Wavelog 3.1 ou plus récent : un jeton de l'APIv2 avec les droits qso:read et qso:write. Il sert seulement à corriger dans Wavelog un contact modifié dans SatMe après son envoi."><button class="discret petit" id="carnetJetonV2-x" hidden onclick="post('api/reglages?carnetJetonV2Efface=1').then(chargeReglages)">oublier le jeton</button></div>
+      <div class="petit aide">Un contact modifié ici après son envoi est marqué « modifié depuis l'envoi » et n'est jamais renvoyé : l'API de dépôt de Wavelog ignore un contact qu'il a déjà (même indicatif, minute, bande, mode) et en crée un second si l'un d'eux a changé. Avec le jeton APIv2, SatMe-PC retrouve le contact dans Wavelog et ne change que les champs modifiés ; sans lui, la liste des changements est donnée, à faire dans Wavelog.</div>
       <div class="ligne"><button onclick="enregistreReglages().then(essaiCarnet)">Enregistrer</button><button onclick="essaiCarnet()" title="Demande au carnet en ligne ses profils de station">Lire les profils</button><span class="petit" id="carnet-essai"></span></div>
       <div id="wl-lieux" hidden style="margin-top:8px">
         <div class="ligne" style="margin-top:0"><span>Ici <b class="cyan" id="wl-ici"></b></span><span class="petit">→</span>
@@ -7478,6 +7485,7 @@ async function chargeCarnet() {
     const j = await (await fetch('api/carnet')).json();
     C = j.contacts;
     txt('c-nb', String(j.total)); txt('c-auto', j.auto || ''); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
+    txt('c-modifies', String(j.modifies || 0)); g('c-modifies-b').hidden = !j.modifies;
     dessineCarnet();
   } catch (x) {}
   chargeControle(); chargeQsl();
@@ -7513,6 +7521,11 @@ async function chargeQsl() {
     g('c-qsl-res').innerHTML = j.releveMs ? l('LoTW', j.lotw) + l('eQSL', j.eqsl) + l('Papier', j.papier) +
       (j.sansStatut ? '<span class="petit">—</span><span class="petit">' + j.sansStatut + ' contact' + (j.sansStatut > 1 ? 's' : '') + ' pas (encore) retrouvé' + (j.sansStatut > 1 ? 's' : '') + ' dans Wavelog</span>' : '')
       : '<span class="petit" style="grid-column:1/-1">' + (j.configure ? 'Pas encore relevé.' : 'Renseignez le carnet en ligne (Réglages) pour lire les QSL.') + '</span>';
+    // Grids and satellites confirmed, by source: LoTW or paper (VUCC), eQSL only apart.
+    const cf = j.confirmations, k = (n, o) => '<b>' + n + '</b><span><span class="vert" title="LoTW ou carte papier : ce que le VUCC accepte">' + o.arrl + ' LoTW/papier</span>' +
+      ' <span class="petit">(LoTW ' + o.lotw + ', papier ' + o.papier + ')</span> · <span style="color:#B07CFF" title="Confirmés par eQSL et rien d’autre : hors VUCC">' + o.eqslSeul + ' eQSL seul.</span>' +
+      ' <span class="petit">sur ' + o.travailles + '</span></span>';
+    g('c-qsl-conf').innerHTML = j.releveMs && cf ? k('Locators', cf.carres) + k('Satellites', cf.satellites) + '<span class="petit aide" style="grid-column:1/-1">' + esc(cf.regle) + '</span>' : '';
     txt('c-qsl-quand', j.releveMs ? 'relevé ' + new Date(j.releveMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '');
     if (j.message && !v('c-qsl-etat')) txt('c-qsl-etat', j.message);
   } catch (x) {}
@@ -7547,6 +7560,7 @@ function dessineCarnet() {
 }
 // Online: sent (✓), waiting for its delay (⏱ and the pause), held back (▶ to release), or to send by hand (⬆).
 function envoiCarnet(e) {
+  if (e.envoye && e.modif) return '<button class="c-modif" title="' + escA('Modifié depuis l’envoi : ' + e.modif + ' — à mettre à jour dans Wavelog (jamais renvoyé : ce serait un doublon)') + '" onclick="metAJour(' + e.t + ')">✓ modifié ⟳</button> ';
   if (e.envoye) return '<span class="vert" title="déposé au carnet en ligne">✓</span> ';
   if (e.ea === 'attente') return '<span class="petit" id="ea-' + e.t + '" title="part au carnet en ligne à la fin du décompte">⏱ ' + e.reste + ' s</span> <button title="Mettre en pause : il ne partira pas" onclick="retiens(' + e.t + ', 1)">⏸</button> ';
   if (e.pause) return '<button title="' + esc(e.refus ? 'Refusé : ' + e.refus + ' — reprendre' : 'En pause — reprendre l’envoi') + '" onclick="retiens(' + e.t + ', 0)" style="color:var(--ambre)">▶</button> ';
@@ -8126,6 +8140,21 @@ async function importeAdif(input) {
   try { j = await (await fetch('api/import/adif?enLigne=' + (g('i-enligne').checked ? 1 : 0), { method: 'POST', body: await f.text() })).json(); } catch (x) {}
   txt('i-etat', bilanImport(j)); input.value = ''; chargeCarnet();
 }
+// A contact changed after its upload: through Wavelog's APIv2 when a token is set and it can carry the change; else said, to fix there by hand.
+async function metAJour(t) {
+  const e = C.find(x => x.t === t); if (!e || !e.modif) return;
+  const main = '« ' + e.c + ' » a changé depuis l’envoi :\n' + e.modif.split(' ; ').join('\n') +
+    '\n\nWavelog ne le reçoit pas une deuxième fois (il l’ignorerait, ou créerait un doublon). Corrigez-le dans Wavelog, puis OK pour le noter comme corrigé.';
+  if (e.modifMain || !REG_JETON_V2) {
+    if (!confirm(main + (REG_JETON_V2 ? '' : '\n\n(Avec un jeton APIv2 de Wavelog dans Réglages, SatMe-PC peut le faire.)'))) return;
+    const j = await post('api/carnet/metajour?main=1&t=' + t); txt('c-depot', j && j.dit ? j.dit : ''); chargeCarnet(); return;
+  }
+  if (!confirm('Mettre à jour « ' + e.c + ' » dans Wavelog ?\n\n' + e.modif.split(' ; ').join('\n') + '\n\nLe contact y est retrouvé par son ancien indicatif et son ancienne heure, puis seuls ces champs sont changés.')) return;
+  txt('c-depot', 'mise à jour…');
+  const j = await post('api/carnet/metajour?t=' + t);
+  txt('c-depot', j && j.dit ? j.dit : '');
+  chargeCarnet();
+}
 async function depose(t) {
   txt('c-depot', 'envoi…');
   const j = await post('api/carnet/depose' + (t ? '?t=' + t : ''));
@@ -8134,6 +8163,7 @@ async function depose(t) {
 }
 
 // ------------------------------------------------------------------ settings
+let REG_JETON_V2 = false;
 async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
@@ -8141,6 +8171,7 @@ async function chargeReglages() {
     horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargeMol(); chargeAnn(); chargePx();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
+    REG_JETON_V2 = !!r.carnetJetonV2; g('carnetJetonV2').placeholder = r.carnetJetonV2 ? 'jeton APIv2 enregistré' : 'Jeton APIv2 (wl2_…, facultatif)'; g('carnetJetonV2-x').hidden = !r.carnetJetonV2;
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
     g('carnetProfil').value = r.carnetProfil;
     g('carnetAuto').checked = r.carnetAuto; g('carnetDelaiL').hidden = !r.carnetAuto;
@@ -8156,9 +8187,9 @@ async function chargeReglages() {
 async function enregistreReglages() {
   const j = await post('api/reglages?c=' + enc(v('indicatif')) + '&l=' + enc(v('locator')) + '&minEl=' + enc(v('minEl')) +
     '&qrzUser=' + enc(v('qrzUser')) + '&qrzMdp=' + enc(g('qrzMdp').value) + '&carnetUrl=' + enc(v('carnetUrl')) +
-    '&carnetCle=' + enc(g('carnetCle').value) + '&carnetProfil=' + enc(v('carnetProfil')));
+    '&carnetCle=' + enc(g('carnetCle').value) + '&carnetProfil=' + enc(v('carnetProfil')) + '&carnetJetonV2=' + enc(g('carnetJetonV2').value));
   if (j && j.ok !== false) {
-    txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
+    txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = ''; g('carnetJetonV2').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
 }
@@ -9046,7 +9077,7 @@ async function ticLarge() {
   dEntendus(j.entendus || []);
   if (!j.on) return;
   const ici = (enDatv ? ['wb'] : []).concat(enQo && qo ? ['tq-wb'] : []);
-  if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; ici.forEach(p => wbChute(wbVals, p + '-chute')); }
+  if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; ici.forEach(p => wbChute(wbVals, p + '-chute')); rbRecoit('datv', j.debut, j.debut + j.largeur, j.valeurs); }
   if (!j.frais) wbVals = null;
   ici.forEach(p => { wbMoi(p + '-moi'); wbSpectre(p + '-spectre'); });
   if (enDatv) wbListe();
@@ -11415,17 +11446,28 @@ function coin(c) { const A = 'A'.charCodeAt(0); return [(c.charCodeAt(0) - A) * 
 async function chargeCarres() {
   try { Q = await (await fetch('api/carres')).json(); } catch (x) { return; }
   txt('q-n', String(Q.carres.length)); txt('q-champs', String(Q.champs));
+  // Confirmed, by source: LoTW or paper (what the VUCC takes), eQSL only apart — never counted as LoTW.
+  const lu = Q.carres.some(c => c.conf), arrl = Q.carres.filter(qArrl).length, eq = Q.carres.filter(c => c.conf && c.conf.length === 1 && c.conf[0] === 'eqsl').length;
+  g('q-conf').hidden = !lu;
+  if (lu) g('q-conf').innerHTML = '<span class="qp ok">' + arrl + ' confirmé' + (arrl > 1 ? 's' : '') + ' LoTW ou papier</span> <span class="qp" style="color:#B07CFF">' + eq + ' par eQSL seulement</span>' +
+    '<div class="aide">VUCC (ARRL) : LoTW et cartes papier, pas eQSL. Contour vert : confirmé LoTW ou papier ; violet : eQSL seulement.</div>';
   const kms = Q.carres.map(c => c.km).filter(k => k != null);
   txt('q-loin', kms.length ? String(Math.max(...kms)) : '—');
   dessineListeCarres();
   if (!qCadre) cadreCarres();
   dessineCarres();
 }
+const qArrl = c => !!c.conf && (c.conf.includes('lotw') || c.conf.includes('papier'));
+/** A grid's confirmations, each by its service: « LoTW✓ papier✓ eQSL✓ ». */
+function qConf(c) {
+  if (!c.conf || !c.conf.length) return '';
+  return '<br>' + c.conf.map(k => '<span class="qp ok"' + (k === 'eqsl' ? ' style="color:#B07CFF"' : '') + '>' + ({ lotw: 'LoTW', papier: 'papier', eqsl: 'eQSL' }[k] || k) + '✓</span>').join(' ');
+}
 function dessineListeCarres() {
   const f = v('q-filtre').toUpperCase();
   g('q-liste').innerHTML = Q.carres.filter(c => !f || [c.c, c.indicatifs.join(' '), c.sats.join(' ')].join(' ').toUpperCase().includes(f))
     .sort((a, b) => b.dernier - a.dernier).map(c => '<tr class="p" onclick="centreSur(\'' + c.c + '\')"><td><b>' + c.c + '</b></td><td>' + c.n +
-    '</td><td>' + (c.km == null ? '' : c.km) + '</td><td class="petit">' + esc(c.indicatifs.join(', ')) + '<br>' + esc(c.sats.join(', ')) + '</td></tr>').join('') ||
+    '</td><td>' + (c.km == null ? '' : c.km) + '</td><td class="petit">' + esc(c.indicatifs.join(', ')) + '<br>' + esc(c.sats.join(', ')) + qConf(c) + '</td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">aucun locator dans le carnet</td></tr>';
 }
 g('q-filtre').oninput = () => Q && dessineListeCarres();
@@ -11472,7 +11514,7 @@ function dessineCarres() {
   const max = Math.max(1, ...Q.carres.map(q => q.n));
   x.font = 'bold ' + Math.max(9, Math.min(14, pasCarre / 4)) + 'px Drapeaux,system-ui'; x.textAlign = 'center';
   Q.carres.forEach(q => { const a = 0.25 + 0.5 * Math.log(1 + q.n) / Math.log(1 + max);
-    const [xa, ya, xb, yb] = carre(q.c, 'rgba(63,224,200,' + a.toFixed(2) + ')', 'rgba(20,120,110,.9)', 1);
+    const [xa, ya, xb, yb] = carre(q.c, 'rgba(63,224,200,' + a.toFixed(2) + ')', qArrl(q) ? '#1E8A4C' : q.conf && q.conf.length ? '#8A5CE6' : 'rgba(20,120,110,.9)', q.conf && q.conf.length ? 2.5 : 1);
     if (pasCarre > 28) { x.fillStyle = '#06131A'; x.fillText(q.c, (xa + xb) / 2, (ya + yb) / 2 + 4); } });
   if (Q.mon && Q.mon.length === 4) { carre(Q.mon, 'rgba(255,180,84,.45)', '#FFB454', 2.5);
     if (Q.lat != null) { x.fillStyle = '#1a1f2a'; x.beginPath(); x.arc(px(Q.lon), py(Q.lat), 5, 0, 7); x.fill(); } }
@@ -12485,6 +12527,7 @@ async function ticPano() {
     oPanTrames = OPan.trames;
     if (oPanHist.length && oPanHist[0].length !== OPan.colonnes.length) oPanHist = [];
     oPanHist.unshift(OPan.colonnes); if (oPanHist.length > 200) oPanHist.length = 200;
+    if (fz) rbRecoit('qo100', fz.b, fz.t, OPan.colonnes);
   }
   const b = OPan.balise;
   g('o-balise').innerHTML = !OPan.sdr ? 'Le récepteur ne tourne pas : « Démarrer la réception QO-100 », en haut.'
@@ -13729,6 +13772,7 @@ function spRecoit(j) {
   if (!r || r.db.length !== n) r = { db: new Float32Array(n) };
   r.db.set(spCur); r.dx = j.dx || 0; r.span = j.span;
   spHist.unshift(r);
+  const ciel = (R && R.ciel) || 0; rbRecoit('sdr', ciel + r.dx - r.span / 2, ciel + r.dx + r.span / 2, db);
   spNeuf = true; spDemande();
 }
 function spRaz() { spVide = true; if (spMoy) { spCrete.set(spMoy); spMini.set(spMoy); } spSale(); }
@@ -14039,6 +14083,13 @@ function spZoom(facteur, px, w) {
   new ResizeObserver(() => spSale(true)).observe(ca);
 })();
 ${EchelleSdrJs.CODE}
+// ---- a waterfall you can rewind (RembobinageJs): ⏸, ten minutes back, the time tape, « Direct »
+${RembobinageJs.CODE}
+${RembobinageJs.PAGE}
+rbVue({ source: 'qo100', toile: 'o-pano', rang: 2, marge: 4, fenetre: () => { const f = tqFenetre(); return f ? [f.b, f.t] : [0, 1]; } });
+rbVue({ source: 'sdr', toile: 'r-cascade', rang: 1, fenetre: () => { const c = (R && R.ciel) || 0; return [c + rDx - rSpan / 2, c + rDx + rSpan / 2]; } });
+for (const p of ['wb', 'tq-wb']) rbVue({ source: 'datv', toile: p + '-chute', rang: 1, hz: 1000, bas: 10000, haut: 38000, grandit: 'rb-grand', dessus: true,
+  fenetre: () => WB ? [WB.debut, WB.debut + WB.largeur] : [0, 1] });
 
 // ---- « Affichage »: the options, in a popover over the spectrum (or the QO-100 waterfall)
 function popPlace(p, ancre) {

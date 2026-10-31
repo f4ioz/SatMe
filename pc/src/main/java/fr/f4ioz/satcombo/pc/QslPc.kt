@@ -84,7 +84,8 @@ class QslPc(private val station: StationPc, private val carnet: CarnetPc, val st
     fun json(): JSONObject {
         val l = carnet.contacts()
         val b = StatutsQsl.bilan(l, associes(l))
-        return StatutsQsl.json(b).put("releveMs", store.releveMs()).put("completMs", store.completMs())
+        return StatutsQsl.json(b).put("confirmations", fr.f4ioz.satcombo.domain.Confirmations.json(fr.f4ioz.satcombo.domain.Confirmations.bilan(l, associes(l))))
+            .put("releveMs", store.releveMs()).put("completMs", store.completMs())
             .put("enCours", enCours).put("message", message)
             .put("configure", station.settings.carnetUrl.isNotBlank() && station.settings.carnetCle.isNotBlank())
     }

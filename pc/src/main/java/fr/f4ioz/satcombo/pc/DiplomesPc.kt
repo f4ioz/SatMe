@@ -46,6 +46,8 @@ class DiplomesPc(
     private val images: () -> List<Diplomes.Image> = { emptyList() },
     /** The log. */
     private val contacts: () -> List<LogEntry> = { emptyList() },
+    /** Each contact's QSL flags read from the online log (by its time), for the confirmed counts by source. */
+    private val confirmations: () -> Map<Long, fr.f4ioz.satcombo.data.StatutsQsl.Statut> = { emptyMap() },
     /** The activities announced (the ARISS sessions). */
     private val activites: () -> List<ActivitesAVenir.Activite> = { emptyList() },
     /** A picture's date, frequency, pass… for the request (the SSTV options). */
@@ -129,7 +131,13 @@ class DiplomesPc(
         val log = runCatching { contacts() }.getOrDefault(emptyList())
         val carre = station.etat.value.locator
         val f = donnees
-        return tous().map { Diplomes.bilan(it, imgs, log, carre, f.suivis[it.id], t, tz()) }
+        val conf = runCatching { confirmations() }.getOrDefault(emptyMap())
+        // The grids awards: how many are confirmed, and by what (LoTW + paper for the ARRL, eQSL apart).
+        val vucc = if (conf.isEmpty()) "" else fr.f4ioz.satcombo.domain.Confirmations.remarqueVucc(log, conf)
+        return tous().map { Diplomes.bilan(it, imgs, log, carre, f.suivis[it.id], t, tz()) }.map { b ->
+            if (vucc.isEmpty() || b.diplome.genre != Diplomes.Genre.GRILLES) b
+            else b.copy(remarque = listOf(b.remarque, vucc).filter { it.isNotBlank() }.joinToString(" · "))
+        }
     }
 
     // ------------------------------------------------------------------ running

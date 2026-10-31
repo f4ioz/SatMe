@@ -1390,7 +1390,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     .put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("carre", it.carre).put("indicatif", it.indicatif).put("nom", it.nom) })).toString().toByteArray())
             }
             "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
-                fr.f4ioz.satcombo.demo.ApiCalculs.carres(carnet?.contacts().orEmpty(), station.etat.value.locator, station.etat.value.observateur).toString().toByteArray())
+                carnet.let { c -> val l = c?.contacts().orEmpty()
+                    // Each grid's confirmations by source, once the QSL statuses were read from the online log.
+                    val conf = c?.qsl?.takeIf { it.store.releveMs() > 0 }?.let { fr.f4ioz.satcombo.domain.Confirmations.bilan(l, it.associes(l)).parCarre }
+                    fr.f4ioz.satcombo.demo.ApiCalculs.carres(l, station.etat.value.locator, station.etat.value.observateur, conf) }.toString().toByteArray())
             "/api/carnet/propositions" -> {
                 val saisie = q["c"].orEmpty()
                 val o = carnet?.let { c ->
@@ -2435,6 +2438,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["qrzMdp"]?.takeIf { it.isNotEmpty() }?.let { s.qrzMdp = it }
                 q["carnetUrl"]?.let { s.carnetUrl = it.trim() }
                 q["carnetCle"]?.takeIf { it.isNotEmpty() }?.let { s.carnetCle = it.trim() }
+                q["carnetJetonV2"]?.takeIf { it.isNotEmpty() }?.let { s.carnetJetonV2 = it.trim() }
+                if (q["carnetJetonV2Efface"] == "1") s.carnetJetonV2 = ""
                 q["carnetProfil"]?.let { s.carnetProfil = it.trim() }
                 q["minEl"]?.toIntOrNull()?.let { s.minElevDeg = it.coerceIn(0, 45); kotlinx.coroutines.runBlocking { station.recalcule() } }
                 q["fiche"]?.let { station.ficheQrz = it == "1" }
@@ -2489,6 +2494,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/carnet/retiens" -> {
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
                 carnet?.retiens(t, q["on"] == "1")
+            }
+            // A contact changed since its upload: the change sent through Wavelog's APIv2 (never uploaded again),
+            // or marked as corrected by hand there (main=1).
+            "/api/carnet/metajour" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
+                if (q["main"] == "1") return if (c.corrigeALaMain(t)) ok.put("dit", "noté : corrigé dans Wavelog") else JSONObject().put("ok", false)
+                return ok.put("dit", kotlinx.coroutines.runBlocking { c.metAJour(t) })
             }
             "/api/carnet/profils" -> {
                 // The online log's station locations, and which one each place of the log goes to (here first).
@@ -3066,6 +3079,7 @@ object JsonPc {
         // Each contact's confirmations (eQSL, LoTW, paper), as the online log last told them.
         val qsl = c?.qsl?.associes(l).orEmpty()
         return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L }).put("total", l.size)
+            .put("modifies", l.count { fr.f4ioz.satcombo.domain.ModifEnvoi.ecartsMemo(it).isNotEmpty() })
             .put("auto", c?.autoEtat.orEmpty())
             .put("contacts", JSONArray(l.take(6000).map { e ->
                 // The automatic upload: waiting (seconds left), held back (and why), or nothing to say.
@@ -3078,6 +3092,9 @@ object JsonPc {
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
                     .also { o -> qsl[e.timeMs]?.let { o.put("qsl", fr.f4ioz.satcombo.data.StatutsQsl.json(it)) } }
+                    // Changed since the upload: what, and whether APIv2 can carry it (else by hand in Wavelog).
+                    .also { o -> fr.f4ioz.satcombo.domain.ModifEnvoi.ecartsMemo(e).takeIf { it.isNotEmpty() }?.let { m ->
+                        o.put("modif", fr.f4ioz.satcombo.domain.ModifEnvoi.texte(m)).put("modifMain", m.none { it.modifiable }) } }
                     .also { o -> drapeaux.getOrPut(e.callsign) { fr.f4ioz.satcombo.demo.ApiStation.drapeau(JSONObject(), e.callsign) }
                         .let { d -> d.optString("dr").takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }; d.optString("py").takeIf { it.isNotEmpty() }?.let { o.put("py", it) } } }
             }))
@@ -3106,7 +3123,7 @@ object JsonPc {
     fun reglages(st: StationPc, son: SonStation? = null): JSONObject {
         val s = st.settings
         return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)
-            .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
+            .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty()).put("carnetJetonV2", s.carnetJetonV2.isNotEmpty())
             .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg).put("fiche", st.ficheQrz)
             .put("carnetAuto", s.carnetAuto).put("carnetDelai", s.carnetAutoDelaiS)
             .put("amsatAuto", s.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
