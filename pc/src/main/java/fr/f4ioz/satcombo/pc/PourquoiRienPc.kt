@@ -30,6 +30,8 @@ class PourquoiRienPc(
     private val largePc: () -> SpectreLargePc?,
     private val balises: () -> BalisesQo100Pc?,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** The end of QO-100's Sun outage under way ([EblouissementPc]), null when none. */
+    private val soleilFin: (Long) -> Long? = { null },
 ) {
     /** When each fact with no date of its own was first seen with its present value (« depuis »). */
     private val vus = HashMap<String, Pair<Any?, Long>>()
@@ -148,7 +150,7 @@ class PourquoiRienPc(
         val ref = b?.historique?.points()?.lastOrNull { it.mer != null }?.let { it.mer!! to it.t }
         val avis = b?.historique?.courant("large")?.let { (a, ms) -> Triple(a.texte, a.cause.cle, ms) }
         return PourquoiRien.datv(t, PourquoiRien.Datv(e.actif, d.distant, e.etat, e.libelle, e.merDb, e.depuis, d.verrouDepuisMs,
-            r.cielKhz, r.srKs, r.lnb, e.erreur, muetMs, ref, avis))
+            r.cielKhz, r.srKs, r.lnb, e.erreur, muetMs, ref, avis), soleilFin(t))
     }
 
     fun qo100(): Diagnostic? {
@@ -157,7 +159,7 @@ class PourquoiRienPc(
         val s = sdrEtat()
         val sur = s?.actif == true && station.qo100.etat.value.aLaCle
         val d = q.suivi.dernier
-        return PourquoiRien.qo100(t, s, sur, d?.rapportDb?.toDouble(), d?.t ?: 0L)
+        return PourquoiRien.qo100(t, s, sur, d?.rapportDb?.toDouble(), d?.t ?: 0L, soleilFin(t))
     }
 
     fun large(): Diagnostic? {

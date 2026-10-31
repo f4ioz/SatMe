@@ -407,6 +407,8 @@ Exemple :
   "etroites":{"statut":"ok","cause":"","texte":"Balises bande étroite entendues (3/3)","depuis":1797990000000}}}
 ```
 
+Pendant un éblouissement solaire de QO-100 (deux fois par an autour des équinoxes, quelques minutes par jour), `balises` porte aussi `soleil` : `{"enCours": true, "fin": <ms UTC>, "texte": "Éblouissement solaire en cours jusqu'à 12:47 (11:47 UTC) — normal, pas une panne : …"}`, pour que le site n'affiche pas la perte des balises comme une panne ; absent sinon. Les éblouissements à venir : `GET /api/qo100/soleil` sur SatMe-PC (station-pc.fr.md).
+
 Pour un script : `POST /api/site/direct?on_balises=1` (ou `0`), `&periode_balises=300` (60 à 3600 s, la cadence quand rien ne change).
 
 Un récepteur qui ne veut pas du direct répond `403` (ou `404`) à ces types.

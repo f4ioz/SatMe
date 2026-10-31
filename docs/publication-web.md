@@ -399,6 +399,8 @@ setting. Example:
   "etroites":{"statut":"ok","cause":"","texte":"Balises bande étroite entendues (3/3)","depuis":1797990000000}}}
 ```
 
+During a QO-100 Sun outage (twice a year around the equinoxes, a few minutes a day), `balises` also carries `soleil`: `{"enCours": true, "fin": <UTC ms>, "texte": "Éblouissement solaire en cours jusqu'à 12:47 (11:47 UTC) — normal, pas une panne : …"}`, so the site does not show the beacons' loss as a fault; absent otherwise. The outages to come: `GET /api/qo100/soleil` on SatMe-PC (station-pc.md).
+
 For a script: `POST /api/site/direct?on_balises=1` (or `0`), `&periode_balises=300` (60 to 3600 s, the pace when nothing changes).
 
 A receiver that does not want live data answers `403` (or `404`) to these

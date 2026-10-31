@@ -108,6 +108,10 @@ class AprsDemo(private val maintenant: Long, private val lat0: Double, private v
         // An object put out by QF1ABC, and a message from it to the car.
         chaque(60, 30) { t -> val (a, b) = km(1.5, 1.0); ajoute(t, "QF1ABC", emptyList(), ";SALON-RA *111111z" + la(a) + "\\" + lo(b) + "iSalon radioamateur, samedi 9 h (fictif)") }
         ajoute(maintenant - 50 * 60_000L, "QF1ABC", emptyList(), ":QF8MOB-9 :Bonne route, à ce soir !{12")
+        // For the station itself (« Messages »): one heard twice (the sender retries), a bulletin from the digipeater's club.
+        ajoute(maintenant - 3 * 3_600_000L, "QF1ABC", emptyList(), ":QF4DMO-7 :Salut ! Tu seras au salon samedi ?{21")
+        ajoute(maintenant - 3 * 3_600_000L + 30_000L, "QF1ABC", listOf("$digi*"), ":QF4DMO-7 :Salut ! Tu seras au salon samedi ?{21")
+        ajoute(maintenant - 9 * 3_600_000L, "QF6DIG-2", emptyList(), ":BLN1CLUB :Réunion du club vendredi 20 h (fictif)")
 
         // The car: a trip of two hours ending 25 minutes ago, through the digipeater, its course and speed given.
         val fin = maintenant - 25 * 60_000L
@@ -153,6 +157,9 @@ class AprsDemo(private val maintenant: Long, private val lat0: Double, private v
             val n = 3 + rnd.nextInt(4)
             val duree = (p.losEpochMs - p.aosEpochMs).coerceAtLeast(60_000L)
             ajoute(p.aosEpochMs + duree / 3, "RS0ISS", emptyList(), ">ARISS-International Space Station", sat = "ISS")
+            // A message for the station through the ISS, on the most recent pass only.
+            if (p === passagesIss.filter { it.losEpochMs in (maintenant - 47 * 3_600_000L)..(maintenant - 60_000L) && it.maxElevationDeg >= 10 }.maxByOrNull { it.aosEpochMs })
+                ajoute(p.aosEpochMs + duree / 2, "QG7ISS", listOf("RS0ISS*", "WIDE2-1"), ":QF4DMO   :73 via l'ISS, merci pour le contact !{7", sat = "ISS")
             loin.shuffled(rnd).take(n).forEachIndexed { i, (c, ll, sym) ->
                 val q = p.aosEpochMs + duree * (i + 1) / (n + 2)
                 ajoute(q, c, listOf("RS0ISS*", "WIDE2-1"), pos(ll.first, ll.second, sym) + "Via l'ISS (fictif)", sat = "ISS")

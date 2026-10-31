@@ -1041,9 +1041,10 @@ class StationPc(
             emetteur = 0, repos = null, passagesSuivi = emptyList(),
             calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) }
         portee.launch(Dispatchers.IO) {
-            // Every live transmitter whatever its mode (« SSDV », « GENESIS FSK »…), then the frequency typed for this satellite.
+            // Every live transmitter whatever its mode (« SSDV », « GENESIS FSK »…), those imported (SatPC32, Gpredict), then the frequency typed for this satellite.
             val l = fr.f4ioz.satcombo.data.EmetteurPerso.ajoute(
-                catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }, c.perso)
+                catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) } +
+                    runCatching { frequencesImportees(sat.catalogNumber) }.getOrDefault(emptyList()), c.perso)
             // The transmitter chosen last time for this satellite, as on the phone.
             val i = c.txDescription?.let { d -> l.indexOfFirst { it.description == d } }?.takeIf { it >= 0 } ?: 0
             val (liste, choisi) = emetteurVoulu?.let { f -> runCatching { f(l) }.getOrNull() } ?: (l to i)
@@ -1124,6 +1125,18 @@ class StationPc(
         stationCat.oublieArmement()
         change { copy(emetteur = i.coerceIn(0, (emetteurs.size - 1).coerceAtLeast(0)), repos = null) }
         _etat.value.let { e -> e.suivi?.let { s -> satConfig.saveTransmitter(s.catalogNumber, e.emetteurs.getOrNull(e.emetteur)?.description) } }
+    }
+
+    /** The transmitters imported from SatPC32 / Gpredict files for a satellite ([FrequencesPc], set by Main). */
+    @Volatile var frequencesImportees: (Int) -> List<Transmitter> = { emptyList() }
+
+    /** Every satellite's SatNOGS DB transmitters already known, nothing downloaded. */
+    fun emetteursConnus(): Map<Int, List<Transmitter>> = catalogue.emetteursConnus()
+
+    /** An import changed [catnums]' lists: the followed one's read again. */
+    fun relisEmetteurs(catnums: Set<Int>) {
+        val s = _etat.value.suivi ?: return
+        if (s.catalogNumber in catnums) suis(s)
     }
 
     fun emetteurChoisi(): Transmitter? = _etat.value.let { it.emetteurs.getOrNull(it.emetteur) }

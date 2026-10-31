@@ -134,10 +134,12 @@ object AprsCarteJs {
         <button type="button" role="tab" data-p="aq-p-trames" aria-selected="false">Trames</button>
         <button type="button" role="tab" data-p="aq-p-kiss" aria-selected="false">Radio KISS</button>
         <button type="button" role="tab" data-p="aq-p-tr" aria-selected="false">Trophées</button>
+        <button type="button" role="tab" data-p="aq-p-msg" aria-selected="false" title="Les messages APRS adressés à ton indicatif (tous SSID) et les bulletins : lecture seule, aucun accusé envoyé">Messages <span class="aq-badge" id="aq-msg-n" hidden></span></button>
       </div>
       <div class="aq-pan" id="aq-p-trames" hidden></div>
       <div class="aq-pan defile" id="aq-p-kiss" hidden></div>
       <div class="aq-pan defile" id="aq-p-tr" hidden></div>
+      <div class="aq-pan" id="aq-p-msg" hidden>${MessagesAprsJs.HTML}</div>
       <div class="carte aq-pan" id="aq-p-st">
         <div class="aq-filtres">
           <input type="search" id="aq-q" placeholder="Chercher : indicatif, commentaire, locator…" aria-label="Chercher une station">
