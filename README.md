@@ -118,6 +118,10 @@ SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own eng
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, pass journal: a 3:4 video's frame drawn over the map">
 </p>
 
+## TellusMe — the SatMe ecosystem's terrestrial station (in preparation)
+
+**TellusMe** is SatMe-PC's sibling for the terrestrial station: HF first (VHF/UHF terrestrial later), the same engine, the same kind of page in the browser, its own folder. A first draft, **receive only**: the Icom IC-7000 over CI-V, the Brick2 SDR (openHPSDR) with spectrum, waterfall and sound, the IARU Region 1 band plan, propagation, a DX cluster and a logbook with ADIF export. Not released yet → [TellusMe](docs/tellusme.md).
+
 ## From the phone to the PC: one QR code
 
 <p align="center"><img src="docs/images/satme-qr-en.svg" width="100%" alt="From the phone to the PC in three moves: the PC shows a QR code, the phone scans it, the passes ticked arrive with their contacts, SSTV pictures and sound"></p>
