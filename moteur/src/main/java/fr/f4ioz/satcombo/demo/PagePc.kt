@@ -1237,7 +1237,46 @@ ${OngletSked.CSS}
     #k-carte, #k-globe { height:auto; }
     .k-ciels { justify-content:flex-start; }
     .k-ciels svg { max-height:calc((100vh - 230px) / 2); }
+    /* « plein »: a tab's column that fills it down to the status bar; its « plein-corps » takes the height the others leave. */
+    .vue > .plein { height:100%; box-sizing:border-box; display:flex; flex-direction:column; }
+    .plein > * { flex:none; }
+    .plein > .plein-corps { flex:1 1 auto; min-height:0; height:auto; }
+    /* A tab made of sub-tabs (Agenda, Télémesure): the sub-tabs stay on top, the panel takes the height left, its columns scroll each in its own. */
+    .vue > .st { height:100%; box-sizing:border-box; display:flex; flex-direction:column; padding-bottom:8px; }
+    .vue > .st > .st-pan > .grille2 { height:100%; }
+    .vue > .st > .st-pan > .grille2 > div { min-height:0; overflow:auto; }
+    /* Images: the gallery fills the tab and scrolls in its card, the series' slides in a column beside it. */
+    #gal-slot-images, #gal-slot-images > #gal { height:100%; }
+    #gal-slot-images > #gal { display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,30%); grid-template-rows:minmax(0,1fr); gap:10px; padding:8px 0; box-sizing:border-box; }
+    #gal-slot-images > #gal:has(> #cl-serie[hidden]), #gal-slot-images > #gal.gal-num { grid-template-columns:minmax(0,1fr); }
+    #gal-slot-images > #gal > .carte { min-height:0; overflow:auto; margin:0; }
+    /* Settings: the categories and the open one each scroll in their own column. */
+    #v-reglages .reg { height:100%; box-sizing:border-box; align-items:stretch; padding-bottom:8px; }
+    #v-reglages .reg-nav, #v-reglages .reg-corps { min-height:0; overflow-y:auto; }
+    /* QO-100: the upper cards take at most about half the height and scroll inside; the waterfall gets the rest. */
+    #v-qo100 .tq { padding-top:8px; padding-bottom:8px; }
+    #v-qo100 .tq-haut { grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); max-height:46%; min-height:0; flex:0 1 auto; margin-bottom:8px; }
+    #v-qo100 .tq-haut > .carte { min-height:0; overflow:auto; margin:0; }
+    #v-qo100 .tq-main > .carte { margin-bottom:8px; }
+    #v-qo100 .tq-main > .carte:last-child { margin-bottom:0; }
+    #v-qo100 .tq-pano { min-height:80px; }
+    #v-qo100 .tq-chute > .t { flex-wrap:nowrap !important; }
+    #v-qo100 .tq-chute > .t > span { flex-shrink:0; }
+    #v-qo100 #tq-cl-etat { flex:1 1 0; flex-shrink:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   }
+  @media (min-width:1101px) and (max-height:860px) {
+    #v-qo100 .tq-reglette { height:64px; } #v-qo100 .tq-loupe { height:46px; }
+  }
+  @media (min-width:1101px) and (max-width:1399px) { #v-qo100 .tq-chute .sp-b span { display:none; } }
+  /* The header strip on one line on a computer: the long chips shorten, the rig's name (in the status bar too) leaves below 1600 px. */
+  @media (min-width:1101px) {
+    body > header#tete { flex-wrap:nowrap; }
+    #tete > * { flex-shrink:0; }
+    #tete > #ctx-chip, #tete > #h-ap, #tete > #info-station, #tete > #cat-statut-court { flex-shrink:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    #tete > #h-ap { min-width:44px; } #tete > #h-ap > .h-m { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    #tete > #hs-boite { flex-shrink:1; min-width:60px; } #hs-boite > #h-son { min-width:0; overflow:hidden; }
+  }
+  @media (min-width:1101px) and (max-width:1599px) { #tete > #cat-statut-court { display:none; } }
   /* The shared map: the whole view, its layers in a card over it. */
   .cg-boite { position:relative; height:calc(100vh - 110px); min-height:420px; margin:12px 16px; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#0B1A26; }
   .cg-boite canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
@@ -1276,6 +1315,7 @@ ${OngletOrbites.CSS}
   .tq-etapes { margin:8px 0 0; padding-left:22px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px 22px; font-size:13px; }
   @media (max-width:1300px) { .tq-etapes { grid-template-columns:1fr 1fr; } }
   @media (max-width:640px) { .tq-etapes { grid-template-columns:1fr; } }
+  .tq-cote .tq-etapes { grid-template-columns:1fr; }
   .tq-bandeau { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; margin-bottom:12px; border-radius:12px; background:rgba(255,180,84,.12); border:1px solid rgba(255,180,84,.55); }
   .tq-grille { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,420px); gap:12px; }
   @media (max-width:1100px) { .tq-grille { grid-template-columns:minmax(0,1fr); } }
@@ -2925,7 +2965,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
 </div>
 </div>
 <div class="vue" id="v-aprs" hidden>
-<div style="padding:12px 16px">
+<div class="plein" style="padding:12px 16px">
 ${AprsCarteJs.HTML}
   <details class="carte" id="kiss-carte">
     <summary class="t" style="cursor:pointer;margin:0">Radio APRS en KISS (TH-D72, TM-D710, Mobilinkd…) <span id="kiss-pastille" class="pastille coupe">déconnectée</span></summary>
@@ -3556,16 +3596,6 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
 </div>
 <div class="vue" id="v-qo100" hidden>
 <div class="tq">
-  <div class="carte tq-aide" id="tq-aide" hidden>
-    <div class="ligne" style="margin:0"><b class="cyan">Comment ça marche</b><span class="petit">le trafic sur QO-100, d'un seul écran</span>
-      <button style="margin-left:auto;padding:3px 10px" onclick="tqAideFerme()">Compris ✕</button></div>
-    <ol class="tq-etapes">
-      <li><b>Démarrer la réception QO-100</b> : un clic démarre le récepteur, le met sur QO-100 et donne son son aux décodeurs.</li>
-      <li><b>Cliquer un signal</b> dans la cascade : SatMe s'y accorde dans son mode (BLU, CW, FT8, SSTV) et ouvre le bon décodeur en bas.</li>
-      <li><b>Noter le contact</b> à droite : le satellite QO-100, la fréquence et le mode sont déjà là.</li>
-      <li>La <b>balise médiane</b> est la référence : si l'écart est grand, coche le calage automatique.</li>
-    </ol>
-  </div>
   <div class="tq-bandeau" id="tq-reprise" hidden>
     <span>📡 <b>Tu recevais QO-100</b> quand SatMe s'est arrêté.</span>
     <button class="primaire" onclick="tqReprise(1)">Reprendre QO-100</button><button onclick="tqReprise(0)">Non merci</button>
@@ -3682,6 +3712,16 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
       </div>
     </div>
     <div class="tq-cote">
+      <div class="carte tq-aide" id="tq-aide" hidden>
+        <div class="ligne" style="margin:0"><b class="cyan">Comment ça marche</b><span class="petit">le trafic sur QO-100, d'un seul écran</span>
+          <button style="margin-left:auto;padding:3px 10px" onclick="tqAideFerme()">Compris ✕</button></div>
+        <ol class="tq-etapes">
+          <li><b>Démarrer la réception QO-100</b> : un clic démarre le récepteur, le met sur QO-100 et donne son son aux décodeurs.</li>
+          <li><b>Cliquer un signal</b> dans la cascade : SatMe s'y accorde dans son mode (BLU, CW, FT8, SSTV) et ouvre le bon décodeur en bas.</li>
+          <li><b>Noter le contact</b> à droite : le satellite QO-100, la fréquence et le mode sont déjà là.</li>
+          <li>La <b>balise médiane</b> est la référence : si l'écart est grand, coche le calage automatique.</li>
+        </ol>
+      </div>
       <div id="ptx-slot-qo"></div>
       <div class="carte ptx" id="btx" hidden tabindex="0" aria-label="Émission bande étroite par le Pluto : maintenir PTT, ou la barre d’espace le panneau sélectionné">
         <div class="t">Émission Pluto · QO-100 <span class="ptx-etat" id="btx-etat">—</span><span class="petit" id="btx-qui"></span>

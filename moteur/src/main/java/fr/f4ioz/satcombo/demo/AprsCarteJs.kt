@@ -108,7 +108,7 @@ object AprsCarteJs {
     <div class="aq-etat" id="a-etat"></div>
     <div class="pq" id="pq-aprs" data-pq="aprs" hidden></div>
   </div>
-  <div class="aq-corps" id="aq-corps">
+  <div class="aq-corps plein-corps" id="aq-corps">
     <div class="aq-boite" id="aq-boite">
       <canvas id="aq-carte" aria-label="Carte des stations APRS entendues"></canvas>
       <div class="aq-outils">
@@ -549,15 +549,10 @@ document.querySelectorAll('.aq-onglets button').forEach(b => { b.onclick = () =>
   try { localStorage.setItem('aq-onglet', b.dataset.p); } catch (x) {}
 }; });
 try { const o = localStorage.getItem('aq-onglet'); const b = o && document.querySelector('.aq-onglets button[data-p="' + o + '"]'); if (b) b.click(); } catch (x) {}
-function aqTaille() {
-  const c = g('aq-corps'); if (!c || g('v-aprs').hidden || window.innerWidth <= 1100) return;
-  const sb = g('sb'), bas = sb && sb.offsetParent !== null ? sb.getBoundingClientRect().top : window.innerHeight;
-  const h = Math.max(320, Math.floor(bas - c.getBoundingClientRect().top - 12));
-  if (c.style.height !== h + 'px') { c.style.height = h + 'px'; aqDessine(); }
-}
-window.addEventListener('resize', aqTaille);
+// The map and its column take the height left above the status bar (the tab is a « plein » column, PagePc's CSS):
+// the map redrawn whenever its box changes size.
+if (window.ResizeObserver) new ResizeObserver(() => { if (!g('v-aprs').hidden) aqDessine(); }).observe(g('aq-boite'));
 // Fetched when the tab opens, then every 5 s while it is open.
-setInterval(() => { if (ouverte('aprs')) aqTaille(); }, 1000);
 setInterval(() => { const o = ouverte('aprs'); if (o && (!aqOuvert || Date.now() - aqVu > 5000)) { aqTic(); if (!aqOuvert) setTimeout(aqDessine, 50); } aqOuvert = o; }, 500);
 """
 }

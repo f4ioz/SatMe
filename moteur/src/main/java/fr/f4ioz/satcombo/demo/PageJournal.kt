@@ -115,7 +115,8 @@ object PageJournal {
   /* On a computer's screen the whole page fits it, nothing to scroll: the replay
      takes the height left, the lists scroll in their own column. */
   @media (min-width:1200px) and (min-height:560px) {
-    #page { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+    /* 26 px: the status bar fixed at the bottom (body's padding). */
+    #page { height:calc(100vh - 26px); display:flex; flex-direction:column; overflow:hidden; }
     #page > header { flex:none; }
     .corps { flex:1; min-height:0; }
     .liste { max-height:none; min-height:0; }
