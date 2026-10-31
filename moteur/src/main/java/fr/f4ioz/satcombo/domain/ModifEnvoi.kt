@@ -175,7 +175,9 @@ object ModifEnvoi {
         val sat = avant["SAT_NAME"].orEmpty().trim()
         val l = liste.filter { q ->
             q.call.trim().equals(call, true) && q.quandMs != null && kotlin.math.abs(q.quandMs - quand) <= ECART_V2_MS &&
-                (sat.isEmpty() || q.satName.isBlank() || q.satName.equals(sat, true) || JournalPassage.memeSatellite(q.satName, sat))
+                (sat.isEmpty() || q.satName.isBlank() || q.satName.equals(sat, true) || JournalPassage.memeSatellite(q.satName, sat) ||
+                    // SatMe sends the space station as « ARISS »; Wavelog may keep « ISS ».
+                    NomSatellite.satNameAdif(q.satName).equals(NomSatellite.satNameAdif(sat), true))
         }
         return l.singleOrNull()
     }
