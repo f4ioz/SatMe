@@ -190,6 +190,9 @@ class PiloteUsbPc(
     /** Downloads an address into a file (throws with the reason). */
     private val telecharge: (String, File) -> Unit = ::telechargeHttps,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** Where the operator's browser saves its downloads (silabs.com refuses SatMe-PC's own download). */
+    private val telechargements: List<File> = listOf("Downloads", "Téléchargements", "OneDrive/Downloads", "OneDrive/Téléchargements")
+        .map { File(System.getProperty("user.home"), it) },
 ) {
     /** Only on Windows, never in the demonstration. */
     val actif: Boolean get() = windows && !ModeDemo.actif
@@ -241,10 +244,23 @@ class PiloteUsbPc(
 
     @Volatile var installation = Installation(); private set
 
-    /** Downloads Silicon Labs' driver (the click on « Installer le pilote »), then installs it. */
+    /** The newest CP210x zip in the downloads folders, null when there is none. */
+    fun zipLocal(): File? = telechargements.flatMap { d -> d.listFiles().orEmpty().toList() }
+        .filter { it.isFile && it.name.startsWith("CP210x", true) && it.name.endsWith(".zip", true) && it.length() in 1..DetectionPiloteUsb.ZIP_MAX }
+        .maxByOrNull { it.lastModified() }
+
+    /**
+     * Downloads Silicon Labs' driver (the click on « Installer le pilote »), then installs it; when
+     * silabs.com refuses, the zip the operator's browser saved in Downloads is taken instead.
+     */
     fun installe(): String? = commence { zip ->
         installation = Installation(true, "téléchargement du pilote depuis silabs.com")
-        telecharge(URL_ZIP, zip)
+        try { telecharge(URL_ZIP, zip) } catch (e: Exception) {
+            val local = zipLocal() ?: throw IllegalStateException((e.message ?: e.toString()) +
+                " — ou télécharger le zip avec le navigateur (il va dans Téléchargements), puis « Installer le pilote » à nouveau")
+            installation = Installation(true, "lecture de ${local.name} (Téléchargements)")
+            local.copyTo(zip, overwrite = true)
+        }
     }
 
     /** Installs from a zip the operator downloaded himself (« Choisir le zip téléchargé… »). */
@@ -297,6 +313,7 @@ class PiloteUsbPc(
             .put("codec", trouves.any { it.type == DetectionPiloteUsb.Type.CODEC_SON })
             .put("installation", JSONObject().put("enCours", i.enCours).put("etape", i.etape).put("erreur", i.erreur)
                 .put("fini", i.fini).put("message", i.message).put("redemarrer", i.redemarrer))
+            .put("zipLocal", zipLocal()?.name ?: "")
             .put("liens", JSONObject().put("silabs", PAGE_SILABS).put("icom", PAGE_ICOM).put("zip", URL_ZIP))
     }
 

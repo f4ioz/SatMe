@@ -226,9 +226,22 @@ class PiloteUsbPcTest {
 
     @Test fun telechargement_refuse_par_le_site() {
         val f = FauxWindows { 0 to "[]" }
-        val p = PiloteUsbPc(tmp.root, windows = true, executeur = f::execute, telecharge = { _, _ -> throw IllegalStateException("silabs.com refuse le téléchargement (HTTP 403)") })
+        val p = PiloteUsbPc(tmp.root, windows = true, executeur = f::execute, telecharge = { _, _ -> throw IllegalStateException("silabs.com refuse le téléchargement (HTTP 403)") },
+            telechargements = listOf(tmp.newFolder("vide")))
         p.installe(); attends(p)
         assertTrue(p.installation.erreur.contains("403"))
         assertTrue(f.appels.none { it.first.last() == PiloteUsbPc.PS_INSTALLE })
+    }
+
+    @Test fun refus_du_site_puis_le_zip_des_telechargements() {
+        val dl = tmp.newFolder("Downloads")
+        zip(File(dl, "CP210x_Universal_Windows_Driver.zip"), "silabser.inf" to "[Version]", "silabser.cat" to "cat")
+        val f = FauxWindows { c -> if (c.last() == PiloteUsbPc.PS_INSTALLE) 0 to "" else 0 to "[]" }
+        val p = PiloteUsbPc(tmp.root, windows = true, executeur = f::execute, telecharge = { _, _ -> throw IllegalStateException("HTTP 403") },
+            telechargements = listOf(tmp.newFolder("absent"), dl))
+        assertEquals("CP210x_Universal_Windows_Driver.zip", p.json().getString("zipLocal"))
+        p.installe(); attends(p)
+        assertTrue(p.installation.erreur, p.installation.fini)
+        assertTrue(f.appels.any { it.first.last() == PiloteUsbPc.PS_INSTALLE && it.second["SATME_INF"]!!.endsWith("silabser.inf") })
     }
 }

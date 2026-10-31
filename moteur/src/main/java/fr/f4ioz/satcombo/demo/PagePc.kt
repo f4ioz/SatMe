@@ -7098,6 +7098,7 @@ function puRend() {
   if (PU.liens) { g('pu-page').href = PU.liens.silabs; g('pu-icom').href = PU.liens.icom; }
   // Possible even when nothing is seen in error: the install by hand from here.
   g('pu-installe').disabled = !!(i && i.enCours);
+  g('pu-installe').textContent = PU.zipLocal ? 'Installer le pilote (' + PU.zipLocal + ', Téléchargements)' : 'Installer le pilote';
   let e = '';
   if (PU.recherche) e = 'recherche en cours…';
   else if (i && i.enCours) e = i.etape + '…';
