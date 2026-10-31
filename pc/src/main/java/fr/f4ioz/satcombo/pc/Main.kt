@@ -739,7 +739,10 @@ fun main(args: Array<String>) {
     directSite.station = {
         stationSite(station, sdr, datv, son,
             enEmission = emission.etat.emet || emissionSstv.etat.emet || emissionPoste.poste.etat.emet || emissionBe.emet || ft8Tx.emet,
-            passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
+            passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) },
+            // « Description du montage » on: the site also learns which of its pieces are in use now (their ids only).
+            montage = { if (!directSite.on(DirectSitePc.Canal.MONTAGE)) null else runCatching { serveur.montage?.enOeuvrePourSite() }.getOrNull()
+                ?.let { (en, tx) -> DirectSitePc.MontageVif(en, tx) } })
     }
     directSite.balises = { balises.siteJson() }
     // « Bande large QO-100 (DATV) »: the ground station's strip and our reception on it, while the DATV receiver is on; the
@@ -1176,7 +1179,8 @@ internal object MouvementRotor {
     }
 }
 
-internal fun stationSite(station: StationPc, sdr: SdrPc, datv: DatvPc, son: SonStation, enEmission: Boolean, passageSstv: () -> Boolean): DirectSitePc.Station {
+internal fun stationSite(station: StationPc, sdr: SdrPc, datv: DatvPc, son: SonStation, enEmission: Boolean, passageSstv: () -> Boolean,
+                         montage: () -> DirectSitePc.MontageVif? = { null }): DirectSitePc.Station {
     val Q = fr.f4ioz.satcombo.domain.Qo100
     val e = station.etat.value
     val t = System.currentTimeMillis()
@@ -1214,7 +1218,8 @@ internal fun stationSite(station: StationPc, sdr: SdrPc, datv: DatvPc, son: SonS
     val es = sdr.etat.value
     val sdrC = DirectSitePc.Sdr(es.actif, DirectSitePc.nomSdr(sdr.recepteur), es.cielHz.takeIf { it > 0 })
     val de = datv.etat
-    val datvC = DirectSitePc.DatvCourt(de.actif, de.verrouille, de.merDb, runCatching { datv.marge() }.getOrNull(), de.service, datv.reglage.cielKhz)
+    val datvC = DirectSitePc.DatvCourt(de.actif, de.verrouille, de.merDb, runCatching { datv.marge() }.getOrNull(), de.service, datv.reglage.cielKhz,
+        when (datv.reglage.lnb) { "v" -> "V"; "h" -> "H"; else -> null })
     val cat = station.stationCat.etat.value
     val poste = if (!e.catConnecte) null else DirectSitePc.Poste(DirectSitePc.nomPoste(e.catModele), true, cat.descenteHz, cat.monteeHz, cat.mode)
     val modePoste = cat.mode?.uppercase().orEmpty()
@@ -1228,5 +1233,5 @@ internal fun stationSite(station: StationPc, sdr: SdrPc, datv: DatvPc, son: SonS
         modePoste.startsWith("FM") || modePoste.startsWith("USB") || modePoste.startsWith("LSB") || modePoste.startsWith("AM") -> "phonie"
         else -> null
     }
-    return DirectSitePc.Station(sat, rotor, parabole, sdrC, datvC, poste, enEmission, mode)
+    return DirectSitePc.Station(sat, rotor, parabole, sdrC, datvC, poste, enEmission, mode, montage())
 }

@@ -147,7 +147,11 @@ class DirectSitePc(
      * something transmits, the mode. Names, angles, frequencies only: no port, address or path has a place here.
      */
     class Station(val sat: Sat? = null, val rotor: Rotor? = null, val parabole: Pair<Double, Double>? = null, val sdr: Sdr? = null,
-                  val datv: DatvCourt? = null, val poste: Poste? = null, val enEmission: Boolean = false, val mode: String? = null)
+                  val datv: DatvCourt? = null, val poste: Poste? = null, val enEmission: Boolean = false, val mode: String? = null,
+                  /** The pieces of the published setup in use now (« Description du montage » on): their ids, and those transmitting. */
+                  val montage: MontageVif? = null)
+    /** [enOeuvre]: the ids (those of `montage`) of the pieces taking part in what happens now; [emission]: those transmitting. */
+    class MontageVif(val enOeuvre: List<String>, val emission: List<String> = emptyList())
     /** [geo]: geostationary (no AOS/LOS); az/el/km/km·s⁻¹ from the station; the next pass or the one under way. */
     class Sat(val nom: String, val norad: Int, val geo: Boolean, val az: Double? = null, val el: Double? = null, val distanceKm: Double? = null,
               val vitesseKmS: Double? = null, val aos: Long? = null, val los: Long? = null, val elMax: Double? = null,
@@ -158,7 +162,9 @@ class DirectSitePc(
                 val horsPortee: Boolean, val azSeul: Boolean)
     /** [type]: the receiver's public name (« RTL-SDR », « ADALM-PLUTO »…); [frequenceHz]: the sky frequency heard. */
     class Sdr(val actif: Boolean, val type: String, val frequenceHz: Long?)
-    class DatvCourt(val actif: Boolean, val verrouille: Boolean, val mer: Double?, val marge: Double?, val service: String?, val cielKhz: Long?)
+    /** [polar]: the LNB's polarisation fed by the receiver (« V » 13 V, « H » 18 V), null when it does not feed it. */
+    class DatvCourt(val actif: Boolean, val verrouille: Boolean, val mer: Double?, val marge: Double?, val service: String?, val cielKhz: Long?,
+                    val polar: String? = null)
     /** [modele]: the rig's model name only (« IC-9700 »); its sky frequencies and mode read back. */
     class Poste(val modele: String, val connecte: Boolean, val descenteHz: Long?, val monteeHz: Long?, val mode: String?)
 
@@ -519,7 +525,7 @@ class DirectSitePc(
 
         /** The keys [stationJson] may write, each level by itself: what a test checks, what the documentation lists. */
         val CLES_STATION = mapOf(
-            "" to setOf("satellite", "antennes", "reception", "enEmission", "mode"),
+            "" to setOf("satellite", "antennes", "reception", "enEmission", "mode", "montage"),
             "satellite" to setOf("nom", "norad", "geo", "az", "el", "distanceKm", "vitesseKmS", "aos", "los", "elMax", "emetteurs", "choisi"),
             "emetteur" to setOf("description", "mode", "descenteHz", "monteeHz"),
             "antennes" to setOf("rotor", "parabole"),
@@ -527,9 +533,11 @@ class DirectSitePc(
             "parabole" to setOf("az", "el"),
             "reception" to setOf("sdr", "datv", "poste"),
             "sdr" to setOf("actif", "type", "frequenceHz"),
-            "datv" to setOf("actif", "verrouille", "mer", "marge", "service", "cielKhz"),
+            "datv" to setOf("actif", "verrouille", "mer", "marge", "service", "cielKhz", "polar"),
+            "montage" to setOf("enOeuvre", "emission"),
             "poste" to setOf("modele", "connecte", "descenteHz", "monteeHz", "mode"))
 
+        private val ID_PIECE = Regex("[a-z0-9_-]{1,32}")
         private fun r1(x: Double) = Math.round(x * 10) / 10.0
         private fun r2(x: Double) = Math.round(x * 100) / 100.0
         private fun mot(x: String, n: Int) = x.replace(Regex("\\p{Cntrl}"), " ").trim().take(n)
@@ -566,6 +574,7 @@ class DirectSitePc(
             s.datv?.let { d ->
                 val j = JSONObject().put("actif", d.actif).put("verrouille", d.actif && d.verrouille)
                 if (d.actif) j.met("cielKhz", d.cielKhz?.takeIf { it > 0 })
+                if (d.actif) j.met("polar", d.polar?.uppercase()?.takeIf { it == "H" || it == "V" })
                 if (d.actif && d.verrouille) j.met("mer", d.mer?.let { r1(it) }).met("marge", d.marge?.let { r1(it) }).met("service", d.service?.let { mot(it, 40) })
                 rec.put("datv", j)
             }
@@ -577,6 +586,11 @@ class DirectSitePc(
             if (rec.length() > 0) o.put("reception", rec)
             o.put("enEmission", s.enEmission)
             s.mode?.let { o.met("mode", mot(it, 16)) }
+            // Only short ids (those of the « montage » message), never a name, an address or a port.
+            s.montage?.let { m ->
+                fun ids(l: List<String>) = JSONArray(l.filter { ID_PIECE.matches(it) }.distinct().take(60))
+                if (m.enOeuvre.isNotEmpty()) o.put("montage", JSONObject().put("enOeuvre", ids(m.enOeuvre)).put("emission", ids(m.emission)))
+            }
             return o
         }
 

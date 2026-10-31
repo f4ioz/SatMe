@@ -577,6 +577,8 @@ minutes pour « station hors ligne ».
 | `reception.poste` | seulement quand le poste est connecté : le nom de son modèle, ses fréquences (ciel) et son mode relus |
 | `enEmission` | quelque chose émet en ce moment (oui ou non, rien de plus) |
 | `mode` | ce que fait la station, quand c'est connu : `DATV`, `FT8`, `FT4`, `SSTV`, `CW`, `phonie`, `numérique` |
+| `reception.datv.polar` | le récepteur DATV en marche alimente la tête LNB : `V` (13 V) ou `H` (18 V) |
+| `montage` | seulement si **Description du montage** est aussi cochée : `enOeuvre`, les identifiants (ceux du message `montage`, `e1`, `e2`…) des appareils qui servent en ce moment (ceux qu'allume l'onglet **Montage**), et `emission`, ceux qui émettent — pour qu'une page dessine le montage utilisé pour ce qui est en direct. Rien que ces identifiants courts |
 
 Toutes les clés sont facultatives sauf `t` et `enEmission`. Jamais dedans :
 une adresse, un port, un périphérique série, un chemin de fichier, un code

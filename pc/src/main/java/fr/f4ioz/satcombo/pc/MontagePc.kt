@@ -72,6 +72,22 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
     fun chaineDe(plan: String): Pair<String, Montage.Chaine> = (plans.plan(plan) ?: plans.choisi).let { PlansMontage.nomVu(it) to it.chaine }
     /** The plan a web site is sent (« Description du montage »): the one drawing QO-100, else the owner's; null when empty. */
     fun planPourSite(): PlansMontage.Plan? = fr.f4ioz.satcombo.station.PublicationMontage.choisit(plans)
+
+    /**
+     * The pieces of the plan sent to the site ([planPourSite]) taking part in what happens now, and those transmitting
+     * (the « Montage » page's lit chain, [ActiviteMontage.allume]); null when that plan is empty or nothing works.
+     */
+    fun enOeuvrePourSite(): Pair<List<String>, List<String>>? {
+        val plan = planPourSite() ?: return null
+        val l = lectures()
+        val a = activite(l)
+        if (a.vide) return null
+        val al = ActiviteMontage.allume(plan.chaine, a)
+        val en = al.enOeuvre()
+        if (en.isEmpty()) return null
+        val ids = plan.chaine.elements.map { it.id }
+        return ids.filter { it in en } to ids.filter { al.elements[it] == ActiviteMontage.Etat.TX || al.elements[it] == ActiviteMontage.Etat.RXTX }
+    }
     /** The plans and the owner's one, for the event's report's drawing. */
     fun plansRapport(): Pair<List<PlansMontage.Plan>, String> = plans.let { it.plans to it.choisi.id }
 

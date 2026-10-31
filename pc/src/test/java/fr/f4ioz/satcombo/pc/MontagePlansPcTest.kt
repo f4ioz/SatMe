@@ -42,6 +42,18 @@ class MontagePlansPcTest {
     }
     private fun dossier() = Files.createTempDirectory("montage").toFile()
 
+    @Test fun lesAppareilsEnServicePourLeSite() {
+        val d = dossier(); File(d, "montage.json").writeText(ANCIEN)
+        // Nothing works: nothing said.
+        assertEquals(null, montage(d).enOeuvrePourSite())
+        // The DATV received on the node's MiniTiouner: the dish, the LNB, the MiniTiouner, by their ids.
+        val m = MontagePc(d, { ActiviteMontage.Lectures(datv = JSONObject("""{"actif":true,"verrouille":true,"recepteur":"minitiouner","noeud":"node","ciel":10491500,"fi":741500}""")) },
+            systeme = { emptyList<DetectionMontage.Usb>() to emptyList() }, horloge = { 1000L })
+        val (en, tx) = m.enOeuvrePourSite()!!
+        assertTrue(en.toString(), en.containsAll(listOf("e1", "e2", "e3")))
+        assertTrue(tx.isEmpty())
+    }
+
     @Test fun lAncienMontageEstLePremierPlan() {
         val d = dossier(); File(d, "montage.json").writeText(ANCIEN)
         val m = montage(d)

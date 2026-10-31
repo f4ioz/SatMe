@@ -562,7 +562,8 @@ class DirectSitePcTest {
         assertTrue(niveau + " : " + o.keySet(), permis.containsAll(o.keySet()))
         for (k in o.keySet()) when (val v = o.get(k)) {
             is JSONObject -> verifieCles(v, k)
-            is org.json.JSONArray -> { assertEquals("emetteurs", k); for (i in 0 until v.length()) verifieCles(v.getJSONObject(i), "emetteur") }
+            is org.json.JSONArray -> if (niveau == "montage") { assertTrue(k, k in setOf("enOeuvre", "emission")); for (i in 0 until v.length()) assertTrue(Regex("[a-z0-9_-]{1,32}").matches(v.getString(i))) }
+                else { assertEquals("emetteurs", k); for (i in 0 until v.length()) verifieCles(v.getJSONObject(i), "emetteur") }
             is String -> assertTrue(k, v.length <= 60 && v.none { it.isISOControl() })
             else -> assertTrue(k + " = " + v, v is Number || v is Boolean)
         }
@@ -589,6 +590,22 @@ class DirectSitePcTest {
         assertEquals(setOf("modele", "connecte"), geo.getJSONObject("reception").getJSONObject("poste").keySet())
         assertTrue(DirectSitePc.stationJson(DirectSitePc.Station()).toString().length < 40)
         assertTrue(o.toString().length < 1500)
+    }
+
+    @Test fun `the station tells the setup's pieces in use by their ids only, and the LNB's polarisation`() {
+        val st = DirectSitePc.Station(datv = DirectSitePc.DatvCourt(true, true, 8.1, 3.0, "CU3AT", 10_494_750L, "h"),
+            montage = DirectSitePc.MontageVif(listOf("e1", "e2", "e3", "e3", "192.168.0.10", "Nom Avec Espaces"), listOf("e9")))
+        val o = DirectSitePc.stationJson(st)
+        verifieCles(o, "")
+        val m = o.getJSONObject("montage")
+        assertEquals(listOf("e1", "e2", "e3"), (0 until m.getJSONArray("enOeuvre").length()).map { m.getJSONArray("enOeuvre").getString(it) })
+        assertEquals("e9", m.getJSONArray("emission").getString(0))
+        assertEquals("H", o.getJSONObject("reception").getJSONObject("datv").getString("polar"))
+        // Nothing in use: no « montage »; a receiver off: no polarisation.
+        val vide = DirectSitePc.stationJson(DirectSitePc.Station(datv = DirectSitePc.DatvCourt(false, false, null, null, null, 10_494_750L, "v"),
+            montage = DirectSitePc.MontageVif(emptyList())))
+        assertFalse(vide.has("montage"))
+        assertFalse(vide.getJSONObject("reception").getJSONObject("datv").has("polar"))
     }
 
     @Test fun `the station goes only when chosen, on change at most every two seconds, else every 30 s`() {
