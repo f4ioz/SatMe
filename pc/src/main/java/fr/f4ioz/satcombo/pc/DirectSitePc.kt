@@ -9,9 +9,12 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.data.Observer
+import fr.f4ioz.satcombo.datv.BandeLarge
 import fr.f4ioz.satcombo.datv.EtatDatv
+import fr.f4ioz.satcombo.datv.MonNiveau
 import fr.f4ioz.satcombo.datv.QrzDatv
 import fr.f4ioz.satcombo.datv.ReglageDatv
+import fr.f4ioz.satcombo.datv.SignalLarge
 import fr.f4ioz.satcombo.domain.QrzReponse
 import fr.f4ioz.satcombo.plateforme.Stockage
 import org.json.JSONArray
@@ -43,7 +46,9 @@ import javax.imageio.ImageWriteParam
  * really point, the receivers and the rig in use, as [stationJson] builds it; when it changes, at most every
  * [periode] seconds, and every [BATTEMENT_STATION_MS] unchanged; to a folder, `direct/station.json`), **FT8/FT4**
  * (type `direct-ft8`: each slot once decoded, its messages and a strip of the waterfall, [Ft8SitePc]; to a folder,
- * `direct/ft8.json`).
+ * `direct/ft8.json`), **Bande large QO-100** (type `direct-large`: the wide band as the DATV tab's strip shows it — the
+ * ground station's spectrum made small, the signals found and their names, our receiver's channel, lock and MER —
+ * every [periode] seconds while the DATV receiver is on, [largeJson]; not to a folder).
  *
  * SatMe-PC pushes; the site never connects to the station. Nothing is
  * queued: what the site does not take is dropped and the next try waits
@@ -72,7 +77,9 @@ class DirectSitePc(
         /** FT8 / FT4: each slot once decoded ([Ft8SitePc], type `direct-ft8`). */
         FT8("ft8", "FT8/FT4", 15, 15, 15),
         /** QO-100's beacons ([BalisesQo100Pc.siteJson], in `direct` as `balises`): on change, else every [periode] s. */
-        BALISES("balises", "Balises QO-100", 300, 60, 3600);
+        BALISES("balises", "Balises QO-100", 300, 60, 3600),
+        /** QO-100's wide band and our reception on it ([SpectreLargePc], type `direct-large`): every [periode] s while the DATV receiver is on. */
+        LARGE("large", "Bande large QO-100 (DATV)", 2, 1, 10);
 
         companion object { fun de(n: String) = values().firstOrNull { it.nom == n } }
     }
@@ -90,6 +97,13 @@ class DirectSitePc(
      * where we are (for the distance and bearing). [stationDatvJson] keeps only what may be public.
      */
     class StationDatv(val indicatif: String, val selection: Boolean, val fiche: QrzReponse.Fiche?, val moi: Observer?)
+
+    /**
+     * QO-100's wide band as the DATV tab's strip has it ([SpectreLargePc.pourSite]): the ground station's last frame (its
+     * units, [BandeLarge]), the signals found with their names ([noms], empty when unknown) and whether our receiver is on
+     * each ([tenus]), our own level where it listens ([niveau], null outside the wide band).
+     */
+    class Large(val valeurs: IntArray, val signaux: List<SignalLarge>, val noms: List<String>, val tenus: List<Boolean>, val niveau: MonNiveau?)
 
     /** The SDR's panorama while on QO-100: its bins (dB) and its axis (sky Hz; a negative width is turned over). */
     class Panorama(val db: FloatArray, val centreHz: Double, val largeurHz: Double)
@@ -118,6 +132,8 @@ class DirectSitePc(
     @Volatile var station: () -> Station? = { null }
     /** QO-100's beacons as the site may show them ([BalisesQo100Pc.siteJson]), null while their watch is off. */
     @Volatile var balises: () -> JSONObject? = { null }
+    /** QO-100's wide band and our reception on it ([Large]), null while the spectrum is off or stale, or the DATV receiver stopped. */
+    @Volatile var large: () -> Large? = { null }
     /** FT8 / FT4's slots and strips ([Ft8SitePc]), null when not set. */
     @Volatile var ft8: Ft8SitePc? = null
     /** « Spectre rapide »: the spectrum streamed ([SpectreRapidePc]), null when not set. */
@@ -187,6 +203,7 @@ class DirectSitePc(
             if (c == Canal.DIPLOMES) { runCatching { diplomes(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.FT8) { runCatching { ft8(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (c == Canal.BALISES) { runCatching { balises(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
+            if (c == Canal.LARGE) { runCatching { large(s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }; continue }
             if (t < s.prochainMs) continue
             s.prochainMs = t + periode(c) * 1000L
             runCatching { envoie(c, s, t) }.onFailure { e -> echec(s, t, 0, e.message ?: e.javaClass.simpleName) }
@@ -228,6 +245,7 @@ class DirectSitePc(
             Canal.MONTAGE -> montage(s, t)
             Canal.FT8 -> ft8(s, t)
             Canal.BALISES -> balises(s, t)
+            Canal.LARGE -> large(s, t)
             Canal.DATV -> {
                 val d = datv()
                 if (d == null || !d.etat.actif) {
@@ -355,6 +373,27 @@ class DirectSitePc(
         if (poste(s, t, "direct", JSONObject().put("t", t).put("balises", b)) == true) { s.envoye = true; s.dernier = cle; s.dernierMs = t }
     }
 
+    /**
+     * QO-100's wide band (`direct-large`, [largeJson]): every [periode] seconds while there is one ([large]: the spectrum
+     * fresh, the DATV receiver on); `{"actif": false}` once when it stops, so the site drops the strip at once. A site
+     * that does not know the type is asked again after [NON_PRIS_STATION_MS].
+     */
+    private fun large(s: Suivi, t: Long) {
+        if (t < s.prochainMs) return
+        s.prochainMs = t + periode(Canal.LARGE) * 1000L
+        val l = large()
+        if (l == null) {
+            if (s.envoye) poste(s, t, "direct-large", JSONObject().put("t", t).put("actif", false))?.let { if (it) s.envoye = false }
+            return
+        }
+        val r = site.envoieDirect("direct-large", largeJson(l).put("t", t)) ?: run { s.erreur = "site non réglé"; return }
+        when {
+            r.first in 200..299 -> { s.okMs = t; s.erreur = ""; s.delaiMs = 0L; s.nonPris = false; s.envoye = true }
+            r.first == 400 || r.first == 404 || r.first == 415 -> { s.nonPris = true; s.erreur = ""; s.prochainMs = t + NON_PRIS_STATION_MS }
+            else -> echec(s, t, r.first, raison(r.second))
+        }
+    }
+
     /** Sends [o] as [type]: true when taken, false when not (the next try put off), null when the target is not set. */
     private fun poste(s: Suivi, t: Long, type: String, o: JSONObject): Boolean? {
         val r = site.envoieDirect(type, o) ?: run { s.erreur = "site non réglé"; return null }
@@ -388,6 +427,7 @@ class DirectSitePc(
             .also { o -> if (c == Canal.DIPLOMES) o.put("cadence", "à chaque changement, sinon 1 fois par jour").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.FT8) o.put("cadence", "chaque créneau décodé (15 s, FT4 7,5 s)").put("nonPris", on(c) && s.nonPris) }
             .also { o -> if (c == Canal.BALISES) o.put("cadence", "à chaque changement, sinon toutes les " + periode(c) / 60 + " min") }
+            .also { o -> if (c == Canal.LARGE) o.put("nonPris", on(c) && s.nonPris) }
     })).also { o -> rapide?.let { o.put("rapide", it.json()) }; video?.let { o.put("video", it.json()) } }
 
     /** `api/site/direct`: `on_<part>=0|1`, `periode_<part>=<s>`. */
@@ -425,6 +465,57 @@ class DirectSitePc(
         const val BATTEMENT_STATION_MS = 30_000L
         /** A site that does not know `direct-station` is asked again after 10 minutes. */
         const val NON_PRIS_STATION_MS = 10 * 60_000L
+
+        /** The wide band's points sent ([largeJson]): about 18 kHz each, a 35 kS/s signal still two of them. */
+        const val POINTS_LARGE = 512
+        /** The signals sent at most (the band holds a dozen or two). */
+        const val SIGNAUX_LARGE = 30
+        /** The wide band's byte scale, in the spectrum's units ([BandeLarge]): the range the DATV tab's strip draws. */
+        const val LARGE_BAS = 8_000
+        const val LARGE_HAUT = 44_000
+
+        /** The keys [largeJson] may write, each level by itself: what a test checks, what the documentation lists. */
+        val CLES_LARGE = mapOf(
+            "" to setOf("debutKhz", "largeurKhz", "bas", "haut", "unitesDb", "bruit", "balise", "points", "signaux", "recepteur"),
+            "signal" to setOf("debut", "fin", "centre", "sr", "niveau", "db", "balise", "auDessus", "tenu", "nom"),
+            "recepteur" to setOf("khz", "sr", "largeur", "actif", "verrouille", "mer", "niveau", "modcod", "seuil"))
+
+        /**
+         * The wide band for a public page (`direct-large`, without its time): the ground station's frame made [n] points
+         * (each the average of its group), one byte each from [LARGE_BAS] to [LARGE_HAUT] units, base64; the signals found
+         * ([SIGNAUX_LARGE] at most: their edges, centre, rate, level, against the beacon, their name when known, the one
+         * received); our receiver where it listens: its channel, locked or not, its MER and the level it makes on the
+         * same scale ([fr.f4ioz.satcombo.datv.NiveauRecu]). Only the keys of [CLES_LARGE]: never a setting, an address or
+         * a path.
+         */
+        fun largeJson(l: Large, n: Int = POINTS_LARGE): JSONObject {
+            val v = l.valeurs
+            val m = minOf(n, v.size)
+            val octets = ByteArray(m) { i ->
+                val a = (i.toLong() * v.size / m).toInt(); val b = maxOf(a + 1, ((i + 1).toLong() * v.size / m).toInt())
+                var x = 0L
+                for (k in a until b) x += v[k]
+                ((x.toDouble() / (b - a) - LARGE_BAS) / (LARGE_HAUT - LARGE_BAS) * 255.0).toInt().coerceIn(0, 255).toByte()
+            }
+            val o = JSONObject().put("debutKhz", BandeLarge.DEBUT_KHZ).put("largeurKhz", BandeLarge.LARGEUR_KHZ).put("bas", LARGE_BAS).put("haut", LARGE_HAUT)
+                .put("unitesDb", BandeLarge.UNITES_PAR_DB).put("bruit", BandeLarge.BRUIT).put("balise", fr.f4ioz.satcombo.datv.Datv.BALISE_KHZ)
+                .put("points", Base64.getEncoder().encodeToString(octets))
+            // The one received and the named first, then the strongest; sent low to high.
+            val garde = l.signaux.indices.sortedWith(compareByDescending<Int> { l.tenus.getOrElse(it) { false } }
+                .thenByDescending { l.noms.getOrElse(it) { "" }.isNotBlank() }.thenByDescending { l.signaux[it].niveau }).take(SIGNAUX_LARGE).sorted()
+            o.put("signaux", JSONArray(garde.map { i ->
+                val sg = l.signaux[i]
+                JSONObject().put("debut", sg.debutKhz).put("fin", sg.finKhz).put("centre", sg.centreKhz).put("sr", sg.srKs).put("niveau", sg.niveau)
+                    .met("db", sg.parRapportBaliseDb).put("balise", sg.balise).put("auDessus", sg.auDessusBalise).put("tenu", l.tenus.getOrElse(i) { false })
+                    .met("nom", mot(l.noms.getOrElse(i) { "" }, 24))
+            }))
+            l.niveau?.let { r ->
+                val j = JSONObject().put("khz", r.khz).put("sr", r.srKs).put("largeur", r.largeurKhz).put("actif", r.actif).put("verrouille", r.verrouille)
+                if (r.verrouille) j.met("mer", r.merDb?.let { r1(it) }).met("niveau", r.niveau).met("modcod", mot(r.modcod, 24)).met("seuil", r.seuilDb?.let { r1(it) })
+                o.put("recepteur", j)
+            }
+            return o
+        }
 
         /** The keys [stationJson] may write, each level by itself: what a test checks, what the documentation lists. */
         val CLES_STATION = mapOf(

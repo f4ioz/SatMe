@@ -279,6 +279,7 @@ Content-Type: image/png
 | `diplomes` | JSON | — | the [awards](#awards) followed and your progress, only when ticked |
 | `diplome-image` | multipart | PNG, JPEG, PDF | the picture of an [award received](#awards), only on a click |
 | `direct-ft8` | JSON | — | each [FT8 / FT4](#ft8--ft4) slot decoded, only when ticked |
+| `direct-large` | JSON | — | [QO-100's wide band](#qo-100s-wide-band) and your reception, while the DATV receiver is on, only when ticked |
 | `direct-video`, `direct-soustitres` (+ `PUT …/direct-video/<rendition>/<n>.ts`, and the WebSocket `/ws/direct/station`) | JSON, MPEG-TS | `video/mp2t` | the [fast live](#fast-live-optional-for-a-fast-uplink), only when ticked |
 | `ft8-passage` | multipart | JSON | a journal's pass with its [FT8 / FT4](#ft8--ft4) messages (at a click, or each pass in Automatique) |
 
@@ -626,6 +627,41 @@ few hundred KB):
 (60 at most), `cascade` only for the slots SatMe-PC still had in memory (the
 last three hours). `stations`, `carres`, `dxcc`: how many callsigns (not the
 station's own), locators and DXCC entities were heard.
+
+### QO-100's wide band
+
+Under **En direct**, the **Bande large QO-100 (DATV)** line (unticked by
+default) sends the DATV tab's strip — the wide band transponder as the ground
+station measures it (its public spectrum), the signals found and your
+reception over it — for a live page to draw it under the DATV picture: type
+`direct-large`, JSON, 2 to 4 KB, every 2 s (1 to 10 s, chosen on the line),
+**only while the DATV receiver is on** and *Spectre de la bande large* is
+ticked in the DATV tab. When the receiver stops: `{"actif": false}` once, then
+nothing. The connection to the ground station stays SatMe-PC's (open while the
+line is ticked and the receiver on): the site fans it out, its visitors never
+connect to it.
+
+```json
+{"type":"direct-large","version":1,"t":1798000000000,
+ "debutKhz":10490500,"largeurKhz":9000,"bas":8000,"haut":44000,"unitesDb":3276.8,"bruit":11000,"balise":10491500,
+ "points":"<base64, 512 bytes>",
+ "signaux":[{"debut":10490750,"fin":10492250,"centre":10491500,"sr":1500,"niveau":38200,"balise":true,"auDessus":false,"tenu":false},
+            {"debut":10494620,"fin":10494880,"centre":10494750,"sr":250,"niveau":24800,"db":-4.1,"balise":false,"auDessus":false,"tenu":true,"nom":"F4XYZ"}],
+ "recepteur":{"khz":10494750,"sr":250,"largeur":338,"actif":true,"verrouille":true,"mer":7.4,"niveau":26900,"modcod":"QPSK 3/4","seuil":4.0}}
+```
+
+| Key | Meaning |
+|---|---|
+| `debutKhz`, `largeurKhz` | the axis (sky kHz): `points` spans `debutKhz` to `debutKhz + largeurKhz` |
+| `points` | the spectrum in 512 points (each its group's average), one byte each, base64: `0` = `bas`, `255` = `haut`, in the ground station's spectrum units (log scale, `unitesDb` units a dB, the noise near `bruit`) |
+| `balise` | the DATV beacon's frequency (kHz) |
+| `signaux` | 30 at most, low to high: `debut`, `fin`, `centre` (kHz), `sr` the nearest standard symbol rate (kS/s), `niveau` (units), `db` against the beacon, `balise`, `auDessus` (over the beacon − 1 dB), `tenu` (your receiver is on it), `nom` (the callsign read, when known) |
+| `recepteur` | your DATV receiver while it listens in the wide band: `khz`, `sr`, `largeur` (kHz occupied), `actif`, `verrouille`; locked, `mer` (dB), `niveau` (the height the MER makes on the same scale), `modcod`, `seuil` (that MODCOD's lowest MER) |
+
+Only these keys: no setting, address, path or anything else of the station.
+Not to a folder. A receiver that does not know the type answers `400`, `404`
+or `415`: left alone for ten minutes, without an error. The settings call:
+`POST /api/site/direct?on_large=1` (or `0`), `&periode_large=2` (1 to 10 s).
 
 ### Fast live (optional, for a fast uplink)
 

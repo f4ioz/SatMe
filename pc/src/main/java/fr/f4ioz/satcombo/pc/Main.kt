@@ -723,6 +723,11 @@ fun main(args: Array<String>) {
             passageSstv = { runCatching { autopilote.etatSite()?.optJSONObject("enCours")?.optString("phase") == "EN_COURS" }.getOrDefault(false) })
     }
     directSite.balises = { balises.siteJson() }
+    // « Bande large QO-100 (DATV) »: the ground station's strip and our reception on it, while the DATV receiver is on; the
+    // spectrum kept connected for it then (one connection, SatMe-PC's own: the site's visitors never reach the ground station).
+    directSite.large = { large.pourSite() }
+    val gardeLarge = large.garde
+    large.garde = { gardeLarge() || (site.actif && directSite.on(DirectSitePc.Canal.LARGE) && datv.etat.actif) }
     site.direct = directSite
     // « Spectre rapide » (off by default): QO-100's spectrum streamed to the site, 1 to 20 lines a second, over one connection.
     val spectreRapide = SpectreRapidePc(station.stockage, site)

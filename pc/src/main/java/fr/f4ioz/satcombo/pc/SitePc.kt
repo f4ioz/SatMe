@@ -431,7 +431,7 @@ class SitePc(
     }
 
     /**
-     * One live request of [DirectSitePc]: [type] (`direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`,
+     * One live request of [DirectSitePc]: [type] (`direct`, `direct-spectre`, `direct-datv-image`, `direct-sstv-image`, `direct-station`, `direct-large`,
      * `direct-efface`), JSON [o] or a JPEG [jpeg]. Its answer, or null when the target is not set or the demonstration
      * forbids it. Never queued: live data that does not go is dropped.
      */
