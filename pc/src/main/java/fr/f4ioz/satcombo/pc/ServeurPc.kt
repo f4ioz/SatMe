@@ -3264,7 +3264,11 @@ object JsonPc {
     /** APRS heard: the frames (newest first) and what they add up to. */
     fun aprs(s: SonStation?, st: StationPc): JSONObject {
         if (s == null) return JSONObject().put("present", false)
+        val d = s.aprs.statsDecodeur
         return fr.f4ioz.satcombo.demo.ApiRadio.aprs(s.aprs.paquets, s.aprsActif && s.son.etat.value.actif, s.aprs.recues, st.etat.value.observateur)
+            .put("decodeur", JSONObject().put("justes", d.ax25).put("corrigees1", d.corrigees1).put("corrigees2", d.corrigees2)
+                .put("fx25", d.fx25).put("il2p", d.il2p).put("octetsRs", d.octetsRs).put("ligne", d.ligne())
+                .put("marquees", JSONArray(s.aprs.marquees.map { (t, l, m) -> JSONObject().put("t", t).put("trame", l).put("marque", m) })))
     }
 
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {

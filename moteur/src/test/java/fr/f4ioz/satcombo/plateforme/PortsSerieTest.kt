@@ -216,4 +216,21 @@ class PortsSerieTest {
         assertTrue(pp.ouverts.none { it.second == Lignes.LEVEES })
         assertEquals(0, sim.tentativesEmission)
     }
+
+    @Test
+    fun format_serie_8n1_par_defaut_et_7e1_refuse_poliment() = runBlocking {
+        assertEquals("8N1", FormatSerie.HUIT_N_UN.toString())
+        assertEquals(FormatSerie(7, Parite.PAIRE), FormatSerie.de("7e1"))
+        assertEquals(FormatSerie(8, Parite.AUCUNE, true), FormatSerie.de("8N2"))
+        assertEquals(null, FormatSerie.de("9N1"))
+        val pp = FauxPorts(ic9700, { Ic9700Sim() }, refus = "non")
+        // 8N2 goes to the platform's own opening, two stop bits.
+        assertTrue(pp.ouvre(ic9700[0], 4800, Lignes.BASSES, FormatSerie(deuxArrets = true)).lien != null)
+        assertEquals(Triple(ic9700[0], 4800, true), pp.reglages.single())
+        // A platform that only knows 8 bits without parity: 7E1 refused, the port never opened.
+        val o = pp.ouvre(ic9700[0], 1200, Lignes.BASSES, FormatSerie.SEPT_E_UN)
+        assertEquals(null, o.lien)
+        assertTrue(o.erreur.contains("7E1"))
+        assertEquals(1, pp.ouverts.size)
+    }
 }

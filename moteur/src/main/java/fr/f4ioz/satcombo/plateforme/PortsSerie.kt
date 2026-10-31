@@ -58,6 +58,39 @@ enum class Lignes {
  */
 fun PortSerie.portPttRigExpert(): Boolean = port > 0 && produit?.contains("RigExpert", ignoreCase = true) == true
 
+/** Parity bit of a serial frame. */
+enum class Parite { AUCUNE, PAIRE, IMPAIRE, MARQUE, ESPACE }
+
+/**
+ * The shape of each character on the line: data bits (5 to 8), parity, one
+ * or two stop bits. [HUIT_N_UN] (8N1) is what every rig and rotator driver
+ * uses; some old TNCs and instruments want 7E1.
+ */
+data class FormatSerie(val bitsDonnees: Int = 8, val parite: Parite = Parite.AUCUNE, val deuxArrets: Boolean = false) {
+    init { require(bitsDonnees in 5..8) }
+    val huitSansParite: Boolean get() = bitsDonnees == 8 && parite == Parite.AUCUNE
+
+    /** "8N1", "7E1", "8N2"… */
+    override fun toString(): String = "$bitsDonnees" + when (parite) {
+        Parite.AUCUNE -> "N"; Parite.PAIRE -> "E"; Parite.IMPAIRE -> "O"; Parite.MARQUE -> "M"; Parite.ESPACE -> "S"
+    } + if (deuxArrets) "2" else "1"
+
+    companion object {
+        val HUIT_N_UN = FormatSerie()
+        val SEPT_E_UN = FormatSerie(7, Parite.PAIRE)
+
+        /** "7E1", "8n2"… → the format, or null. */
+        fun de(texte: String): FormatSerie? {
+            val t = texte.trim().uppercase()
+            if (t.length != 3) return null
+            val bits = t[0].digitToIntOrNull()?.takeIf { it in 5..8 } ?: return null
+            val p = when (t[1]) { 'N' -> Parite.AUCUNE; 'E' -> Parite.PAIRE; 'O' -> Parite.IMPAIRE; 'M' -> Parite.MARQUE; 'S' -> Parite.ESPACE; else -> return null }
+            val arrets = when (t[2]) { '1' -> false; '2' -> true; else -> return null }
+            return FormatSerie(bits, p, arrets)
+        }
+    }
+}
+
 /** What opening gave: the line, or why not, in words for the operator. */
 class Ouverture(val lien: SerialLink?, val erreur: String)
 
@@ -82,6 +115,15 @@ interface PortsSerie {
      * may carry PTT on them.
      */
     suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes = Lignes.BASSES, deuxArrets: Boolean = false): Ouverture
+
+    /**
+     * Opens [p] with another character [format] (7E1…). A platform that only
+     * knows 8 bits without parity opens those, and refuses the others —
+     * saying so — rather than open the line wrong.
+     */
+    suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, format: FormatSerie): Ouverture =
+        if (format.huitSansParite) ouvre(p, baud, lignes, format.deuxArrets)
+        else Ouverture(null, "format $format non pris en charge sur cette plateforme")
 }
 
 /**

@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.aprs
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -28,15 +29,19 @@ object Afsk {
      * full scale. Used by the tests, and later to transmit.
      */
     fun module(trames: List<ByteArray>, frequence: Int, niveau: Double = 0.5,
-               drapeauxAvant: Int = 32): ShortArray {
-        val tons = Hdlc.bits(trames, drapeauxAvant)
-        val parBit = frequence.toDouble() / BAUD
+               drapeauxAvant: Int = 32, marque: Double = MARQUE, espace: Double = ESPACE, baud: Int = BAUD): ShortArray =
+        moduleTons(Hdlc.bits(trames, drapeauxAvant), frequence, niveau, marque, espace, baud)
+
+    /** Tones (true = mark) as PCM, phase-continuous. */
+    internal fun moduleTons(tons: BooleanArray, frequence: Int, niveau: Double = 0.5,
+                            marque: Double = MARQUE, espace: Double = ESPACE, baud: Int = BAUD): ShortArray {
+        val parBit = frequence.toDouble() / baud
         val n = (tons.size * parBit).roundToInt()
         val out = ShortArray(n)
         var phase = 0.0
         for (i in 0 until n) {
             val ton = tons[minOf((i / parBit).toInt(), tons.lastIndex)]
-            phase += 2 * PI * (if (ton) MARQUE else ESPACE) / frequence
+            phase += 2 * PI * (if (ton) marque else espace) / frequence
             if (phase > 2 * PI) phase -= 2 * PI
             out[i] = (sin(phase) * niveau * 32767).roundToInt().toShort()
         }
@@ -44,24 +49,99 @@ object Afsk {
     }
 }
 
+/** How many received bits a frame whose FCS failed may have had wrong, to be mended ([CorrecteurHdlc]). */
+enum class CorrectionBits(val bits: Int) { AUCUNE(0), UN_BIT(1), DEUX_BITS(2) }
+
+/**
+ * What the AFSK demodulator listens for: the tones and speed, and what it
+ * tries besides plain AX.25. [APRS] (the default) is 1200/2200 Hz at 1200
+ * baud; [HF_300] the HF packet of 300 baud, 1600/1800 Hz.
+ */
+data class ReglagesAfsk(
+    val marque: Double = Afsk.MARQUE,
+    val espace: Double = Afsk.ESPACE,
+    val baud: Int = Afsk.BAUD,
+    val correction: CorrectionBits = CorrectionBits.DEUX_BITS,
+    /** Frames wrapped in FX.25 (Reed-Solomon around AX.25). */
+    val fx25: Boolean = true,
+    /** IL2P frames (NinoTNC and others). */
+    val il2p: Boolean = true,
+) {
+    companion object {
+        val APRS = ReglagesAfsk()
+        val HF_300 = ReglagesAfsk(marque = 1600.0, espace = 1800.0, baud = 300)
+    }
+}
+
+/** How a frame was received. */
+enum class OrigineTrame { AX25, FX25, IL2P }
+
+/**
+ * One frame received, with how: plain AX.25, mended ([bitsCorriges] received
+ * bits turned over), FX.25 or IL2P ([octetsCorriges] bytes the Reed-Solomon
+ * code mended). [octets] is the frame with its FCS; [trame] when it is an
+ * APRS (UI) frame.
+ */
+class Reception(
+    val octets: ByteArray,
+    val trame: Trame?,
+    val origine: OrigineTrame,
+    val bitsCorriges: Int = 0,
+    val octetsCorriges: Int = 0,
+    /** IL2P: its trailing CRC was there and right. */
+    val crcIl2p: Boolean = false,
+) {
+    /** A word for the operator, or null for a plain frame heard clean: « corrigée 1 bit », « FX.25 (3 octets corrigés) ». */
+    val marque: String? get() = when (origine) {
+        OrigineTrame.AX25 -> if (bitsCorriges > 0) "corrigée $bitsCorriges bit" + (if (bitsCorriges > 1) "s" else "") else null
+        OrigineTrame.FX25 -> "FX.25" + octets(octetsCorriges)
+        OrigineTrame.IL2P -> "IL2P" + octets(octetsCorriges)
+    }
+    private fun octets(n: Int) = if (n == 0) "" else " ($n octet${if (n > 1) "s" else ""} corrigé${if (n > 1) "s" else ""})"
+}
+
+/** Frames heard since the start, by how. */
+data class StatsAfsk(
+    /** AX.25 frames heard clean. */
+    val ax25: Int = 0,
+    val corrigees1: Int = 0,
+    val corrigees2: Int = 0,
+    val fx25: Int = 0,
+    val il2p: Int = 0,
+    /** Bytes mended by FX.25 and IL2P together. */
+    val octetsRs: Int = 0,
+) {
+    val total: Int get() = ax25 + corrigees1 + corrigees2 + fx25 + il2p
+    /** "justes 9 · corrigées 2 (1 bit : 1, 2 bits : 1) · FX.25 1 · IL2P 0". */
+    fun ligne(): String = "justes $ax25 · corrigées ${corrigees1 + corrigees2}" +
+        (if (corrigees2 > 0) " (1 bit : $corrigees1, 2 bits : $corrigees2)" else "") + " · FX.25 $fx25 · IL2P $il2p"
+}
+
 /**
  * Received audio → AX.25 frames.
  *
- * A band-pass filter keeps 900–2500 Hz. Two quadrature detectors measure
- * the mark and space tones over one bit. The audio from a radio has lost
- * treble on the way (FM de-emphasis): the space tone arrives weaker than the
- * mark, by an amount that depends on the rig. So several slicers run side by
- * side, each weighing space against mark differently, each with its own
- * clock and HDLC decoder; a frame any of them gets right counts once.
+ * A band-pass filter keeps the two tones (900–2500 Hz for APRS). Two
+ * quadrature detectors measure the mark and space tones over one bit. The
+ * audio from a radio has lost treble on the way (FM de-emphasis): the space
+ * tone arrives weaker than the mark, by an amount that depends on the rig.
+ * So several slicers run side by side, each weighing space against mark
+ * differently, each with its own clock and HDLC decoder; a frame any of them
+ * gets right counts once.
+ *
+ * Beyond plain AX.25 ([reglages]): a frame no slicer got right is mended
+ * when one or two bits were wrong ([CorrecteurHdlc], using how sure each
+ * slicer was of each bit); FX.25 and IL2P frames are found in the same
+ * bits and mended by their Reed-Solomon code. All come out the same way.
  *
  * Works at any sample rate the recorder uses (8 to 48 kHz). Feed it the
  * capture buffers as they come; frames arrive through [surTrame].
  */
 class AfskDemodulateur(
     private val frequence: Int,
+    private val reglages: ReglagesAfsk = ReglagesAfsk.APRS,
     private val surTrame: (Trame) -> Unit,
 ) {
-    private val parBit = frequence.toDouble() / Afsk.BAUD
+    private val parBit = frequence.toDouble() / reglages.baud
 
     /**
      * Every HDLC frame with a right FCS (the FCS removed), AX.25 or not: an
@@ -69,14 +149,25 @@ class AfskDemodulateur(
      */
     @Volatile var surOctets: ((ByteArray) -> Unit)? = null
 
-    // Band-pass: windowed-sinc low-pass 2500 Hz minus low-pass 900 Hz.
+    /** Every frame, with how it came (mended, FX.25, IL2P) — APRS or not. */
+    @Volatile var surReception: ((Reception) -> Unit)? = null
+
+    /** Frames since the start, by how they came. */
+    @Volatile var statistiques = StatsAfsk()
+        private set
+
+    // Band-pass around the tones (900–2500 Hz for APRS): windowed-sinc low-pass minus low-pass.
     private val filtre: FloatArray = run {
-        val m = ((frequence / 1000.0) * 3.2).roundToInt().let { if (it % 2 == 0) it + 1 else it }.coerceAtLeast(15)
+        val marge = reglages.baud / 4.0
+        val bas = minOf(reglages.marque, reglages.espace) - marge
+        val haut = maxOf(reglages.marque, reglages.espace) + marge
+        val m = ((frequence / 1000.0) * 3.2 * (Afsk.BAUD.toDouble() / reglages.baud)).roundToInt()
+            .let { if (it % 2 == 0) it + 1 else it }.coerceAtLeast(15)
         val c = (m - 1) / 2.0
         FloatArray(m) { k ->
             val x = k - c
             fun sinc(fc: Double) = if (x == 0.0) 2 * fc else sin(2 * PI * fc * x) / (PI * x)
-            val h = sinc(2500.0 / frequence) - sinc(900.0 / frequence)
+            val h = sinc(haut / frequence) - sinc(bas / frequence)
             (h * (0.42 - 0.5 * cos(2 * PI * k / (m - 1)) + 0.08 * cos(4 * PI * k / (m - 1)))).toFloat()
         }
     }
@@ -90,22 +181,32 @@ class AfskDemodulateur(
     private var sommeMI = 0f; private var sommeMQ = 0f; private var sommeSI = 0f; private var sommeSQ = 0f
     private var k = 0
     private var phaseM = 0.0; private var phaseS = 0.0
-    private val pasM = 2 * PI * Afsk.MARQUE / frequence
-    private val pasS = 2 * PI * Afsk.ESPACE / frequence
+    private val pasM = 2 * PI * reglages.marque / frequence
+    private val pasS = 2 * PI * reglages.espace / frequence
 
-    /** One slicer: its own weighting, clock and HDLC state. */
+    /** One slicer: its own weighting, clock and decoders. */
     private inner class Tranche(val poids: Float) {
         var pll = 0
         var niveau = false
         var dernierBit = false
-        val hdlc = HdlcDecodeur { octets -> recu(octets) }
+        val hdlc = HdlcDecodeur(surEchec = if (reglages.correction != CorrectionBits.AUCUNE) ({ s -> candidat(s) }) else null) { octets ->
+            recu(octets, OrigineTrame.AX25)
+        }
+        val fx25 = if (reglages.fx25) Fx25Decodeur { o, c -> recu(o, OrigineTrame.FX25, octetsRs = c) } else null
+        val il2p = if (reglages.il2p) Il2pDecodeur { o, info -> recu(o, OrigineTrame.IL2P, octetsRs = info.corriges, crc = info.crc) } else null
     }
     private val tranches = listOf(0.5f, 0.71f, 1f, 1.41f, 2f, 2.83f, 4f).map { Tranche(it) }
-    private val pasPll = ((1L shl 32) * Afsk.BAUD / frequence).toInt()
+    private val pasPll = ((1L shl 32) * reglages.baud / frequence).toInt()
 
     // One frame heard by several slicers counts once.
     private var echantillon = 0L
     private val recents = LinkedHashMap<Int, Long>()
+
+    // Frames that failed, kept a few bits: mended only if no slicer got them right.
+    private val candidats = ArrayList<SegmentHdlc>()
+    private var echeance = Long.MAX_VALUE
+    private var debutCandidats = 0L
+    private var derniereBonne = Long.MIN_VALUE / 2
 
     /** Frames delivered since the start. */
     var nombre = 0
@@ -142,12 +243,16 @@ class AfskDemodulateur(
         val espace = sqrt(sommeSI * sommeSI + sommeSQ * sommeSQ)
 
         for (t in tranches) {
-            val niveau = marque > espace * t.poids
+            val pese = espace * t.poids
+            val niveau = marque > pese
             val avant = t.pll
             t.pll += pasPll
             if (avant > 0 && t.pll < 0) {
                 // Middle of a bit: NRZI, same tone as before = 1.
-                t.hdlc.bit(niveau == t.dernierBit)
+                val bit = niveau == t.dernierBit
+                t.hdlc.bit(bit, abs(marque - pese) / (marque + pese + 1e-12f))
+                t.fx25?.bit(bit)
+                t.il2p?.bit(niveau)  // IL2P: no NRZI, mark = 1
                 t.dernierBit = niveau
             }
             if (niveau != t.niveau) {
@@ -157,20 +262,52 @@ class AfskDemodulateur(
                 t.niveau = niveau
             }
         }
+        if (echantillon >= echeance) traiteCandidats()
     }
 
-    private fun recu(octets: ByteArray) {
+    private fun candidat(s: SegmentHdlc) {
+        if (candidats.isEmpty()) { debutCandidats = echantillon; echeance = echantillon + (3 * parBit).toLong() }
+        if (candidats.size < 2 * tranches.size) candidats += s
+    }
+
+    /** The slicers have all closed the frame: if none got it right, try mending what they heard. */
+    private fun traiteCandidats() {
+        // An FX.25 block under way may still give this frame, mended better.
+        if (tranches.any { it.fx25?.enCours == true }) { echeance = echantillon + (8 * parBit).toLong(); return }
+        val l = candidats.sortedByDescending { it.bits.size }
+        candidats.clear()
+        echeance = Long.MAX_VALUE
+        if (derniereBonne >= debutCandidats - (2 * parBit).toLong()) return
+        for (s in l) {
+            val c = CorrecteurHdlc.corrige(s, reglages.correction.bits) ?: continue
+            recu(c.octets, OrigineTrame.AX25, bits = c.bits)
+            return
+        }
+    }
+
+    private fun recu(octets: ByteArray, origine: OrigineTrame, bits: Int = 0, octetsRs: Int = 0, crc: Boolean = false) {
+        derniereBonne = echantillon
         val cle = octets.contentHashCode()
         val deja = recents[cle]
-        if (deja != null && echantillon - deja < frequence) return
+        // An FX.25 block ends long after the frame inside it (up to 255 bytes later: 1.7 s at 1200 baud).
+        val fenetre = if (origine == OrigineTrame.FX25) 3L * frequence * Afsk.BAUD / reglages.baud else frequence.toLong()
+        if (deja != null && echantillon - deja < fenetre) return
         recents[cle] = echantillon
         if (recents.size > 64) recents.remove(recents.keys.first())
-        surOctets?.let { f ->
-            val n = octets.size
-            if (n > 2 && Ax25.crc(octets, n - 2) == ((octets[n - 2].toInt() and 0xFF) or ((octets[n - 1].toInt() and 0xFF) shl 8)))
-                runCatching { f(octets.copyOf(n - 2)) }
+        val s = statistiques
+        statistiques = when {
+            origine == OrigineTrame.FX25 -> s.copy(fx25 = s.fx25 + 1, octetsRs = s.octetsRs + octetsRs)
+            origine == OrigineTrame.IL2P -> s.copy(il2p = s.il2p + 1, octetsRs = s.octetsRs + octetsRs)
+            bits == 1 -> s.copy(corrigees1 = s.corrigees1 + 1)
+            bits >= 2 -> s.copy(corrigees2 = s.corrigees2 + 1)
+            else -> s.copy(ax25 = s.ax25 + 1)
         }
-        val t = Ax25.decode(octets) ?: return
+        surOctets?.let { f ->
+            if (Ax25.fcsJuste(octets)) runCatching { f(octets.copyOf(octets.size - 2)) }
+        }
+        val t = Ax25.decode(octets)
+        surReception?.let { f -> runCatching { f(Reception(octets, t, origine, bits, octetsRs, crc)) } }
+        if (t == null) return
         nombre++
         surTrame(t)
     }

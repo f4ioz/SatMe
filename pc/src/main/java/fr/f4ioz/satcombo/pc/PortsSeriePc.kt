@@ -11,7 +11,9 @@ package fr.f4ioz.satcombo.pc
 import com.fazecast.jSerialComm.SerialPort
 import fr.f4ioz.satcombo.cat.IdentiteUsb
 import fr.f4ioz.satcombo.cat.SerialLink
+import fr.f4ioz.satcombo.plateforme.FormatSerie
 import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.Parite
 import fr.f4ioz.satcombo.plateforme.Ouverture
 import fr.f4ioz.satcombo.plateforme.PortSerie
 import fr.f4ioz.satcombo.plateforme.PortsSerie
@@ -47,7 +49,10 @@ class PortsSeriePc : PortsSerie {
     override fun demande(p: PortSerie) {}
     override suspend fun demandeEtAttends(p: PortSerie): Boolean = true
 
-    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
+    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture =
+        ouvre(p, baud, lignes, FormatSerie(deuxArrets = deuxArrets))
+
+    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, format: FormatSerie): Ouverture = withContext(Dispatchers.IO) {
         if (p.portPttRigExpert()) return@withContext Ouverture(null, "port PTT/CW d'un RigExpert : jamais ouvert")
         // A trial copy beside the station (tests, demos): no serial port at all — opening one raises RTS/DTR.
         if (sansSerie()) return@withContext Ouverture(null, "ports série désactivés pour cette instance (SATME_SANS_SERIE)")
@@ -55,8 +60,8 @@ class PortsSeriePc : PortsSerie {
             ?: return@withContext Ouverture(null, "port introuvable : ${p.libelle}")
         // Before opening: jSerialComm applies them as the port opens.
         if (lignes == Lignes.LEVEES) { port.setDTR(); port.setRTS() } else { port.clearDTR(); port.clearRTS() }
-        port.setComPortParameters(baud, 8, if (deuxArrets) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT,
-            SerialPort.NO_PARITY)
+        port.setComPortParameters(baud, format.bitsDonnees, if (format.deuxArrets) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT,
+            pariteJsc(format.parite))
         port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
         if (!port.openPort()) {
             return@withContext Ouverture(null, "ouverture refusée : ${port.systemPortPath}" +
@@ -68,6 +73,15 @@ class PortsSeriePc : PortsSerie {
     }
 
     companion object {
+        /** jSerialComm's parity constant. */
+        fun pariteJsc(p: Parite): Int = when (p) {
+            Parite.AUCUNE -> SerialPort.NO_PARITY
+            Parite.PAIRE -> SerialPort.EVEN_PARITY
+            Parite.IMPAIRE -> SerialPort.ODD_PARITY
+            Parite.MARQUE -> SerialPort.MARK_PARITY
+            Parite.ESPACE -> SerialPort.SPACE_PARITY
+        }
+
         /** Set by `SATME_SANS_SERIE=1` (environment) or `-Dsatme.sansSerie=true`: this instance never opens a serial port. */
         fun sansSerie(): Boolean = System.getenv("SATME_SANS_SERIE") == "1" || System.getProperty("satme.sansSerie") == "true"
 
