@@ -98,7 +98,7 @@ object ControleAdif {
                 a(Gravite.BLOQUANT, "mode-inconnu", "Mode « ${e.mode} » inconnu de l'ADIF : MODE vide à l'export.")
 
             val sat = e.satName.trim()
-            if (sat.isNotEmpty() && sat != Adif.DATV_TERRESTRE && !NomSatellite.connuDeLotw(sat)) {
+            if (sat.isNotEmpty() && sat != Adif.DATV_TERRESTRE && !NomSatellite.connuDeLotw(NomSatellite.satNameAdif(sat))) {
                 val s = NomSatellite.suggestionLotw(sat)
                 a(Gravite.AVERTISSEMENT, "satellite-lotw",
                     "Satellite « $sat » absent de la liste LoTW connue de SatMe" + (s?.let { " (LoTW l'appelle « $it »)" } ?: "") + ".")

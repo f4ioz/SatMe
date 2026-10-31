@@ -202,7 +202,7 @@ object Adif {
             // A satellite contact only: a terrestrial DATV one (23 cm) has neither SAT_NAME nor PROP_MODE.
             val satellite = e.satName.isNotBlank() && e.satName != DATV_TERRESTRE
             if (satellite) {
-                sb.append(field("SAT_NAME", e.satName))
+                sb.append(field("SAT_NAME", fr.f4ioz.satcombo.domain.NomSatellite.satNameAdif(e.satName)))
                 sb.append(field("PROP_MODE", "SAT"))
             }
             if (station.isNotBlank()) {

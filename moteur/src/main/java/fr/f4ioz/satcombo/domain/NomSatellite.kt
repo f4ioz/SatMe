@@ -67,6 +67,15 @@ object NomSatellite {
         "UKUBE1", "UO-14", "UVSQ", "VO-52", "XW-2A", "XW-2B", "XW-2C", "XW-2D", "XW-2E", "XW-2F",
     )
 
+    /**
+     * The SAT_NAME written in ADIF: the space station is « ARISS », LoTW's
+     * name (the owner's choice) — whatever SatMe calls it; others as they are.
+     */
+    fun satNameAdif(nom: String): String {
+        val p = propre(nom).uppercase()
+        return if (p == "ISS" || p.startsWith("ISS ")) "ARISS" else nom
+    }
+
     /** True when LoTW knows this SAT_NAME (as written, case aside). */
     fun connuDeLotw(nom: String): Boolean = nom.trim().uppercase() in LOTW
 

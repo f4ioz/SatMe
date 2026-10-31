@@ -101,7 +101,9 @@ object StatutsQsl {
                 val dt = kotlin.math.abs(s.quandMs - e.timeMs)
                 if (dt <= ECART_MS && (s.satellite.isBlank() || e.satName.isBlank() ||
                         s.satellite.equals(e.satName, true) || JournalPassage.memeSatellite(s.satellite, e.satName) ||
-                        fr.f4ioz.satcombo.domain.NomSatellite.propre(e.satName).equals(s.satellite, true)))
+                        fr.f4ioz.satcombo.domain.NomSatellite.propre(e.satName).equals(s.satellite, true) ||
+                        // Sent as « ARISS » (SatMe's SAT_NAME for the space station), kept here as « ISS ».
+                        fr.f4ioz.satcombo.domain.NomSatellite.satNameAdif(e.satName).equals(s.satellite, true)))
                     paires += Triple(dt, e, s)
             }
         }
