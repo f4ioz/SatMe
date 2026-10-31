@@ -54,7 +54,10 @@ object PourquoiRien {
     // ------------------------------------------------------------ the facts
 
     /** The decoders' sound input: running, its name, its last block, its level over a window. */
-    data class Entree(val actif: Boolean, val nom: String, val dernierBlocMs: Long, val rmsDbfs: Double?, val creteDbfs: Double?, val fenetreMs: Long)
+    data class Entree(val actif: Boolean, val nom: String, val dernierBlocMs: Long, val rmsDbfs: Double?, val creteDbfs: Double?, val fenetreMs: Long,
+                      /** Sound the capture lost over [perduOu] (« pendant ce passage »), the PC's load and cores (null / 0: unknown). */
+                      val perdu: fr.f4ioz.satcombo.audio.SonPerdu.Bilan? = null, val perduOu: String = "",
+                      val charge: Double? = null, val coeurs: Int = 0)
 
     /**
      * The rig in CAT: its name, its dial (sky Hz, converters undone) and mode
@@ -201,6 +204,31 @@ object PourquoiRien {
         return null
     }
 
+    /** Sound lost worth telling: this much at least (ms), the last loss this recent (ms). */
+    const val PERDU_MS = 500L
+    const val PERDU_RECENT_MS = 15 * 60_000L
+
+    /** « son perdu : 19,7 s pendant ce passage — PC surchargé (charge 34 pour 12 cœurs) », or null (none worth telling, or the SDR feeds). */
+    fun sonPerdu(c: Contexte): String? {
+        if (c.parSdr) return null
+        val e = c.entree ?: return null
+        val b = e.perdu ?: return null
+        if (b.ms < PERDU_MS || b.derniereMs <= 0L || c.t - b.derniereMs > PERDU_RECENT_MS) return null
+        return fr.f4ioz.satcombo.audio.SonPerdu.texte(b, e.perduOu, e.charge, e.coeurs)
+    }
+
+    /**
+     * A decoder's line with the sound lost said after it: what it decodes is
+     * then shifted or broken there (an SSTV picture gets a blank band, an FT8
+     * slot is lost) — the cause is the PC, not the radio. A fault stays as it is.
+     */
+    private fun avecPerte(d: Diagnostic, c: Contexte): Diagnostic {
+        if (d.gravite == Gravite.PANNE) return d
+        val p = sonPerdu(c) ?: return d
+        return Diagnostic(Gravite.ATTENTION, d.texte.trimEnd() + " " + p.replaceFirstChar { it.uppercase() } +
+            " : des morceaux du signal manquent (comblés de silence).", d.action)
+    }
+
     /** What the level says when nothing else is wrong: silence (not a fault), clipping, or plain listening. */
     private fun niveau(c: Contexte, rien: String): Diagnostic {
         val e = c.entree
@@ -227,6 +255,10 @@ object PourquoiRien {
      */
     fun sstv(c: Contexte, actif: Boolean, derniereImageMs: Long, enCours: String, voie: Voie?): Diagnostic {
         if (!actif) return Diagnostic(Gravite.INFO, "Décodage SSTV coupé.")
+        return avecPerte(sstvEnMarche(c, derniereImageMs, enCours, voie), c)
+    }
+
+    private fun sstvEnMarche(c: Contexte, derniereImageMs: Long, enCours: String, voie: Voie?): Diagnostic {
         if (enCours.isNotBlank()) return Diagnostic(Gravite.OK, "Image en cours : $enCours.")
         if (derniereImageMs > 0 && c.t - derniereImageMs < 120_000L) return Diagnostic(Gravite.OK, "Dernière image ${ilYa(c.t - derniereImageMs)}.")
         chaine(c, "la SSTV", voie, satellite = voie != null)?.let { return it }
@@ -236,9 +268,9 @@ object PourquoiRien {
     /** APRS / packet on the sound card. [voie]: the followed satellite's APRS transmitter (null: terrestrial or none). */
     fun aprs(c: Contexte, actif: Boolean, dernierPaquetMs: Long, voie: Voie?): Diagnostic {
         if (!actif) return Diagnostic(Gravite.INFO, "Décodeur APRS coupé.")
-        if (dernierPaquetMs > 0 && c.t - dernierPaquetMs < 120_000L) return Diagnostic(Gravite.OK, "Dernière trame ${ilYa(c.t - dernierPaquetMs)}.")
-        chaine(c, "l'APRS", voie, satellite = voie != null)?.let { return it }
-        return niveau(c, "À l'écoute. " + dernier(c.t, dernierPaquetMs, "décodé"))
+        if (dernierPaquetMs > 0 && c.t - dernierPaquetMs < 120_000L) return avecPerte(Diagnostic(Gravite.OK, "Dernière trame ${ilYa(c.t - dernierPaquetMs)}."), c)
+        chaine(c, "l'APRS", voie, satellite = voie != null)?.let { return avecPerte(it, c) }
+        return avecPerte(niveau(c, "À l'écoute. " + dernier(c.t, dernierPaquetMs, "décodé")), c)
     }
 
     /** The usual FT8 dials (MHz × 1000), and QO-100's narrow band segment. */
@@ -255,6 +287,10 @@ object PourquoiRien {
     fun ft8(c: Contexte, enMarche: Boolean, mode: String, derniereLigneMs: Long, creneauxVides: Int, lineaire: Boolean): Diagnostic {
         val m = mode.ifBlank { "FT8" }
         if (!enMarche) return Diagnostic(Gravite.INFO, "$m à l'arrêt.")
+        return avecPerte(ft8EnMarche(c, m, derniereLigneMs, creneauxVides, lineaire), c)
+    }
+
+    private fun ft8EnMarche(c: Contexte, m: String, derniereLigneMs: Long, creneauxVides: Int, lineaire: Boolean): Diagnostic {
         if (derniereLigneMs > 0 && c.t - derniereLigneMs < 60_000L) return Diagnostic(Gravite.OK, "Dernier décodage ${ilYa(c.t - derniereLigneMs)}.")
         chaine(c, m, null, satellite = false)?.let { return it }
         val p = c.poste.takeIf { !c.parSdr }

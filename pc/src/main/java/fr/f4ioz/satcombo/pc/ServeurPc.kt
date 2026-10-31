@@ -1480,6 +1480,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     System.currentTimeMillis(), q["heures"]?.toIntOrNull() ?: 48)
             } ?: JSONObject().put("present", false)).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr, phonie?.actif == true).toString().toByteArray())
+            // Sound lost: the capture's figures, and each recording's audio against the time it lasted (one by ?nom=). Read only.
+            "/api/son/bilan" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.bilanSon(son, q["nom"]).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/mire" -> {
                 val m = mire
@@ -3147,6 +3149,31 @@ object JsonPc {
      * Where a station is from mine: its place (QRZ's coordinates, else its
      * square's centre), the distance and the bearing (great circle).
      */
+    /**
+     * « Son perdu »: the capture's figures (holes, the card's buffer nearly
+     * full, blocks dropped behind the decoders, the clock's ppm) and each
+     * recording's verdict ([fr.f4ioz.satcombo.audio.BilanEnregistrement]), or [nom]'s alone.
+     */
+    fun bilanSon(s: SonStation?, nom: String?): JSONObject {
+        if (s == null) return JSONObject().put("present", false)
+        fun un(f: java.io.File): JSONObject {
+            val o = JSONObject().put("nom", f.name)
+            val b = fr.f4ioz.satcombo.demo.ApiSon.bilan(f) ?: return o.put("mesurable", false)
+            return o.put("mesurable", true).put("sonMs", b.sonMs).put("murMs", b.murMs).put("manqueMs", b.perduMs).put("combleMs", b.combleMs)
+                .put("trous", b.trous).put("pourcent", Math.round(b.pourcent * 10) / 10.0).put("perte", b.perte).put("parTemps", b.parTemps).put("texte", b.texte())
+        }
+        if (!nom.isNullOrBlank()) return s.fichierEnregistrement(nom)?.let { un(it) } ?: JSONObject().put("erreur", "enregistrement introuvable")
+        val c = s.son.capture
+        val tot = s.son.pertes.entre(s.son.debutMs)
+        return JSONObject().put("present", true)
+            .put("capture", c?.let { x -> JSONObject().put("rate", x.rate).put("blocs", x.blocs).put("trous", x.trous.trous).put("coupures", x.trous.coupures)
+                .put("manquants", x.trous.manquantsTotal).put("combles", x.combles).put("tamponPlein", x.tamponPlein).put("blocsJetes", x.blocsJetes)
+                .put("file", x.enFile).put("fileMax", x.fileMax).put("fileCapacite", x.fileCapacite).put("ppm", Math.round(x.trous.ppm * 10) / 10.0) } ?: JSONObject.NULL)
+            .put("perdus", tot.n).put("perduMs", tot.ms).put("dernier", tot.derniereMs)
+            .put("charge", SonPc.chargeSysteme() ?: JSONObject.NULL).put("coeurs", Runtime.getRuntime().availableProcessors())
+            .put("enregistrements", org.json.JSONArray(s.enregistrements().take(50).map { un(it) }))
+    }
+
     fun son(s: SonStation?, sdr: SdrPc? = null, phonieActif: Boolean = false): JSONObject {
         if (s == null) return JSONObject().put("present", false)
         val c = s.son.etat.value
@@ -3158,7 +3185,8 @@ object JsonPc {
             e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
             v.mode, v.lignes, v.hauteur, v.version, v.derniere, s.enregistrements(), s.images(), s.coupeLos,
             detail = sstvDetail(s, sdr, noms), dossierImages = s.dossierSstv,
-            libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty()))
+            libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty(),
+            sonPerdu = s.son.pertes.entre(s.son.debutMs).takeIf { s.son.debutMs > 0L }, bilans = true))
             // What actually feeds the decoders (the dongle when it took the card's place), not only the card chosen.
             .put("appareil", c.appareil)
             .also { resumeSource(it, s, sdr, phonieActif, appareils, noms) }

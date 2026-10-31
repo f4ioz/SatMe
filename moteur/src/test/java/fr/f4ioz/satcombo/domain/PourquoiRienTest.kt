@@ -204,4 +204,35 @@ class PourquoiRienTest {
         assertNull(tard.rmsDbfs)
         assertEquals(u - 500, tard.dernierBlocMs)
     }
+    // ------------------------------------------------------------ son perdu
+
+    private fun perdu(ms: Long, n: Int = 12, dernier: Long = t - 40_000) =
+        carte.copy(perdu = fr.f4ioz.satcombo.audio.SonPerdu.Bilan(n, ms, dernier), perduOu = "pendant ce passage", charge = 34.2, coeurs = 12)
+
+    @Test
+    fun le_son_perdu_pendant_le_passage_est_dit_apres_l_image_en_cours() {
+        val d = PourquoiRien.sstv(ctx(entree = perdu(19_700)), true, 0, "Robot36, ligne 120/240", sstvIss)
+        assertEquals(Gravite.ATTENTION, d.gravite)
+        assertEquals("Image en cours : Robot36, ligne 120/240. Son perdu : 19,7 s pendant ce passage (12 trous) — PC surchargé (charge 34 pour 12 cœurs) : " +
+            "des morceaux du signal manquent (comblés de silence).", d.texte)
+        // FT8 and APRS say it too.
+        assertTrue(PourquoiRien.ft8(ctx(entree = perdu(19_700)), true, "FT8", t - 5_000, 0, false).texte.contains("Son perdu : 19,7 s"))
+        assertTrue(PourquoiRien.aprs(ctx(entree = perdu(19_700)), true, t - 5_000, aprsIss).texte.contains("Son perdu : 19,7 s"))
+    }
+
+    @Test
+    fun un_peu_de_son_perdu_ou_ancien_ne_se_dit_pas() {
+        assertEquals("Image en cours : Robot36, ligne 10/240.", PourquoiRien.sstv(ctx(entree = perdu(300, 1)), true, 0, "Robot36, ligne 10/240", sstvIss).texte)
+        assertNull(PourquoiRien.sonPerdu(ctx(entree = perdu(5_000, dernier = t - 20 * 60_000))))
+        // Decoders off: nothing about it.
+        assertEquals("Décodage SSTV coupé.", PourquoiRien.sstv(ctx(entree = perdu(19_700)), false, 0, "", sstvIss).texte)
+        // The dongle feeds: the card's losses are not its own.
+        assertNull(PourquoiRien.sonPerdu(ctx(entree = perdu(19_700), parSdr = true, sdr = PourquoiRien.Sdr(true, 145_800_000L))))
+    }
+
+    @Test
+    fun une_charge_moderee_est_dite_sans_surcharge() {
+        val e = carte.copy(perdu = fr.f4ioz.satcombo.audio.SonPerdu.Bilan(1, 1_200, t - 1_000), perduOu = "en 15 min", charge = 3.1, coeurs = 8)
+        assertEquals("son perdu : 1,2 s en 15 min — charge 3,1", PourquoiRien.sonPerdu(ctx(entree = e)))
+    }
 }
