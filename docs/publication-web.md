@@ -564,6 +564,8 @@ silence of a minute or two as « station off line ».
 | `reception.poste` | only while the rig is connected: its model's name, its sky frequencies and mode as read back |
 | `enEmission` | something transmits now (yes or no, nothing more) |
 | `mode` | what the station does, when known: `DATV`, `FT8`, `FT4`, `SSTV`, `CW`, `phonie`, `numérique` |
+| `reception.datv.polar` | the running DATV receiver feeds the LNB: `V` (13 V) or `H` (18 V) |
+| `montage` | only when **Description du montage** is ticked too: `enOeuvre`, the ids (those of the `montage` message, `e1`, `e2`…) of the pieces in use now (those the **Montage** tab lights), and `emission`, those transmitting — so that a page can draw the setup used for what is live. Only these short ids |
 
 Every key is optional except `t` and `enEmission`. Never in it: an address, a
 port, a serial device, a file path, a pairing code, a token, another setting.
