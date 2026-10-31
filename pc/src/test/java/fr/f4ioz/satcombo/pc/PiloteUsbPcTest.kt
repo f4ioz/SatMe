@@ -181,6 +181,21 @@ class PiloteUsbPcTest {
         assertEquals(1, f2.appels.size)
     }
 
+    @Test fun la_page_voit_aussi_les_appareils_qui_marchent() {
+        val f = FauxWindows { 0 to JSON_FR }
+        val p = PiloteUsbPc(tmp.root, windows = true, executeur = f::execute)
+        p.analyse()
+        val j = p.json()
+        assertEquals("powershell", j.getString("methode"))
+        assertEquals(2, j.getJSONArray("appareils").length())
+        assertEquals(4, j.getJSONArray("vus").length())
+        assertEquals(28, j.getJSONArray("vus").getJSONObject(0).getInt("code"))
+        assertEquals(0, j.getJSONArray("vus").getJSONObject(2).getInt("code"))
+        val rien = PiloteUsbPc(tmp.root, windows = true, executeur = { _, _, _ -> null })
+        rien.analyse()
+        assertEquals("PowerShell et pnputil ne répondent pas", rien.json().getString("methode"))
+    }
+
     private fun attends(p: PiloteUsbPc) { val fin = System.currentTimeMillis() + 10_000; while (p.installation.enCours && System.currentTimeMillis() < fin) Thread.sleep(20) }
 
     @Test fun installation_depuis_un_zip_choisi() {

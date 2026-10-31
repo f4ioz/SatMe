@@ -514,8 +514,10 @@ class DirectSitePc(
          * counts the banner shows, whatever else [ap] carries.
          */
         fun pilote(ap: JSONObject, derniere: Triple<String, Long, String>?, t: Long): JSONObject {
+            // The campaign's real end besides its name (an announcement's « du 27 au 29 » may have been stretched since).
             fun passage(p: JSONObject): JSONObject = JSONObject().put("campagne", p.optString("campagne").take(80)).put("sat", p.optString("sat").take(40))
                 .put("aos", p.optLong("aos")).put("los", p.optLong("los")).put("el", p.optLong("el"))
+                .also { o -> p.optLong("fin").takeIf { it > 0 }?.let { o.put("fin", it) } }
             val o = JSONObject().put("maitre", ap.optBoolean("maitre"))
             ap.optJSONObject("prochain")?.let { o.put("prochain", passage(it)) }
             ap.optJSONObject("enCours")?.let { e ->

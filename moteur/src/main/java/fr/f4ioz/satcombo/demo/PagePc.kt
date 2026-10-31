@@ -517,6 +517,7 @@ ${STYLE_JETONS}
   .d-agrandir { position:absolute; right:8px; bottom:8px; z-index:3; padding:1px 8px; font-size:16px; line-height:1.3; background:rgba(0,0,0,.55); color:#fff; border-radius:6px; opacity:.55; }
   .d-agrandir:hover, .d-agrandir:focus-visible { opacity:1; }
   .d-plein-arret { display:none; }
+  .d-qual { gap:6px; flex-wrap:wrap; } .d-qual select { padding:1px 4px; font-size:var(--fs-xs); }
   .d-leg { margin-top:-2px; min-height:1.3em; overflow-wrap:anywhere; }
   .d-haut.d-duo { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"tx rx" "ltx lrx" "info info"; gap:4px 10px; }
   .d-haut.d-duo #d-cadre-tx { grid-area:tx; }
@@ -2066,7 +2067,7 @@ ${rail()}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
-<div id="ap-bandeau" class="ap-bandeau" hidden role="status" aria-live="polite"><b>🤖 Auto-pilote :</b><span id="ap-b-t"></span>
+<div id="ap-bandeau" class="ap-bandeau" hidden role="status" aria-live="polite"><b id="ap-b-poignee" title="Glisser pour déplacer le bandeau (double-clic : le remettre en place)">🤖 Auto-pilote :</b><span id="ap-b-t"></span>
   <a href="#" onclick="event.preventDefault(); apOuvre()">Voir</a><button class="arret" onclick="apStop()" title="Arrêter ce passage : l'enregistrement s'arrête, la réception est remise comme avant">■ STOP</button></div>
 <div id="mu-pop" class="sp-pop" hidden role="dialog" aria-label="Décodeurs multiples">
   <div class="t sp-pop-t">Décodeurs multiples<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-pop').hidden = true" aria-label="Fermer">✕</button></div>
@@ -3122,6 +3123,9 @@ ${OngletSked.HTML}
     <div id="d-cadre" class="d-cadre" ondblclick="if (!event.target.closest('button')) dAgrandit(this)"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div><span class="d-nom d-nom-rx">Reçu</span><div id="d-ba" class="d-ba" hidden></div><div id="d-ba-bascule" class="d-ba-bascule" role="status" aria-live="polite" hidden></div><button type="button" class="discret d-agrandir" onclick="dAgrandit(this.parentNode)" title="Agrandir (double-clic aussi). Pour revenir : ce bouton, un double-clic ou Échap (qui arrête aussi toute émission, comme partout sur la page)">⛶</button><button type="button" class="arret-tx d-plein-arret" hidden onclick="eArrete()" title="Arrêter l’émission DATV">ARRÊT</button></div>
     <div id="d-leg-rx" class="petit d-leg" hidden></div>
       <div class="d-info">
+    <div class="ligne d-qual" id="d-qual"><label class="petit" title="La taille de l’image DATV dans ce navigateur, retenue pour lui seul (une tablette peut rester en 480p pendant que ce PC garde la source). Source : l’image telle que reçue. 720p, 480p, 360p : réencodée plus petite et plus légère par SatMe-PC (deux tailles réencodées à la fois au plus ; une troisième demandée reçoit la plus proche). Auto : descend d’un cran quand ce navigateur perd des images ou prend du retard, remonte après un moment de calme. À droite : le débit reçu et les images perdues.">Qualité
+      <select id="d-qualite" onchange="dQualite(this.value)"><option value="source">Source</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option><option value="auto">Auto</option></select></label>
+      <span class="petit" id="d-qual-etat"></span></div>
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
       <span>MER <b class="val" id="d-mer">—</b></span>
@@ -4596,8 +4600,9 @@ ${DemarragePagePc.CARTES}
         <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
         <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
       <div id="pu-carte" hidden style="margin-top:8px;padding:8px;border:1px solid var(--ambre);border-radius:6px">
-        <b class="ambre" id="pu-titre"></b>
+        <b id="pu-titre"></b>
         <div class="petit" id="pu-codec" hidden style="margin-top:4px"></div>
+        <div class="petit" id="pu-vus" style="margin-top:4px;color:var(--gris)"></div>
         <div class="petit aide" id="pu-aide" style="margin-top:4px">Sans lui, Windows ne crée pas les deux ports COM du poste (CI-V et données) et SatMe-PC n'a rien à ouvrir. C'est le pilote Silicon Labs CP210x, le même que le « USB Driver (Serial Port) » d'Icom. Avant tout : l'IC-9700 <b>allumé</b>, puis le câble USB branché. Windows Update peut aussi le proposer : <i>Paramètres › Windows Update › Options avancées › Mises à jour facultatives › Mises à jour de pilotes</i>.</div>
         <div class="ligne"><a class="bouton" id="pu-page" target="_blank" rel="noopener noreferrer">Ouvrir la page du pilote</a>
           <a class="petit" id="pu-icom" target="_blank" rel="noopener noreferrer">page d'Icom (firmware et pilotes)</a></div>
@@ -7068,19 +7073,31 @@ async function puCharge() {
 function puRend() {
   const c = g('pu-carte'), i = PU && PU.installation;
   const appareils = (PU && PU.appareils) || [];
-  const montre = !!(PU && PU.windows && (appareils.length || (i && (i.enCours || i.erreur || i.fini))));
-  c.hidden = !montre;
-  if (!montre) return;
+  // On Windows the notice is always there: amber when a device is in error, plain otherwise (what Windows sees, and the install by hand).
+  c.hidden = !(PU && PU.windows);
+  if (c.hidden) return;
+  const alerte = !!(appareils.length || (i && (i.enCours || i.erreur)));
+  c.style.borderColor = alerte ? 'var(--ambre)' : 'var(--ligne)';
+  g('pu-titre').className = alerte ? 'ambre' : '';
+  // The first answer comes before Windows has been asked: followed until the look is over.
+  if ((PU.recherche || !PU.analyse) && !puFil) puSuit();
   const ponts = appareils.filter(a => a.type === 'PONT_SERIE'), codecs = appareils.filter(a => a.type === 'CODEC_SON');
   txt('pu-titre', ponts.some(a => a.sansPilote) ? 'Un poste Icom (CP2102N) est branché mais Windows n’a pas son pilote.'
     : ponts.length ? 'Un poste Icom (CP2102N) est branché mais son pilote ne démarre pas (code ' + ponts[0].code + ' dans Windows).'
     : codecs.length ? 'La carte son USB d’un poste Icom est branchée mais Windows la signale en erreur.'
-    : i && i.fini ? 'Pilote du poste installé.' : 'Pilote du poste');
+    : i && i.fini ? 'Pilote du poste installé.'
+    : (PU.recherche || !PU.analyse) ? 'Pilote USB du poste : Windows est interrogé…'
+    : 'Pilote USB du poste : Windows ne signale aucun appareil Silicon Labs ou Icom en erreur.');
+  const vus = PU.vus || [];
+  txt('pu-vus', !PU.analyse ? '' : (PU.methode && PU.methode !== 'powershell' && PU.methode !== 'pnputil' ? 'Recherche impossible : ' + PU.methode + '. '
+    : '') + (vus.length ? 'Ce que Windows voit : ' + vus.map(v => (v.nom || v.instance) + ' — ' + (v.statut || '?') + (v.code ? ' (code ' + v.code + ')' : '')).join(' · ')
+    : 'Windows ne voit aucun appareil Silicon Labs (VID 10C4) ni Icom (VID 08BB) : poste allumé, câble USB branché directement (pas un câble de charge seule), puis « Rechercher à nouveau ».'));
   g('pu-codec').hidden = !(codecs.length && ponts.length);
   txt('pu-codec', 'Sa carte son USB (USB Audio CODEC) est aussi en erreur (code ' + (codecs[0] ? codecs[0].code : '') + ') : elle prend le pilote audio de Windows lui-même, souvent remis en place en débranchant puis rebranchant le câble, poste allumé.');
-  g('pu-aide').hidden = !ponts.length;
+  g('pu-aide').hidden = !(ponts.length || !vus.length);
   if (PU.liens) { g('pu-page').href = PU.liens.silabs; g('pu-icom').href = PU.liens.icom; }
-  g('pu-installe').disabled = !!(i && i.enCours) || !ponts.length;
+  // Possible even when nothing is seen in error: the install by hand from here.
+  g('pu-installe').disabled = !!(i && i.enCours);
   let e = '';
   if (PU.recherche) e = 'recherche en cours…';
   else if (i && i.enCours) e = i.etape + '…';
@@ -8525,7 +8542,7 @@ async function ticDatv(premier) {
   const vign = MD && !dDirect && D.actif && D.images;
   g('d-direct').hidden = !(MD && D.actif && D.images); txt('d-direct', dDirect ? 'Vignettes' : '▶ Vidéo en direct');
   if (vign && !mdSaute('vign', 2000)) { v.dataset.vign = '1'; v.src = 'api/datv/image.jpg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
-  if (D.actif && D.images && !vign && (v.style.display !== 'block' || v.dataset.vign)) { delete v.dataset.vign; v.src = 'api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  if (D.actif && D.images && !vign && (v.style.display !== 'block' || v.dataset.vign || dQualRelance())) { delete v.dataset.vign; v.src = dQualMjpeg(); v.style.display = 'block'; g('d-vide').hidden = true; }
   if (!D.actif && v.style.display === 'block') { v.removeAttribute('src'); v.style.display = 'none'; }
   if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' :
     D.telephone ? (D.verrouille ? 'accroché : l’image est sur l’écran DATV du téléphone' : D.libelle + '…') : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
@@ -8582,6 +8599,9 @@ function dReduit() {
 }
 // ------------------------------------------------------------------ DATV: « Lecture fluide », the picture and its sound together in a <video>
 ${LecteurFluideJs.CODE}
+// « Qualité » of the DATV picture, per browser: Source, 720p, 480p, 360p or Auto (QualiteDatvJs), its measures.
+${QualiteDatvJs.CODE}
+${QualiteDatvJs.PAGE}
 // ------------------------------------------------------------------ DATV reception quality
 let qEm = null, qEmPs = null;
 const fr1 = x => x == null ? '—' : x.toFixed(1).replace('.', ',');
@@ -15655,10 +15675,31 @@ function apTete() {
   b.classList.toggle('on', AP.maitre && !e); b.classList.toggle('encours', !!e);
   txt('h-ap-t', e ? e.sat + ' SSTV' : AP.maitre ? 'Auto-pilote' : 'Auto-pilote coupé');
   g('ap-bandeau').hidden = !e;
-  // Just under the header strip, however many lines it takes.
-  if (e) g('ap-bandeau').style.top = (g('tete').offsetHeight + 6) + 'px';
+  // Just under the header strip, however many lines it takes — or where it was moved to.
+  if (e) apBandeauPlace();
   apBandeau();
 }
+/* The banner moved (it may hide a tab's buttons): dragged by its « 🤖 Auto-pilote », kept in this browser; a double click puts it back. */
+let apPos = null;
+try { apPos = JSON.parse(localStorage.getItem('ap-bandeau-pos') || 'null'); } catch (x) {}
+function apBandeauPlace() {
+  const b = g('ap-bandeau');
+  if (apPos) {
+    const x = Math.max(0, Math.min(innerWidth - 80, apPos.x)), y = Math.max(0, Math.min(innerHeight - 40, apPos.y));
+    b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.transform = 'none';
+  } else { b.style.left = ''; b.style.transform = ''; b.style.top = (g('tete').offsetHeight + 6) + 'px'; }
+}
+(function () {
+  const h = g('ap-b-poignee'), b = g('ap-bandeau');
+  if (!h) return;
+  h.style.cursor = 'move'; h.style.touchAction = 'none';
+  let dep = null;
+  h.addEventListener('pointerdown', e => { const r = b.getBoundingClientRect(); dep = { dx: e.clientX - r.left, dy: e.clientY - r.top }; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove', e => { if (!dep) return; apPos = { x: e.clientX - dep.dx, y: e.clientY - dep.dy }; apBandeauPlace(); });
+  h.addEventListener('pointerup', () => { if (!dep) return; dep = null; try { localStorage.setItem('ap-bandeau-pos', JSON.stringify(apPos)); } catch (x) {} });
+  h.addEventListener('dblclick', () => { apPos = null; try { localStorage.removeItem('ap-bandeau-pos'); } catch (x) {} apBandeauPlace(); });
+  addEventListener('resize', () => { if (!b.hidden) apBandeauPlace(); });
+})();
 /* The banner's words, counted down every second with the header (the AOS to come, the LOS of the pass running). */
 function apBandeau() {
   const e = AP && AP.enCours; if (!e || g('ap-bandeau').hidden) return;

@@ -22,6 +22,8 @@ package fr.f4ioz.satcombo.demo
  *   refusing to start it by itself plays muted, its button saying so. The page tells SatMe-PC whether it plays
  *   the sound (SatMe-PC's own player quiet meanwhile, when the page is on that PC).
  * - Hidden or another tab, and silent: the stream is let go.
+ * - At the « Qualité » of this browser (QualiteDatvJs, `&q=`): asked again when it changes; the bytes received,
+ *   the stalls and the jumps counted for its measures, the level served read from SatMe-PC's answer.
  *
  * dFlTic(D, img), from ticDatv: true when it shows the picture (the JPEG one then left alone).
  * dFlSonJoue(): the page plays the DATV sound now. dFlBaisse(on, k): the sound lowered (k) or back.
@@ -32,7 +34,7 @@ object LecteurFluideJs {
     const val CODE = """
 const DFL = { on: false, son: true, vol: 1, baisse: 1, ok: false, demo: false, id: Math.random().toString(36).slice(2, 10),
   ctrl: null, ms: null, sb: null, file: [], joue: false, bloque: false, echecs: 0, panneJusque: 0, essaiMs: 0, etatMs: 0,
-  msg: '', mode: '', retard: null, sauts: 0, pret: false };
+  msg: '', mode: '', retard: null, sauts: 0, pret: false, q: '', niveau: '', repli: '', flux: 0, octets: 0, debutMs: 0, attentes: 0 };
 try {
   DFL.on = localStorage.getItem('satme.datvFluide') === '1';
   DFL.son = localStorage.getItem('satme.datvFluideSon') !== '0';
@@ -59,6 +61,7 @@ function dflPrepare() {
   const vid = document.createElement('video');
   vid.id = 'd-video-f'; vid.playsInline = true; vid.muted = true; vid.setAttribute('aria-label', 'Image et son DATV reçus');
   vid.addEventListener('playing', () => { DFL.joue = true; DFL.echecs = 0; });
+  vid.addEventListener('waiting', () => { if (DFL.joue) DFL.attentes++; });
   img.insertAdjacentElement('afterend', vid);
   const b = document.createElement('div');
   b.className = 'd-fl-son'; b.id = 'd-fl-son';
@@ -134,6 +137,8 @@ function dFlTic(D, img) {
   dflEtatTexte(voulu);
   if (!voulu) { dflArrete(); return false; }
   if (img.getAttribute('src') || img.style.display === 'block') { img.removeAttribute('src'); img.style.display = 'none'; delete img.dataset.vign; }
+  // Another « Qualité »: asked again at once (not a failure).
+  if (DFL.ctrl && DFL.q !== dQualVoulu()) { dflFin(DFL.ctrl, 'lecture fluide : qualité ' + qdvNom(dQualVoulu()) + '…'); DFL.essaiMs = 0; }
   if (!DFL.ctrl && t - DFL.essaiMs > 1500) dflOuvre();
   g('d-video-f').style.display = 'block';
   g('d-fl-son').style.display = 'flex';
@@ -154,8 +159,9 @@ async function dflOuvre() {
   DFL.essaiMs = Date.now();
   const ctrl = new AbortController();
   DFL.ctrl = ctrl; DFL.joue = false; DFL.msg = 'lecture fluide : connexion…';
+  DFL.q = dQualVoulu(); DFL.flux++; DFL.octets = 0; DFL.debutMs = Date.now(); DFL.attentes = 0; DFL.sauts = 0; DFL.niveau = ''; DFL.repli = '';
   let rep;
-  try { rep = await fetch('api/datv/fluide.mp4?id=' + DFL.id + '&son=' + (dflSonVoulu() ? 1 : 0), { signal: ctrl.signal, cache: 'no-store' }); }
+  try { rep = await fetch('api/datv/fluide.mp4?id=' + DFL.id + '&son=' + (dflSonVoulu() ? 1 : 0) + '&q=' + DFL.q, { signal: ctrl.signal, cache: 'no-store' }); }
   catch (x) { return dflFin(ctrl, 'lecture fluide : pas de réponse', true); }
   if (DFL.ctrl !== ctrl) return;
   if (!rep.ok || !rep.body) {
@@ -164,6 +170,8 @@ async function dflOuvre() {
   }
   const codecs = rep.headers.get('X-Satme-Codecs') || 'avc1.640028,mp4a.40.2', type = 'video/mp4; codecs="' + codecs + '"';
   DFL.mode = rep.headers.get('X-Satme-Mode') || '';
+  DFL.niveau = rep.headers.get('X-Satme-Niveau') || DFL.q;
+  try { DFL.repli = decodeURIComponent((rep.headers.get('X-Satme-Repli') || '').replace(/\+/g, ' ')); } catch (x) { DFL.repli = ''; }
   if (!MediaSource.isTypeSupported(type)) return dflFin(ctrl, 'ce navigateur ne lit pas ' + codecs, true, 60000);
   const ms = new MediaSource(), vid = g('d-video-f');
   DFL.ms = ms; DFL.file = []; DFL.sb = null;
@@ -182,6 +190,7 @@ async function dflOuvre() {
     while (DFL.ctrl === ctrl) {
       const r = await lecteur.read();
       if (r.done) break;
+      DFL.octets += r.value.length;
       DFL.file.push(r.value);
       dflPousse();
     }

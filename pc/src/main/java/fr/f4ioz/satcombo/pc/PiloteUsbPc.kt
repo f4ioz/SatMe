@@ -67,9 +67,10 @@ object DetectionPiloteUsb {
      * The JSON of `Get-PnpDevice | Select-Object … | ConvertTo-Json`: an
      * array, a single object (one device) or nothing. Names are as Windows
      * gives them (French or English); only the instance id, the status
-     * (never translated) and the code are relied on.
+     * (never translated) and the code are relied on. [tous]: the working
+     * ones too (what the page shows of what Windows sees).
      */
-    fun depuisJson(texte: String): List<Peripherique> {
+    fun depuisJson(texte: String, tous: Boolean = false): List<Peripherique> {
         // A byte order mark, a warning or a stray line before the JSON: skipped.
         val t = texte.trim().let { x -> x.indexOfFirst { it == '[' || it == '{' }.let { i -> if (i < 0) "" else x.substring(i) } }
         if (t.isEmpty()) return emptyList()
@@ -83,8 +84,9 @@ object DetectionPiloteUsb {
             if (o.has("Present") && o.opt("Present") == false) return@mapNotNull null
             val statut = o.optString("Status").takeIf { it != "null" }.orEmpty()
             val c = code(o.opt("Code")) ?: code(o.opt("ConfigManagerErrorCode")) ?: code(o.opt("Problem"))
-            if (!enErreur(statut, c)) return@mapNotNull null
-            Peripherique(instance.trim(), o.optString("FriendlyName").takeIf { it != "null" }.orEmpty(), type, c ?: -1, statut)
+            val erreur = enErreur(statut, c)
+            if (!erreur && !tous) return@mapNotNull null
+            Peripherique(instance.trim(), o.optString("FriendlyName").takeIf { it != "null" }.orEmpty(), type, if (erreur) c ?: -1 else 0, statut)
         }.distinctBy { it.instance.uppercase() }
     }
 
@@ -193,6 +195,10 @@ class PiloteUsbPc(
     val actif: Boolean get() = windows && !ModeDemo.actif
 
     @Volatile var trouves: List<DetectionPiloteUsb.Peripherique> = emptyList(); private set
+    /** Every device of ours Windows sees, in error or not (empty when only pnputil answered: it lists the faulty ones). */
+    @Volatile var vus: List<DetectionPiloteUsb.Peripherique> = emptyList(); private set
+    /** How the last look was made: "powershell", "pnputil", or what went wrong. */
+    @Volatile var methode = ""; private set
     @Volatile private var analyseMs = 0L
     @Volatile var recherche = false; private set
 
@@ -208,10 +214,21 @@ class PiloteUsbPc(
     fun analyse(): List<DetectionPiloteUsb.Peripherique> {
         if (!actif) return emptyList()
         val ps = executeur(listOf("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", PS_DETECTION), emptyMap(), 30)
-        val l = if (ps != null && ps.first == 0 && ps.second.trim().let { it.contains('[') || it.contains('{') || it.isEmpty() })
-            DetectionPiloteUsb.depuisJson(ps.second)
-        else executeur(listOf("pnputil.exe", "/enum-devices", "/connected", "/problem"), emptyMap(), 30)
-            ?.let { DetectionPiloteUsb.depuisPnputil(it.second) }.orEmpty()
+        val l: List<DetectionPiloteUsb.Peripherique>
+        if (ps != null && ps.first == 0 && ps.second.trim().let { it.contains('[') || it.contains('{') || it.isEmpty() }) {
+            l = DetectionPiloteUsb.depuisJson(ps.second)
+            vus = DetectionPiloteUsb.depuisJson(ps.second, tous = true)
+            methode = "powershell"
+        } else {
+            val pn = executeur(listOf("pnputil.exe", "/enum-devices", "/connected", "/problem"), emptyMap(), 30)
+            l = pn?.let { DetectionPiloteUsb.depuisPnputil(it.second) }.orEmpty()
+            vus = l
+            methode = when {
+                pn != null -> "pnputil"
+                ps == null -> "PowerShell et pnputil ne répondent pas"
+                else -> "PowerShell (code ${ps.first}) puis pnputil ne répondent pas"
+            }
+        }
         trouves = l
         analyseMs = horloge()
         return l
@@ -270,7 +287,8 @@ class PiloteUsbPc(
         if (!actif) return o
         rafraichis()
         val i = installation
-        return o.put("recherche", recherche).put("analyse", analyseMs)
+        return o.put("recherche", recherche).put("analyse", analyseMs).put("methode", methode)
+            .put("vus", JSONArray(vus.map { p -> JSONObject().put("nom", p.nom).put("instance", p.instance).put("statut", p.statut).put("code", p.code) }))
             .put("appareils", JSONArray(trouves.map { p ->
                 JSONObject().put("instance", p.instance).put("nom", p.nom).put("type", p.type.name).put("code", p.code)
                     .put("sansPilote", p.sansPilote)
