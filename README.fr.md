@@ -118,10 +118,6 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
 </p>
 
-## TellusMe — la station terrestre de l'écosystème SatMe (en préparation)
-
-**TellusMe** est le pendant de SatMe-PC pour la station terrestre : le déca d'abord (VHF/UHF terrestre ensuite), le même moteur, le même genre de page dans le navigateur, son propre dossier. Une première ébauche, **en réception seule** : l'Icom IC-7000 en CI-V, le SDR Brick2 (openHPSDR) avec spectre, chute d'eau et son, le plan de bande IARU Région 1, la propagation, un cluster DX et un carnet avec export ADIF. Pas encore publié → [TellusMe](docs/tellusme.fr.md).
-
 ## Du téléphone au PC : un QR code
 
 <p align="center"><img src="docs/images/satme-qr-fr.svg" width="100%" alt="Du téléphone au PC en trois gestes : le PC affiche un QR code, le téléphone le scanne, les passages cochés arrivent avec leurs contacts, images SSTV et sons"></p>
