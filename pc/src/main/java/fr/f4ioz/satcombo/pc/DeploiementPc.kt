@@ -120,7 +120,7 @@ class DeploiementPc(private val dossier: File, private val lanceur: LanceurPc,
         val INTERNES = setOf("reprises", CLE_VERSION_VUE, CLE_CONFIG_RAPIDE, "pending_capture", "update_skipped")
 
         /** The secrets by name (passwords, keys, logins, the node's codes); any key saying mdp/token/password/secret too. */
-        val SECRETS = setOf("qrz_user", "qrz_mdp", "lotw_mdp", "carnet_cle", "icom_utilisateur", "icom_mdp", "icom_utilisateur_code",
+        val SECRETS = setOf("qrz_user", "qrz_mdp", "lotw_mdp", "carnet_cle", "carnet_jeton_v2", "icom_utilisateur", "icom_mdp", "icom_utilisateur_code",
             "icom_mdp_code", "skeds_token", "pota_token", "demo_mdp", "extensions_code", "datv_noeud_cle", "noeud_code")
         private val SECRET = Regex("(mdp|token|password|passwd|secret|jeton)", RegexOption.IGNORE_CASE)
 

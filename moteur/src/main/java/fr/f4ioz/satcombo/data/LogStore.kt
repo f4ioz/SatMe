@@ -63,7 +63,12 @@ data class LogEntry(
      * Held back from the automatic upload: the operator saw something wrong
      * and wants to fix it before it reaches the online log (EnvoiAuto).
      */
-    val retenu: Boolean = false
+    val retenu: Boolean = false,
+    /**
+     * The record's fields as the online log took them (JSON, [fr.f4ioz.satcombo.domain.ModifEnvoi]):
+     * an edit after the upload shows against it. Empty: not uploaded, or uploaded before SatMe kept it.
+     */
+    val envoiAdif: String = ""
 )
 
 /** Persists quick log entries to disk (`qso_log.json`: the phone's files, the PC's folder). */
@@ -96,7 +101,8 @@ class LogStore(private val file: java.io.File) {
                     nom = o.optString("nm"),
                     qth = o.optString("qt"),
                     courriel = o.optString("em"),
-                    retenu = o.optBoolean("rt", false)
+                    retenu = o.optBoolean("rt", false),
+                    envoiAdif = o.optString("es")
                 )
             }
         }.getOrDefault(emptyList())
@@ -116,6 +122,7 @@ class LogStore(private val file: java.io.File) {
                 put("lo", e.locatorOrigine)
                 put("nm", e.nom); put("qt", e.qth); put("em", e.courriel)
                 if (e.retenu) put("rt", true)
+                if (e.envoiAdif.isNotEmpty()) put("es", e.envoiAdif)
             })
         }
         runCatching { file.writeText(arr.toString()) }
@@ -232,8 +239,15 @@ class LogStore(private val file: java.io.File) {
         return list
     }
 
-    fun marqueEnvoye(timeMs: Long, quandMs: Long): List<LogEntry> {
-        val list = load().map { if (it.timeMs == timeMs) it.copy(envoyeMs = quandMs) else it }
+    fun marqueEnvoye(timeMs: Long, quandMs: Long, envoiAdif: String? = null): List<LogEntry> {
+        val list = load().map { if (it.timeMs == timeMs) it.copy(envoyeMs = quandMs, envoiAdif = envoiAdif ?: it.envoiAdif) else it }
+        save(list)
+        return list
+    }
+
+    /** What the online log has of a contact now (after a correction there, or kept at the first edit). */
+    fun fixeEnvoi(timeMs: Long, envoiAdif: String): List<LogEntry> {
+        val list = load().map { if (it.timeMs == timeMs) it.copy(envoiAdif = envoiAdif) else it }
         save(list)
         return list
     }

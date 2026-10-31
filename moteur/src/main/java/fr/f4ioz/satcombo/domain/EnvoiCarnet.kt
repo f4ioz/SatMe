@@ -11,8 +11,11 @@ package fr.f4ioz.satcombo.domain
 /**
  * What goes to the online log, and what must not go again.
  *
- * Wavelog, like Cloudlog, does not deduplicate: re-sending the whole log
- * would create one duplicate per contact per attempt, to be cleaned by hand.
+ * Wavelog skips a contact it already has (same call, minute, band, mode and
+ * station: Logbook_model's import), but a contact edited since — another
+ * call, time or mode — comes in as a second one beside the first, to be
+ * cleaned by hand. So what went never goes again ([ModifEnvoi] carries a
+ * change instead).
  *
  * So the mark is **local and set afterwards**: a contact counts as uploaded
  * only once the server said it took it. Network failure, rejected key, cut
