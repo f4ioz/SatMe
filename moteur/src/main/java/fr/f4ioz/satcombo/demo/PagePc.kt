@@ -4600,8 +4600,9 @@ ${DemarragePagePc.CARTES}
         <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
         <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
       <div id="pu-carte" hidden style="margin-top:8px;padding:8px;border:1px solid var(--ambre);border-radius:6px">
-        <b class="ambre" id="pu-titre"></b>
+        <b id="pu-titre"></b>
         <div class="petit" id="pu-codec" hidden style="margin-top:4px"></div>
+        <div class="petit" id="pu-vus" style="margin-top:4px;color:var(--gris)"></div>
         <div class="petit aide" id="pu-aide" style="margin-top:4px">Sans lui, Windows ne crée pas les deux ports COM du poste (CI-V et données) et SatMe-PC n'a rien à ouvrir. C'est le pilote Silicon Labs CP210x, le même que le « USB Driver (Serial Port) » d'Icom. Avant tout : l'IC-9700 <b>allumé</b>, puis le câble USB branché. Windows Update peut aussi le proposer : <i>Paramètres › Windows Update › Options avancées › Mises à jour facultatives › Mises à jour de pilotes</i>.</div>
         <div class="ligne"><a class="bouton" id="pu-page" target="_blank" rel="noopener noreferrer">Ouvrir la page du pilote</a>
           <a class="petit" id="pu-icom" target="_blank" rel="noopener noreferrer">page d'Icom (firmware et pilotes)</a></div>
@@ -7072,19 +7073,31 @@ async function puCharge() {
 function puRend() {
   const c = g('pu-carte'), i = PU && PU.installation;
   const appareils = (PU && PU.appareils) || [];
-  const montre = !!(PU && PU.windows && (appareils.length || (i && (i.enCours || i.erreur || i.fini))));
-  c.hidden = !montre;
-  if (!montre) return;
+  // On Windows the notice is always there: amber when a device is in error, plain otherwise (what Windows sees, and the install by hand).
+  c.hidden = !(PU && PU.windows);
+  if (c.hidden) return;
+  const alerte = !!(appareils.length || (i && (i.enCours || i.erreur)));
+  c.style.borderColor = alerte ? 'var(--ambre)' : 'var(--ligne)';
+  g('pu-titre').className = alerte ? 'ambre' : '';
+  // The first answer comes before Windows has been asked: followed until the look is over.
+  if ((PU.recherche || !PU.analyse) && !puFil) puSuit();
   const ponts = appareils.filter(a => a.type === 'PONT_SERIE'), codecs = appareils.filter(a => a.type === 'CODEC_SON');
   txt('pu-titre', ponts.some(a => a.sansPilote) ? 'Un poste Icom (CP2102N) est branché mais Windows n’a pas son pilote.'
     : ponts.length ? 'Un poste Icom (CP2102N) est branché mais son pilote ne démarre pas (code ' + ponts[0].code + ' dans Windows).'
     : codecs.length ? 'La carte son USB d’un poste Icom est branchée mais Windows la signale en erreur.'
-    : i && i.fini ? 'Pilote du poste installé.' : 'Pilote du poste');
+    : i && i.fini ? 'Pilote du poste installé.'
+    : (PU.recherche || !PU.analyse) ? 'Pilote USB du poste : Windows est interrogé…'
+    : 'Pilote USB du poste : Windows ne signale aucun appareil Silicon Labs ou Icom en erreur.');
+  const vus = PU.vus || [];
+  txt('pu-vus', !PU.analyse ? '' : (PU.methode && PU.methode !== 'powershell' && PU.methode !== 'pnputil' ? 'Recherche impossible : ' + PU.methode + '. '
+    : '') + (vus.length ? 'Ce que Windows voit : ' + vus.map(v => (v.nom || v.instance) + ' — ' + (v.statut || '?') + (v.code ? ' (code ' + v.code + ')' : '')).join(' · ')
+    : 'Windows ne voit aucun appareil Silicon Labs (VID 10C4) ni Icom (VID 08BB) : poste allumé, câble USB branché directement (pas un câble de charge seule), puis « Rechercher à nouveau ».'));
   g('pu-codec').hidden = !(codecs.length && ponts.length);
   txt('pu-codec', 'Sa carte son USB (USB Audio CODEC) est aussi en erreur (code ' + (codecs[0] ? codecs[0].code : '') + ') : elle prend le pilote audio de Windows lui-même, souvent remis en place en débranchant puis rebranchant le câble, poste allumé.');
-  g('pu-aide').hidden = !ponts.length;
+  g('pu-aide').hidden = !(ponts.length || !vus.length);
   if (PU.liens) { g('pu-page').href = PU.liens.silabs; g('pu-icom').href = PU.liens.icom; }
-  g('pu-installe').disabled = !!(i && i.enCours) || !ponts.length;
+  // Possible even when nothing is seen in error: the install by hand from here.
+  g('pu-installe').disabled = !!(i && i.enCours);
   let e = '';
   if (PU.recherche) e = 'recherche en cours…';
   else if (i && i.enCours) e = i.etape + '…';

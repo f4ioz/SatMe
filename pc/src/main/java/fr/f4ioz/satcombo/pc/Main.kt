@@ -391,7 +391,7 @@ fun main(args: Array<String>) {
     serveur.textesDatv = textesDatv
     serveur.icomReseau = icomReseau
     // Windows only: the rig's USB driver found missing, installed on the operator's click.
-    serveur.piloteUsb = PiloteUsbPc(dossier)
+    serveur.piloteUsb = PiloteUsbPc(dossier).also { it.rafraichis() }
     serveur.fichiersDatv = fichiersDatv
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
