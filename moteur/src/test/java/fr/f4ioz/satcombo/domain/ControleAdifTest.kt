@@ -64,9 +64,10 @@ class ControleAdifTest {
 
     @Test
     fun `le satellite inconnu de LoTW, avec la suggestion quand SatMe la connait`() {
-        val iss = ControleAdif.controle(listOf(bon(sat = "ISS")), maintenant).single()
-        assertEquals("satellite-lotw", iss.code)
-        assertTrue(iss.message, iss.message.contains("ARISS"))
+        // The space station goes out as « ARISS »: nothing to say.
+        assertTrue(ControleAdif.controle(listOf(bon(sat = "ISS")), maintenant).isEmpty())
+        assertEquals("ARISS", NomSatellite.satNameAdif("ISS"))
+        assertTrue(fr.f4ioz.satcombo.data.Adif.enregistrement(bon(sat = "ISS")).contains("<SAT_NAME:5>ARISS"))
         val long = ControleAdif.controle(listOf(bon(sat = "RS-44 & BREEZE-KM R/B")), maintenant).single()
         assertTrue(long.message, long.message.contains("« RS-44 »"))
         assertTrue(ControleAdif.controle(listOf(bon(sat = "AO-07")), maintenant).single().message.contains("« AO-7 »"))
