@@ -171,17 +171,22 @@ class SdrNoeudPc(
         val lu = ShortArray(BLOC)
         var bloc = ShortArray(BLOC)
         var pos = 0
+        // The centre the frame being filled was read at: a frame never mixes two tunings.
+        var centreBloc = centreA.get()
         val tmp = ShortArray(BLOC + 4)
         var raison = ""
         try {
             while (!s.fin) {
                 if (horloge() - dernierVu.get() > silenceMs) { raison = ""; break }
+                // Taken before the read: samples read across a retune go out with the old centre, which the PC drops.
+                val ici = centreA.get()
                 val n = src.read16(lu, 200)
                 if (n < 0) {
                     raison = when (src) { is PlutoSdr -> src.erreur; is BladerfSdr -> src.erreur; else -> null } ?: "le récepteur s'est arrêté"
                     break
                 }
                 if (n == 0) continue
+                if (ici != centreBloc) { centreBloc = ici; pos = 0 }
                 val m = d.traite(lu, n, tmp)
                 var k = 0
                 while (k < m) {
@@ -189,7 +194,7 @@ class SdrNoeudPc(
                     System.arraycopy(tmp, k, bloc, pos, a)
                     pos += a; k += a
                     if (pos == BLOC) {
-                        val f = bloc to centreA.get()
+                        val f = bloc to centreBloc
                         if (!file.offer(f)) { file.poll(); e.saute(); etat = etat.copy(sautees = etat.sautees + 1); file.offer(f) }
                         bloc = ShortArray(BLOC); pos = 0
                     }

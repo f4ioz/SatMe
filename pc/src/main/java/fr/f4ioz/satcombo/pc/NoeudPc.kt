@@ -76,6 +76,8 @@ class NoeudPc(
         thread(isDaemon = true, name = "satme-noeud") {
             while (!s.isClosed) {
                 val c = runCatching { s.accept() }.getOrNull() ?: continue
+                // Stopped while that connection was coming in: not answered (a PC must see the node gone).
+                if (s.isClosed) { runCatching { c.close() }; continue }
                 thread(isDaemon = true, name = "satme-noeud-client") { runCatching { sert(c) }; runCatching { c.close() } }
             }
         }
