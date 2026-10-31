@@ -23,8 +23,27 @@ import kotlinx.coroutines.withContext
  * Frames the radio receives come in already decoded (its own modem) and go
  * to [surTrame]. A frame to send goes out as one KISS frame; the radio keys,
  * modulates and returns to receive by itself.
+ *
+ * [ecouteSeule]: a monitor that never writes to the line by itself — no
+ * KISS ON / RESTART on connecting, no frame sent ([envoie] refuses), no
+ * retuning, nothing on disconnecting. The only bytes that may go out are a
+ * [CommandeKiss] the operator picked ([commande]): entering or leaving KISS,
+ * none of which makes the radio transmit.
  */
-class LienKiss(private val surTrame: (Trame) -> Unit) {
+class LienKiss(val ecouteSeule: Boolean = false, private val surTrame: (Trame) -> Unit) {
+
+    /** The commands an operator may send by hand: in or out of KISS. None keys the transmitter. */
+    enum class CommandeKiss(val octets: ByteArray) {
+        /** Kenwood (TH-D72/D74/D75, TM-D710) and TNC2-like TNCs in command mode. */
+        ENTREE_KENWOOD(Kiss.ENTREE_KENWOOD.toByteArray(Charsets.US_ASCII)),
+        /** Kantronics TNCs in command mode. */
+        ENTREE_KANTRONICS("\rINTFACE KISS\rRESET\r".toByteArray(Charsets.US_ASCII)),
+        /** Back from KISS to the TNC's command mode (FEND, 0xFF, FEND). */
+        SORTIE(Kiss.SORTIE),
+    }
+
+    /** Every KISS data frame as it came (no FCS), AX.25 or not, APRS or not: for a monitor. */
+    @Volatile var surOctets: ((ByteArray) -> Unit)? = null
 
     data class Etat(
         val connecte: Boolean = false,
@@ -45,12 +64,16 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
          * TH-D72 whose adapter wants RTS/DTR up). Said, not hidden.
          */
         val muette: Boolean = false,
+        /** Listening only: nothing written but the operator's own commands. */
+        val ecouteSeule: Boolean = false,
     )
 
     private val _etat = MutableStateFlow(Etat())
     val etat: StateFlow<Etat> = _etat.asStateFlow()
 
     @Volatile private var lien: SerialLink? = null
+    /** The line itself, for [commande] only, when listening only ([lien] then refuses every write). */
+    @Volatile private var ligne: SerialLink? = null
     private var lecteur: Thread? = null
 
     /** What the radio said in text (PC commands, TNC prompts), for the switch to KISS. */
@@ -63,10 +86,13 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
     }
 
     /** Plugs a serial line in (the real cable, or a test's fake) and starts reading. */
-    fun attache(l: SerialLink, nom: String, vitesse: Int) {
+    fun attache(cable: SerialLink, nom: String, vitesse: Int) {
+        val l = if (ecouteSeule) LectureSeule(cable) else cable
         lien = l
-        _etat.value = Etat(connecte = true, nom = nom, vitesse = vitesse)
+        ligne = cable
+        _etat.value = Etat(connecte = true, nom = nom, vitesse = vitesse, ecouteSeule = ecouteSeule)
         val decodeur = KissDecodeur { octets ->
+            surOctets?.let { f -> runCatching { f(octets) } }
             val t = Ax25.decodeSansFcs(octets) ?: return@KissDecodeur
             _etat.value = _etat.value.copy(recues = _etat.value.recues + 1)
             surTrame(t)
@@ -114,6 +140,7 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
      * Nothing here makes the radio transmit.
      */
     suspend fun passeEnKiss(frequenceHz: Long? = null): Boolean = withContext(Dispatchers.IO) {
+        if (ecouteSeule) return@withContext false  // the operator's own command only ([commande])
         val l = lien ?: return@withContext false
         val r = commande(l, "\r", 1500) { it.contains("?") || it.contains("cmd:") }
         if (r != null && !r.contains("cmd:")) {
@@ -148,6 +175,7 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
 
     /** One frame to the radio, which transmits it. */
     suspend fun envoie(t: Trame): Boolean = withContext(Dispatchers.IO) {
+        if (ecouteSeule) return@withContext false
         val l = lien ?: return@withContext false
         val ok = l.write(Kiss.trame(Ax25.encodeSansFcs(t)), 1000)
         if (ok) _etat.value = _etat.value.copy(envoyees = _etat.value.envoyees + 1)
@@ -177,6 +205,7 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
      * was read (a Kenwood answering "FO"): another TNC is left alone.
      */
     suspend fun regleFrequence(hz: Long): Boolean = withContext(Dispatchers.IO) {
+        if (ecouteSeule) return@withContext false
         val l = lien ?: return@withContext false
         if (_etat.value.frequenceHz == null) return@withContext false
         if (_etat.value.frequenceHz == hz && _etat.value.initialise) return@withContext true
@@ -190,10 +219,28 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
      */
     fun deconnecte(sortirDuKiss: Boolean = true) {
         val l = lien ?: return
-        if (sortirDuKiss) quitteKiss(l)
+        if (sortirDuKiss && !ecouteSeule) quitteKiss(l)
         lien = null
+        ligne = null
         runCatching { l.close() }
         lecteur = null
         _etat.value = _etat.value.copy(connecte = false, initialise = false)
+    }
+
+    /**
+     * Sends one of the operator's [CommandeKiss] (in or out of KISS) as it
+     * is — the one way bytes leave a listening-only link. False when no line.
+     */
+    suspend fun commande(c: CommandeKiss): Boolean = withContext(Dispatchers.IO) {
+        val l = ligne ?: return@withContext false
+        if (lien == null) return@withContext false
+        val ok = runCatching { l.write(c.octets, 1000) }.getOrDefault(false)
+        if (ok) _etat.value = _etat.value.copy(initialise = c != CommandeKiss.SORTIE)
+        ok
+    }
+
+    /** A line that reads and never writes: what a listening-only link hands to everything else. */
+    private class LectureSeule(private val l: SerialLink) : SerialLink by l {
+        override fun write(bytes: ByteArray, timeoutMs: Int): Boolean = false
     }
 }

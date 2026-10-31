@@ -110,12 +110,26 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     /** Each HDLC frame heard on the air (AX.25 or bare, FCS removed): the SSDV packets looked for in them. */
     @Volatile var surOctets: ((ByteArray) -> Unit)? = null
 
+    /** The decoder's counts since it started: frames heard clean, mended (1 or 2 bits), FX.25, IL2P. */
+    val statsDecodeur: fr.f4ioz.satcombo.aprs.StatsAfsk get() = demod?.statistiques ?: fr.f4ioz.satcombo.aprs.StatsAfsk()
+
+    /** The last frames heard on the air that needed help, newest first: (ms, TNC2 line, « corrigée 1 bit », « FX.25 »…). */
+    @Volatile var marquees: List<Triple<Long, String, String>> = emptyList()
+        private set
+
     /** A block of the card's sound. */
     fun ecoute(pcm: ShortArray, n: Int, rate: Int) {
         val d = demod?.takeIf { rateDemod == rate } ?: AfskDemodulateur(rate) { t ->
             if (runCatching { horsAntenne() }.getOrDefault(false)) essais++ else ajoute(t, horloge())
         }.also { a ->
             a.surOctets = { o -> if (!runCatching { horsAntenne() }.getOrDefault(false)) surOctets?.invoke(o) }
+            a.surReception = { r ->
+                val m = r.marque
+                if (m != null && !runCatching { horsAntenne() }.getOrDefault(false)) {
+                    val ligne = r.trame?.tnc2() ?: Ax25.entete(r.octets.copyOf(r.octets.size - 2))?.ligne() ?: "?"
+                    marquees = (listOf(Triple(horloge(), ligne, m)) + marquees).take(20)
+                }
+            }
             demod = a; rateDemod = rate
         }
         runCatching { d.traite(pcm, n) }

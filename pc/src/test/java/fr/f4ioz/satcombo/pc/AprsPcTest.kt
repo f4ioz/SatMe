@@ -152,4 +152,16 @@ class AprsPcTest {
         assertTrue(b.passages.single().stations.size >= 3)
         assertTrue(File(dossier, "aprs").listFiles()!!.isNotEmpty())
     }
+
+    @Test
+    fun compteurs_du_decodeur() {
+        val trame = Trame(Adresse.de("APRS"), Adresse.de("F4IOZ-7"), emptyList(), "=4852.55N/00219.00E-SatMe".toByteArray())
+        val a = AprsPc(dossier, { "" }, { t })
+        assertEquals(0, a.statsDecodeur.total)
+        val son = Afsk.module(listOf(Ax25.encode(trame)), 48_000)
+        a.ecoute(son, son.size, 48_000)
+        assertEquals(1, a.statsDecodeur.ax25)
+        assertEquals("justes 1 · corrigées 0 · FX.25 0 · IL2P 0", a.statsDecodeur.ligne())
+        assertTrue(a.marquees.isEmpty())  // heard clean: nothing to mark
+    }
 }
