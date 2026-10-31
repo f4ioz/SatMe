@@ -22,19 +22,20 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 10. [DATV : émission](#datv--émission) — DVB-S2 et DVB-S, créneaux libres, résumé du signal, test de l'encodeur, horloge en direct, rampe et puissance calibrée, la station, les règles, l'essai en intérieur, carte et chat
 11. [SSTV](#sstv) — réception, encart du satellite suivi, compte à rebours, images par diapo (séries 33 et 34), image corrigée, couleurs et IA, émission
 12. [FT8 / FT4](#ft8--ft4) — réception, émission par l'IC-9700 (jamais sans opérateur), premier essai sur l'air, passages vers votre site
-13. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV (sur plusieurs passages ; SO-127 en BLU, IO-86, Geoscan), FUNcube, SatNOGS
-14. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
-15. [Le récepteur SDR](#le-récepteur-sdr) — échelle des satellites, mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
-16. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
-17. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
-18. [Navires (AIS)](#navires-ais)
-19. [Météo spatiale](#météo-spatiale)
-20. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
-21. [Réglages](#réglages) — poste et rotor, IC-9700 sous Windows (pilote USB), IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), trafic satellite (préréglages, SO-50, mémoires CW et vocales, APRS par l'ISS), polarisation d'antenne (boîtier ESP32, sondage H/V), table des convertisseurs et transverters, calibration de la clé SDR, alignement d'un transpondeur, éléments orbitaux, journal Doppler, lien satellite, rigctld, publication web vers votre site, molette USB (Windows, relais vers une autre station), annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
-22. [Encore sur le PC](#encore-sur-le-pc)
-23. [Sécurité du matériel](#sécurité-du-matériel)
-24. [Avant le premier essai](#avant-le-premier-essai)
-25. [Démonstration : données fictives, matériel virtuel](#démonstration--données-fictives-matériel-virtuel) — `--demo`, VM ou Raspberry Pi, remise à neuf
+13. [APRS](#aprs) — carte des stations entendues (symboles, cap, traces, comment chacune a été entendue), liste et filtres, passages de satellite, fiche d'une station
+14. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV (sur plusieurs passages ; SO-127 en BLU, IO-86, Geoscan), FUNcube, SatNOGS
+15. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
+16. [Le récepteur SDR](#le-récepteur-sdr) — échelle des satellites, mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
+17. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
+18. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
+19. [Navires (AIS)](#navires-ais)
+20. [Météo spatiale](#météo-spatiale)
+21. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
+22. [Réglages](#réglages) — poste et rotor, IC-9700 sous Windows (pilote USB), IC-9700 par le réseau, IC-9700 en émission (PTT, micro, puissance), trafic satellite (préréglages, SO-50, mémoires CW et vocales, APRS par l'ISS), polarisation d'antenne (boîtier ESP32, sondage H/V), table des convertisseurs et transverters, calibration de la clé SDR, alignement d'un transpondeur, éléments orbitaux, journal Doppler, lien satellite, rigctld, publication web vers votre site, molette USB (Windows, relais vers une autre station), annonces, correction I/Q, accès à distance et HTTPS, démarrage (configuration rapide, quoi de neuf, mises à jour, options de démarrage, déploiement)
+23. [Encore sur le PC](#encore-sur-le-pc)
+24. [Sécurité du matériel](#sécurité-du-matériel)
+25. [Avant le premier essai](#avant-le-premier-essai)
+26. [Démonstration : données fictives, matériel virtuel](#démonstration--données-fictives-matériel-virtuel) — `--demo`, VM ou Raspberry Pi, remise à neuf
 
 ## L'installer
 
@@ -787,6 +788,18 @@ La carte **Émission FT8/FT4** de l'onglet, à droite au-dessus du radar, envoie
 <img src="images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar des stations, qui appeler maintenant">
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, et le fil au fil de l'eau en bulles">
 </p>
+
+## APRS
+
+L'onglet **APRS** (espace **Modes**) montre qui a été entendu, où, et comment. Les trames viennent du décodeur de la carte son (AFSK 1200, pastille **Son**) et d'une **radio KISS** (TH-D72, TM-D710, Mobilinkd…). Réception seulement : la carte, la liste et la fiche n'émettent jamais rien.
+
+- **Les chiffres**, en haut : stations entendues **aujourd'hui**, stations reçues **via satellite** (et le dernier passage), la **station la plus lointaine entendue en direct** (sans digipeater) avec sa distance, les **paquets par heure** (la dernière heure, et un petit histogramme des 24 dernières heures).
+- **La carte** : chaque station avec **son symbole APRS** (dessiné par SatMe : voiture, maison, étoile du digipeater, losange de l'iGate, météo, ballon, avion, bateau, vélo, piéton, relais, satellite, drapeau ; le caractère de surcharge dans un petit carré blanc), **son indicatif**, **une flèche pour son cap** quand elle roule, et **sa trace** (aucune, 1, 3, 6, 12, 24 ou 48 heures). **L'anneau dit comment elle a été entendue** : vert **en direct** (sans digipeater), bleu **par un digipeater**, doré avec un second anneau en pointillés **par un satellite** (l'ISS / ARISS sur 145,825 MHz, PSAT, PCSAT…), gris en pointillés **par Internet** (APRS-IS, par exemple une trame de tiers remise sur l'air par un iGate). Votre station est la maison turquoise. **⤢** cadre la carte sur les stations affichées (et suit la station choisie) ; glisser ou zoomer laisse regarder ailleurs, **⤢** ou un double-clic y revient. Glisser, molette, **+** / **−**, et sur une tablette glisser, **pincer** et **toucher**. Le fond est le trait de côte de SatMe (sans Internet) ; *OpenStreetMap* charge les tuiles dans le navigateur, comme dans l'onglet **Carte** (le même choix).
+- **La liste**, à côté de la carte (dessous sur un écran étroit) : tri par **dernière écoute**, **distance** (proche ou loin d'abord) ou **indicatif** ; filtres **RF seulement** (entendue par la radio : direct, digipeater ou satellite), **Via satellite**, **1 h / 6 h / 24 h / 48 h**, le type (**mobiles**, **fixes**, **météo**, **digipeaters**, **iGates**, **objets**, **satellites**) et une recherche (indicatif, commentaire, locator). Avec **Via satellite**, les stations sont rangées par passage : « Reçus via ISS pendant le passage de 14:32 ». Vos choix sont gardés par le navigateur.
+- **La fiche d'une station** (cliquer ou toucher une station sur la carte ou dans la liste) : ce que veut dire son symbole, en mots ; son indicatif avec les liens **QRZ.com** et **aprs.fi** ; son commentaire et son statut ; **distance et azimut** depuis votre station ; **locator** ; cap, vitesse, altitude ; **la dernière écoute par chaque voie** (direct, digipeater, satellite, Internet : des faits datés séparés) ; le **chemin** (digipeaters utilisés) ; le nombre de paquets ; les valeurs **météo** d'une station météo (seulement celles qu'elle envoie) ; son dernier **message** et sa **télémétrie** ; le **dernier paquet brut**.
+- **Gardé** : SatMe-PC garde ce qu'il entend comme avant (`aprs/AAAA-MM-JJ.txt` dans son dossier de données, 7 jours relus au démarrage). La carte et la liste prennent les **48 dernières heures** (20 000 trames au plus), relues des mêmes fichiers après un redémarrage.
+- **Dessous** : la carte de la **radio KISS**, les **trophées APRS**, et **Trames reçues**, les trames brutes des 7 derniers jours avec leur filtre.
+- API : `GET /api/aprs/stations?heures=48` (1 à 48) : `stations` (chacune avec `id`, `call`, `sym`, `symNom`, `genre`, `voie`, `lat`, `lon`, `loc`, `km`, `az`, `cap`, `kmh`, `alt`, `com`, `statut`, `vus` {`direct`, `digi`, `satellite`, `internet` : dernière fois, en ms}, `chemin`, `digis`, `brut`, `n`, `meteo`, `msg`, `tlm`, `trace` [[ms, lat, lon]…]), `passages` (les passages de satellite entendus), `stats`, `moi`. `GET /api/aprs` (les trames) ne change pas.
 
 ## Télémesure
 

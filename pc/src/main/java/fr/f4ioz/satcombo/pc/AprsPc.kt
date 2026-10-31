@@ -25,12 +25,18 @@ import java.util.TimeZone
  * demodulator), kept as the phone keeps it: one file per UTC day
  * (`aprs/AAAA-MM-JJ.txt`, "ms⇥satellite⇥AX.25 in base64"), the same frame
  * heard twice within 5 s kept once, the last 7 days read back at start.
+ * The map's window ([fenetre]: the last 48 hours, up to [MAX_FENETRE]
+ * frames) is read back from the same files: the stations and their trails
+ * survive a restart.
  */
 class AprsPc(private val dossier: File, private val satellite: () -> String, private val horloge: () -> Long = System::currentTimeMillis,
              /** Who we are for the trophies: callsign, latitude, longitude (as the phone's AprsHub.joueur). */
              private val joueur: () -> Triple<String, Double?, Double?> = { Triple("", null, null) }) {
 
     @Volatile var paquets: List<Paquet> = emptyList()
+        private set
+    /** The last [FENETRE_MS] of frames, newest first, at most [MAX_FENETRE]: the map's stations and trails. */
+    @Volatile var fenetre: List<Paquet> = emptyList()
         private set
     @Volatile private var demod: AfskDemodulateur? = null
     @Volatile private var rateDemod = 0
@@ -78,16 +84,21 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     }
 
     private fun charge() {
-        val depuis = horloge() - 7 * 86_400_000L
-        paquets = (dossier.listFiles { f -> f.name.endsWith(".txt") } ?: emptyArray())
+        val maintenant = horloge()
+        val depuis = maintenant - 7 * 86_400_000L
+        // Only the files of the last 8 days are read (a day file is named after its UTC day).
+        val premierJour = jour.format(Date(depuis - 86_400_000L))
+        val tout = (dossier.listFiles { f -> f.name.endsWith(".txt") && f.name >= premierJour } ?: emptyArray())
             .flatMap { f -> runCatching { f.readLines() }.getOrDefault(emptyList()).mapNotNull { lit(it) } }
-            .filter { it.quand >= depuis }.sortedByDescending { it.quand }.take(MAX)
+            .filter { it.quand >= depuis }.sortedByDescending { it.quand }
+        paquets = tout.take(MAX)
+        fenetre = tout.asSequence().filter { it.quand >= maintenant - FENETRE_MS }.take(MAX_FENETRE).toList()
     }
 
     private fun lit(ligne: String): Paquet? = runCatching {
         val (ms, sat, b64) = ligne.split('\t', limit = 3)
         val t = Ax25.decode(Base64.getDecoder().decode(b64)) ?: return null
-        Aprs.lit(t, ms.toLong()).copy(emis = sat == EMIS)
+        Aprs.lit(t, ms.toLong()).copy(emis = sat == EMIS, satellite = if (sat == EMIS) "" else sat)
     }.getOrNull()
 
     /** True while the sound is not on the air (the SDR's test generator, a recording played back). */
@@ -113,13 +124,15 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     @Synchronized fun ajoute(t: Trame, quand: Long): Boolean {
         if (paquets.any { it.trame == t && kotlin.math.abs(it.quand - quand) < 5_000 }) return false
         trophees   // read (or worked out from the history) before this frame joins it: this one is cheered
-        val p = Aprs.lit(t, quand)
+        val sat = satellite().replace('\t', ' ')
+        val p = Aprs.lit(t, quand).copy(satellite = sat)
         runCatching {
             dossier.mkdirs()
             File(dossier, jour.format(Date(quand)) + ".txt").appendText(
-                "$quand\t${satellite().replace('\t', ' ')}\t" + Base64.getEncoder().encodeToString(Ax25.encode(t)) + "\n")
+                "$quand\t$sat\t" + Base64.getEncoder().encodeToString(Ax25.encode(t)) + "\n")
         }
         paquets = (listOf(p) + paquets).take(MAX)
+        garde(p)
         recues++
         runCatching { note(p) }
         return true
@@ -134,11 +147,24 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
             File(dossier, jour.format(Date(quand)) + ".txt").appendText("$quand\t$EMIS\t" + Base64.getEncoder().encodeToString(Ax25.encode(t)) + "\n")
         }
         paquets = (listOf(p) + paquets).take(MAX)
+        garde(p)
         runCatching { note(p) }
+    }
+
+    /** [p] at the head of the map's window, what is older than [FENETRE_MS] let go. */
+    private fun garde(p: Paquet) {
+        val limite = horloge() - FENETRE_MS
+        val l = ArrayList<Paquet>(minOf(fenetre.size + 1, MAX_FENETRE))
+        l += p
+        for (q in fenetre) { if (l.size >= MAX_FENETRE || q.quand < limite) break; l += q }
+        fenetre = l
     }
 
     companion object {
         const val MAX = 2000
+        /** The map's window: 48 hours, 20 000 frames at most (a busy 144.800 MHz). */
+        const val FENETRE_MS = 48 * 3_600_000L
+        const val MAX_FENETRE = 20_000
         /** In the file's satellite column: this line was sent, not heard (the phone's mark). */
         const val EMIS = "↑"
     }

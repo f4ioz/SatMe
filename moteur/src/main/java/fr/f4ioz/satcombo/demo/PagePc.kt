@@ -1309,6 +1309,7 @@ ${OngletOrbites.CSS}
   .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
 ${Ft8EmissionJs.CSS}
+${AprsCarteJs.CSS}
 ${TraficLeoJs.CSS}  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
   .ck-l button { padding:2px 7px !important; }
   .ck-texte { margin-top:4px; height:120px; overflow-y:auto; padding:6px 8px; border-radius:8px; background:#0E1720; font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.45; word-break:break-word; }
@@ -2893,16 +2894,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
 </div>
 <div class="vue" id="v-aprs" hidden>
 <div style="padding:12px 16px">
-  <div class="carte">
-    <div class="paire">
-      <span><span class="val" id="a-n">0</span> <span class="petit">trames</span></span>
-      <span><span class="val" id="a-stations">0</span> <span class="petit">stations</span></span>
-      <span><span class="val ambre" id="a-iss">0</span> <span class="petit">par l'ISS</span></span>
-      <span><span class="val" id="a-loin">—</span> <span class="petit">km au plus loin</span></span>
-      <span class="petit" id="a-etat" style="margin-left:auto"></span>
-    </div>
-    <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
-  </div>
+${AprsCarteJs.HTML}
   <details class="carte" id="kiss-carte">
     <summary class="t" style="cursor:pointer;margin:0">Radio APRS en KISS (TH-D72, TM-D710, Mobilinkd…) <span id="kiss-pastille" class="pastille coupe">déconnectée</span></summary>
     <div class="ligne"><select id="kiss-port" style="flex:1"></select>
@@ -2944,11 +2936,14 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <div><div class="t">Dernières fêtes</div><div id="tr-fetes" class="petit"></div></div>
     </div>
   </details>
-  <div class="carte">
+  <details class="carte" id="a-trames">
+    <summary class="t" style="cursor:pointer;margin:0">Trames reçues (7 jours)
+      <span class="petit"><span id="a-n">0</span> trames · <span id="a-stations">0</span> stations · <span id="a-iss">0</span> par l'ISS · <span id="a-loin">—</span> km au plus loin</span></summary>
+    <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
     <div style="max-height:calc(100vh - 250px);overflow:auto">
       <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Locator</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
     </div>
-  </div>
+  </details>
 </div>
 </div>
 <div class="vue" id="v-agenda" hidden>
@@ -15501,6 +15496,7 @@ function dessineAprs() {
 g('a-filtre').oninput = () => { aVus = ''; dessineAprs(); };
 g('a-isss').onchange = () => { aVus = ''; dessineAprs(); };
 setInterval(ticAprs, 2000);
+${AprsCarteJs.CODE}
 // Served by the phone: it hears while it records (MP3), its passes recorded through its agenda.
 if (window.SATME_TELEPHONE) {
   g('s-note').textContent = 'MP3, comme sur le téléphone : il écoute en enregistrant. La source se choisit ici ; SatMe doit être à l’écran du téléphone pour prendre le micro.';

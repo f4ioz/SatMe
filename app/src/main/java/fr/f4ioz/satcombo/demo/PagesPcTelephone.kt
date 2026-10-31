@@ -184,6 +184,10 @@ object PagesPcTelephone {
                     val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
                     json(ApiRadio.aprs(a.paquets, a.ecoute, a.nouveaux, u.observer))
                 }
+                "/api/aprs/stations" -> {
+                    val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
+                    json(ApiRadio.stationsAprs(a.paquets, vm.indicatif(), u.observer, System.currentTimeMillis(), p("heures").toIntOrNull() ?: 48))
+                }
                 "/api/aprs/trophees" -> {
                     val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
                     json(ApiRadio.trophees(fr.f4ioz.satcombo.aprs.AprsHub.trophees.value, a.paquets, vm.indicatif(), u.observer,

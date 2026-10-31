@@ -144,6 +144,8 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
             }, emptyMap(), true, maintenant)
         File(dossier, "sstv-campagnes.json").writeText(campagnes(images).toString(), Charsets.UTF_8)
         runCatching { imagesSsdv(dossier) }
+        // Two days of made-up APRS, the ISS's real passes of those days carrying the far stations.
+        runCatching { AprsDemo(maintenant, observateur.latDeg, observateur.lonDeg, graine).genere(dossier, sats[ISS]?.let { passages(it, 2, 10.0) } ?: emptyList()) }
         File(dossier, ModeDemo.MARQUE).writeText("genere=$maintenant\ngraine=$graine\nversion=$VERSION\n", Charsets.UTF_8)
         return Bilan(nbPassages, contacts.size, images.sumOf { it.second.size }, sats.size)
     }
