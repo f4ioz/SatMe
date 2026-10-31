@@ -21,15 +21,15 @@ package fr.f4ioz.satcombo.demo
 object AprsCarteJs {
 
     const val CSS = """
-  .aq-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
-  .aq-tuile { background:var(--s2); border:1px solid var(--ligne); border-radius:var(--r3); padding:8px 12px; box-shadow:var(--ombre); min-width:0; }
+  .aq-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+  .aq-tuile { background:var(--s2); border:1px solid var(--ligne); border-radius:var(--r3); padding:4px 10px; box-shadow:var(--ombre); min-width:0; }
   .aq-tuile .aq-l { font-size:var(--fs-xs); color:var(--texte-2); text-transform:uppercase; letter-spacing:.04em; }
-  .aq-tuile .val { font-size:22px; line-height:1.2; }
+  .aq-tuile .val { font-size:19px; line-height:1.15; }
   .aq-tuile .aq-s { font-size:var(--fs-s); color:var(--texte-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .aq-tuile canvas { width:100%; height:26px; display:block; margin-top:2px; }
+  .aq-tuile canvas { width:100%; height:18px; display:block; margin-top:2px; }
   .aq-etat { grid-column:1/-1; font-size:var(--fs-s); color:var(--texte-2); margin-top:-2px; }
-  .aq-corps { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:10px; margin-bottom:10px; }
-  .aq-boite { position:relative; height:calc(100vh - 230px); min-height:420px; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#0D2433; }
+  .aq-corps { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:10px; height:calc(100vh - 210px); min-height:320px; }
+  .aq-boite { position:relative; height:100%; min-height:0; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#0D2433; }
   #aq-carte { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
   .aq-outils { position:absolute; left:8px; top:8px; display:flex; flex-direction:column; gap:6px; z-index:2; }
   .aq-outils button { width:34px; height:34px; padding:0; font-size:18px; line-height:1; background:rgba(15,22,29,.88); border:1px solid var(--ligne-forte); border-radius:8px; color:var(--texte); }
@@ -51,7 +51,15 @@ object AprsCarteJs {
   .aq-fiche .aq-ligne > span { min-width:0; overflow-wrap:anywhere; }
   .aq-fiche pre { margin:2px 0 0; white-space:pre-wrap; word-break:break-all; font-family:var(--mono); font-size:11px; color:var(--texte-2); background:var(--creux); padding:6px; border-radius:6px; }
   .aq-fiche a { color:var(--rx); }
-  .aq-cote { display:flex; flex-direction:column; min-width:0; height:calc(100vh - 230px); min-height:420px; }
+  .aq-cote { display:flex; flex-direction:column; min-width:0; height:100%; min-height:0; }
+  .aq-onglets { display:flex; gap:4px; margin-bottom:6px; flex:none; flex-wrap:wrap; }
+  .aq-onglets button { flex:1; padding:4px 6px; font-size:var(--fs-s); background:var(--s1); border:1px solid var(--ligne); color:var(--texte-2); border-radius:8px; white-space:nowrap; }
+  .aq-onglets button[aria-selected=true] { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .aq-pan { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .aq-pan[hidden] { display:none; }
+  .aq-pan.defile { overflow:auto; }
+  .aq-pan > details.carte { margin:0; }
+  .aq-pan > details.carte > summary { display:none; }
   .aq-cote .carte { flex:1; display:flex; flex-direction:column; min-height:0; margin:0; }
   .aq-filtres { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:6px; }
   .aq-filtres input[type=search] { flex:1 1 140px; min-width:0; }
@@ -74,9 +82,10 @@ object AprsCarteJs {
   .aq-passe { font-size:var(--fs-s); font-weight:700; color:var(--sat); padding:8px 4px 4px; border-bottom:1px solid var(--ligne); }
   .aq-vide { padding:16px 4px; color:var(--texte-2); font-size:var(--fs-s); }
   @media (max-width:1100px) {
-    .aq-corps { grid-template-columns:1fr; }
+    .aq-corps { grid-template-columns:1fr; height:auto !important; }
     .aq-boite { height:56vh; min-height:300px; }
     .aq-cote { height:auto; min-height:0; }
+    .aq-pan { max-height:70vh; }
     .aq-cote .carte { max-height:none; }
     .aq-liste { max-height:70vh; }
     .aq-fiche { left:6px; right:6px; top:auto; bottom:6px; width:auto; max-height:62%; }
@@ -99,7 +108,7 @@ object AprsCarteJs {
     <div class="aq-etat" id="a-etat"></div>
     <div class="pq" id="pq-aprs" data-pq="aprs" hidden></div>
   </div>
-  <div class="aq-corps">
+  <div class="aq-corps" id="aq-corps">
     <div class="aq-boite" id="aq-boite">
       <canvas id="aq-carte" aria-label="Carte des stations APRS entendues"></canvas>
       <div class="aq-outils">
@@ -120,7 +129,16 @@ object AprsCarteJs {
       <div class="aq-fiche" id="aq-fiche" hidden></div>
     </div>
     <div class="aq-cote">
-      <div class="carte">
+      <div class="aq-onglets" role="tablist" aria-label="À côté de la carte">
+        <button type="button" role="tab" data-p="aq-p-st" aria-selected="true">Stations</button>
+        <button type="button" role="tab" data-p="aq-p-trames" aria-selected="false">Trames</button>
+        <button type="button" role="tab" data-p="aq-p-kiss" aria-selected="false">Radio KISS</button>
+        <button type="button" role="tab" data-p="aq-p-tr" aria-selected="false">Trophées</button>
+      </div>
+      <div class="aq-pan" id="aq-p-trames" hidden></div>
+      <div class="aq-pan defile" id="aq-p-kiss" hidden></div>
+      <div class="aq-pan defile" id="aq-p-tr" hidden></div>
+      <div class="carte aq-pan" id="aq-p-st">
         <div class="aq-filtres">
           <input type="search" id="aq-q" placeholder="Chercher : indicatif, commentaire, locator…" aria-label="Chercher une station">
           <select id="aq-tri" aria-label="Trier"><option value="dernier">Dernière écoute</option><option value="proche">Distance, proche d’abord</option><option value="loin">Distance, loin d’abord</option><option value="call">Indicatif</option></select>
@@ -519,7 +537,27 @@ g('aq-q').oninput = () => { AQF.q = g('aq-q').value.trim(); aqDessineListe(); aq
 try { g('aq-osm').checked = localStorage.getItem('cg-osm') === '1'; } catch (x) {}
 g('aq-osm').onchange = () => { try { localStorage.setItem('cg-osm', g('aq-osm').checked ? '1' : '0'); } catch (x) {} if (g('cg-osm')) g('cg-osm').checked = g('aq-osm').checked; aqDessine(); };
 aqPuces();
+// The whole tab in the window: the KISS radio, the trophies and the raw frames go in tabs beside the map
+// (same elements, moved), and the map with its column takes the height left above the status bar.
+[['kiss-carte', 'aq-p-kiss'], ['tr-carte', 'aq-p-tr'], ['a-trames', 'aq-p-trames']].forEach(([d, p]) => {
+  const e = g(d); if (!e || !g(p)) return; e.open = true; g(p).appendChild(e);
+});
+(function () { const t = g('a-trames'); const boite = t && t.querySelector('div[style*="max-height"]'); if (boite) { boite.style.maxHeight = 'none'; boite.style.flex = '1'; boite.style.minHeight = '0'; }
+  if (t) { t.style.display = 'flex'; t.style.flexDirection = 'column'; t.style.flex = '1'; t.style.minHeight = '0'; } })();
+document.querySelectorAll('.aq-onglets button').forEach(b => { b.onclick = () => {
+  document.querySelectorAll('.aq-onglets button').forEach(x => { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); g(x.dataset.p).hidden = x !== b; });
+  try { localStorage.setItem('aq-onglet', b.dataset.p); } catch (x) {}
+}; });
+try { const o = localStorage.getItem('aq-onglet'); const b = o && document.querySelector('.aq-onglets button[data-p="' + o + '"]'); if (b) b.click(); } catch (x) {}
+function aqTaille() {
+  const c = g('aq-corps'); if (!c || g('v-aprs').hidden || window.innerWidth <= 1100) return;
+  const sb = g('sb'), bas = sb && sb.offsetParent !== null ? sb.getBoundingClientRect().top : window.innerHeight;
+  const h = Math.max(320, Math.floor(bas - c.getBoundingClientRect().top - 12));
+  if (c.style.height !== h + 'px') { c.style.height = h + 'px'; aqDessine(); }
+}
+window.addEventListener('resize', aqTaille);
 // Fetched when the tab opens, then every 5 s while it is open.
+setInterval(() => { if (ouverte('aprs')) aqTaille(); }, 1000);
 setInterval(() => { const o = ouverte('aprs'); if (o && (!aqOuvert || Date.now() - aqVu > 5000)) { aqTic(); if (!aqOuvert) setTimeout(aqDessine, 50); } aqOuvert = o; }, 500);
 """
 }
