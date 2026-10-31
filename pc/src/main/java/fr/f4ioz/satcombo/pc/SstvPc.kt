@@ -163,6 +163,8 @@ class SstvPc(
      * knows the station.
      */
     @Volatile var posteEntend: () -> Boolean = { false }
+    /** The card's sound lost (ms) between two moments (UTC ms): written on a picture from the card. */
+    @Volatile var perteEntre: (Long, Long) -> Long = { _, _ -> 0L }
 
     /**
      * A picture just kept with its own sound (its folder, its sidecar): for the
@@ -266,7 +268,9 @@ class SstvPc(
             val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, sat, finMs,
                 if (h != null) RELECTURE else "live", if (h != null) h.fichier else if (sat == c.satellite) c.enregistrement else "", c.locator, c.indicatif,
                 sonDe(decodeur, memoire), note = if (h == null && sat == c.satellite) c.note else "", entree = sourceActive,
-                trous = d?.trous.orEmpty(), ligne0Ms = ligne0) else null
+                trous = d?.trous.orEmpty(), ligne0Ms = ligne0,
+                // Its sound's losses: noted when the card's block was read, a moment before the decoder heard it.
+                sonPerduMs = if (sourceActive == CARTE && h == null && ligne0 > 0L) runCatching { perteEntre(ligne0 - 2_000L, finMs) }.getOrDefault(0L) else 0L) else null
             if (nom != null) runCatching {
                 val s = SstvMeta.decode(nom, File(dossier, SstvMeta.sidecarName(nom)).readText(Charsets.UTF_8))
                 if (SstvSon.fichier(File(dossier, nom)).isFile) imageGardee(dossier, s)
@@ -399,7 +403,7 @@ class SstvPc(
     private fun garde(mode: SstvMode, pixels: IntArray, lignes: Int, complete: Boolean, sat: String, quandMs: Long,
                       origine: String, enregistrement: String, locator: String, indicatif: String,
                       son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = "", entree: String = "",
-                      trous: List<IntRange> = emptyList(), ligne0Ms: Long = 0L, reunion: List<String> = emptyList(), nettoie: Boolean = nettoyage): String? = synchronized(verrouFichiers) {
+                      trous: List<IntRange> = emptyList(), ligne0Ms: Long = 0L, sonPerduMs: Long = 0L, reunion: List<String> = emptyList(), nettoie: Boolean = nettoyage): String? = synchronized(verrouFichiers) {
         dossier.mkdirs()
         val px = if (nettoie) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, lignes) }.getOrDefault(pixels) else pixels
         var nom = SstvMeta.fileName(sat.ifBlank { "SAT" }, quandMs, mode.name, complete)
@@ -413,7 +417,7 @@ class SstvPc(
         val meta = SstvMeta.SstvShot(fileName = nom, satName = sat, timeMs = quandMs, mode = mode.name, complete = complete,
             redecodeMs = if (origine == "file") horloge() else 0L, recale = recale,
             locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note, entree = entree,
-            trous = trous, ligne0Ms = ligne0Ms, reunion = reunion)
+            trous = trous, ligne0Ms = ligne0Ms, sonPerduMs = sonPerduMs, reunion = reunion)
         runCatching { File(dossier, SstvMeta.sidecarName(nom)).writeText(SstvMeta.encode(meta), Charsets.UTF_8) }
         son?.let { (pcm, rate) -> if (pcm.isNotEmpty()) runCatching { SstvSon.ecritWav(SstvSon.fichier(png), pcm, rate) } }
         nom

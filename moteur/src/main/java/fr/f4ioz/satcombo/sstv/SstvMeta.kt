@@ -64,6 +64,8 @@ object SstvMeta {
         val groupe: String = "",
         /** Rows lost to a fade or a jump of the sound, the picture going on after them ([SstvDecoder.trous]). */
         val trous: List<IntRange> = emptyList(),
+        /** Sound the capture lost while it came (ms; an overloaded PC): its holes filled with silence, a blank band in it. 0: none. */
+        val sonPerduMs: Long = 0L,
         /** When its row 0 began, UTC ms (0: not known — pictures before 27/10/2026): for [ReunionSstv]. */
         val ligne0Ms: Long = 0L,
         /** A picture put together from these partial ones ([ReunionSstv]), their PNG names. */
@@ -239,6 +241,7 @@ object SstvMeta {
         put("group", shot.groupe)
         if (shot.trous.isNotEmpty()) put("gaps", trousTexte(shot.trous))
         if (shot.ligne0Ms > 0L) put("row0", shot.ligne0Ms.toString())
+        if (shot.sonPerduMs > 0L) put("sonPerdu", shot.sonPerduMs.toString())
         if (shot.reunion.isNotEmpty()) put("merged", shot.reunion.joinToString(";"))
         put("mergedinto", shot.reunieDans)
         return sb.toString()
@@ -287,6 +290,7 @@ object SstvMeta {
                 "group" -> shot.copy(groupe = v.trim().take(120))
                 "gaps" -> shot.copy(trous = trousDe(v))
                 "row0" -> v.toLongOrNull()?.let { shot.copy(ligne0Ms = it) } ?: shot
+                "sonPerdu" -> v.toLongOrNull()?.takeIf { it > 0 }?.let { shot.copy(sonPerduMs = it) } ?: shot
                 "merged" -> shot.copy(reunion = v.split(';').map { it.trim() }.filter { it.isNotEmpty() })
                 "mergedinto" -> shot.copy(reunieDans = v.trim())
                 else -> shot

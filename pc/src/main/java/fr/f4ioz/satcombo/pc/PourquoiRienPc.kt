@@ -33,6 +33,9 @@ class PourquoiRienPc(
     /** The end of QO-100's Sun outage under way ([EblouissementPc]), null when none. */
     private val soleilFin: (Long) -> Long? = { null },
 ) {
+    /** Where /proc/loadavg is read (a fixture in the tests); null: not Linux. */
+    var racineCharge: java.io.File? = java.io.File("/").takeIf { System.getProperty("os.name").orEmpty().startsWith("Linux") }
+
     /** When each fact with no date of its own was first seen with its present value (« depuis »). */
     private val vus = HashMap<String, Pair<Any?, Long>>()
 
@@ -82,7 +85,14 @@ class PourquoiRienPc(
         val s = son?.son ?: return null
         val e = s.etat.value
         val m = s.mesure.instantane(t)
-        return PourquoiRien.Entree(e.actif, e.appareil, m.dernierBlocMs, m.rmsDbfs, m.creteDbfs, m.fenetreMs)
+        // The sound lost: during the pass under way (the satellite followed up), else the last quarter of an hour.
+        val st = station.etat.value
+        val aos = st.passage?.aosEpochMs?.takeIf { it <= t && (st.position?.elevationDeg ?: -1.0) >= 0 }
+        val de = maxOf(aos ?: (t - PourquoiRien.PERDU_RECENT_MS), s.debutMs)
+        val perdu = s.pertes.entre(de, t).takeIf { s.debutMs > 0L }
+        return PourquoiRien.Entree(e.actif, e.appareil, m.dernierBlocMs, m.rmsDbfs, m.creteDbfs, m.fenetreMs,
+            perdu, if (aos != null) "pendant ce passage" else "en ${PourquoiRien.duree(t - de)}",
+            racineCharge?.let { SonPc.chargeSysteme(it) }, Runtime.getRuntime().availableProcessors())
     }
 
     private fun contexte(t: Long, parSdr: Boolean) = PourquoiRien.Contexte(t, entree(t), parSdr, sdrEtat(), poste(t), ciel(t))

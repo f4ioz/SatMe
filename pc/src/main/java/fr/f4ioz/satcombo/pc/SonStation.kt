@@ -215,6 +215,10 @@ class SonStation(
             cw.ecoute(pcm, n, rate)
             clavier.ecoute(pcm, n, rate)
         }
+        // A hole in the card's sound: counted in the recording's sidecar, a cut written there as silence (the file keeps the pass's time).
+        son.trous += { n, comble, _ -> wav?.trou(n, comble) }
+        // A picture says how much of its sound the card lost while it came.
+        sstv.perteEntre = { de, a -> son.pertes.entre(de, a).ms }
     }
 
     // ------------------------------------------------------------ recording
@@ -226,7 +230,7 @@ class SonStation(
         val sat = station.etat.value.suivi?.name ?: "SAT"
         val safe = sat.replace(Regex("[^A-Za-z0-9-]"), "-").trim('-').ifBlank { "SAT" }
         val f = File(dossierEnregistrements, "SatMe_${safe}_${stamp(horloge())}.wav")
-        wav = EnregistreurWav(f, rate)
+        wav = EnregistreurWav(f, rate, horloge)
         basDepuis = 0L; vuLeve = false; finPrevue = 0L
         _etat.update { it.copy(enregistrement = f.name, depuisMs = horloge(), secondes = 0, auto = auto) }
         return null

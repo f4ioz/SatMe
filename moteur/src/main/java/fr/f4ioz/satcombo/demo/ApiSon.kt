@@ -38,6 +38,10 @@ object ApiSon {
         val libelles: Map<String, String> = emptyMap(),
         /** The rig's own card, when one is recognised ("" none). */
         val carteDuPoste: String = "",
+        /** Sound the card lost since it started (an overloaded PC): holes, total ms, the last (UTC ms); null where not measured. */
+        val sonPerdu: fr.f4ioz.satcombo.audio.SonPerdu.Bilan? = null,
+        /** Each recording's audio against the time it lasted (« son perdu »), where it is measured. */
+        val bilans: Boolean = false,
     )
 
     /** The SSTV decoder: settings, what it hears, the work under way. */
@@ -123,8 +127,11 @@ object ApiSon {
         .put("sstvMode", e.sstvMode).put("sstvLignes", e.sstvLignes).put("sstvHauteur", e.sstvHauteur)
         .put("sstvVersion", e.sstvVersion).put("sstvDerniere", e.sstvDerniere)
         .put("enregistrements", JSONArray(e.enregistrements.take(50).map {
-            JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
+            val o = JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
+            if (e.bilans) bilan(it)?.let { b -> o.put("bilan", b.texte()).put("perte", b.perte).put("perduPct", Math.round(b.pourcent * 10) / 10.0) }
+            o
         }))
+        .put("sonPerdu", e.sonPerdu?.let { b -> JSONObject().put("n", b.n).put("ms", b.ms).put("dernier", b.derniereMs).put("coupures", b.coupures) } ?: JSONObject.NULL)
         .put("images", JSONArray(e.images.take(200).let { l ->
             // « Réunir »: each partial picture's other half, when the two are one picture.
             val paires = fr.f4ioz.satcombo.sstv.ReunionSstv.paires(l.filter { it.source != "essai" })
@@ -132,6 +139,7 @@ object ApiSon {
         }.map { (it, avec) ->
             val o = JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
             if (it.trous.isNotEmpty()) o.put("trous", fr.f4ioz.satcombo.sstv.SstvMeta.trousTexte(it.trous))
+            if (it.sonPerduMs > 0L) o.put("sonPerdu", it.sonPerduMs)
             if (it.reunion.isNotEmpty()) o.put("reunion", JSONArray(it.reunion))
             if (avec != null) o.put("reunirAvec", avec)
             e.dossierImages?.let { d ->
@@ -147,6 +155,20 @@ object ApiSon {
             o
         }))
         .put("sstvDetail", e.detail?.let { sstv(it) } ?: JSONObject.NULL)
+
+    /** The recordings' verdicts, read again only when a file changed. */
+    private val bilansVus = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, fr.f4ioz.satcombo.audio.BilanEnregistrement.Bilan?>>()
+
+    /** [f]'s audio against the time it lasted ([fr.f4ioz.satcombo.audio.BilanEnregistrement]); null for an MP3 or one that cannot be told. */
+    fun bilan(f: File): fr.f4ioz.satcombo.audio.BilanEnregistrement.Bilan? {
+        if (!f.name.endsWith(".wav", ignoreCase = true)) return null
+        val cle = f.length() * 31 + f.lastModified() + fr.f4ioz.satcombo.audio.BilanEnregistrement.fichierTemps(f).lastModified()
+        bilansVus[f.path]?.takeIf { it.first == cle }?.let { return it.second }
+        val b = fr.f4ioz.satcombo.audio.BilanEnregistrement.bilan(f, SstvMeta.debutEnregistrement(f.name))
+        if (bilansVus.size > 500) bilansVus.clear()
+        bilansVus[f.path] = cle to b
+        return b
+    }
 
     /** A file asked for by name: only a plain name, inside [dossier], ending in one of [suffixes]; else null. */
     fun fichier(dossier: File, nom: String, vararg suffixes: String): File? {

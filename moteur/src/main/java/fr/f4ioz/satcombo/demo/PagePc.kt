@@ -10649,6 +10649,13 @@ async function essaiQrz() {
 // ------------------------------------------------------------------ sound and SSTV
 let S = null, versionImage = -1, cartesVues = '', imagesVus = '', enregsVus = '';
 const ouverte = n => !g('v-' + n).hidden;
+// « Son perdu »: the capture's holes since the card started (an overloaded PC), for the Son tab's state.
+function sonPerduTxt(p) {
+  if (!p || !p.n) return '';
+  const s = p.ms < 1000 ? p.ms + ' ms' : (p.ms / 1000).toFixed(1).replace('.', ',') + ' s';
+  return ' · son perdu : ' + s + ' (' + p.n + ' trou' + (p.n > 1 ? 's' : '') + ', dernier ' + hm(p.dernier) + ')';
+}
+function sonPerduImage(ms) { return ms ? (ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1).replace('.', ',') + ' s') : ''; }
 async function ticSon() {
   if (!(fluxOk && S)) { try { S = await (await fetch('api/son')).json(); } catch (x) { return; } }
   rendSon();
@@ -10670,7 +10677,8 @@ function rendSon() {
   if (document.activeElement !== g('s-carte') && S.carte) g('s-carte').value = S.carte;
   g('s-niveau').style.width = Math.round(Math.min(1, S.niveau) * 100) + '%';
   g('s-niveau').style.background = S.niveau > 0.9 ? 'var(--rose)' : 'var(--vert)';
-  txt('s-etat', S.erreur || (S.actif ? nomCarte(S.appareil || S.carte) + ' · ' + S.rate + ' Hz' : 'arrêtée'));
+  txt('s-etat', S.erreur || (S.actif ? nomCarte(S.appareil || S.carte) + ' · ' + S.rate + ' Hz' + sonPerduTxt(S.sonPerdu) : 'arrêtée'));
+  g('s-etat').title = S.sonPerdu && S.sonPerdu.n ? 'Son perdu par la capture (PC surchargé) : chaque trou est comblé de silence pour que la suite garde son heure (une image SSTV montre une bande vide au lieu d’être déchirée). Détail : api/son/bilan' : '';
   etatMarche('son', S.actif, 's-etat');
   txt('s-rec', S.enregistrement ? '■ Arrêter' : '● Enregistrer');
   txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
@@ -10684,11 +10692,12 @@ function rendSon() {
   document.querySelectorAll('.rec-los-l').forEach(l => l.hidden = S.coupeLos === null || S.coupeLos === undefined);
   if (document.activeElement !== g('s-sstv')) g('s-sstv').checked = S.sstv;
   if (document.activeElement !== g('s-aprs')) g('s-aprs').checked = S.aprs;
-  const enregs = JSON.stringify(S.enregistrements.map(e => e.nom + e.taille));
+  const enregs = JSON.stringify(S.enregistrements.map(e => e.nom + e.taille + (e.bilan || '')));
   if (enregs !== enregsVus && ouverte('son')) {
     enregsVus = enregs;
     g('s-liste').innerHTML = S.enregistrements.map(e => '<tr><td><a href="#" onclick="ecoute(\'' + enc(e.nom) + '\');return false">' + esc(e.nom) +
-      '</a></td><td class="petit">' + mo1(e.taille) + '</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
+      '</a>' + (e.perte ? ' <b class="badge-hors" title="' + escA(e.bilan) + '">son perdu ' + String(e.perduPct).replace('.', ',') + ' %</b>' : '') +
+      '</td><td class="petit"' + (e.bilan ? ' title="' + escA(e.bilan) + '"' : '') + '>' + mo1(e.taille) + '</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
       '<tr><td class="petit">aucun enregistrement</td></tr>';
   }
   // SSTV: the picture arriving, reloaded only when it moved.
@@ -10748,7 +10757,7 @@ function sstvTuile(i, n, genre) {
   return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
     '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + (genre ? '<span class="gal-type sstv">SSTV</span>' : '') + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
     ' · ' + (i.t ? galQuand(i.t) : '') + (i.complete ? '' : ' · partielle') +
-    (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
+    (i.redecode ? ' · redécodée' : '') + (i.sonPerdu ? ' · <b class="badge-hors" title="Son perdu pendant l’image : ' + sonPerduImage(i.sonPerdu) + ' (PC surchargé) — comblé de silence : une bande vide au lieu d’une image déchirée">son perdu ' + sonPerduImage(i.sonPerdu) + '</b>' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
     (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="' + (i.iaAuto ? 'Débruitage appris (IA), fait automatiquement' : 'Débruitage appris (IA) demandé pour cette image') + '">IA</b>' : '') + '</div></a>';
 }
 function galQuand(t) { return clJour(t) + '/' + new Date(t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(t) + (utc() ? ' UTC' : ''); }
@@ -11201,7 +11210,8 @@ function voisImage(n) {
   g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
   txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle',
     i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '',
-    i.reunion ? 'réunie de ' + i.reunion.length + ' images partielles' : '', i.trous ? 'lignes perdues ' + i.trous.replace(/;/g, ', ').replace(/-/g, '–') : ''].filter(x => x).join(' · '));
+    i.reunion ? 'réunie de ' + i.reunion.length + ' images partielles' : '', i.trous ? 'lignes perdues ' + i.trous.replace(/;/g, ', ').replace(/-/g, '–') : '',
+    i.sonPerdu ? 'son perdu pendant l’image : ' + sonPerduImage(i.sonPerdu) + ' (PC surchargé ; comblé de silence)' : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
   VR = null; viRetCle = ''; VC = null; viCorrCharge();
