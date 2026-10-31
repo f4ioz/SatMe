@@ -4482,6 +4482,7 @@ ${Ft8EmissionJs.BANDEAU}
         <button onclick="post('api/ft8?vide=1').then(() => { f8Lignes = []; f8Total = 0; })">Effacer</button>
         <input id="8-filtre" placeholder="Filtrer : indicatif, pays, locator…" style="max-width:200px">
         <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
+        <label class="petit" id="8-deux-l" title="L’autre mode décodé aussi, dans ses propres créneaux (FT4 en écoutant le FT8, FT8 en écoutant le FT4) : ses lignes rejoignent la liste, le journal du passage et le site. Réception seule."><input type="checkbox" id="8-deux" onchange="post('api/ft8?deux=' + (this.checked ? 1 : 0))"> <span id="8-deux-m">+ FT4</span></label>
         <span class="bascule-c" style="margin-left:auto"><button id="8-b-tableau" class="actif" onclick="f8Montre('tableau')">📊 Tableau</button><button id="8-b-messages" onclick="f8Montre('messages')">💬 Messages</button></span>
         <span class="petit" id="8-etat"></span>
         <button class="primaire repare" id="f8-repare" hidden onclick="hsRepare()"></button>
@@ -15308,6 +15309,7 @@ async function ticFt8() {
   if (!H.present) return;
   etatMarche('8', H.enMarche, 'aucune');
   if (document.activeElement !== g('8-mode')) g('8-mode').value = H.mode;
+  if (g('8-deux')) { g('8-deux').checked = !!H.deuxModes; txt('8-deux-m', '+ ' + (H.mode === 'FT4' ? 'FT8' : 'FT4')); g('8-deux-l').hidden = H.deuxModes == null; }
   txt('8-etat', !H.carte ? carteArretee() : H.enMarche ? (S && S.actif && S.appareil ? nomCarte(S.appareil) + ' · ' : '') + H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
   // The page served by the phone has no stream of rows: its whole waterfall each time.
   if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
@@ -15430,8 +15432,9 @@ function listeFt8() {
     return '<tr' + sep + ' data-i="' + i + '"' + (e.de ? ' title="Double-clic : répondre à ' + esc(e.de) + '"' : '') + '><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td title="' + esc(e.pays || '') + (e.cont ? ' · ' + (F8_CONT[e.cont] || e.cont) : '') + '">' + f8Drapeau(e.drapeau) +
       '</td><td style="color:' + coul + ';font-weight:700">' + esc(e.de || '') + (e.nouveauPays ? ' ★' : '') + '</td><td>' + barre + '<span class="petit">' + e.db + '</span></td><td class="petit">' + e.hz +
       '</td><td style="font-family:ui-monospace,Consolas,monospace;color:' + coul + '">' + esc(e.texte) + f8Tags(e, true) +
-      '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td style="white-space:nowrap">' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' +
-        '<button class="f8-rep" title="Répondre à cette station (émission FT8/FT4)" onclick="f8txRepond(f8txLignes[' + i + '])">↩</button>' : '') + '</td></tr>';
+      (e.mode && e.mode !== H.mode ? ' <span class="f8-tag" style="color:#A98BFF;border-color:#A98BFF" title="Décodé dans l’autre mode (« + ' + e.mode + ' »)">' + e.mode + '</span>' : '') +
+      '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td style="white-space:nowrap">' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' + (e.mode && e.mode !== H.mode ? '' :
+        '<button class="f8-rep" title="Répondre à cette station (émission FT8/FT4)" onclick="f8txRepond(f8txLignes[' + i + '])">↩</button>') : '') + '</td></tr>';
   }).join('') || '<tr><td colspan="8" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
   dessineRadar();
 }

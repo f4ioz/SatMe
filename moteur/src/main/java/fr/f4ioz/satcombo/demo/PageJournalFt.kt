@@ -37,6 +37,11 @@ object PageJournalFt {
   #cadreFt .auto { position:absolute; right:3px; top:3px; font-size:10px; font-family:system-ui,sans-serif; padding:1px 6px; background:rgba(5,10,16,.85); display:none; }
   #cadreFt.manuel:hover .auto { display:block; }
   .ft-bloc .s-curseur input { width:140px; }
+  /* The digital zones (SatMe-PC): violet on the timeline, listed in Options with their decodes. */
+  .num-zone { cursor:pointer; border-radius:5px; padding:1px 4px; }
+  .num-zone.choisie { background:rgba(157,107,255,.18); outline:1px solid rgba(157,107,255,.6); }
+  .num-lignes { max-height:180px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:.88em; margin:4px 0; }
+  .num-lignes .h { color:#9AA7B4; white-space:pre; }
 """
 
     const val JS = """
@@ -154,8 +159,8 @@ function blocFt(p) {
     b.appendChild(el('div', { class: 'aide', text: T.ft_aide }));
   } else b.appendChild(el('div', { class: 'aide', text: T.ft_aucun }));
   if (relire) {
-    const m = el('select', {}, ['FT8', 'FT4'].map(x => el('option', { value: x, text: x })));
-    if (P.ft && P.ft.length && String(P.ft[0].m).toUpperCase() === 'FT4') m.value = 'FT4';
+    // Both by default: after the fact, which one was on the air is rarely known (RS-44, 27 October 2026: FT4 read as FT8).
+    const m = el('select', {}, [['FT4+FT8', T.ft_deux], ['FT8', 'FT8'], ['FT4', 'FT4']].map(x => el('option', { value: x[0], text: x[1] })));
     const z = el('span', { class: 'aide', text: ftMsg });
     const bt = el('button', { class: 'discret', text: T.ft_redecoder, title: T.ft_redecode_aide, onclick: () => ftRedecode(m.value, z, bt) });
     b.appendChild(el('div', { class: 'rangee' }, [m, bt, z]));
@@ -175,6 +180,121 @@ async function ftRedecode(mode, z, bt) {
     if (S && P && P.id === id) rechargeEditeur(); else { z.textContent = ftMsg; bt.disabled = false; }
     return;
   }
+}
+
+// ------------------------------------------------------------ the digital zones (SatMe-PC)
+// Where the recordings hold FT4, FT8 or other narrow bursts (ZonesNumeriques on the station): violet on the timeline,
+// labelled; a click in one chooses it (its strip opens it in Options); there, read now by both decoders, the messages
+// listed with their times and kept with the pass; « Rechercher le numérique » scans the recordings again and reads every
+// zone; the pass's messages then go to the web site as the FT8 tab's 🌐 (« Publication web », by hand).
+const NUM_COUL = '#9D6BFF';
+let numZones = [], numSel = null, numLignes = null, numMsg = '', numId = '';
+function numPasse(id) {
+  if (id !== numId) { numId = id; numZones = []; numSel = null; numLignes = null; numMsg = ''; }
+  if (!window.SATME_PC) return;
+  lire('/numerique', { id: id }).then(a => {
+    if (!P || P.id !== id || !Array.isArray(a)) return;
+    numZones = a; if (numSel) numSel = a.find(z => z.de === numSel.de) || null;
+    dessineFrise(); if (onglet === 'options') panneau();
+  }).catch(() => {});
+}
+function numDessine(x, w, h) {
+  numZones.forEach(z => {
+    const a = tx(z.de, w), b = tx(z.a, w); if (b < 0 || a > w) return;
+    const l = Math.max(3, b - a), choisie = !!(numSel && numSel.de === z.de);
+    x.fillStyle = choisie ? 'rgba(157,107,255,.22)' : 'rgba(157,107,255,.10)'; x.fillRect(a, 4, l, h - 20);
+    x.fillStyle = NUM_COUL; x.fillRect(a, 45, l, 10);
+    if (choisie) { x.strokeStyle = NUM_COUL; x.lineWidth = 1.5; x.strokeRect(a + .75, 4.75, l - 1.5, h - 21.5); }
+    if (l > 24) {
+      x.save(); x.beginPath(); x.rect(a, 44, l, 12); x.clip();
+      x.fillStyle = '#0B1016'; x.font = 'bold 9px system-ui'; x.textAlign = 'left';
+      x.fillText(z.l + (l > 80 ? ' · ' + tf('num_salves', z.n) : ''), a + 3, 53.5); x.restore();
+    }
+  });
+}
+function numA(tt) { return numZones.find(z => tt >= z.de && tt <= z.a) || null; }
+/** A click on the timeline at [tt], [y] px down: in a zone, it is chosen; on its strip, Options opens on it (true: no seek). */
+function numClic(tt, y) {
+  const z = numA(tt); if (!z) return false;
+  if (!numSel || numSel.de !== z.de) { numSel = z; numLignes = null; }
+  dessineFrise();
+  if (y >= 42 && y <= 58) { onglet = 'options'; panneau(); const b = g('numBloc'); if (b) b.scrollIntoView({ block: 'nearest' }); return true; }
+  if (onglet === 'options') panneau();
+  return false;
+}
+/** A station's background work followed (« /travail »), [z] saying how far; [fin] with its last word. */
+async function numSuit(n, z, fin) {
+  while (true) {
+    await new Promise(r => setTimeout(r, 800));
+    let e = null; try { e = await lire('/travail', { n: n }); } catch (x) { fin(null); return; }
+    if (!e.fini) { if (z) z.textContent = tf('ft_en_cours', Math.round(e.progres * 100)); continue; }
+    fin(e); return;
+  }
+}
+async function numCherche(z, bt) {
+  if (!P) return; const id = P.id;
+  bt.disabled = true; z.textContent = tf('ft_en_cours', 0);
+  let j = null; try { j = await lire('/numerique/cherche', { id: id }); } catch (e) {}
+  if (!j || !j.ok) { z.textContent = T.echec; bt.disabled = false; return; }
+  numSuit(j.travail, z, e => {
+    if (!e || e.trouves < 0) { numMsg = T.echec; z.textContent = numMsg; bt.disabled = false; return; }
+    if (P && P.id === id) numZones = e.resultat || [];
+    numSel = null; numLignes = null;
+    numMsg = tf('num_trouves', numZones.length, e.trouves);
+    if (e.trouves > 0 && S && P && P.id === id) rechargeEditeur(); else { dessineFrise(); panneau(); }
+  });
+}
+async function numDecode(x, bt) {
+  if (!P) return; const id = P.id;
+  numSel = x; bt.disabled = true; bt.textContent = tf('ft_en_cours', 0);
+  let j = null; try { j = await lire('/numerique/decode', { id: id, de: x.de, a: x.a }); } catch (e) {}
+  if (!j || !j.ok) { bt.textContent = T.echec; bt.disabled = false; return; }
+  numSuit(j.travail, bt, e => {
+    numLignes = e && Array.isArray(e.resultat) ? e.resultat : [];
+    numMsg = e && e.trouves >= 0 ? tf('ft_trouves', e.trouves) : T.echec;
+    if (e && e.trouves > 0 && S && P && P.id === id) rechargeEditeur(); else { dessineFrise(); panneau(); }
+  });
+}
+async function numPublie(s) {
+  if (!P) return;
+  let j = null; try { j = await envoie('/numerique/publie', { id: P.id }); } catch (e) {}
+  s.textContent = j ? (j.ok ? '🌐 ' + j.message : '✗ ' + (j.erreur || T.echec)) : '✗ ' + T.echec;
+}
+/** The Options tab's block of the digital zones (SatMe-PC, a pass with its sound). */
+function blocNum(p) {
+  if (!window.SATME_PC || !S || !P || !P.sons.length) return;
+  const b = el('div', { class: 'ft-bloc', id: 'numBloc' });
+  b.appendChild(titreBloc(T.num_titre));
+  b.appendChild(el('div', { class: 'aide', text: T.num_aide }));
+  const z = el('span', { class: 'aide', text: numMsg });
+  const bt = el('button', { class: 'discret', text: T.num_chercher, title: T.num_chercher_aide });
+  bt.addEventListener('click', () => numCherche(z, bt));
+  b.appendChild(el('div', { class: 'rangee' }, [bt, z]));
+  if (!numZones.length) b.appendChild(el('div', { class: 'aide', text: T.num_aucune }));
+  numZones.forEach(x => {
+    const d = el('button', { class: 'discret', text: T.num_decoder });
+    d.addEventListener('click', ev => { ev.stopPropagation(); numDecode(x, d); });
+    const r = el('div', { class: 'rangee num-zone' + (numSel && numSel.de === x.de ? ' choisie' : '') }, [
+      el('b', { style: 'color:' + NUM_COUL, text: x.l }),
+      el('span', { class: 'aide', text: ftHeure(x.de) + ' – ' + ftHeure(x.a) + ' UTC · ' + tf('num_salves', x.n) + ' · ' + x.bas + '–' + x.haut + ' Hz' }), d]);
+    r.addEventListener('click', () => { if (!numSel || numSel.de !== x.de) numLignes = null; numSel = x; cherche(x.de); dessineFrise(); panneau(); });
+    b.appendChild(r);
+  });
+  if (numLignes) {
+    const l = el('div', { class: 'num-lignes' });
+    if (!numLignes.length) l.appendChild(el('div', { class: 'aide', text: T.num_rien }));
+    numLignes.forEach(d => l.appendChild(el('div', { title: 'dt ' + d.dt + ' s' }, [
+      el('span', { class: 'h', text: ftHeure(d.t) + ' ' + d.m + ' ' + String(d.db).padStart(3, ' ') + ' ' + String(d.hz).padStart(4, ' ') + ' ' }),
+      el('span', { text: d.x })])));
+    b.appendChild(l);
+  }
+  if (P.siteFt && P.ft && P.ft.length) {
+    const s = el('span', { class: 'aide' });
+    const pb = el('button', { class: 'discret', text: '🌐 ' + T.num_publier, title: T.num_publier_aide });
+    pb.addEventListener('click', () => numPublie(s));
+    b.appendChild(el('div', { class: 'rangee' }, [pb, s]));
+  }
+  p.appendChild(b);
 }
 """
 }

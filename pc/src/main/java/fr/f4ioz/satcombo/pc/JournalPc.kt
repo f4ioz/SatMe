@@ -310,6 +310,25 @@ class JournalPc(
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Where the pass's recordings hold digital traffic (FT4, FT8, other narrow bursts: [ZonesNumeriques]), as pass
+     * times; worked out once, kept next to each recording (« .numerique »), again when [refait] (« Rechercher le
+     * numérique »).
+     */
+    fun zones(e: JournalPassage.Entree, refait: Boolean = false): List<fr.f4ioz.satcombo.domain.ZonesNumeriques.Zone> = morceaux(e).flatMap { m ->
+        val Z = fr.f4ioz.satcombo.domain.ZonesNumeriques
+        runCatching {
+            val garde = File(m.f.parentFile, m.f.name.substringBeforeLast('.') + ".numerique")
+            if (!refait && garde.isFile && garde.lastModified() >= m.f.lastModified()) Z.lit(garde.readText(), m.origine) else {
+                var mesure: fr.f4ioz.satcombo.domain.ZonesNumeriques.Mesure? = null
+                decodeur.decode(m.f) { pcm, n, rate -> (mesure ?: fr.f4ioz.satcombo.domain.ZonesNumeriques.Mesure(rate).also { mesure = it }).ajoute(pcm, n); true }
+                val l = mesure?.let { Z.zones(Z.salves(it, m.origine)) } ?: emptyList()
+                runCatching { garde.writeText(Z.ecrit(l, m.origine)) }
+                l
+            }
+        }.getOrDefault(emptyList())
+    }
+
     /** A moment's sound as a WAV file in [dossier], from the pass's recordings; null when none covers it. */
     fun extraitWav(e: JournalPassage.Entree, deMs: Long, aMs: Long, dossier: File, nom: String): File? {
         val s = SonPassage.fabrique(morceaux(e), deMs, aMs, dossier, decodeur) ?: return null

@@ -221,12 +221,15 @@ class StationPc(
         }
         override fun donnees() = runCatching { donneesFt8() }.getOrDefault(false)
         override fun emissionEnCours() = runCatching { posteEmet() }.getOrDefault(false)
+        override fun dopplerFin() = runCatching { dopplerFinFt8() }.getOrDefault(false)
     }, horloge)
 
     // ---------------------------------------------------------------- data mode (USB-D) for FT8/FT4
 
     /** FT8/FT4 wants the rig in its data modes now (set by Main: armed, listening, « Mode données » ticked). */
     @Volatile var donneesFt8: () -> Boolean = { false }
+    /** FT8/FT4 listens: the downlink's Doppler written by fine steps ([StationCat.pasDopplerHz]; set by Main). */
+    @Volatile var dopplerFinFt8: () -> Boolean = { false }
     /** The rig is keyed (anyone's PTT): no mode written meanwhile (set by Main). */
     @Volatile var posteEmet: () -> Boolean = { false }
     /** The data flags switched for FT8/FT4 and what to put back. */

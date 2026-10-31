@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.domain.Ft8
 import fr.f4ioz.satcombo.domain.Ft8Signal
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -151,5 +152,44 @@ class Ft8PcTest {
         assertTrue(!encore.enMarche)
         // Never on its own the first time.
         assertTrue(!Ft8Pc(fr.f4ioz.satcombo.plateforme.StockageMemoire(), null).also { it.reprend() }.enMarche)
+    }
+
+    @Test
+    fun en_ecoutant_le_ft8_le_ft4_est_decode_aussi() {
+        // RS-44, 27 October 2026: FT4 on the air, the listening in FT8. The other mode read too, its lines marked FT4.
+        val t0 = 1_793_118_600_000L / 15_000L * 15_000L - 1_000L
+        val rate = 12_000
+        var verses = 0L
+        val f = Ft8Pc { t0 + verses * 1000L / rate }
+        f.deuxModes = true
+        f.demarre("FT8")
+        val slot = t0 + 1_000L
+        val a = fr.f4ioz.satcombo.ft.EnregistrementFt.fabrique(t0, 17.0, rate, listOf(
+            fr.f4ioz.satcombo.ft.EnregistrementFt.Emission("CQ F5LMG IN88", "FT4", slot, 1744.0, -6.0, 0.3),
+            fr.f4ioz.satcombo.ft.EnregistrementFt.Emission("F5LMG OH5MWL +06", "FT4", slot + 7_500L, 949.0, -6.0, 0.1)))
+        val bloc = ShortArray(1024)
+        var i = 0
+        fun jusqua(n: Int) {
+            while (i < n) {
+                val k = minOf(bloc.size, n - i)
+                for (j in 0 until k) bloc[j] = (a[i + j].coerceIn(-1f, 1f) * 32767).toInt().toShort()
+                verses += k; f.ecoute(bloc, k, rate); i += k
+            }
+        }
+        // As in real time: the first FT4 slot read before the next closes (a decoder behind skips the other mode).
+        jusqua(9 * rate)
+        val fin = System.currentTimeMillis() + 60_000
+        while (f.entendus.isEmpty() && System.currentTimeMillis() < fin) Thread.sleep(50)
+        jusqua(a.size)
+        while (f.entendus.size < 2 && System.currentTimeMillis() < fin) Thread.sleep(50)
+        Thread.sleep(300)
+        assertEquals(setOf("CQ F5LMG IN88" to slot, "F5LMG OH5MWL +06" to slot + 7_500L), f.entendus.map { it.texte to it.tranche }.toSet())
+        assertTrue(f.entendus.all { it.mode == "FT4" })
+        // The chosen mode's own counters: one FT8 slot heard, nothing in it.
+        assertEquals("FT8", f.mode)
+        assertEquals(1, f.tranches); assertEquals(1, f.sansDecodage)
+        assertTrue(f.dernierAutreMs > 0)
+        // Off: the FT4 is no longer read.
+        assertFalse(Ft8Pc().deuxModes)
     }
 }

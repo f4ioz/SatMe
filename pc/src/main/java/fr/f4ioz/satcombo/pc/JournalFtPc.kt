@@ -8,8 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
-import fr.f4ioz.satcombo.domain.Ft8Decodeur
-import fr.f4ioz.satcombo.domain.Ft8Signal
+import fr.f4ioz.satcombo.domain.Ft8HorsLigne
 import fr.f4ioz.satcombo.domain.JournalFt
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.SonPassage
@@ -117,57 +116,81 @@ class JournalFtPc(
     fun oublie(e: JournalPassage.Entree) { fichier(e).delete() }
 
     /**
-     * The pass's recordings read again by SatMe's decoder in [mode] (FT8 or FT4): their sound cut in UTC slots
-     * (a recording's start is its name's second), each slot read as the live decoder does; what it finds kept with
-     * the pass. Returns how many messages came out (0: none, or no recording).
+     * The pass's recordings read again by SatMe's decoder in [mode] (FT8, FT4, or both: « FT4+FT8 »), the whole
+     * pass ([stretch] over it). Returns how many messages came out (0: none, or no recording).
      */
     fun redecode(e: JournalPassage.Entree, morceaux: List<SonPassage.Morceau>, decodeur: SonPassage.Decodeur, mode: String,
                  progres: (Float) -> Unit = {}): Int {
-        val m = if (mode.uppercase() == "FT4") "FT4" else "FT8"
-        val sig = if (m == "FT4") Ft8Signal.FT4 else Ft8Signal.FT8
-        val duree = JournalFt.dureeTranche(m)
-        val total = morceaux.sumOf { it.dureeMs }.coerceAtLeast(1L)
-        var fait = 0L
+        val de = morceaux.minOfOrNull { it.origine } ?: return 0
+        val a = morceaux.maxOf { it.origine + it.dureeMs }
+        return stretch(e, morceaux, decodeur, de, a, modes(mode), progres).size
+    }
+
+    /**
+     * The stretch [deMs]..[aMs] (UTC) of the pass's recordings read again by SatMe's decoder ([Ft8HorsLigne]: the
+     * sound cut on the UTC slots, a second's margin each side so a recording's start known to the second loses
+     * nothing), in each of [modes]; what it finds kept with the pass ([garde]) and returned, slot by slot.
+     */
+    fun stretch(e: JournalPassage.Entree, morceaux: List<SonPassage.Morceau>, decodeur: SonPassage.Decodeur, deMs: Long, aMs: Long,
+                modes: List<String>, progres: (Float) -> Unit = {}): List<JournalFt.Decode> {
+        val pris = morceaux.filter { it.origine < aMs + MARGE_LECTURE_MS && it.origine + it.dureeMs > deMs - MARGE_LECTURE_MS }
         val trouves = ArrayList<JournalFt.Decode>()
-        for (mc in morceaux) {
-            var facteur = 0; var cadence = 0
-            var somme = 0; var dans = 0; var n = 0L
-            var tranche = Long.MIN_VALUE; var tampon = FloatArray(0); var remplis = 0
-            fun lis() {
-                if (tranche == Long.MIN_VALUE || remplis < tampon.size * 6 / 10) return
-                val debut = tranche * duree
-                runCatching { Ft8Decodeur.decode(tampon, cadence.toDouble(), sig, profondeur = Ft8Decodeur.Profondeur.NORMALE) }.getOrDefault(emptyList()).forEach {
-                    trouves += JournalFt.Decode(debut, m, it.rapportDb, it.instantS, Math.round(it.frequenceHz).toInt(), it.message.brut,
-                        it.message.appelant, it.message.appele, it.message.locator, it.ap, e.catnum)
+        val etapes = (pris.size * modes.size).coerceAtLeast(1)
+        pris.forEachIndexed { i, mc ->
+            val (audio, cadence, origine) = lisMorceau(mc, decodeur, deMs - MARGE_LECTURE_MS, aMs + MARGE_LECTURE_MS) ?: return@forEachIndexed
+            modes.forEachIndexed { k, m ->
+                Ft8HorsLigne.decode(audio, cadence, origine, deMs, aMs, m) { progres(((i * modes.size + k + it) / etapes).coerceIn(0f, 0.99f)) }.forEach { x ->
+                    trouves += JournalFt.Decode(x.trancheMs, x.mode, x.decode.rapportDb, Math.round(x.dtS * 100) / 100.0,
+                        Math.round(x.decode.frequenceHz).toInt(), x.decode.message.brut, x.decode.message.appelant, x.decode.message.appele,
+                        x.decode.message.locator, x.decode.ap, e.catnum)
                 }
             }
+        }
+        val l = trouves.distinctBy { it.tMs.toString() + it.mode + it.message }.sortedWith(compareBy({ it.tMs }, { -it.db }))
+        if (l.isNotEmpty()) garde(e, l)
+        progres(1f)
+        return l
+    }
+
+    companion object {
+        /** A slot's margins and the decoder's: read this much of sound either side of the stretch asked. */
+        const val MARGE_LECTURE_MS = 2_000L
+
+        /** « FT4 », « FT8 », else both (FT4 first: what a LEO pass mostly carries). */
+        fun modes(mode: String): List<String> = when (mode.trim().uppercase()) { "FT4" -> listOf("FT4"); "FT8" -> listOf("FT8"); else -> listOf("FT4", "FT8") }
+
+        /**
+         * A recording's sound between [deMs] and [aMs] (UTC), brought down by an integer factor to about 12 kHz:
+         * the samples, their rate, the UTC time of the first; null when it holds nothing of it.
+         */
+        fun lisMorceau(mc: SonPassage.Morceau, decodeur: SonPassage.Decodeur, deMs: Long, aMs: Long): Triple<FloatArray, Int, Long>? {
+            var facteur = 0; var cadence = 0
+            var somme = 0; var dans = 0; var n = 0L
+            var debut = -1L
+            var sortie = FloatArray(0); var ecrits = 0
             runCatching {
                 decodeur.decode(mc.f) { pcm, k, rate ->
-                    if (facteur == 0) { facteur = Math.round(rate / 12_000.0).toInt().coerceAtLeast(1); cadence = rate / facteur }
+                    if (facteur == 0) {
+                        facteur = Math.round(rate / 12_000.0).toInt().coerceAtLeast(1); cadence = rate / facteur
+                        val i0 = ((deMs - mc.origine).coerceAtLeast(0L) * cadence / 1000)
+                        val i1 = ((aMs - mc.origine).coerceAtMost(mc.dureeMs + 1000L) * cadence / 1000)
+                        if (i1 <= i0) return@decode false
+                        debut = i0; sortie = FloatArray((i1 - i0).toInt())
+                    }
                     for (i in 0 until k) {
                         somme += pcm[i]; dans++
                         if (dans < facteur) continue
                         val v = somme / facteur / 32768f; somme = 0; dans = 0
-                        // The sample's time to the sample (a millisecond holds twelve of them).
-                        val t = mc.origine + n * 1000.0 / cadence; n++
-                        val tr = Math.floor(t / duree).toLong()
-                        if (tr != tranche) { lis(); tranche = tr; tampon = FloatArray((duree * cadence / 1000).toInt()); remplis = 0 }
-                        val pos = ((t - tr * duree) * cadence / 1000.0).toInt()
-                        if (pos in tampon.indices) { tampon[pos] = v; remplis++ }
+                        if (n >= debut && ecrits < sortie.size) sortie[ecrits++] = v
+                        n++
                     }
-                    progres(((fait + n * 1000L / cadence.coerceAtLeast(1)).toFloat() / total).coerceIn(0f, 0.99f))
-                    true
+                    ecrits < sortie.size
                 }
-                lis()
             }
-            fait += mc.dureeMs
+            if (debut < 0 || ecrits == 0) return null
+            return Triple(sortie.copyOf(ecrits), cadence, mc.origine + debut * 1000 / cadence)
         }
-        if (trouves.isNotEmpty()) garde(e, trouves)
-        progres(1f)
-        return trouves.size
-    }
 
-    companion object {
         /** The days' files: a week and a half, time for a pass to close and keep its own. */
         const val GARDE_JOURS = 10L
         /** A message a little before the AOS or after the LOS still the pass's. */
