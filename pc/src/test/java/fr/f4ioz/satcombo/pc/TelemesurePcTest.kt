@@ -112,6 +112,61 @@ class TelemesurePcTest {
         } finally { s.stop(0) }
     }
 
+    @Test fun `paquets par la carte son - la carte ouverte seulement choisie, les trames avec la frequence de la CAT`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val t = TelemesurePc(stockage(), dir, null)
+        val ouvertes = java.util.concurrent.CopyOnWriteArrayList<String>()
+        var fermees = 0
+        var recoit: ((ShortArray, Int, Int) -> Unit)? = null
+        t.cartes = { listOf("Carte USB TS-2000") }
+        t.ouvreCarte = { nom, r -> ouvertes += nom; recoit = r; ({ fermees++; recoit = null; Unit }) to "" }
+        t.contextePaquetsSon = { essai -> fr.f4ioz.satcombo.telemesure.RecepteurPaquets.Contexte("Q0SAT", 99999, 435_100_500L, 435_100_000L, essai) }
+        t.appliqueSonPaquets()
+        assertEquals(TelemesurePc.SOURCE_SDR, t.paquetsSource)
+        // A card chosen, the option off: nothing opened.
+        t.action("/api/telemesure/paquets/source", mapOf("v" to "son"))
+        t.action("/api/telemesure/paquets/carte", mapOf("v" to "Carte USB TS-2000"))
+        assertTrue(ouvertes.isEmpty())
+        t.action("/api/telemesure/paquets", mapOf("on" to "1"))
+        assertEquals(listOf("Carte USB TS-2000"), ouvertes)
+        assertEquals(fr.f4ioz.satcombo.telemesure.RecepteurPaquets.SOURCE_SON, t.paquets.sourceEnMarche)
+        // The dongle's I/Q is not taken while the sound is the source.
+        t.iqSdr(ByteArray(4096), null, 4096, 0.0, false)
+        assertEquals(fr.f4ioz.satcombo.telemesure.RecepteurPaquets.SOURCE_SON, t.paquets.sourceEnMarche)
+        val trames = (1..3).map { fr.f4ioz.satcombo.telemesure.SignalPaquets.trameTelemesure(it) }
+        val son = fr.f4ioz.satcombo.telemesure.SignalPaquets.bandeBase(fr.f4ioz.satcombo.telemesure.G3ruh.bits(trames), 48_000, 9_600, 18.0, 7, inverse = true)
+        var k = 0
+        while (k < son.size) { val m = minOf(1920, son.size - k); recoit!!(son.copyOfRange(k, k + m), m, 48_000); k += m; Thread.sleep(1) }
+        val fin = System.currentTimeMillis() + 20_000
+        while (t.paquets.trames.size < 3 && System.currentTimeMillis() < fin) Thread.sleep(50)
+        val j = t.json().getJSONObject("paquets")
+        assertEquals("son", j.getString("source"))
+        assertEquals("Carte USB TS-2000", j.getString("carteOuverte"))
+        assertEquals("son", j.getJSONObject("etat").getString("source"))
+        assertEquals(3, j.getJSONArray("trames").length())
+        assertEquals(435_100_500L, j.getJSONArray("trames").getJSONObject(0).getLong("f"))
+        assertEquals(3, File(dir, "telemesure/paquets").listFiles()!!.single { it.name.endsWith(".jsonl") }.readLines().size)
+        // Back to the Son tab's card: the packets' own card closed; the option off: the decoder stopped.
+        t.action("/api/telemesure/paquets/carte", mapOf("v" to ""))
+        assertEquals(1, fermees)
+        t.action("/api/telemesure/paquets", mapOf("on" to "0"))
+        assertEquals(null, t.paquets.sourceEnMarche)
+        assertEquals(1, ouvertes.size)
+    }
+
+    @Test fun `paquets par la carte son - l'essai en bande de base ne garde rien`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val t = TelemesurePc(stockage(), dir, null)
+        t.action("/api/telemesure/paquets/source", mapOf("v" to "son"))
+        assertTrue(t.lanceEssaiPaquets())
+        val fin = System.currentTimeMillis() + 60_000
+        while (t.json().getJSONObject("paquets").getBoolean("essaiEnCours") && System.currentTimeMillis() < fin) Thread.sleep(100)
+        val j = t.json().getJSONObject("paquets")
+        assertTrue(j.getJSONArray("trames").length() >= 10)
+        assertTrue(j.getJSONArray("images").getJSONObject(0).getBoolean("essai"))
+        assertFalse(File(dir, "telemesure/paquets").exists())
+    }
+
     @Test fun `une trame de la balise est ecrite dans le dossier du jour`() {
         val dir = Files.createTempDirectory("tlm").toFile()
         val k = CanauxPc(stockage())

@@ -46,24 +46,13 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
     private val hI = FloatArray(2 * nc); private val hQ = FloatArray(2 * nc)
     private var hp = 0
 
-    private val sps = fs2 / debit
-    private val apres = Dsp.lowPass(((4 * sps).toInt() or 1).coerceIn(15, 401), 0.6 * debit, fs2)
-    private val na = apres.size
-    private val hD = FloatArray(2 * na)
-    private var hd = 0
-
+    /** Steps 4 and 5, shared with [DemodBandeBase] (the levels in Hz here). */
+    private val trancheur = TrancheurFsk(fs2, debit, 1_000.0, surBit)
+    /** The two levels (Hz from the AFC's frequency), for the display and tests. */
+    val niveaux: Pair<Double, Double> get() = trancheur.niveaux
+    private val dc: Double get() = trancheur.dc
     private var ncoPhase = 0.0
     private var prevI = 0f; private var prevQ = 0f
-    // The signal's envelope, top and bottom: their middle is the slicer's threshold, right even
-    // when the data is not balanced (NRZI without scrambler: flags hold one level 7 bits in 8).
-    private var haut = 1_000.0
-    private var bas = -1_000.0
-    private val declin = 1.0 / (sps * 40)
-    private val dc: Double get() = (haut + bas) / 2
-    /** The two levels (Hz from the AFC's frequency), for the display and tests. */
-    val niveaux: Pair<Double, Double> get() = haut to bas
-    private var phase = 0.0
-    private var avant = 0.0
 
     /** The carrier's offset the AFC has found (Hz, positive: above). */
     @Volatile var afcHz = 0.0; private set
@@ -72,7 +61,7 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
     /** The channel's level and the noise floor's estimate, dB. */
     @Volatile var niveauDb = -120.0; private set
     @Volatile var plancherDb = -120.0; private set
-    var bits = 0L; private set
+    val bits: Long get() = trancheur.bits
 
     // The AFC's block: power.
     private var blocN = 0
@@ -80,7 +69,9 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
     private val blocTaille = (fs2 * 0.01).toInt().coerceAtLeast(32)
     private var plancher = -1.0
     /** An outside sign of a signal (flags seen): the AFC may follow even near the noise. */
-    @Volatile var verrouExterne = false
+    var verrouExterne: Boolean
+        get() = trancheur.verrouExterne
+        set(v) { trancheur.verrouExterne = v }
 
     fun traite(re: FloatArray, im: FloatArray, n: Int) {
         val hzParRad = fs2 / (2 * PI)
@@ -105,36 +96,8 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
             val hz = atan2(b.toDouble(), a.toDouble()) * hzParRad
             blocP += (fi * fi + fq * fq).toDouble(); blocN++
             if (blocN == blocTaille) bloc()
-            // 4. Post-detection filter, DC.
-            hD[hd] = hz.toFloat(); hD[hd + na] = hz.toFloat()
-            hd = if (hd + 1 == na) 0 else hd + 1
-            var y = 0.0
-            for (t in 0 until na) y += apres[t] * hD[hd + t]
-            // The envelope: peaks caught at once, let go slowly towards each other.
-            val ecart = haut - bas
-            if (y > haut) haut += (y - haut) * 0.3 else haut -= ecart * declin
-            if (y < bas) bas += (y - bas) * 0.3 else bas += ecart * declin
-            val v = y - dc
-            // 5. Clock: decide at the wrap; nudge at each crossing.
-            val p0 = phase
-            phase += 1.0 / sps
-            if ((v >= 0) != (avant >= 0)) {
-                // Where between the two samples it crossed, in bit units.
-                val f = avant / (avant - v)
-                val ici = p0 + f / sps
-                var e = ici - 0.5
-                if (e > 0.5) e -= 1.0 else if (e < -0.5) e += 1.0
-                phase -= e * (if (verrouExterne) 0.06 else 0.15)
-            }
-            if (phase >= 1.0) {
-                phase -= 1.0
-                // The decision instant fell between the two samples: interpolated.
-                val f = 1.0 - phase * sps
-                val d = avant + (v - avant) * f.coerceIn(0.0, 1.0)
-                surBit(if (d >= 0) 1 else 0)
-                bits++
-            }
-            avant = v
+            // 4. and 5.
+            trancheur.pousse(hz)
         }
     }
 
@@ -152,7 +115,7 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
         if (presence) {
             val av = afcHz
             afcHz = (afcHz + (if (verrouExterne) 0.08 else 0.2) * dc).coerceIn(-afcMaxHz, afcMaxHz)
-            haut -= afcHz - av; bas -= afcHz - av
+            trancheur.decale(afcHz - av)
         } else if (abs(afcHz) > 0) {
             // Nothing heard: slowly back to the tracking's frequency.
             afcHz *= 0.998

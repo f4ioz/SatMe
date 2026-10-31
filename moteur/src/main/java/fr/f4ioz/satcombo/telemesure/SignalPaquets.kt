@@ -76,6 +76,38 @@ object SignalPaquets {
         return re to im
     }
 
+    /**
+     * A rig's packet output in 9600 mode, as a sound card hears it (16-bit
+     * mono at [fs]): [silenceS] of the discriminator's noise, then [bits] at
+     * [debit] (levels ±[ampleur] full scale, raised-cosine edges), SNR
+     * [snrDb] in the bit rate's bandwidth, then noise again. The rig's
+     * imperfections: [inverse] (the discriminator upside down), [dc] (the
+     * Doppler's rest after the CAT's step, the card's offset, full scale),
+     * [horlogePpm] (the card's clock against the satellite's), and the
+     * card's AC coupling (a high-pass near [passeHautHz]).
+     */
+    fun bandeBase(bits: IntArray, fs: Int, debit: Int, snrDb: Double, graine: Long = 1L, silenceS: Double = 0.3,
+                  inverse: Boolean = false, dc: Double = 0.0, horlogePpm: Double = 0.0, ampleur: Double = 0.3,
+                  passeHautHz: Double = 15.0): ShortArray {
+        // The satellite's bit rate as the card's clock counts it.
+        val sps = fs.toDouble() / debit / (1 + horlogePpm * 1e-6)
+        val avant = (silenceS * fs).toInt()
+        val n = avant + (bits.size * sps).toInt() + avant
+        val r = java.util.Random(graine)
+        // Noise over the whole band fs/2 such that the bit rate's band has the asked SNR.
+        val sigma = ampleur * sqrt(fs / 2.0 / debit / Math.pow(10.0, snrDb / 10))
+        val a = Math.exp(-2 * PI * passeHautHz / fs)
+        var xAvant = 0.0; var y = 0.0
+        val signe = if (inverse) -1.0 else 1.0
+        return ShortArray(n) { i ->
+            val t = (i - avant) / sps
+            val x = (if (i >= avant && t < bits.size) signe * ampleur * niveau(bits, t) + dc else dc) + sigma * r.nextGaussian()
+            // One-pole high-pass: the card's input capacitor.
+            y = a * (y + x - xAvant); xAvant = x
+            (y.coerceIn(-1.0, 1.0) * 32767).toInt().toShort()
+        }
+    }
+
     /** The test picture: colour bars, a grey ramp, a dark band with a white cross, 320 × 240. */
     fun mire(largeur: Int = 320, hauteur: Int = 240): IntArray {
         val barres = intArrayOf(0xFFFFFF, 0xFFFF00, 0x00FFFF, 0x00FF00, 0xFF00FF, 0xFF0000, 0x0000FF, 0x101010)

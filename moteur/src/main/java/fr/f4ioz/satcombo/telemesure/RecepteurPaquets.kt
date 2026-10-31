@@ -24,6 +24,9 @@ import java.util.concurrent.TimeUnit
  * - the samples (the satellite [iq]'s offset from the dongle's centre,
  *   its Doppler already followed) moved to 0 Hz and cut to ~88 kS/s on a
  *   thread of their own, behind a queue (the dongle never waits);
+ * - or, from a sound card, a rig's packet output in 9600 mode (the
+ *   TS-2000's ACC2: its own discriminator, flat, Doppler by its CAT):
+ *   [audio], to [DemodBandeBase] — no mixer, no AFC;
  * - [DemodFsk] (residual AFC, discriminator, clock), then two readings of
  *   the same bits: descrambled + NRZI, and NRZI alone — HDLC frames with
  *   a right CRC-16 come out of whichever fits;
@@ -85,6 +88,11 @@ class RecepteurPaquets(
         val signal: Boolean = false,
         val perdus: Int = 0,
         val derniereMs: Long = 0,
+        /** « iq » (the SDR) or « son » (a rig's 9600 output on a sound card). */
+        val source: String = SOURCE_IQ,
+        /** The sound's peak over the last 50 ms (0..1), its rate; « son » only. */
+        val crete: Double = 0.0,
+        val rate: Int = 0,
     )
 
     @Volatile var contexte: () -> Contexte = { Contexte() }
@@ -105,33 +113,54 @@ class RecepteurPaquets(
 
     // ---------------------------------------------------------------- the chain (one thread)
 
-    private inner class Chaine(val fs: Double, val debit: Int) {
+    /**
+     * From the line's bits on, the same for both sources; [son]: the bits come
+     * from a sound card's baseband ([DemodBandeBase]), not the SDR's I/Q.
+     */
+    private inner class Chaine(val fs: Double, val debit: Int, val son: Boolean = false) {
         val g = DeframeurHdlc { t -> trame(t, true) }
         val n = DeframeurHdlc { t -> trame(t, false) }
         val desembrouille = G3ruh.Desembrouilleur()
         val nrziG = G3ruh.Nrzi(); val nrziN = G3ruh.Nrzi()
         // The Geoscan satellites' frames (CC1125-like: sync word, PN9, CRC-16) in the same bits, NRZ.
         val geo = Geoscan.Deframeur { o -> trameGeoscan(o) }
-        val demod = DemodFsk(fs, debit) { b ->
+        val bit: (Int) -> Unit = { b ->
             g.bit(nrziG.bit(desembrouille.bit(b)))
             n.bit(nrziN.bit(b))
             geo.bit(b)
         }
+        val demod: DemodFsk? = if (son) null else DemodFsk(fs, debit, surBit = bit)
+        val demodSon: DemodBandeBase? = if (son) DemodBandeBase(fs, debit, bit) else null
+        private fun verrou() = maxOf(g.signe, n.signe) > g.compte - 2L * debit
         fun traite(re: FloatArray, im: FloatArray, k: Int) {
+            val dm = demod ?: return
             var i = 0
             while (i < k) {
                 val m = minOf(2048, k - i)
-                demod.verrouExterne = maxOf(g.signe, n.signe) > g.compte - 2L * debit
-                if (i == 0) demod.traite(re, im, m) else demod.traite(re.copyOfRange(i, i + m), im.copyOfRange(i, i + m), m)
+                dm.verrouExterne = verrou()
+                if (i == 0) dm.traite(re, im, m) else dm.traite(re.copyOfRange(i, i + m), im.copyOfRange(i, i + m), m)
                 i += m
             }
         }
+        fun traiteSon(x: FloatArray, k: Int) {
+            val dm = demodSon ?: return
+            var i = 0
+            while (i < k) {
+                val m = minOf(1024, k - i)
+                dm.verrouExterne = verrou()
+                if (i == 0) dm.traite(x, m) else dm.traite(x.copyOfRange(i, i + m), m)
+                i += m
+            }
+        }
+        val afcHz: Double get() = demod?.afcHz ?: 0.0
     }
 
     private var chaine: Chaine? = null
     @Volatile private var decalageHz = 0.0
     private var decimateur: Decimateur? = null
     private val file = ArrayBlockingQueue<Pair<Any, Double>>(64)
+    /** A block of sound for the « son » source. */
+    private class BlocSon(val pcm: ShortArray, val rate: Int)
     @Volatile private var enMarche = false
     private var fil: Thread? = null
     @Volatile private var perdus = 0
@@ -140,9 +169,18 @@ class RecepteurPaquets(
 
     /** Starts on the dongle's samples at [fsEntree] S/s. */
     @Synchronized
-    fun demarre(fsEntree: Double) {
+    fun demarre(fsEntree: Double) = lance { prepare(fsEntree) }
+
+    /** Starts on a sound card's baseband ([audio]): the rate comes with each block. */
+    @Synchronized
+    fun demarreSon() = lance { decimateur = null }
+
+    /** What it was started on: [SOURCE_IQ] or [SOURCE_SON]; null when stopped. */
+    val sourceEnMarche: String? get() = if (!enMarche) null else if (decimateur != null) SOURCE_IQ else SOURCE_SON
+
+    private fun lance(prepare: () -> Unit) {
         if (enMarche) return
-        prepare(fsEntree)
+        prepare()
         file.clear(); perdus = 0; chaine = null
         enMarche = true
         etat = etat.copy(actif = true)
@@ -169,6 +207,15 @@ class RecepteurPaquets(
         if (!file.offer(bloc.copyOf(n) to decalage)) perdus++
     }
 
+    /**
+     * A block of 16-bit mono sound at [rate] Hz (44.1, 48 or 96 kHz): a rig's
+     * packet output in 9600 mode (the FM discriminator, flat).
+     */
+    fun audio(pcm: ShortArray, n: Int, rate: Int) {
+        if (!enMarche || n <= 0 || rate < 8_000) return
+        if (!file.offer(BlocSon(pcm.copyOf(n), rate) to rate.toDouble())) perdus++
+    }
+
     private fun boucle() {
         while (enMarche) {
             val (b, dec) = file.poll(200, TimeUnit.MILLISECONDS) ?: continue
@@ -180,6 +227,7 @@ class RecepteurPaquets(
 
     /** One block of raw samples (bytes or 16-bit pairs), synchronously; [demarre] must have set the rate. */
     fun traiteBloc(b: Any, dec: Double) {
+        if (b is BlocSon) { traiteSon(b.pcm, b.pcm.size, b.rate); return }
         val d = decimateur ?: return
         val taille = when (b) { is ByteArray -> b.size; is ShortArray -> b.size; else -> 0 }
         val max = taille / 2 / d.facteur + 2
@@ -202,13 +250,41 @@ class RecepteurPaquets(
     fun traiteBaseband(re: FloatArray, im: FloatArray, n: Int, fs: Double) {
         val voulu = debit
         var c = chaine
-        if (c == null || c.debit != voulu || c.fs != fs) { c = Chaine(fs, voulu); chaine = c }
+        if (c == null || c.son || c.debit != voulu || c.fs != fs) { c = Chaine(fs, voulu); chaine = c }
         c.traite(re, im, n)
         run {
-            val dm = c.demod
+            val dm = c.demod ?: return@run
             etat = etat.copy(debit = voulu, bits = dm.bits, crcFaux = c.g.crcFaux + c.n.crcFaux, afcHz = dm.afcHz,
-                niveauDb = dm.niveauDb, plancherDb = dm.plancherDb, presence = dm.presence, signal = dm.verrouExterne, perdus = perdus)
+                niveauDb = dm.niveauDb, plancherDb = dm.plancherDb, presence = dm.presence, signal = dm.verrouExterne, perdus = perdus,
+                source = SOURCE_IQ, crete = 0.0, rate = 0)
         }
+    }
+
+    private var son = FloatArray(0)
+
+    /**
+     * Sound at [rate] Hz, 16-bit mono, from a rig's 9600 output: the chain,
+     * synchronously (also for tests). The discriminator and the Doppler are
+     * the rig's: no AFC, the frequency is the CAT's.
+     */
+    fun traiteSon(pcm: ShortArray, n: Int, rate: Int) {
+        if (son.size < n) son = FloatArray(n)
+        for (i in 0 until n) son[i] = pcm[i] / 32768f
+        traiteSon(son, n, rate.toDouble())
+    }
+
+    /** The same, samples at full scale ±1. */
+    fun traiteSon(x: FloatArray, n: Int, fs: Double) {
+        val voulu = debit
+        var c = chaine
+        if (c == null || !c.son || c.debit != voulu || c.fs != fs) { c = Chaine(fs, voulu, son = true); chaine = c }
+        decalageHz = 0.0
+        c.traiteSon(x, n)
+        val dm = c.demodSon ?: return
+        // « Signal »: flags or a frame lately; « présence »: the same (a discriminator's noise is as loud as a signal).
+        etat = etat.copy(debit = voulu, bits = dm.bits, crcFaux = c.g.crcFaux + c.n.crcFaux, afcHz = 0.0,
+            niveauDb = dm.niveauDb, plancherDb = dm.plancherDb, presence = dm.verrouExterne, signal = dm.verrouExterne, perdus = perdus,
+            source = SOURCE_SON, crete = dm.crete, rate = fs.toInt())
     }
 
     // ---------------------------------------------------------------- frames
@@ -227,7 +303,7 @@ class RecepteurPaquets(
         }
         val cx = runCatching { contexte() }.getOrDefault(Contexte())
         val c = chaine
-        val afc = c?.demod?.afcHz ?: 0.0
+        val afc = c?.afcHz ?: 0.0
         val ecart = Math.round(decalageHz + afc)
         val ax = Ax25.entete(o)
         val ssdv = Ssdv.cherche(ax?.info ?: o).map { p -> image(p, cx, now) }
@@ -247,7 +323,7 @@ class RecepteurPaquets(
         val now = horloge()
         val cx = runCatching { contexte() }.getOrDefault(Contexte())
         val c = chaine
-        val afc = c?.demod?.afcHz ?: 0.0
+        val afc = c?.afcHz ?: 0.0
         val ecart = Math.round(decalageHz + afc)
         val m = Geoscan.morceau(o)
         val im = m?.let { geoscan.takeIf { _ -> !cx.essai }?.ajoute(it, now, cx.satellite) ?: geoscanEssai.ajoute(it, now, cx.satellite) }
@@ -302,6 +378,8 @@ class RecepteurPaquets(
         const val MAX_TRAMES = 300
         const val FORMAT_HDLC = "HDLC"
         const val FORMAT_GEOSCAN = "Geoscan"
+        const val SOURCE_IQ = "iq"
+        const val SOURCE_SON = "son"
         const val NOUVEAU_PASSAGE_MS = 20 * 60_000L
         val DEBITS = listOf(1200, 2400, 4800, 9600)
 

@@ -79,7 +79,30 @@ class TelemesurePc(
 
     var paquetsActif: Boolean
         get() = stockage.getBoolean(CLE_PAQUETS, false)
-        set(v) { stockage.edit().putBoolean(CLE_PAQUETS, v).apply(); if (!v) paquets.arrete() }
+        set(v) { stockage.edit().putBoolean(CLE_PAQUETS, v).apply(); if (!v) paquets.arrete(); appliqueSonPaquets() }
+    /**
+     * Where the packets come from: [SOURCE_SDR] (the main SDR's raw I/Q, by
+     * default) or [SOURCE_SON] (a rig's 9600 output on a sound card: the
+     * TS-2000's ACC2 with its external TNC speed at 9600 bps).
+     */
+    var paquetsSource: String
+        get() = stockage.getString(CLE_PAQUETS_SOURCE, SOURCE_SDR)?.takeIf { it == SOURCE_SON } ?: SOURCE_SDR
+        set(v) { stockage.edit().putString(CLE_PAQUETS_SOURCE, if (v == SOURCE_SON) SOURCE_SON else SOURCE_SDR).apply(); appliqueSonPaquets() }
+    /** The card for [SOURCE_SON]: "" the Son tab's card (as it runs), else a card opened for the packets alone. */
+    var paquetsCarte: String
+        get() = stockage.getString(CLE_PAQUETS_CARTE, "") ?: ""
+        set(v) { stockage.edit().putString(CLE_PAQUETS_CARTE, v.take(200)).apply(); appliqueSonPaquets() }
+
+    /** The sound cards that can record (names), for the choice. */
+    @Volatile var cartes: () -> List<String> = { emptyList() }
+    /** Opens a card for one listener of its own: its closer, or null and why (the Son tab's [SonPc.capture]). */
+    @Volatile var ouvreCarte: (String, (ShortArray, Int, Int) -> Unit) -> Pair<(() -> Unit)?, String> = { _, _ -> null to "pas de carte son" }
+    /** What frames heard by a sound card are stamped with: the CAT's downlink, not the SDR's. */
+    @Volatile var contextePaquetsSon: (essai: Boolean) -> RecepteurPaquets.Contexte = { RecepteurPaquets.Contexte(essai = it) }
+    private var fermeCarte: (() -> Unit)? = null
+    @Volatile private var carteOuverte: String? = null
+    @Volatile private var erreurCarte = ""
+    @Volatile private var fictifSon = false
     /** 0: from the transmitter (SatNOGS DB), else 1200 … 9600. */
     var debitChoisi: Int
         get() = stockage.getInt(CLE_DEBIT, 0)
@@ -97,7 +120,7 @@ class TelemesurePc(
 
     init {
         paquets.kiss = kiss
-        paquets.contexte = { contextePaquets(fictif) }
+        paquets.contexte = { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_SON) contextePaquetsSon(fictifSon) else contextePaquets(fictif) }
         paquets.surTrame = { t -> partage(t) }
         Thread({
             while (true) {
@@ -185,6 +208,7 @@ class TelemesurePc(
 
     /** The sound card's audio (the Son tab's source). */
     fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
+        if (paquetsActif && paquetsSource == SOURCE_SON && paquetsCarte.isBlank()) sonPaquets(pcm, n, rate, sonFictif())
         if (!genesisEnMarche() || genesisSource != SOURCE_CARTE) return
         genesis.profil = genesisProfil()
         genesis.traite(pcm, n, rate)
@@ -275,11 +299,46 @@ class TelemesurePc(
 
     /** The main SDR's raw I/Q off QO-100 (from [SdrPc]). */
     fun iqSdr(iq: ByteArray?, iq16: ShortArray?, n: Int, decalageHz: Double, essai: Boolean) {
-        if (!paquetsActif) { if (paquets.actif) paquets.arrete(); return }
+        if (!paquetsActif || paquetsSource != SOURCE_SDR) { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_IQ) paquets.arrete(); return }
         if (!paquets.actif) paquets.demarre(fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble())
         fictif = essai
         paquets.debit = debitVoulu()
         if (iq16 != null) paquets.iq16(iq16, n, decalageHz) else if (iq != null) paquets.iq(iq, n, decalageHz)
+    }
+
+    /**
+     * A rig's 9600 output (the TS-2000's ACC2, its external TNC speed at
+     * 9600 bps), from the Son tab's card or one opened for it. Receive only:
+     * nothing here keys the rig.
+     */
+    private fun sonPaquets(pcm: ShortArray, n: Int, rate: Int, essai: Boolean) {
+        if (!paquetsActif || paquetsSource != SOURCE_SON) return
+        if (paquets.sourceEnMarche != RecepteurPaquets.SOURCE_SON) { paquets.arrete(); paquets.demarreSon() }
+        fictifSon = essai
+        paquets.debit = debitVoulu()
+        paquets.audio(pcm, n, rate)
+    }
+
+    /**
+     * The packets' source as chosen: the decoder started on the sound, the
+     * card opened (or closed) for it. Called by each setting and once at the
+     * start; opens nothing while the option is off or on the SDR.
+     */
+    @Synchronized
+    fun appliqueSonPaquets() {
+        val son = paquetsActif && paquetsSource == SOURCE_SON
+        val nom = paquetsCarte.takeIf { son && it.isNotBlank() }
+        if (carteOuverte != null && carteOuverte != nom) {
+            runCatching { fermeCarte?.invoke() }
+            fermeCarte = null; carteOuverte = null
+        }
+        if (!son) { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_SON) paquets.arrete(); erreurCarte = ""; return }
+        if (paquets.sourceEnMarche != RecepteurPaquets.SOURCE_SON) { paquets.arrete(); paquets.demarreSon() }
+        if (nom == null) { erreurCarte = ""; return }
+        if (carteOuverte == nom) return
+        val (f, err) = runCatching { ouvreCarte(nom) { pcm, n, rate -> sonPaquets(pcm, n, rate, false) } }.getOrElse { null to (it.message ?: "carte son") }
+        if (f == null) { erreurCarte = err.ifBlank { "carte son indisponible" }; return }
+        fermeCarte = f; carteOuverte = nom; erreurCarte = ""
     }
 
     /** The test mode for packets: a made-up 9600 bit/s burst (telemetry, part of a picture) through its own decoder. */
@@ -295,9 +354,16 @@ class TelemesurePc(
                 // Then a Geoscan picture (its own framing, NRZ): a small JPEG in chunks, one missing.
                 val geo = fr.f4ioz.satcombo.telemesure.Geoscan.morceaux(0x0C, (horloge() / 1000 % 900).toInt(),
                     fr.f4ioz.satcombo.telemesure.Geoscan.jpegEssai()).filterIndexed { i, _ -> i != 7 }
-                val (re, im) = fr.f4ioz.satcombo.telemesure.SignalPaquets.baseband(fr.f4ioz.satcombo.telemesure.G3ruh.bits(trames) +
-                    fr.f4ioz.satcombo.telemesure.Geoscan.bits(geo), fs, 9_600, 1_800.0, 16.0, horloge())
+                val bits = fr.f4ioz.satcombo.telemesure.G3ruh.bits(trames) + fr.f4ioz.satcombo.telemesure.Geoscan.bits(geo)
                 essaiPaquets.debit = 9_600
+                if (paquetsSource == SOURCE_SON) {
+                    // As a TS-2000's 9600 output on a 48 kHz card: its discriminator upside down, a DC offset, the card's clock off.
+                    val son = fr.f4ioz.satcombo.telemesure.SignalPaquets.bandeBase(bits, 48_000, 9_600, 16.0, horloge(), inverse = true, dc = 0.05, horlogePpm = 120.0)
+                    var k = 0
+                    while (k < son.size) { val m = minOf(4_096, son.size - k); essaiPaquets.traiteSon(son.copyOfRange(k, k + m), m, 48_000); k += m }
+                    return@Thread
+                }
+                val (re, im) = fr.f4ioz.satcombo.telemesure.SignalPaquets.baseband(bits, fs, 9_600, 1_800.0, 16.0, horloge())
                 var k = 0
                 while (k < re.size) {
                     val m = minOf(8_192, re.size - k)
@@ -341,11 +407,14 @@ class TelemesurePc(
         val em = emetteurPaquets()
         val o = JSONObject().put("option", paquetsActif).put("debit", debitVoulu()).put("choisi", debitChoisi)
             .put("kiss", kiss).put("essaiEnCours", essaiPaquetsEnCours)
+            .put("source", paquetsSource).put("carte", paquetsCarte).put("carteOuverte", carteOuverte ?: "").put("erreurCarte", erreurCarte)
+            .put("cartes", JSONArray(if (paquetsSource == SOURCE_SON) runCatching { cartes() }.getOrDefault(emptyList()) else emptyList()))
         if (em != null) o.put("emetteur", JSONObject().put("debit", em.first).put("description", em.second).put("mode", em.third)
             .put("note", RecepteurPaquets.noteMode(em.third) ?: ""))
         o.put("etat", JSONObject().put("actif", e.actif).put("bits", e.bits).put("trames", e.trames).put("crcFaux", e.crcFaux)
             .put("afcHz", Math.round(e.afcHz)).put("niveauDb", Math.round(e.niveauDb * 10) / 10.0).put("plancherDb", Math.round(e.plancherDb * 10) / 10.0)
-            .put("presence", e.presence).put("signal", e.signal).put("perdus", e.perdus).put("derniereMs", e.derniereMs))
+            .put("presence", e.presence).put("signal", e.signal).put("perdus", e.perdus).put("derniereMs", e.derniereMs)
+            .put("source", e.source).put("crete", Math.round(e.crete * 1000) / 1000.0).put("rate", e.rate))
         val l = (paquets.trames.take(40) + essaiPaquets.trames.take(40)).sortedByDescending { it.t }.take(40)
         o.put("trames", JSONArray(l.map { RecepteurPaquets.json(it).put("hex", it.hex()) }))
         val imgs = JSONArray()
@@ -440,6 +509,8 @@ class TelemesurePc(
             "paquets" -> paquetsActif = q["on"] == "1"
             "paquets/debit" -> debitChoisi = q["v"]?.toIntOrNull()?.takeIf { it == 0 || it in RecepteurPaquets.DEBITS } ?: return erreur("débit inconnu")
             "paquets/kiss" -> kiss = q["on"] == "1"
+            "paquets/source" -> paquetsSource = q["v"].orEmpty()
+            "paquets/carte" -> paquetsCarte = q["v"].orEmpty()
             "paquets/sids" -> {
                 val on = q["on"] == "1"
                 if (on && station()?.first.isNullOrBlank()) return erreur("indicatif de la station manquant (Réglages)")
@@ -502,6 +573,8 @@ class TelemesurePc(
         const val CLE_PAQUETS = "pc_tlm_paquets"
         const val CLE_DEBIT = "pc_tlm_paquets_debit"
         const val CLE_KISS = "pc_tlm_paquets_kiss"
+        const val CLE_PAQUETS_SOURCE = "pc_tlm_paquets_source"
+        const val CLE_PAQUETS_CARTE = "pc_tlm_paquets_carte"
         const val CLE_SIDS = "pc_tlm_sids"
         const val CLE_GENESIS = "pc_tlm_genesis"
         const val CLE_GENESIS_SOURCE = "pc_tlm_genesis_source"
@@ -509,6 +582,8 @@ class TelemesurePc(
         const val CLE_GENESIS_CAPTURE = "pc_tlm_genesis_capture"
         const val SOURCE_CARTE = "carte"
         const val SOURCE_SDR = "sdr"
+        /** The packets from a rig's 9600 output on a sound card. */
+        const val SOURCE_SON = "son"
         /** A recording read again: 400 MB (a pass at 48 kHz is some 60 MB). */
         const val MAX_RELECTURE = 400L * 1024 * 1024
 
