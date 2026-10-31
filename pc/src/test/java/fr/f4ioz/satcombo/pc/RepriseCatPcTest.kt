@@ -41,11 +41,13 @@ class RepriseCatPcTest {
 
     private class Ports(val cable: Cable) : PortsSerie {
         val port = PortSerie(0, 0, 0, 1, "/dev/ttyFAUX0 — IC-9700", "FAUX-IC9700", 0x10C4, "IC-9700")
+        /** The lines asked at each opening, in order. */
+        val ouvertures = java.util.concurrent.CopyOnWriteArrayList<Lignes>()
         override fun liste() = listOf(port)
         override fun autorise(p: PortSerie) = true
         override fun demande(p: PortSerie) {}
         override suspend fun demandeEtAttends(p: PortSerie) = true
-        override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean) = Ouverture(cable, "")
+        override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture { ouvertures += lignes; return Ouverture(cable, "") }
     }
 
     private val dossier = File(System.getProperty("java.io.tmpdir"), "satme-reprise-" + System.nanoTime()).apply { mkdirs() }
@@ -63,7 +65,8 @@ class RepriseCatPcTest {
     fun poste_eteint_puis_rallume() {
         val sim = Ic9700Sim()
         val cable = Cable(sim)
-        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), Ports(cable), portee)
+        val ports = Ports(cable)
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), ports, portee)
         st.connecteCat(StationPc.ChoixCat("IC9700", 0, 19_200))
         assertTrue(attends(5_000) { st.etat.value.catConnecte })
         assertTrue(st.etat.value.catStatut, st.etat.value.catStatut.contains("IC-9700"))
@@ -73,11 +76,17 @@ class RepriseCatPcTest {
         assertTrue(st.etat.value.catLiaison, st.etat.value.catLiaison.startsWith("IC-9700 muet depuis"))
         // Still « connected »: the operator's choice stands, only the writing stopped.
         assertTrue(st.etat.value.catConnecte)
+        // The manual connection unchanged (CI-V lines up); then at least one automatic reopening, lines low.
+        assertTrue("no automatic reopening", attends(15_000) { ports.ouvertures.size >= 2 })
+        assertTrue(ports.ouvertures.toString(), ports.ouvertures.first() == Lignes.LEVEES)
+        assertTrue(ports.ouvertures.toString(), ports.ouvertures.drop(1).all { it == Lignes.BASSES })
+        assertTrue(st.etat.value.catLiaison, st.etat.value.catLiaison.contains("sans lignes RTS/DTR"))
 
         cable.muet = false
         assertTrue("never taken back", attends(12_000) { !st.etat.value.catMuet })
         assertFalse(st.etat.value.catLiaison.contains("muet"))
         assertTrue(sim.commandesPtt.isEmpty())
         assertFalse(sim.transmitting)
+        assertTrue(ports.ouvertures.drop(1).all { it == Lignes.BASSES })
     }
 }

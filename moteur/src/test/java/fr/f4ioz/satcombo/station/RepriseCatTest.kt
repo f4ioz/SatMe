@@ -32,28 +32,39 @@ import org.junit.Test
  */
 class RepriseCatTest {
 
-    /** The rig behind a cable: [muet] the rig switched off (the cable still there), every frame counted. */
+    /**
+     * The rig behind a cable: [muet] the rig switched off (the cable still
+     * there), every frame counted; [rts] and [dtr] the lines as the last
+     * opening left them; [exigeLignes]: a bridge that answers only with its
+     * lines up (as some CDC bridges do).
+     */
     private class Cable(val rig: SerialLink) : SerialLink {
         @Volatile var muet = false
         @Volatile var debranche = false
+        @Volatile var rts = false
+        @Volatile var dtr = false
+        @Volatile var exigeLignes = false
         val ecrites = ArrayList<ByteArray>()
+        private fun sourd() = muet || debranche || (exigeLignes && !(rts && dtr))
         override fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
             if (debranche) return false
             synchronized(ecrites) { ecrites += bytes }
-            if (muet) return true
+            if (sourd()) return true
             return rig.write(bytes, timeoutMs)
         }
-        override fun read(buf: ByteArray, timeoutMs: Int): Int = if (muet || debranche) 0 else rig.read(buf, timeoutMs)
+        override fun read(buf: ByteArray, timeoutMs: Int): Int = if (sourd()) 0 else rig.read(buf, timeoutMs)
         // Closing the port does not switch the rig off.
         override fun close() {}
         fun nombre() = synchronized(ecrites) { ecrites.size }
     }
 
-    /** One port that can vanish (USB unplugged) and come back; each opening counted. */
+    /** One port that can vanish (USB unplugged) and come back; each opening counted, every line change recorded. */
     private class Ports(val cable: Cable) : PortsSerie {
         val port = PortSerie(0, 0, 0, 1, "/dev/ttyUSB0 — IC-9700", "IC9700-1", 0x10C4, "IC-9700")
         @Volatile var present = true
         val ouvertures = ArrayList<Lignes>()
+        /** (RTS, DTR) after each change, in order: the lines' whole history. */
+        val lignes = ArrayList<Pair<Boolean, Boolean>>()
         override fun liste() = if (present) listOf(port) else emptyList()
         override fun autorise(p: PortSerie) = true
         override fun demande(p: PortSerie) {}
@@ -61,6 +72,10 @@ class RepriseCatTest {
         override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture {
             if (!present) return Ouverture(null, "port introuvable")
             ouvertures += lignes
+            // As PortsSeriePc: TELLES is low on a PC.
+            val haut = lignes == Lignes.LEVEES
+            cable.rts = haut; cable.dtr = haut
+            this.lignes += haut to haut
             return Ouverture(cable, "")
         }
     }
@@ -118,8 +133,12 @@ class RepriseCatTest {
         assertTrue("back after ${t - retour} ms", t - retour <= 1_000L)
         assertEquals(1, reprises)
         assertTrue(r.reouvertures >= 1)
-        // Every opening as the connection's own (CI-V lines up), on that port only.
-        assertTrue(ports.ouvertures.all { it == Lignes.LEVEES })
+        // The manual connection as before (CI-V lines up); every automatic reopening with RTS and DTR low,
+        // and the lines never up again after the first: nothing unattended can key a rig on DTR/RTS.
+        assertEquals(Lignes.LEVEES, ports.ouvertures.first())
+        assertTrue(ports.ouvertures.size >= 2)
+        assertTrue(ports.ouvertures.drop(1).all { it == Lignes.BASSES })
+        assertTrue(ports.lignes.drop(1).all { it == (false to false) })
         // Never keyed, never asked to key.
         assertTrue(sim.commandesPtt.isEmpty())
         assertTrue(synchronized(cable.ecrites) { cable.ecrites.none { estPtt(it) } })
@@ -153,7 +172,37 @@ class RepriseCatTest {
         assertEquals(1, reprises)
         assertTrue(pendant < 40)
         assertEquals(0, sim.tentativesEmission)
+        // Manual and automatic openings alike: RTS and DTR low, all the time.
+        assertTrue(ports.ouvertures.size >= 2)
         assertTrue(ports.ouvertures.all { it == Lignes.BASSES })
+        assertTrue(ports.lignes.all { it == (false to false) })
+    }
+
+    @Test
+    fun un_pont_qui_veut_ses_lignes_levees_reste_muet_plutot_que_de_les_lever() = runBlocking {
+        val sim = Ic9700Sim()
+        val cable = Cable(sim).apply { exigeLignes = true }
+        val ports = Ports(cable)
+        val civ = CivController(ports).apply { pacingMs = 0L }
+        // The manual connection raises them: the rig answers.
+        assertTrue(civ.open(0, 19_200))
+        assertTrue(civ.readFrequency() != null)
+        var t = 0L
+        val g = GardeLiaisonCat().apply { noteReouverture = "reconnexion automatique sans lignes RTS/DTR : si le poste reste muet, le reconnecter à la main" }
+        g.ouvert(t)
+        val r = RepriseCat(g, { 0L }, sonde = { civ.readFrequency() != null },
+            portPresent = { true }, rouvre = { civ.ouvrePort(ports.port, 19_200) }, horloge = { t })
+        // Switched off and on again: the reopening (lines low) gets no answer — the rig stays silent, said so.
+        cable.muet = true
+        while (t < 10_000L) { t += 100; r.avantTour() }
+        cable.muet = false
+        while (t < 120_000L) { t += 100; r.avantTour() }
+        assertTrue(g.muet)
+        assertTrue(r.reouvertures >= 3)
+        assertTrue(g.message(t), g.message(t).contains("reconnecter à la main"))
+        assertEquals(listOf(true to true), ports.lignes.take(1))
+        assertTrue(ports.lignes.drop(1).all { it == (false to false) })
+        assertTrue(sim.commandesPtt.isEmpty())
     }
 
     @Test

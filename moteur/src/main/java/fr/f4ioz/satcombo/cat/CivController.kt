@@ -185,13 +185,19 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
 
     /**
      * Opens exactly [p] at [baud], nothing else tried — not the first port
-     * when [p] is gone: the CAT link opened again on the port it was on
-     * (another adapter, opened with these lines up, could be another rig's).
+     * when [p] is gone: the CAT link opened again on the port it was on.
+     *
+     * **RTS and DTR low** unless [lignes] says otherwise: this is the
+     * unattended reopening ([fr.f4ioz.satcombo.station.RepriseCat]), and an
+     * Icom whose « USB SEND » / « USB Keying » menu is set to DTR or RTS
+     * keys its transmitter when a line goes up. Nothing unattended may key a
+     * rig: a bridge that stays silent with its lines low leaves the rig
+     * silent, to be reconnected by hand.
      */
-    suspend fun ouvrePort(p: fr.f4ioz.satcombo.plateforme.PortSerie, baud: Int): Boolean {
+    suspend fun ouvrePort(p: fr.f4ioz.satcombo.plateforme.PortSerie, baud: Int, lignes: Lignes = Lignes.BASSES): Boolean {
         val pp = ports ?: return false
         close()
-        return branche(pp.ouvre(p, baud, LIGNES))
+        return branche(pp.ouvre(p, baud, lignes))
     }
 
     /** Serial ports of the adapter with key [cle] (an Icom shows two). */

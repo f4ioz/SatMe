@@ -1520,9 +1520,11 @@ class StationPc(
     /**
      * The watch for the rig connected: Icom on CI-V (USB or network) and
      * TS-2000. The read is a frequency read; reopening uses the very port it
-     * was on (never another adapter: opening one with its lines up could key
-     * another rig); once back, the Doppler loop sets the rig up again. None of
-     * it keys the transmitter.
+     * was on (never another adapter), **always with RTS and DTR low** — the
+     * Icom's manual connection raises them for its CI-V bridge, an
+     * unattended reopening never does (a rig keyed by DTR/RTS must not go on
+     * the air by itself); once back, the Doppler loop sets the rig up again.
+     * None of it keys the transmitter.
      */
     private fun repriseCat(g: fr.f4ioz.satcombo.cat.GardeLiaisonCat): fr.f4ioz.satcombo.station.RepriseCat? {
         val e = _etat.value
@@ -1533,6 +1535,10 @@ class StationPc(
             modeLu = null
         }
         val usb = portCat
+        // The manual connection raises RTS/DTR on an Icom's CI-V; the automatic one never does: a bridge that
+        // needs them up stays silent, and says so.
+        g.noteReouverture = if (e.catModele in ICOMS && !catParReseau)
+            "reconnexion automatique sans lignes RTS/DTR : si le poste reste muet, le reconnecter à la main" else ""
         return when {
             e.catModele in ICOMS && catParReseau -> fr.f4ioz.satcombo.station.RepriseCat(g,
                 reponduMs = { civ.derniereReponseMs },
@@ -1546,7 +1552,8 @@ class StationPc(
                     reponduMs = { civ.derniereReponseMs },
                     sonde = { civ.readFrequency() != null },
                     portPresent = portPresentCache(cle, port),
-                    rouvre = { rouvreCat { p -> civ.ouvrePort(p, baud) } },
+                    // RTS and DTR low: an Icom with « USB SEND » on DTR or RTS would key on a line raised unattended.
+                    rouvre = { rouvreCat { p -> civ.ouvrePort(p, baud, fr.f4ioz.satcombo.plateforme.Lignes.BASSES) } },
                     repris = revient, horloge = horlogeCat)
             }
             e.catModele == "TS2000" && usb != null -> {

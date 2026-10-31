@@ -19,7 +19,9 @@ package fr.f4ioz.satcombo.cat
  * - **Silent.** The loop stops writing (no more frames into a rig that does
  *   not hear, ten times a second). A single read is tried after 2, 4, 8, 16
  *   then every 30 s ([paliersMs]); from the second try on, the port is
- *   closed and opened again first when it can be ([Geste.ROUVRE]).
+ *   closed and opened again first when it can be ([Geste.ROUVRE]) — by
+ *   the caller, with RTS and DTR low: nothing unattended raises a line
+ *   that could key a transmitter.
  * - **Gone.** The port vanished (USB unplugged, the rig switched off takes
  *   its own USB with it): nothing is tried until it is back, then at once.
  * - **Back.** The first answer: alive again, the caller sets the rig up
@@ -70,6 +72,13 @@ class GardeLiaisonCat(
     @Volatile var dernierRefusMs: Long = 0L; private set
 
     val muet: Boolean get() = muetDepuisMs != null
+
+    /**
+     * Added to the silent line when a reopening has been tried (set by the
+     * caller): the automatic one opens with RTS and DTR low, which some rigs
+     * need up to answer — then only a reconnection by hand brings them back.
+     */
+    @Volatile var noteReouverture: String = ""
 
     /** The link was (re)opened at [t]: counted from there. */
     fun ouvert(t: Long) {
@@ -142,10 +151,12 @@ class GardeLiaisonCat(
     fun message(t: Long, nom: String = "poste"): String {
         val depuis = muetDepuisMs ?: return ""
         val absent = absentDepuisMs
-        if (absent != null) return "$nom muet depuis ${duree(t - depuis)} : son port USB a disparu (câble débranché, poste éteint ?) — repris dès son retour"
+        if (absent != null) return "$nom muet depuis ${duree(t - depuis)} : son port USB a disparu (câble débranché, poste éteint ?) — repris dès son retour" +
+            (if (noteReouverture.isNotBlank()) " ($noteReouverture)" else "")
         val dans = (prochainEssaiMs - t).coerceAtLeast(0L)
         return "$nom muet depuis ${duree(t - depuis)} — " + (if (dans < 1_000L) "nouvel essai en cours" else "nouvel essai dans ${duree(dans)}") +
-            (if (essais > 0) " ($essais essai" + (if (essais > 1) "s" else "") + " sans réponse)" else "")
+            (if (essais > 0) " ($essais essai" + (if (essais > 1) "s" else "") + " sans réponse)" else "") +
+            (if (noteReouverture.isNotBlank() && essais > 0) " — $noteReouverture" else "")
     }
 
     /** The last refusal, dated, when recent ([fenetreMs]); "" otherwise. */
