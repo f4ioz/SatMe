@@ -22,19 +22,20 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 10. [DATV: transmission](#datv-transmission) — DVB-S2 and DVB-S, free slots, signal summary, encoder test, live clock, gain ramp and calibrated power, the station, the rules, the indoor test, card and chat
 11. [SSTV](#sstv) — reception, the followed satellite's inset, countdown, pictures by slide (series 33 and 34), corrected picture, colour and AI, transmission
 12. [FT8 / FT4](#ft8--ft4) — receiving, transmitting through the IC-9700 (never unattended), first on-air test, passes to your site
-13. [Telemetry](#telemetry) — 1200 to 9600 bit/s packets, SSDV pictures (over several passes; SO-127 in USB, IO-86, Geoscan), FUNcube, SatNOGS
-14. [Voice to text (Phonie → texte)](#voice-to-text-phonie--texte) — written and spoken translation
-15. [The SDR receiver](#the-sdr-receiver) — satellite scale, memories, band plan, display, sound cleaning, CTCSS, scanning, I/Q, test generator, measurements
-16. [SDR hardware](#sdr-hardware) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, the IC-9700's IF
-17. [Aircraft (ADS-B) and the map](#aircraft-ads-b-and-the-map) — 1090 MHz, aircraft scatter, the shared map
-18. [Ships (AIS)](#ships-ais)
-19. [Space weather](#space-weather)
-20. [Montage: the station chain](#montage-the-station-chain) — diagram, editing, catalogue, functions, profiles
-21. [Réglages (settings)](#réglages-settings) — rig and rotator, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
-22. [More of the PC](#more-of-the-pc)
-23. [Hardware safety](#hardware-safety)
-24. [Before the first try](#before-the-first-try)
-25. [Demonstration: made-up data, virtual hardware](#demonstration-made-up-data-virtual-hardware) — `--demo`, a VM or a Raspberry Pi, making it new
+13. [APRS](#aprs) — map of the stations heard (symbols, heading, trails, how each was heard), list and filters, satellite passes, station card
+14. [Telemetry](#telemetry) — 1200 to 9600 bit/s packets, SSDV pictures (over several passes; SO-127 in USB, IO-86, Geoscan), FUNcube, SatNOGS
+15. [Voice to text (Phonie → texte)](#voice-to-text-phonie--texte) — written and spoken translation
+16. [The SDR receiver](#the-sdr-receiver) — satellite scale, memories, band plan, display, sound cleaning, CTCSS, scanning, I/Q, test generator, measurements
+17. [SDR hardware](#sdr-hardware) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, the IC-9700's IF
+18. [Aircraft (ADS-B) and the map](#aircraft-ads-b-and-the-map) — 1090 MHz, aircraft scatter, the shared map
+19. [Ships (AIS)](#ships-ais)
+20. [Space weather](#space-weather)
+21. [Montage: the station chain](#montage-the-station-chain) — diagram, editing, catalogue, functions, profiles
+22. [Réglages (settings)](#réglages-settings) — rig and rotator, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
+23. [More of the PC](#more-of-the-pc)
+24. [Hardware safety](#hardware-safety)
+25. [Before the first try](#before-the-first-try)
+26. [Demonstration: made-up data, virtual hardware](#demonstration-made-up-data-virtual-hardware) — `--demo`, a VM or a Raspberry Pi, making it new
 
 ## Installing it
 
@@ -814,6 +815,18 @@ The tab's **Émission FT8/FT4** card, on the right above the radar, sends FT8 an
 <img src="images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar of the stations, who to call now">
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, and the stream as bubbles">
 </p>
+
+## APRS
+
+The **APRS** tab (workspace **Modes**) shows who was heard, where, and how. The frames come from the sound card's decoder (AFSK 1200, the **Son** chip) and from a **KISS radio** (TH-D72, TM-D710, Mobilinkd…). Receive only: the map, the list and the card never transmit anything.
+
+- **The figures**, at the top: stations heard **today**, stations heard **via satellite** (and the last pass), the **farthest station heard direct** (no digipeater) with its distance, **packets per hour** (the last hour, and a small bar chart of the last 24 hours).
+- **The map**: each station with **its APRS symbol** (drawn by SatMe: car, house, digipeater star, iGate diamond, weather, balloon, aircraft, boat, bicycle, walker, relay, satellite, flag; the overlay character in a small white box), **its callsign**, **an arrow for its heading** when it moves, and **its trail** (none, 1, 3, 6, 12, 24 or 48 hours). The **ring tells how it was heard**: green **direct** (no digipeater), blue **through a digipeater**, gold with a dashed outer ring **through a satellite** (the ISS / ARISS on 145.825 MHz, PSAT, PCSAT…), grey dashed **from the internet** (APRS-IS, e.g. a third-party frame put on the air by an iGate). Your station is the teal house. **⤢** fits the map to the stations shown (and follows the selected one); dragging or zooming lets you look around, **⤢** or a double click comes back. Drag, wheel, **+** / **−**, and on a tablet drag, **pinch** and **tap**. The background is SatMe's coastlines (no internet); *OpenStreetMap* loads tiles in the browser, as on the **Carte** tab (the same choice).
+- **The list**, beside the map (below it on a narrow screen): sort by **last heard**, **distance** (near or far first) or **callsign**; filters **RF only** (heard by radio: direct, digipeater or satellite), **Via satellite**, **1 h / 6 h / 24 h / 48 h**, the type (**mobile**, **fixed**, **weather**, **digipeater**, **iGate**, **object**, **satellite**) and a search box (callsign, comment, locator). With **Via satellite**, stations are grouped by pass: « Reçus via ISS pendant le passage de 14:32 ». Your choices are kept by the browser.
+- **The station card** (click or tap a station on the map or in the list): what its symbol means, in words; its callsign with links to **QRZ.com** and **aprs.fi**; its comment and status; **distance and bearing** from your station; **locator**; course, speed, altitude; **when it was last heard each way** (direct, digipeater, satellite, internet: separate dated facts); the **path** (digipeaters used); the number of packets; the **weather** values a weather station sends (only those present); its last **message** and **telemetry**; the **last raw packet**.
+- **Kept**: SatMe-PC keeps what it hears as before (`aprs/AAAA-MM-JJ.txt` in its data folder, 7 days read back at start). The map and list use the **last 48 hours** (up to 20 000 frames), read back from the same files after a restart.
+- **Below**: the **KISS radio** card, the **APRS trophies**, and **Trames reçues**, the raw frames of the last 7 days with their filter.
+- API: `GET /api/aprs/stations?heures=48` (1 to 48): `stations` (each with `id`, `call`, `sym`, `symNom`, `genre`, `voie`, `lat`, `lon`, `loc`, `km`, `az`, `cap`, `kmh`, `alt`, `com`, `statut`, `vus` {`direct`, `digi`, `satellite`, `internet`: last time, ms}, `chemin`, `digis`, `brut`, `n`, `meteo`, `msg`, `tlm`, `trace` [[ms, lat, lon]…]), `passages` (satellite passes as heard), `stats`, `moi`. `GET /api/aprs` (the frames) is unchanged.
 
 ## Telemetry
 

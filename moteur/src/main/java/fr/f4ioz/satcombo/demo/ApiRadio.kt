@@ -68,6 +68,56 @@ object ApiRadio {
             }))
     }
 
+    /**
+     * The APRS map and list: each station heard in the last [heures] hours
+     * with its facts (where, its trail, how it was heard each way and when,
+     * symbol in words, comment, path, raw frame, weather, message,
+     * telemetry), the satellite passes as heard, the header's figures.
+     */
+    fun stationsAprs(paquets: List<Paquet>, moi: String, obs: Observer?, maintenant: Long, heures: Int = 48): JSONObject {
+        val S = fr.f4ioz.satcombo.aprs.StationsAprs
+        val minuit = java.util.Calendar.getInstance().apply { timeInMillis = maintenant; set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
+        val h = heures.coerceIn(1, 48)
+        val b = S.bilan(paquets, moi, obs?.latDeg, obs?.lonDeg, maintenant, maintenant - h * 3_600_000L, minuit)
+        fun r(v: Double, n: Int = 5) = Math.round(v * Math.pow(10.0, n.toDouble())) / Math.pow(10.0, n.toDouble())
+        val o = JSONObject().put("present", true).put("t", maintenant).put("heures", h)
+        o.put("moi", if (obs == null) JSONObject.NULL else JSONObject().put("call", moi.uppercase()).put("lat", r(obs.latDeg)).put("lon", r(obs.lonDeg))
+            .put("loc", fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg)))
+        o.put("stats", JSONObject().put("jour", b.jour).put("viaSat", b.viaSatellite).put("paquets", b.paquets)
+            .put("loinDirect", b.loinDirect?.let { JSONObject().put("call", it.first).put("km", Math.round(it.second)) } ?: JSONObject.NULL)
+            .put("parHeure", JSONArray(b.parHeure.toList())).put("derniereHeure", b.parHeure.last()))
+        o.put("stations", JSONArray(b.fiches.take(1000).map { f ->
+            val j = JSONObject().put("id", f.id).put("call", f.indicatif).put("objet", f.objet).put("moi", f.moi)
+                .put("sym", f.symbole ?: "").put("symNom", fr.f4ioz.satcombo.aprs.SymbolesAprs.nom(f.symbole))
+                .put("genre", f.genre.name.lowercase()).put("voie", f.voie.name.lowercase())
+                .put("premier", f.premier).put("dernier", f.dernier).put("n", f.nombre)
+                .put("com", f.commentaire).put("statut", f.statut).put("chemin", f.chemin).put("digis", JSONArray(f.digis)).put("brut", f.brut)
+            if (f.lat != null && f.lon != null) j.put("lat", r(f.lat)).put("lon", r(f.lon)).put("loc", f.locator)
+            f.km?.let { j.put("km", r(it, 1)) }
+            f.azimut?.let { j.put("az", Math.round(it)) }
+            f.cap?.let { j.put("cap", it) }
+            f.kmh?.let { j.put("kmh", it) }
+            f.altitudeM?.let { j.put("alt", it) }
+            f.satellite?.let { j.put("sat", it) }
+            j.put("vus", JSONObject().apply { f.vus.forEach { (v, t) -> put(v.name.lowercase(), t) } })
+            f.meteo?.let { m ->
+                j.put("meteo", JSONObject().put("t", f.meteoT).apply {
+                    m.temperatureC?.let { put("tempC", it) }; m.humidite?.let { put("hum", it) }; m.pressionHpa?.let { put("hpa", it) }
+                    m.ventDeg?.let { put("ventDeg", it) }; m.ventKmh?.let { put("ventKmh", it) }; m.rafaleKmh?.let { put("rafaleKmh", it) }
+                    m.pluie1hMm?.let { put("pluie1h", it) }
+                })
+            }
+            f.message?.let { j.put("msg", JSONObject().put("t", it.t).put("a", it.a).put("txt", it.texte)) }
+            f.telemetrie?.let { j.put("tlm", JSONObject().put("t", it.t).put("txt", it.texte)) }
+            j.put("trace", JSONArray(f.trace.map { p -> JSONArray().put(p.t).put(r(p.lat)).put(r(p.lon)) }))
+        }))
+        o.put("passages", JSONArray(b.passages.take(50).map { p ->
+            JSONObject().put("debut", p.debut).put("fin", p.fin).put("sat", p.satellite).put("stations", JSONArray(p.stations)).put("n", p.paquets)
+        }))
+        return o
+    }
+
     /** One FT8/FT4 decode: its slot, its text, who calls whom, the square given. */
     class Ligne(val tranche: Long, val texte: String, val appelant: String?, val appele: String?, val locator: String?,
                 val frequenceHz: Int, val rapportDb: Int, val decalageS: Double, val mode: String)

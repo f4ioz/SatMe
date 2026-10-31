@@ -1475,6 +1475,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             // « Pourquoi rien ? »: each receiver's one line, read only.
             "/api/pourquoi" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", pourquoi.json().toString().toByteArray())
+            "/api/aprs/stations" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (son?.aprs?.let { a ->
+                fr.f4ioz.satcombo.demo.ApiRadio.stationsAprs(a.fenetre, station.settings.callsign, station.etat.value.observateur,
+                    System.currentTimeMillis(), q["heures"]?.toIntOrNull() ?: 48)
+            } ?: JSONObject().put("present", false)).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr, phonie?.actif == true).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/mire" -> {

@@ -39,6 +39,8 @@ data class Paquet(
     val emis: Boolean = false,
     /** A weather station's report: wind, temperature, rain, pressure. */
     val meteo: Meteo? = null,
+    /** The satellite SatMe followed when the frame was heard (its file's column), "" when none. */
+    val satellite: String = "",
 ) {
     val source: String get() = trame.source.toString()
 
@@ -158,12 +160,23 @@ object Aprs {
         val type = if (symbole.endsWith("_")) TypeAprs.METEO else TypeAprs.POSITION
         var (alt, reste) = altitudePieds(s.substring(minOf(fin, s.length)).trimEnd('\r', '\n'))
         var meteo: Meteo? = null
+        var cap = p.cap
+        var noeuds = p.noeuds
+        if (alt == null && p.altitudePieds != null) alt = (p.altitudePieds * 0.3048).toInt()
         if (type == TypeAprs.METEO) {
             val (m, r) = Meteo.lit(reste)
             meteo = m.takeUnless { it.vide }; reste = r
+        } else if (!p.compressee) {
+            // "088/036" right after the symbol: course (°) and speed (knots), APRS 1.01 chapter 7.
+            Regex("^([0-9]{3})/([0-9]{3})").find(reste)?.let { m ->
+                val c = m.groupValues[1].toInt(); val v = m.groupValues[2].toInt()
+                if (c in 0..360) { cap = c.takeIf { it in 1..360 }; noeuds = v.toDouble(); reste = reste.substring(m.range.last + 1).trimStart('/').trim() }
+            }
         }
+        val kmh = noeuds?.takeIf { it > 0 }?.let { (it * 1.852).toInt() }
         return base.copy(type = type, lat = lat, lon = lon, symbole = symbole,
-            commentaire = reste, altitudeM = alt, meteo = meteo)
+            commentaire = reste, altitudeM = alt, meteo = meteo,
+            vitesseKmh = kmh, cap = cap?.takeIf { kmh != null || it in 1..360 })
     }
 
     /** "/A=001234" (feet) anywhere in a comment: taken out, in metres. */
@@ -185,7 +198,8 @@ object Aprs {
         return null to t.trim()
     }
 
-    private data class Pos(val lat: Double, val lon: Double, val symbole: String, val fin: Int)
+    private data class Pos(val lat: Double, val lon: Double, val symbole: String, val fin: Int,
+                           val compressee: Boolean = false, val cap: Int? = null, val noeuds: Double? = null, val altitudePieds: Int? = null)
 
     private fun positionClaire(s: String, i: Int): Pos? {
         if (s.length < i + 19) return null
@@ -197,7 +211,7 @@ object Aprs {
         val ns = la[7]; val ew = lo[8]
         if (ns !in "NSns" || ew !in "EWew" || lat > 90 || lon > 180) return null
         return Pos(if (ns in "Ss") -lat else lat, if (ew in "Ww") -lon else lon,
-            "${s[i + 8]}${s[i + 18]}", i + 19)
+            "${s[i + 8]}${s[i + 18]}", i + 19, compressee = false)
     }
 
     private fun base91(s: String): Int = s.fold(0) { acc, ch -> acc * 91 + (ch.code - 33) }
@@ -209,7 +223,14 @@ object Aprs {
         val lat = 90 - base91(s.substring(i + 1, i + 5)) / 380926.0
         val lon = -180 + base91(s.substring(i + 5, i + 9)) / 190463.0
         if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
-        return Pos(lat, lon, "$table${s[i + 9]}", i + 13)
+        // The "cs" bytes and their type byte: course and speed, or an altitude (APRS 1.01 chapter 9).
+        val c = s[i + 10].code - 33; val sp = s[i + 11].code - 33; val t = s[i + 12].code - 33
+        var cap: Int? = null; var noeuds: Double? = null; var altPieds: Int? = null
+        if (s[i + 10] != ' ' && c in 0..89 && sp in 0..90) {
+            if ((t and 0x18) == 0x10) altPieds = Math.pow(1.002, (c * 91 + sp).toDouble()).toInt()
+            else { cap = (c * 4).takeIf { it in 1..360 }; noeuds = Math.pow(1.08, sp.toDouble()) - 1 }
+        }
+        return Pos(lat, lon, "$table${s[i + 9]}", i + 13, true, cap, noeuds, altPieds)
     }
 
     private val ETATS_MIC_E = mapOf(

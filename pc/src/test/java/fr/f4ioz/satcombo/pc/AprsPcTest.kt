@@ -83,4 +83,73 @@ class AprsPcTest {
         val relu = AprsPc(d, { "ISS" }, { t }, joueur)
         assertEquals("EA4ABC", relu.trophees.recordIndicatif)
     }
+
+    @Test
+    fun la_fenetre_de_la_carte_survit_au_redemarrage_et_s_arrete_a_48_h() {
+        fun trame(de: String, info: String, chemin: List<Adresse> = emptyList()) =
+            Trame(Adresse.de("APRS"), Adresse.de(de), chemin, info.toByteArray())
+        var maintenant = t
+        val a = AprsPc(dossier, { "ISS" }, { maintenant })
+        // Three days ago, yesterday, now; one through the ISS.
+        assertTrue(a.ajoute(trame("QF1ABC", "=4547.00N/00305.00E-vieux"), t - 72 * 3_600_000L))
+        assertTrue(a.ajoute(trame("QF2HOT", "=4548.00N/00306.00E-hier"), t - 20 * 3_600_000L))
+        assertTrue(a.ajoute(trame("QE4ABC", "=4024.00N/00342.00W-hola", listOf(Adresse("RS0ISS", repete = true))), t - 60_000L))
+        assertEquals(3, a.paquets.size)
+        assertEquals(listOf("QE4ABC", "QF2HOT"), a.fenetre.map { it.source })
+        assertEquals("ISS", a.fenetre.first().satellite)
+        // Read back by a new start: the same window, the satellite column with it.
+        val relu = AprsPc(dossier, { "" }, { maintenant })
+        assertEquals(listOf("QE4ABC", "QF2HOT"), relu.fenetre.map { it.source })
+        assertEquals("ISS", relu.fenetre.first().satellite)
+        // A day later, yesterday's frame has left the window.
+        maintenant = t + 30 * 3_600_000L
+        assertTrue(relu.ajoute(trame("QF5ZZA", "=4549.00N/00307.00E-"), maintenant))
+        assertEquals(listOf("QF5ZZA", "QE4ABC"), relu.fenetre.map { it.source })
+    }
+
+    @Test
+    fun l_api_des_stations_de_satme_pc() {
+        val st = StationPc(fr.f4ioz.satcombo.plateforme.StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(),
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default))
+        st.settings.callsign = "QF4DMO"
+        val son = SonStation(SonPc(), st, File(dossier, "enregistrements"), File(dossier, "sstv"))
+        son.aprs.ajoute(Trame(Adresse.de("APRS"), Adresse.de("QF8MOB-9"), listOf(Adresse.de("QF6DIG-2*")),
+            "=4540.00N/00300.00E>045/040 En route".toByteArray()), System.currentTimeMillis() - 60_000L)
+        val s = ServeurPc(st, 0, son = son)
+        s.demarre()
+        try {
+            val base = "http://127.0.0.1:${s.portReel}"
+            val o = org.json.JSONObject(java.net.URL("$base/api/aprs/stations?heures=6").readText())
+            assertTrue(o.getBoolean("present"))
+            assertEquals(6, o.getInt("heures"))
+            val q = o.getJSONArray("stations").getJSONObject(0)
+            assertEquals("QF8MOB-9", q.getString("id"))
+            assertEquals("digi", q.getString("voie"))
+            assertEquals("mobile", q.getString("genre"))
+            assertEquals("voiture", q.getString("symNom"))
+            assertEquals(45, q.getInt("cap"))
+            assertEquals("QF6DIG-2", q.getJSONArray("digis").getString(0))
+        } finally { s.arrete() }
+    }
+
+    @Test
+    fun la_demonstration_a_son_aprs() {
+        val maintenant = 1_793_000_000_000L
+        val iss = fr.f4ioz.satcombo.data.SatPass("ISS", 25544, maintenant - 5 * 3_600_000L, maintenant - 5 * 3_600_000L + 600_000L, 60.0, 200.0, 40.0, false, false)
+        val n = AprsDemo(maintenant, 45.77, 3.04).genere(dossier, listOf(iss))
+        assertTrue(n > 300)
+        val a = AprsPc(File(dossier, "aprs"), { "" }, { maintenant })
+        val b = fr.f4ioz.satcombo.aprs.StationsAprs.bilan(a.fenetre, "QF4DMO", 45.77, 3.04, maintenant)
+        val f = b.fiches.associateBy { it.id }
+        // Every callsign in the Q series (never on the air), every kind of station there.
+        assertTrue(b.fiches.all { it.indicatif.startsWith("Q") || it.indicatif == "RS0ISS" })
+        val genres = b.fiches.map { it.genre }.toSet()
+        listOf("MOBILE", "FIXE", "METEO", "DIGI", "IGATE", "OBJET", "SATELLITE").forEach { g -> assertTrue(g, genres.any { it.name == g }) }
+        assertTrue(f.getValue("QF8MOB-9").trace.size > 20)
+        assertTrue(f.getValue("QF2CMP-7").cap != null)
+        assertEquals(fr.f4ioz.satcombo.aprs.Voie.INTERNET, f.getValue("QF3NET-5").voie)
+        assertEquals(1, b.passages.size)
+        assertTrue(b.passages.single().stations.size >= 3)
+        assertTrue(File(dossier, "aprs").listFiles()!!.isNotEmpty())
+    }
 }
