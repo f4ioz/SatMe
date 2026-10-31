@@ -43,7 +43,9 @@ class StationCatTest {
         var repos: Long? = null
         var connecte = true
         var afc = 0L
+        var fin = false
         override fun afcRxHz() = afc
+        override fun dopplerFin() = fin
         override fun connecte() = connecte
         override fun poste() = poste
         override fun emetSeul() = false
@@ -276,5 +278,22 @@ class StationCatTest {
         assertTrue(st.etat.value.rxPilote)
         assertFalse("no tone in its description", sim.toneOn)
         assertEquals(0, sim.refusals)
+    }
+
+    @Test
+    fun pendant_l_ecoute_ft8_la_descente_suit_par_pas_de_4_hz() = runBlocking {
+        for (fin in listOf(false, true)) {
+            val (st, m) = station(lineaire)
+            m.repos = 435_640_000L; m.fin = fin
+            repeat(30) { st.tour(); t += 100 }
+            assertEquals(435_640_000L, sim.mainHz)
+            // 8 Hz of Doppler on the downlink: under 20, over 4.
+            m.rr = -8.0 / 435_640_000.0 * 299_792.458
+            repeat(3) { st.tour(); t += 100 }
+            val dl = Doppler.downlink(435_640_000L, m.rr)
+            assertTrue(kotlin.math.abs(dl - 435_640_000L) in 6..10)
+            assertEquals("FT8/FT4 à l'écoute : $fin", if (fin) dl else 435_640_000L, sim.mainHz)
+            assertEquals(if (fin) 4L else 20L, st.pasDopplerHz())
+        }
     }
 }

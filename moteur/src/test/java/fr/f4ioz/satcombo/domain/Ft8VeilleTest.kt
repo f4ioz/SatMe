@@ -102,4 +102,21 @@ class Ft8VeilleTest {
         val vide = ApiRadio.ft8(false, "FT8", 0f, 0f, 0, false, 200, 3000, emptyList(), FloatArray(0), emptyList(), "", null, emptySet())
         assertTrue(vide.isNull("horloge")); assertTrue(vide.isNull("diag"))
     }
+
+    @Test
+    fun l_autre_mode_decode_a_cote_se_dit_tout_de_suite() {
+        val t = 1_793_119_000_000L
+        assertEquals("FT4", Ft8Veille.autreMode(listOf(t - 30_000 to "FT4", t - 15_000 to "FT8"), "FT8", t))
+        assertNull(Ft8Veille.autreMode(listOf(t - 15_000 to "FT8"), "FT8", t))
+        assertNull("trop vieux", Ft8Veille.autreMode(listOf(t - 600_000 to "FT4"), "FT8", t))
+        val d = Ft8Veille.diagnostic(true, true, 0L, 0.2f, 5, mode = "FT8", autreMode = "FT4")
+        assertEquals("mode", d?.code)
+        assertTrue(d!!.detail.contains("FT4"))
+        assertNull("à peine commencé", Ft8Veille.diagnostic(true, true, 0L, 0.2f, 2, mode = "FT8", autreMode = "FT4"))
+        // The API says it from the lines (the PC's sansDecodage given).
+        val l = listOf(ApiRadio.Ligne(t - 20_000, "CQ F5LMG IN88", "F5LMG", "CQ", "IN88", 1744, -6, 0.2, "FT4"))
+        val j = ApiRadio.ft8(true, "FT8", 0f, 0.2f, 12, true, 200, 3000, emptyList(), FloatArray(0), l, "", null, emptySet(),
+            sonDepuisMs = 0L, sansDecodage = 6, maintenant = t)
+        assertEquals("mode", j.getJSONObject("diag").getString("code"))
+    }
 }

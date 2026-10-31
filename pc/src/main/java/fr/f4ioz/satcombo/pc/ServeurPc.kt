@@ -2604,6 +2604,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 when {
                     q["vide"] == "1" -> f.vide()
                     q["tranches"] != null -> f.enregistreTranches = q["tranches"] == "1"
+                    q["deux"] != null -> f.deuxModes = q["deux"] == "1"
                     // Nothing feeding: the card it needs started first (receive only), else why not.
                     q["on"] == "1" -> { son.assureSource()?.let { return JSONObject().put("ok", false).put("erreur", it) }; f.demarre(q["mode"] ?: f.mode) }
                     q["on"] == "0" -> f.arrete()
@@ -3292,7 +3293,7 @@ object JsonPc {
                 e.frequenceHz, e.rapportDb, e.decalageS, e.mode) },
             st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits, paysFaits, carresFaits,
             guettees = fr.f4ioz.satcombo.domain.Ft8Veille.lit(st.stockage), sonDepuisMs = f.sonDepuisMs(), sansDecodage = f.sansDecodage)
-            .put("enregistreTranches", f.enregistreTranches)
+            .put("enregistreTranches", f.enregistreTranches).put("deuxModes", f.deuxModes)
     }
 
     /** APRS heard: the frames (newest first) and what they add up to. */

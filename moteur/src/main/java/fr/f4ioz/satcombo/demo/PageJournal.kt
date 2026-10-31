@@ -57,7 +57,9 @@ object PageJournal {
         "pj_accel_aide", "pj_accel_vitesse", "pj_duree_video", "pj_duree_cartes", "pj_duree_bilan", "pj_frise_legende", "pj_vitesse_aide",
         "pj_s_passages", "pj_s_ouvrir", "pj_s_autour", "pj_s_mode", "pj_exp_unique", "pj_exp_plusieurs", "pj_s_mode_seul",
         "pj_ft_titre", "pj_ft_aide", "pj_ft_visibilite", "pj_ft_ordre", "pj_ft_bas", "pj_ft_haut", "pj_ft_aucun", "pj_ft_redecoder",
-        "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher")
+        "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher",
+        "pj_ft_deux", "pj_num_titre", "pj_num_aide", "pj_num_chercher", "pj_num_chercher_aide", "pj_num_aucune", "pj_num_decoder",
+        "pj_num_salves", "pj_num_rien", "pj_num_trouves", "pj_num_publier", "pj_num_publier_aide")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -431,6 +433,7 @@ function passeA(i, force) {
   majEntete(); dessineCiel(); if (O.vue === 'carte') dessineCarte();
   const id = P.id;
   lire('/activite', { id: id }).then(a => { if (P && P.id === id) { activite = a; dessineFrise(); } }).catch(() => {});
+  numPasse(id);
   chargeSstv();
   panneau(); maj();
 }
@@ -1277,6 +1280,7 @@ function dessineFrise() {
   x.fillStyle = 'rgba(205,215,230,.45)'; activite.forEach(r => x.fillRect(tx(r[0], w), 36, Math.max(2, tx(r[1], w) - tx(r[0], w)), 7));
   if (P.sig.length) { x.strokeStyle = 'rgba(235,240,245,.8)'; x.lineWidth = 1.3; x.beginPath();
     P.sig.forEach((s, i) => { const px = tx(s[0], w), py = h - 18 - part(s[1]) * 22; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke(); }
+  numDessine(x, w, h);
   P.marques.forEach(m => { x.fillStyle = COULHEX[couleur(m)]; const a = tx(m.de, w), b = tx(m.a, w); x.fillRect(a, 8, Math.max(4, b - a), 24); });
   if (sel) { x.fillStyle = 'rgba(63,224,200,.18)'; x.fillRect(tx(sel[0], w), 0, tx(sel[1], w) - tx(sel[0], w), h - 16);
     x.fillStyle = '#3FE0C8'; x.fillRect(tx(sel[0], w), 0, 2, h - 16); x.fillRect(tx(sel[1], w) - 2, 0, 2, h - 16); }
@@ -1293,13 +1297,14 @@ function hachure(x, x0, y0, l, h) {
 }
 function installeFrise() {
   const c = g('frise'); let pres = null;
-  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.offsetX, t: tDeX(ev.offsetX, c.clientWidth), bouge: false, avant: sel }; });
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.offsetX, y: ev.offsetY, t: tDeX(ev.offsetX, c.clientWidth), bouge: false, avant: sel }; });
   // A stretch only from a real drag (12 px); one under 10 s is dropped (the stretch before it kept), the press read as a click.
   c.addEventListener('pointermove', ev => { if (!pres) return; if (Math.abs(ev.offsetX - pres.x) > 12) pres.bouge = true;
     if (pres.bouge) { const b = tDeX(ev.offsetX, c.clientWidth); sel = [Math.min(pres.t, b), Math.max(pres.t, b)]; maj(); } });
   c.addEventListener('pointerup', () => {
     if (pres && pres.bouge && sel && sel[1] - sel[0] < 10000) { sel = pres.avant; pres.bouge = false; }
-    if (pres && !pres.bouge) cherche(pres.t); else if (sel) deQuoi = 'sel';
+    // In a digital zone: chosen (its violet strip opens it in Options instead of going there).
+    if (pres && !pres.bouge) { if (!numClic(pres.t, pres.y)) cherche(pres.t); } else if (sel) deQuoi = 'sel';
     pres = null; maj(); if (onglet === 'fabriquer') panneau(); });
   c.addEventListener('wheel', ev => { ev.preventDefault(); const w = c.clientWidth, m = tDeX(ev.offsetX, w), k = ev.deltaY > 0 ? 1.25 : 0.8;
     const l = Math.max(20000, Math.min((P.t1 - P.t0) + 1200000, (vue1 - vue0) * k));
@@ -1731,6 +1736,7 @@ function panneauOptions(p) {
   p.appendChild(curseurPolice(rafraichit));
   // The FT8/FT4 messages over the replay, when the pass has some (or a recording to read them from).
   blocFt(p);
+  blocNum(p);
   if (S.images.length) p.appendChild(el('p', { class: 'aide', text: T.sstv_cadre + ' — ' + T.sstv_cadre_aide }));
   p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
 }

@@ -86,6 +86,11 @@ interface MondeCat {
     fun donnees(): Boolean = false
     /** The rig is keyed (PTT held): no mode write until it is released; frequencies go on. */
     fun emissionEnCours(): Boolean = false
+    /**
+     * FT8/FT4 listens: the downlink written in [StationCat.PAS_FIN_HZ] steps
+     * instead of 20 Hz (see [StationCat.pasDopplerHz]). False by default.
+     */
+    fun dopplerFin(): Boolean = false
 }
 
 /** What the loop shows: the rig's frequencies (sky), who drives the RX dial, its mode read back. */
@@ -283,6 +288,8 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         const val VITESSE_MAX_KMS = 7.6
         /** Beyond the band and its Doppler, what a hand might still do (tuning past an edge, another FM channel). */
         const val MARGE_HORS_BANDE_HZ = 20_000L
+        /** The downlink's step while FT8/FT4 listens ([pasDopplerHz]). */
+        const val PAS_FIN_HZ = 4L
     }
 
     /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
@@ -387,8 +394,17 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         return true
     }
 
-    /** Doppler threshold: FM channels move by 200 Hz steps at least, SSB by 20. */
-    private fun dopplerThreshold(t: Transmitter): Long = if (isFmMode(t)) 200L else 20L
+    /** Doppler threshold: FM channels move by 200 Hz steps at least, SSB by 20 (or [PAS_FIN_HZ], [pasDopplerHz]). */
+    private fun dopplerThreshold(t: Transmitter): Long = if (isFmMode(t)) 200L else pasDopplerHz()
+
+    /**
+     * The step the SSB downlink is written by: 20 Hz, inaudible on a voice; [PAS_FIN_HZ] while FT8/FT4 listens
+     * ([MondeCat.dopplerFin]). Each 20 Hz write is a jump in the audio, and in between every signal slides with
+     * the Doppler: a sawtooth of 20 Hz, a second long at 20 Hz/s on a LEO pass (RS-44, 27 October 2026). An FT8
+     * signal (6.25 Hz tones) is then never read, FT4 (20.8 Hz) loses 3 to 5 dB; 4 Hz steps leave them whole
+     * (`Ft8DentsTest`). About five writes a second at the fastest, the loop's pace being ten.
+     */
+    fun pasDopplerHz(): Long = if (monde.dopplerFin()) PAS_FIN_HZ else 20L
 
     // ---------------------------------------------- the loop
 
@@ -640,8 +656,9 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
 
         if (pilote) {
             // 20 Hz: below that the gap is inaudible and writing only loads
-            // the CI-V bus.
-            if (kotlin.math.abs(dl - lastSentDl) >= 20 || kotlin.math.abs(ul - lastSentUl) >= 20) {
+            // the CI-V bus — except to FT8/FT4 ([pasDopplerHz]): the
+            // downlink then by finer steps (the uplink stays at 20).
+            if (kotlin.math.abs(dl - lastSentDl) >= pasDopplerHz() || kotlin.math.abs(ul - lastSentUl) >= 20) {
                 lastSentDl = dl; lastSentUl = ul
                 // Recognise ourselves on readback, or our own command would
                 // look like an operator gesture and we would let go every round.

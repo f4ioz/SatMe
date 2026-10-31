@@ -1059,6 +1059,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         override fun modeCw(): Boolean = _ui.value.opMode == "CW"
         override fun maintienDoppler(): Boolean = _ui.value.dopplerHold
         override fun dopplerRx(): Boolean = _ui.value.catRxDoppler
+        // FT8/FT4 listening: the downlink by fine steps (a 20 Hz sawtooth in the audio kills FT8).
+        override fun dopplerFin(): Boolean = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value.enMarche
         override fun moletteTxDecalage(): Boolean = _ui.value.catUi.txVfoShift
         override fun txSuitVite(): Boolean = _ui.value.catUi.txSuitVite
         override fun modelePoste(): String = _ui.value.rigModel

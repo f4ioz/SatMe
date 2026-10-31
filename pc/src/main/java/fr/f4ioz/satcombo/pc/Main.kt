@@ -513,6 +513,8 @@ fun main(args: Array<String>) {
             override fun modePoste() = station.modePoste()
         })
     station.donneesFt8 = { ft8Tx.veutDonnees }
+    // FT8/FT4 listening: the CAT's Doppler by 4 Hz steps, not 20 (a 20 Hz sawtooth in the audio kills FT8, hurts FT4).
+    station.dopplerFinFt8 = { son.ft8.enMarche }
     // No mode written while the rig is keyed, by FT8/FT4 or anyone else's PTT.
     station.posteEmet = { emissionPoste.poste.etat.emet || ft8Tx.emet }
     ft8Tx.demarreBoucle()
@@ -696,6 +698,9 @@ fun main(args: Array<String>) {
     son.sstv.nouvelleImage = { nom, _ -> site.nouvelleImage(nom); iaAuto.demande(son.sstv.dossier, nom) }
     carnet.ecouteurs += { c -> site.nouveauContact(c.timeMs) }
     journalWeb.videoFaite = { f -> site.nouvelleVideo(f.name) }
+    // A pass's FT8/FT4 (its digital zones read again in the journal) to the site, by hand, as the FT8 tab's 🌐.
+    journalWeb.publieFt = { id -> site.publie(SitePc.Genre.FT8, id, true) }
+    journalWeb.siteFtPret = { site.configure && site.mode(SitePc.Genre.FT8) != SitePc.Mode.JAMAIS }
     serveur.site = site
     site.demarre()
     // The live parts: the auto-pilot, QO-100's spectrum and the DATV picture pushed live (each off unless chosen).

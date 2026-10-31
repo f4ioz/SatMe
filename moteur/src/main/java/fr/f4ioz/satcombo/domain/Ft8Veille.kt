@@ -33,6 +33,14 @@ object Ft8Veille {
     const val SILENCE = 1e-6f
     /** That many slots with sound and nothing decoded: worth saying. */
     const val TRANCHES_SANS_DECODAGE = 40
+    /** The other mode decoded while this one is not, for that many slots: worth saying at once. */
+    const val TRANCHES_AUTRE_MODE = 4
+    /** The other mode's lines this recent count (ms). */
+    const val AGE_AUTRE_MODE_MS = 3 * 60_000L
+
+    /** The other mode heard lately ([lignes]: (slot start, mode)), when it is not [mode]: its name, else null. */
+    fun autreMode(lignes: List<Pair<Long, String>>, mode: String, maintenant: Long): String? =
+        lignes.firstOrNull { !it.second.equals(mode, true) && maintenant - it.first <= AGE_AUTRE_MODE_MS }?.second?.uppercase()
 
     /**
      * Our clock against the stations': the median DT, less the nominal start,
@@ -63,10 +71,11 @@ object Ft8Veille {
      * What stops the decoding, the worst first, or null when all is well.
      * [sonDepuisMs] since the last sound block (null: not known here),
      * [niveau] its peak (0..1), [sansDecodage] slots heard with nothing decoded,
-     * [panne] what the listener itself reported.
+     * [panne] what the listener itself reported, [autreMode] the other mode
+     * when its lines are decoded alongside ([autreMode]).
      */
     fun diagnostic(enMarche: Boolean, carte: Boolean, sonDepuisMs: Long?, niveau: Float, sansDecodage: Int,
-                   panne: String = ""): Diagnostic? {
+                   panne: String = "", mode: String = "FT8", autreMode: String? = null): Diagnostic? {
         if (!enMarche) return null
         if (panne.isNotBlank()) return Diagnostic("son", "pas de son", panne)
         if (!carte) return Diagnostic("son", "pas de son", "la carte son est arrêtée (onglet Son)")
@@ -74,6 +83,10 @@ object Ft8Veille {
             return Diagnostic("son", "pas de son", "plus rien n’arrive de la carte son depuis " + sonDepuisMs / 1000 + " s : débranchée, ou prise par un autre logiciel ?")
         if (niveau < SILENCE)
             return Diagnostic("silence", "silence numérique", "le son arrive mais ne vaut que des zéros (sous −120 dBFS) : entrée coupée ou volume à zéro dans le mélangeur")
+        // The other mode is what is on the air (its lines decoded alongside): said at once, not after 40 slots.
+        if (autreMode != null && autreMode != mode && sansDecodage >= TRANCHES_AUTRE_MODE)
+            return Diagnostic("mode", "du $autreMode, pas du $mode",
+                "rien en $mode depuis $sansDecodage créneaux, mais du $autreMode est décodé à côté : passer l’écoute en $autreMode ?")
         if (sansDecodage >= TRANCHES_SANS_DECODAGE)
             return Diagnostic("rien", "aucun décodage depuis $sansDecodage tranches",
                 "du son, mais rien de lisible : la bonne fréquence, le mode (USB), le niveau, l’horloge à la seconde ?")

@@ -97,7 +97,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     private class Travail(@Volatile var progres: Float = 0f, @Volatile var fichier: File? = null, @Volatile var fini: Boolean = false,
                           /** An FT8/FT4 re-reading: how many messages it found (-1: not one, or failed). */
-                          @Volatile var trouves: Int = -1)
+                          @Volatile var trouves: Int = -1,
+                          /** What it found, as JSON for the page (the digital zones' decodes, the zones found). */
+                          @Volatile var resultat: String? = null)
     private val travaux = ConcurrentHashMap<String, Travail>()
 
     private fun opt(p: (String) -> String, nom: String, defaut: Boolean) = when (p(nom)) { "1" -> true; "0" -> false; else -> defaut }
@@ -221,6 +223,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     append(",\"sig\":").append(e.signal.joinToString(",", "[", "]") { "[${it.tMs},${it.s}]" })
                     append(",\"freq\":").append(frequences(e, l).joinToString(",", "[", "]") { "[${it.first},${it.second}]" })
                     append(",\"ft\":").append(ftJson(e, l)).append(",\"ftAff\":").append(ftAffJson(e.options.ft))
+                        .append(",\"siteFt\":").append(runCatching { siteFtPret() }.getOrDefault(false))
                     append(",\"doppler\":").append(station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(it, e.satName, e.debutMs, e.finMs) }
                         .orEmpty().joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                     append("}")
@@ -326,7 +329,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "/ft/redecode" -> {
                 val e = j.passage(p("id")) ?: return NON
                 val m = j.morceaux(e).ifEmpty { return json("{\"ok\":false,\"raison\":\"son\"}") }
-                val mode = if (p("mode").uppercase() == "FT4") "FT4" else "FT8"
+                // FT4, FT8, or both (the page's « FT4 + FT8 », and its default: the mode is rarely known after the fact).
+                val mode = when (p("mode").uppercase()) { "FT4" -> "FT4"; "FT8" -> "FT8"; else -> "FT4+FT8" }
                 val (n, t) = travail()
                 kotlin.concurrent.thread(name = "JournalWebPc-ft", isDaemon = true) {
                     val k = runCatching { j.ft.redecode(e, m, JournalPc.decodeur, mode) { t.progres = it } }
@@ -337,7 +341,58 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             }
             "/travail" -> {
                 val t = travaux[p("n")] ?: return NON
-                json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null || t.trouves >= 0},\"trouves\":${t.trouves},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")
+                json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null || t.trouves >= 0},\"trouves\":${t.trouves},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}" +
+                    (t.resultat?.let { ",\"resultat\":$it" } ?: "") + "}")
+            }
+            // The digital zones of the pass's recordings (FT4, FT8, other narrow bursts), worked out once and kept.
+            "/numerique" -> {
+                val e = j.passage(p("id")) ?: return NON
+                json(zonesJson(j.zones(e)))
+            }
+            // « Rechercher le numérique »: the recordings scanned again, every zone found read by the FT4 and FT8
+            // decoders, what they find kept with the pass; in the background (« /travail »: « resultat » the zones).
+            "/numerique/cherche" -> {
+                val e = j.passage(p("id")) ?: return NON
+                val m = j.morceaux(e).ifEmpty { return json("{\"ok\":false,\"raison\":\"son\"}") }
+                val (n, t) = travail()
+                kotlin.concurrent.thread(name = "JournalWebPc-num", isDaemon = true) {
+                    runCatching {
+                        t.progres = 0.02f
+                        val zs = j.zones(e, refait = true)
+                        t.progres = 0.1f
+                        var k = 0
+                        zs.forEachIndexed { i, z ->
+                            k += j.ft.stretch(e, m, JournalPc.decodeur, z.debutMs, z.finMs, modesZone(z)) { t.progres = 0.1f + 0.9f * (i + it) / zs.size }.size
+                        }
+                        t.resultat = zonesJson(zs); t.trouves = k
+                    }.onFailure { System.err.println("journal : numérique de ${e.id} : $it") }
+                    t.progres = 1f; t.fini = true
+                }
+                json("{\"ok\":true,\"travail\":\"$n\"}")
+            }
+            // One zone (« de », « a », UTC ms) read now by the decoders (« mode »: FT4, FT8, else both); its messages
+            // kept with the pass and given back (« resultat »: slot, mode, dB, dt, Hz, message).
+            "/numerique/decode" -> {
+                val e = j.passage(p("id")) ?: return NON
+                val de = p("de").toLongOrNull() ?: return NON; val a = p("a").toLongOrNull() ?: return NON
+                if (a <= de || a - de > 3 * 3_600_000L) return NON
+                val m = j.morceaux(e).ifEmpty { return json("{\"ok\":false,\"raison\":\"son\"}") }
+                val (n, t) = travail()
+                kotlin.concurrent.thread(name = "JournalWebPc-num", isDaemon = true) {
+                    runCatching {
+                        val l = j.ft.stretch(e, m, JournalPc.decodeur, de, a, JournalFtPc.modes(p("mode"))) { t.progres = it }
+                        t.resultat = decodesJson(l); t.trouves = l.size
+                    }.onFailure { System.err.println("journal : zone de ${e.id} : $it") }
+                    t.progres = 1f; t.fini = true
+                }
+                json("{\"ok\":true,\"travail\":\"$n\"}")
+            }
+            // The pass's FT8/FT4 messages to the web site (« Publication web », « Passages FT8/FT4 »: by hand, unless « Jamais »).
+            "/numerique/publie" -> {
+                val e = j.passage(p("id")) ?: return NON
+                if (j.ft.duPassage(e).isEmpty()) return json("{\"ok\":false,\"erreur\":\"aucun message FT8/FT4 gardé avec ce passage\"}")
+                val err = runCatching { publieFt(e.id) }.getOrElse { it.message ?: "échec" }
+                json(org.json.JSONObject().put("ok", err == null).put(if (err == null) "message" else "erreur", err ?: "dans la file d’envoi vers le site").toString())
             }
             // A Doppler/CAT log (CSV), by its name.
             "/doppler" -> {
@@ -609,6 +664,29 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** Told of each video made by the editor (« Réglages › Envoyer vers un site web »). */
     @Volatile var videoFaite: (File) -> Unit = {}
+    /**
+     * A pass's FT8/FT4 messages put in « Publication web »'s queue (`ft8-passage`, [SitePc.Genre.FT8]): null when
+     * queued, else why not (set by Main; without a site, it says so).
+     */
+    @Volatile var publieFt: (String) -> String? = { "« Publication web » n’est pas en place" }
+    /** Whether a pass's FT8/FT4 can go to the site now (the module on, the site ready, not « Jamais »), for the page's button. */
+    @Volatile var siteFtPret: () -> Boolean = { false }
+
+    /** The zones for the page: start, end (UTC ms), mode (FT4, FT8, NUM), label, bursts, low and high Hz. */
+    private fun zonesJson(l: List<fr.f4ioz.satcombo.domain.ZonesNumeriques.Zone>): String = org.json.JSONArray(l.map { z ->
+        org.json.JSONObject().put("de", z.debutMs).put("a", z.finMs).put("m", z.mode).put("l", z.libelle).put("n", z.salves)
+            .put("bas", z.basHz.toInt()).put("haut", z.hautHz.toInt())
+    }).toString()
+
+    /** A zone's messages for the page: slot (« t »), mode, dB, dt, Hz, message (« x »), who calls (« de »). */
+    private fun decodesJson(l: List<JournalFt.Decode>): String = org.json.JSONArray(l.map { d ->
+        org.json.JSONObject().put("t", d.tMs).put("m", d.mode).put("db", d.db).put("dt", d.dt).put("hz", d.hz).put("x", d.message)
+            .also { o -> d.appelant?.let { o.put("de", it) } }
+    }).toString()
+
+    /** What a zone is read in: FT8 first when it says FT8, else FT4 first, both always (a zone's label is a guess). */
+    private fun modesZone(z: fr.f4ioz.satcombo.domain.ZonesNumeriques.Zone) =
+        if (z.mode == fr.f4ioz.satcombo.domain.ZonesNumeriques.FT8) listOf("FT8", "FT4") else listOf("FT4", "FT8")
 
     private val client by lazy { okhttp3.OkHttpClient() }
 

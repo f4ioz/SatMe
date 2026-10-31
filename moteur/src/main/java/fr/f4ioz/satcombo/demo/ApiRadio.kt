@@ -156,7 +156,8 @@ object ApiRadio {
         // The clock and the reception, read here so that both servers say the same.
         val h = V.horloge(entendus.filter { it.mode == mode }.map { it.tranche to it.decalageS }, maintenant)
         val d = V.diagnostic(enMarche, carte, sonDepuisMs, niveau,
-            sansDecodage ?: V.sansDecodage(tranches, entendus.maxOfOrNull { it.tranche }, maintenant, dureeMs), panne)
+            sansDecodage ?: V.sansDecodage(tranches, entendus.filter { it.mode == mode }.maxOfOrNull { it.tranche }, maintenant, dureeMs), panne,
+            mode, V.autreMode(entendus.map { it.tranche to it.mode }, mode, maintenant))
         return JSONObject()
             .put("horloge", h?.let { JSONObject().put("decalage", Math.round(it.decalageS * 10) / 10.0).put("dispersion", Math.round(it.dispersionS * 10) / 10.0)
                 .put("decodes", it.decodes).put("tranches", it.tranches) } ?: JSONObject.NULL)

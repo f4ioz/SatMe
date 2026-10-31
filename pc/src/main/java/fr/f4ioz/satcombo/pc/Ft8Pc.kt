@@ -41,6 +41,18 @@ class Ft8Pc(
         get() = stockage?.getBoolean("pc_ft8_tranches", false) ?: false
         set(v) { stockage?.edit()?.putBoolean("pc_ft8_tranches", v)?.apply() }
 
+    /**
+     * The other mode decoded too (FT4 while listening in FT8, FT8 in FT4): its own
+     * slots cut from the same sound, read at the normal depth after the chosen
+     * mode's. On by default where settings are kept (the station's card): a pass
+     * of RS-44 heard in FT8 on 27 October 2026 held FT4 the listening never read.
+     * Receive only.
+     */
+    var deuxModes: Boolean
+        get() = stockage?.getBoolean(CLE_DEUX, true) ?: deuxModesSansReglages
+        set(v) { if (stockage != null) stockage.edit().putBoolean(CLE_DEUX, v).apply() else deuxModesSansReglages = v }
+    @Volatile private var deuxModesSansReglages = false
+
     data class Entendu(
         /** Start of its slot, UTC ms. */
         val tranche: Long,
@@ -98,13 +110,26 @@ class Ft8Pc(
     @Volatile var sansDecodage = 0
         private set
 
-    private val decodeur = Executors.newSingleThreadExecutor { r -> Thread(r, "satme-ft8").apply { isDaemon = true } }
+    // Below the sound's threads: a slow decode must never starve the capture (a lost second is a lost slot, and a torn SSTV picture).
+    private val decodeur = Executors.newSingleThreadExecutor { r -> Thread(r, "satme-ft8").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
+    /** Slots handed to the decoder and not done yet: the other mode's skipped while the chosen one's are behind. */
+    private val enAttente = java.util.concurrent.atomic.AtomicInteger(0)
     private var facteur = 1
     private var cadence = 12_000
-    private var tampon = FloatArray(0)
-    private var ecrit = 0
-    private var trancheCourante = -1L
-    private var premiere = true
+
+    /** One mode's slots as the sound comes: its buffer, the slot being filled, the first one (cut) dropped. */
+    private class Fil(val mode: String) {
+        val dureeMs: Long = if (mode == "FT4") 7_500L else 15_000L
+        val sig: Ft8Signal.Mode = if (mode == "FT4") Ft8Signal.FT4 else Ft8Signal.FT8
+        var tampon = FloatArray(0)
+        var ecrit = 0
+        var trancheCourante = -1L
+        var premiere = true
+        fun prepare(cadence: Int) { tampon = FloatArray((dureeMs * cadence / 1000).toInt()); ecrit = 0 }
+    }
+    /** The chosen mode's, and the other one's when [deuxModes]. */
+    private var principal = Fil("FT8")
+    private var autre: Fil? = null
     private var somme = 0
     private var dansSomme = 0
     private val bloc = ShortArray(1024)
@@ -185,7 +210,8 @@ class Ft8Pc(
 
     @Synchronized fun demarre(m: String = mode) {
         mode = if (m == "FT4") "FT4" else "FT8"
-        enMarche = true; premiere = true; trancheCourante = -1L; ecrit = 0; cadence = 0
+        principal = Fil(mode); autre = null
+        enMarche = true; cadence = 0
         dernierSonMs = horloge(); sansDecodage = 0
         stockage?.edit()?.putBoolean(CLE_MARCHE, true)?.putString(CLE_MODE, mode)?.apply()
     }
@@ -211,9 +237,13 @@ class Ft8Pc(
             facteur = Math.round(rate / 12_000.0).toInt().coerceAtLeast(1)
             cadence = rate / facteur
             cascade = Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, cadence, LIGNES)
-            tampon = FloatArray((dureeTranche() * cadence / 1000).toInt())
-            ecrit = 0; somme = 0; dansSomme = 0; dansBloc = 0
+            principal.prepare(cadence); autre?.prepare(cadence)
+            somme = 0; dansSomme = 0; dansBloc = 0
         }
+        // The other mode switched on or off as it is listened to.
+        val voulu = if (deuxModes) (if (mode == "FT4") "FT8" else "FT4") else null
+        if (autre?.mode != voulu) autre = voulu?.let { Fil(it).also { f -> f.prepare(cadence) } }
+        val fils = listOfNotNull(principal, autre)
         var pic = 0
         for (i in 0 until n) {
             val v = pcm[i].toInt()
@@ -222,24 +252,65 @@ class Ft8Pc(
             if (dansSomme < facteur) continue
             val s = somme / facteur
             somme = 0; dansSomme = 0
-            if (ecrit < tampon.size) tampon[ecrit++] = s / 32768f
+            val ech = s / 32768f
+            for (f in fils) if (f.ecrit < f.tampon.size) f.tampon[f.ecrit++] = ech
             bloc[dansBloc++] = s.toShort()
             if (dansBloc == bloc.size) { if (cascade?.verse(bloc, dansBloc) == true) derniereLigneMs = horloge(); dansBloc = 0 }
         }
         niveau = pic / 32768f
         // A new slot: the one just over is decoded (the first one, cut, is dropped).
         val t = horloge()
-        val numero = t / dureeTranche()
-        if (numero != trancheCourante) {
-            val plein = tampon.copyOf(ecrit)
-            val debut = (numero - 1) * dureeTranche()
-            val etaitPremiere = premiere || trancheCourante < 0
-            trancheCourante = numero; ecrit = 0; premiere = false
-            val sig = signal(); val m = mode; val c = cadence
-            val pente = penteSur(debut, debut + dureeTranche())
-            if (!etaitPremiere && plein.size > sig.parSymbole * sig.symboles / 4) decodeur.execute { decode(plein, c, sig, m, debut, pente) }
+        var principalMis = 0
+        for (f in fils) {
+            val numero = t / f.dureeMs
+            if (numero == f.trancheCourante) continue
+            val plein = f.tampon.copyOf(f.ecrit)
+            val debut = (numero - 1) * f.dureeMs
+            val etaitPremiere = f.premiere || f.trancheCourante < 0
+            f.trancheCourante = numero; f.ecrit = 0; f.premiere = false
+            val sig = f.sig; val m = f.mode; val c = cadence; val second = f !== principal
+            val pente = penteSur(debut, debut + f.dureeMs)
+            if (etaitPremiere || plein.size <= sig.parSymbole * sig.symboles / 4) continue
+            // A loaded PC: the other mode waits for no one, the chosen mode's slots come first.
+            // (Every 15 s both close at once: the chosen one just handed over does not count.)
+            if (second && enAttente.get() > principalMis) { autresSautees++; continue }
+            enAttente.incrementAndGet()
+            if (!second) principalMis = 1
+            decodeur.execute {
+                try { if (second) decodeAutre(plein, c, sig, m, debut, pente) else decode(plein, c, sig, m, debut, pente) }
+                finally { enAttente.decrementAndGet() }
+            }
         }
     }
+
+    /**
+     * The other mode's slot ([deuxModes]): normal depth, its lines among the others (with their
+     * mode), kept and sent on as the chosen mode's; it leaves the chosen mode's counters alone.
+     */
+    private fun decodeAutre(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long, pente: Double) {
+        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente, profondeur = Ft8Decodeur.Profondeur.NORMALE) }
+            .getOrDefault(emptyList())
+        if (l.isEmpty()) return
+        val nouveaux = l.map {
+            Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
+                Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m, it.ap)
+        }
+        fr.f4ioz.satcombo.domain.Ft8Indicatifs.commun.sauve()
+        if (enregistreTranches) runCatching { garde(audio, cadence, m, debut, l) }
+        synchronized(this) {
+            entendus = (nouveaux + entendus).take(500)
+            dernierAutreMs = horloge()
+        }
+        auDecode?.let { runCatching { it(nouveaux) } }
+    }
+
+    /** The other mode's slots left out because the decoder was behind (a loaded PC). */
+    @Volatile var autresSautees = 0
+        private set
+
+    /** When the other mode last decoded something (0: never): the reception's diagnostic says so. */
+    @Volatile var dernierAutreMs = 0L
+        private set
 
     /** How far into the current slot (0..1), for the page's bar. */
     fun avancement(): Float = (horloge() % dureeTranche()).toFloat() / dureeTranche()
@@ -306,6 +377,8 @@ class Ft8Pc(
         /** Listening on or off, and the mode, kept across restarts. */
         const val CLE_MARCHE = "pc_ft8_marche"
         const val CLE_MODE = "pc_ft8_mode"
+        /** The other mode decoded too ([deuxModes]). */
+        const val CLE_DEUX = "pc_ft8_deux"
         /** About 5.5 Hz a column (FT8's tones are 6.25 Hz apart). */
         const val COLONNES = 512
         /** About 46 s: three FT8 slots. */
