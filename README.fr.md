@@ -302,6 +302,7 @@ Les versions précédentes : [les nouveautés du wiki](https://github.com/f4ioz/
 - Clavier d'indicatifs à une main, recherche QRZ.com, nouveau locator et doublon signalés pendant la saisie.
 - Wavelog et Cloudlog : contacts envoyés, au besoin tout seuls une minute après la saisie, avec vos profils de station. SatMe apparaît aussi comme une radio dans Wavelog et Cloudlog : satellite, mode et fréquences corrigées du Doppler se remplissent.
 - Confirmations LoTW, carte des locators, export ADIF, QSL et fiches d'activation en PDF.
+- SatMe-PC contrôle le carnet avant l'export (« Contrôle ADIF » : ce que LoTW, eQSL ou Wavelog refuseraient, ce qui semble faux, un clic ouvre le contact) et montre l'**état des QSL** de chaque contact — LoTW, eQSL, papier — lu dans Wavelog (en lecture seule : SatMe-PC ne garde aucun mot de passe LoTW ni eQSL).
 
 ### Enregistrement et décodage
 - Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.

@@ -56,7 +56,7 @@ class ImportPc(private val station: StationPc, private val carnet: CarnetPc, pri
             val m = r.getOrNull() ?: continue
             if (m.adif.isBlank()) { if (m.message.isNotBlank()) message = m.message; continue }
             // A contact without its own square takes its location's.
-            l += AdifImport.contactsEnLigne(m.adif).map { q -> if (q.monLocator.isBlank()) q.copy(monLocator = p.carre.trim().uppercase()) else q }
+            l += AdifImport.contactsEnLigne(m.adif).map { q -> AdifImport.avecLieu(q, p.carre) }
         }
         if (l.isEmpty()) return Bilan(0, 0, 0, 0, message.ifBlank { "rien dans le carnet en ligne" })
         return importe(l, dejaEnLigne = true)
@@ -86,11 +86,11 @@ class ImportPc(private val station: StationPc, private val carnet: CarnetPc, pri
             val deja = locaux.any { J.indicatifDeBase(it.callsign) == J.indicatifDeBase(q.indicatif) &&
                 kotlin.math.abs(it.timeMs - q.quandMs) <= 120_000L && ((sat != null && it.catnum == sat.catalogNumber) || J.memeSatellite(it.satName, nomSat)) }
             if (deja) continue
-            val obs = Maidenhead.centre(q.monLocator)?.let { (la, lo) -> Observer(la, lo) } ?: station.etat.value.observateur
+            val obs = Maidenhead.centre(q.monLocator.ifBlank { q.monGrilles.substringBefore(",") })?.let { (la, lo) -> Observer(la, lo) } ?: station.etat.value.observateur
             val pos = if (sat != null && obs != null) runCatching { predicteur.positionAt(sat, obs, q.quandMs) }.getOrNull() else null
             val e = LogEntry(timeMs = q.quandMs, satName = nomSat, catnum = sat?.catalogNumber ?: 0,
                 azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
-                myLocator = q.monLocator, callsign = q.indicatif, theirLocator = q.locator,
+                myLocator = q.monLocator, myGrids = q.monGrilles, callsign = q.indicatif, theirLocator = q.locator,
                 nom = q.nom, qth = q.qth, mode = q.mode, rstSent = q.rstEnvoye, rstRcvd = q.rstRecu,
                 downlinkMhz = q.freqRxMhz, uplinkMhz = q.freqMhz,
                 envoyeMs = if (dejaEnLigne) maintenant else 0L)

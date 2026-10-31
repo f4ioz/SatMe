@@ -1413,6 +1413,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 fr.f4ioz.satcombo.demo.ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(carnet?.contacts().orEmpty(), station.settings.manualLocator))
                     .toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
+            // The log checked before export: what LoTW, eQSL or Wavelog would refuse, what looks wrong.
+            "/api/carnet/controle" -> {
+                val l = carnet?.contacts().orEmpty()
+                envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                    fr.f4ioz.satcombo.domain.ControleAdif.json(fr.f4ioz.satcombo.domain.ControleAdif.controle(l), l.size).toString().toByteArray())
+            }
+            // The QSL statuses (eQSL, LoTW, paper) read from the online log: the summary.
+            "/api/carnet/qsl" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (carnet?.qsl?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station, son).toString().toByteArray())
             "/api/sources" -> {
                 // The orbital elements' choice, as on the phone.
@@ -2472,6 +2481,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 // The server's groups and their counts, or why it does not answer.
                 return fr.f4ioz.satcombo.demo.ApiStation.essaiServeurGp(q["serveur"].orEmpty().ifBlank { station.settings.serveurGp })
             }
+            // The QSL statuses read again from the online log (tout=1: the whole log, for confirmations on old contacts).
+            "/api/carnet/qsl/releve" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                return ok.put("dit", kotlinx.coroutines.runBlocking { c.qsl.releve(q["tout"] == "1") })
+            }
             "/api/carnet/retiens" -> {
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
                 carnet?.retiens(t, q["on"] == "1")
@@ -3049,6 +3063,8 @@ object JsonPc {
     fun carnet(c: CarnetPc?): JSONObject {
         val l = c?.contacts().orEmpty()
         val maintenant = System.currentTimeMillis()
+        // Each contact's confirmations (eQSL, LoTW, paper), as the online log last told them.
+        val qsl = c?.qsl?.associes(l).orEmpty()
         return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L }).put("total", l.size)
             .put("auto", c?.autoEtat.orEmpty())
             .put("contacts", JSONArray(l.take(6000).map { e ->
@@ -3061,6 +3077,7 @@ object JsonPc {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+                    .also { o -> qsl[e.timeMs]?.let { o.put("qsl", fr.f4ioz.satcombo.data.StatutsQsl.json(it)) } }
                     .also { o -> drapeaux.getOrPut(e.callsign) { fr.f4ioz.satcombo.demo.ApiStation.drapeau(JSONObject(), e.callsign) }
                         .let { d -> d.optString("dr").takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }; d.optString("py").takeIf { it.isNotEmpty() }?.let { o.put("py", it) } } }
             }))

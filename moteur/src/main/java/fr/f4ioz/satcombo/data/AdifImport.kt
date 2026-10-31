@@ -154,8 +154,26 @@ object AdifImport {
         val indicatif: String, val quandMs: Long, val satellite: String,
         val locator: String = "", val monLocator: String = "", val mode: String = "",
         val freqMhz: Double = 0.0, val freqRxMhz: Double = 0.0,
-        val rstEnvoye: String = "", val rstRecu: String = "", val nom: String = "", val qth: String = ""
+        val rstEnvoye: String = "", val rstRecu: String = "", val nom: String = "", val qth: String = "",
+        /** The station's grid line ("JN06,JN16"): MY_VUCC_GRIDS, or a list found in MY_GRIDSQUARE. */
+        val monGrilles: String = "",
     )
+
+    /**
+     * A contact without its own square takes its station location's [carre].
+     * That square may be a grid line ("JN06,JN16": Wavelog lets a location
+     * span several squares): it then fills the grid-line field, not the
+     * locator — eleven contacts once came in with "JN06,JN16" as locator and
+     * went back out as an invalid MY_GRIDSQUARE.
+     */
+    fun avecLieu(q: ContactEnLigne, carre: String): ContactEnLigne {
+        if (q.monLocator.isNotBlank()) return q
+        val c = carre.trim().uppercase()
+        if (!Adif.estUneGrille(c)) return q.copy(monLocator = c)
+        val g = Adif.grilles(c)
+        return q.copy(monGrilles = q.monGrilles.ifBlank { if (g.size >= 2) g.joinToString(",") else "" },
+            monLocator = if (g.size == 1) g[0] else "")
+    }
 
     /** Every satellite contact (PROP_MODE=SAT, or a SAT_NAME) of an ADIF, in full. */
     fun contactsEnLigne(texte: String): List<ContactEnLigne> {
@@ -169,9 +187,21 @@ object AdifImport {
             val call = f["CALL"].orEmpty().trim().uppercase()
             val quand = instant(f["QSO_DATE"].orEmpty(), f["TIME_ON"].orEmpty()) ?: return@forEach
             if (call.isEmpty() || sat.isEmpty()) return@forEach
+            // **A grid line in a GRIDSQUARE field** ("JN06,JN16", seen in real
+            // logs) is not a locator: it goes to the grid-line field, never to
+            // the square — it would come back out as an invalid MY_GRIDSQUARE.
+            // The other station's line stays a list in its locator field, which
+            // the export turns back into VUCC_GRIDS.
+            val monCarre = f["MY_GRIDSQUARE"].orEmpty().trim().uppercase()
+            val monGrilles = Adif.grilles(f["MY_VUCC_GRIDS"].orEmpty())
+                .ifEmpty { if (Adif.estUneGrille(monCarre)) Adif.grilles(monCarre) else emptyList() }
+            val sonCarre = f["GRIDSQUARE"].orEmpty().trim().uppercase()
+            val saGrille = Adif.grilles(f["VUCC_GRIDS"].orEmpty())
+                .ifEmpty { if (Adif.estUneGrille(sonCarre)) Adif.grilles(sonCarre) else emptyList() }
             out += ContactEnLigne(call, quand, sat,
-                locator = f["GRIDSQUARE"].orEmpty().trim().uppercase(),
-                monLocator = f["MY_GRIDSQUARE"].orEmpty().trim().uppercase(),
+                locator = if (saGrille.size >= 2) saGrille.joinToString(",") else if (Adif.estUneGrille(sonCarre)) "" else sonCarre,
+                monLocator = if (Adif.estUneGrille(monCarre)) "" else monCarre,
+                monGrilles = if (monGrilles.size >= 2) monGrilles.joinToString(",") else "",
                 mode = f["SUBMODE"].orEmpty().ifBlank { f["MODE"].orEmpty() }.trim().uppercase(),
                 freqMhz = f["FREQ"]?.trim()?.toDoubleOrNull() ?: 0.0,
                 freqRxMhz = f["FREQ_RX"]?.trim()?.toDoubleOrNull() ?: 0.0,

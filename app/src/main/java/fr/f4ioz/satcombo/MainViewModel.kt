@@ -9833,7 +9833,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val m = r.getOrNull() ?: continue
             if (m.adif.isBlank()) continue
             out += fr.f4ioz.satcombo.data.AdifImport.contactsEnLigne(m.adif).map { q ->
-                if (q.monLocator.isBlank()) q.copy(monLocator = p.carre.trim().uppercase()) else q }
+                fr.f4ioz.satcombo.data.AdifImport.avecLieu(q, p.carre) }
         }
         return out.sortedBy { it.quandMs } to (if (out.isEmpty()) message ?: t("carnet_moisson_rien") else null)
     }
@@ -9871,13 +9871,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val deja = l.any { J.indicatifDeBase(it.callsign) == J.indicatifDeBase(q.indicatif) &&
                 kotlin.math.abs(it.timeMs - q.quandMs) <= 120_000L && (it.catnum == sat.catalogNumber || J.memeSatellite(it.satName, sat.name)) }
             if (deja) continue
-            val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(q.monLocator)?.let { (la, lo) -> Observer(la, lo) }
+            val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(q.monLocator.ifBlank { q.monGrilles.substringBefore(",") })?.let { (la, lo) -> Observer(la, lo) }
                 ?: _ui.value.observer ?: locationProvider.defaultObserver
             val pos = runCatching { predictor.positionAt(sat, obs, q.quandMs) }.getOrNull()
             l = logStore.add(fr.f4ioz.satcombo.data.LogEntry(
                 timeMs = q.quandMs, satName = sat.name, catnum = sat.catalogNumber,
                 azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
-                myLocator = q.monLocator, callsign = q.indicatif, theirLocator = q.locator,
+                myLocator = q.monLocator, myGrids = q.monGrilles, callsign = q.indicatif, theirLocator = q.locator,
                 nom = q.nom, qth = q.qth, mode = q.mode, rstSent = q.rstEnvoye, rstRcvd = q.rstRecu,
                 downlinkMhz = q.freqRxMhz, uplinkMhz = q.freqMhz,
                 // Already in the online log: never sent there again.

@@ -40,6 +40,9 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     fun contacts(): List<LogEntry> = store.load().sortedByDescending { it.timeMs }
 
+    /** The QSL statuses read from the online log (in memory until Main gives it its file). */
+    var qsl: QslPc = QslPc(station, this, fr.f4ioz.satcombo.data.StatutsQsl.Store(null), horloge)
+
     // ------------------------------------------------------------ the callsigns known
 
     /** What the log knows of each station (the phone's memory), kept a few seconds: asked at every key. */

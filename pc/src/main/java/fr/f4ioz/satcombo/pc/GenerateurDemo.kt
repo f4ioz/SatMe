@@ -132,6 +132,16 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
         // Uploaded to the online log a couple of hours after, but for the last two days'.
         LogStore(File(dossier, "qso_log.json")).save(contacts.sortedBy { it.timeMs }
             .map { if (it.timeMs < maintenant - 2 * JOUR_MS) it.copy(envoyeMs = it.timeMs + 2 * 3_600_000L) else it })
+        // What the (virtual) online log says of their confirmations: most uploaded to LoTW and
+        // eQSL, a good part confirmed, a few paper cards. Fictitious, as everything here.
+        File(dossier, "qsl_statuts.json").delete()
+        fr.f4ioz.satcombo.data.StatutsQsl.Store(File(dossier, "qsl_statuts.json")).fusionne(
+            contacts.filter { it.timeMs < maintenant - 2 * JOUR_MS && it.callsign.isNotBlank() }.mapIndexed { i, e ->
+                fr.f4ioz.satcombo.data.StatutsQsl.Statut(e.callsign, e.timeMs, fr.f4ioz.satcombo.domain.NomSatellite.propre(e.satName),
+                    lotwRecu = if (i % 3 != 0) "Y" else "N", lotwEnvoye = "Y",
+                    eqslRecu = if (i % 2 == 0) "Y" else "N", eqslEnvoye = if (i % 5 != 4) "Y" else "N",
+                    papierRecu = if (i % 11 == 0) "Y" else "N", papierEnvoye = if (i % 11 == 0 || i % 13 == 0) "Y" else "N")
+            }, emptyMap(), true, maintenant)
         File(dossier, "sstv-campagnes.json").writeText(campagnes(images).toString(), Charsets.UTF_8)
         runCatching { imagesSsdv(dossier) }
         File(dossier, ModeDemo.MARQUE).writeText("genere=$maintenant\ngraine=$graine\nversion=$VERSION\n", Charsets.UTF_8)

@@ -83,25 +83,64 @@ object Adif {
     /**
      * ADIF mode from SatNOGS, which mixes modulations and protocol names. SSB
      * is MODE=SSB with SUBMODE USB or LSB; the rest maps to FM, CW or DATA.
+     *
+     * Checked against the ADIF 3.1.4 Mode enumeration: **FT8 is a mode of its
+     * own** (no submode) while FT4, JS8, Q65 and FST4 are submodes of MFSK;
+     * PSK31 a submode of PSK; FreeDV, D-STAR, C4FM and DMR submodes of
+     * DIGITALVOICE. FT8 once went out as MFSK/FT8, which no reader expects.
+     * The digital names are tested before FM and AM: "C4FM" holds "FM".
      */
     fun modeOf(raw: String?): Pair<String, String> {
         val s = (raw ?: "").uppercase()
         return when {
-            s.contains("ATV") -> "ATV" to ""
+            s.contains("DATV") || s.contains("ATV") -> "ATV" to ""
+            s.contains("FT8") -> "FT8" to ""
+            s.contains("FT4") -> "MFSK" to "FT4"
+            s.contains("JS8") -> "MFSK" to "JS8"
+            s.contains("Q65") -> "MFSK" to "Q65"
+            s.contains("FST4") -> "MFSK" to "FST4"
+            s.contains("MSK144") -> "MSK144" to ""
+            s.contains("JT65") -> "JT65" to ""
+            s.contains("RTTY") -> "RTTY" to ""
+            s == "MFSK" -> "MFSK" to ""
+            s.contains("PSK31") -> "PSK" to "PSK31"
+            s.contains("FREEDV") -> "DIGITALVOICE" to "FREEDV"
+            s.contains("DSTAR") || s.contains("D-STAR") -> "DIGITALVOICE" to "DSTAR"
+            s.contains("C4FM") -> "DIGITALVOICE" to "C4FM"
+            s == "DMR" -> "DIGITALVOICE" to "DMR"
+            s.contains("SSTV") -> "SSTV" to ""
             s.contains("USB") -> "SSB" to "USB"
             s.contains("LSB") -> "SSB" to "LSB"
             s.contains("SSB") -> "SSB" to ""
             s.contains("CW") -> "CW" to ""
             s.startsWith("FM") || s.contains("FM") -> "FM" to ""
             s.contains("AM") -> "AM" to ""
-            s.contains("SSTV") -> "SSTV" to ""
-            s.contains("FT4") -> "MFSK" to "FT4"
-            s.contains("FT8") -> "MFSK" to "FT8"
             s.contains("APRS") || s.contains("AFSK") || s.contains("FSK") ||
-                s.contains("BPSK") || s.contains("GMSK") || s.contains("DATA") -> "PKT" to ""
+                s.contains("BPSK") || s.contains("GMSK") || s.contains("DATA") || s == "PKT" -> "PKT" to ""
             else -> "" to ""
         }
     }
+
+    /**
+     * A Maidenhead locator of 2, 4, 6 or 8 characters (field, square,
+     * subsquare, extended square). Anything else would get the contact
+     * refused, so it is left out of the export instead.
+     */
+    private val LOCATOR = Regex("^[A-R]{2}([0-9]{2}([A-X]{2}([0-9]{2})?)?)?$")
+
+    fun locatorValide(l: String): Boolean = LOCATOR.matches(l.trim().uppercase())
+
+    /**
+     * The big squares of a grid line written as a list ("JN06,JN16"), each
+     * reduced to 4 characters, valid ones only, without repeats. ADIF's
+     * VUCC_GRIDS and MY_VUCC_GRIDS take exactly two or four of them.
+     */
+    fun grilles(s: String): List<String> = s.split(',', ';', '/', ' ')
+        .map { it.trim().uppercase() }.filter { it.length >= 4 && locatorValide(it) }
+        .map { it.take(4) }.distinct()
+
+    /** True for a locator field that actually holds a grid line ("JN06,JN16"). */
+    fun estUneGrille(l: String): Boolean = l.contains(',')
 
     /**
      * One ADIF field. The length counts UTF-8 bytes: most readers go byte by
@@ -170,7 +209,7 @@ object Adif {
                 sb.append(field("STATION_CALLSIGN", station.uppercase()))
                 sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))
             }
-            sb.append(field("CALL", e.callsign))
+            sb.append(field("CALL", e.callsign.trim().uppercase()))
             val (mode, sub) = modeOf(e.mode)
             sb.append(field("MODE", mode))
             sb.append(field("SUBMODE", sub))
@@ -198,8 +237,17 @@ object Adif {
                 sb.append(field("ANT_EL", "%.1f".format(Locale.US, e.elevationDeg)))
             }
             if (satellite) sb.append(field("SAT_MODE", satMode(e.uplinkMhz, e.downlinkMhz)))
-            if (e.myLocator.isNotBlank()) sb.append(field("MY_GRIDSQUARE", e.myLocator))
-            if (e.theirLocator.isNotBlank()) sb.append(field("GRIDSQUARE", e.theirLocator))
+            // **A grid line typed (or imported) into a locator field** —
+            // "JN06,JN16" — is not a GRIDSQUARE: it goes to the VUCC_GRIDS
+            // fields, and the GRIDSQUARE field gets nothing. A malformed
+            // locator is left out rather than sent: one bad field and the
+            // whole contact is refused.
+            val maGrille = estUneGrille(e.myLocator)
+            if (!maGrille && locatorValide(e.myLocator)) sb.append(field("MY_GRIDSQUARE", e.myLocator.trim().uppercase()))
+            if (estUneGrille(e.theirLocator)) {
+                val g = grilles(e.theirLocator)
+                if (g.size == 2 || g.size == 4) sb.append(field("VUCC_GRIDS", g.joinToString(",")))
+            } else if (locatorValide(e.theirLocator)) sb.append(field("GRIDSQUARE", e.theirLocator.trim().uppercase()))
             // What the directory told us about the other station, so the remote
             // log does not have to be filled in by hand.
             if (e.nom.isNotBlank()) sb.append(field("NAME", e.nom))
@@ -209,6 +257,7 @@ object Adif {
             // or four adjacent squares. Three (a corner with one square out of
             // reach) would be rejected, so it goes in the comment instead.
             val grids = e.myGrids.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                .ifEmpty { if (maGrille) grilles(e.myLocator) else emptyList() }
             if (grids.size == 2 || grids.size == 4) {
                 sb.append(field("MY_VUCC_GRIDS", grids.joinToString(",")))
             }

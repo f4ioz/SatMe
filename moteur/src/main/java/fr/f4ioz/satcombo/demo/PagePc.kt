@@ -480,6 +480,23 @@ ${STYLE_JETONS}
   .edc-carte canvas { position:absolute; inset:0; width:100%; height:100%; }
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
   #c-liste td.act { white-space:nowrap; }
+  .c-ctrl { margin-top:8px; border-top:1px solid var(--bord); padding-top:6px; }
+  .c-ctrl summary { cursor:pointer; font-size:13px; }
+  #c-ctrl-res .bq { color:var(--rose); font-weight:700; } #c-ctrl-res .av { color:var(--ambre); font-weight:700; } #c-ctrl-res .ok { color:var(--vert); }
+  .c-ctrl-liste { max-height:260px; overflow:auto; margin-top:6px; }
+  .c-ctrl-l { display:flex; gap:6px; align-items:baseline; padding:3px 4px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .c-ctrl-l:hover { background:var(--s3); }
+  .c-ctrl-l .g { flex:none; width:8px; height:8px; border-radius:50%; background:var(--ambre); align-self:center; }
+  .c-ctrl-l.bloquant .g { background:var(--rose); }
+  .c-ctrl-l .c { flex:none; font-weight:700; min-width:64px; }
+  .c-ctrl-l .c small { display:block; font-weight:400; font-size:10px; color:var(--gris); white-space:nowrap; }
+  .c-ctrl-l .m { flex:1; min-width:0; }
+  .c-ctrl-l .auto { color:var(--vert); }
+  .c-qsl-res { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:13px; }
+  .qps { display:flex; gap:2px; flex-wrap:wrap; max-width:110px; margin-top:1px; }
+  .qp { display:inline-block; font-size:10px; line-height:13px; padding:0 4px; border-radius:8px; background:var(--s3); color:var(--gris); white-space:nowrap; }
+  .qp.ok { background:rgba(91,214,138,.18); color:var(--vert); }
+  .qp.attente { background:rgba(255,180,84,.14); color:var(--ambre); }
   .fd-grille { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px; max-height:50vh; overflow:auto; margin-top:6px; }
   .fd-el { background:var(--fond); border:1px solid var(--bord); border-radius:8px; padding:4px; cursor:pointer; font-size:11px; overflow:hidden; position:relative; }
   .fd-el:hover { border-color:var(--cyan); }
@@ -2488,6 +2505,20 @@ ${TraficLeoJs.HTML}
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
       <div class="petit" id="c-auto"></div>
       <div class="etat" id="c-depot"></div>
+      <details class="c-ctrl" id="c-ctrl" hidden>
+        <summary title="Ce que LoTW, eQSL ou Wavelog refuseraient, et ce qui semble faux, contact par contact"><b>Contrôle ADIF</b> <span id="c-ctrl-res"></span></summary>
+        <div class="petit aide">Bloquant : le contact serait refusé par LoTW, eQSL ou Wavelog. Avertissement : exporté, mais à vérifier (ou corrigé tout seul à l'export). Cliquez une ligne pour ouvrir le contact.</div>
+        <div id="c-ctrl-liste" class="c-ctrl-liste"></div>
+      </details>
+    </div>
+    <div class="carte" id="c-qsl" hidden>
+      <div class="t">QSL reçues <span class="petit" id="c-qsl-quand"></span></div>
+      <div id="c-qsl-res" class="c-qsl-res"></div>
+      <div class="ligne"><button onclick="releveQsl(0)" title="Lit au carnet en ligne les contacts nouveaux et leurs confirmations (une fois par jour, tout le carnet)">Relever les QSL</button>
+        <button class="discret petit" onclick="releveQsl(1)" title="Relit tout le carnet en ligne : les confirmations arrivent sur d'anciens contacts">tout relire</button>
+        <label class="petit"><input type="checkbox" id="c-qsl-attente" onchange="if (this.checked) vueCarnet('contacts'); dessineCarnet()"> en attente seulement</label></div>
+      <div class="etat" id="c-qsl-etat"></div>
+      <div class="petit aide">Lu dans Wavelog (eQSL, LoTW, cartes papier), en lecture seule. Wavelog n'apprend une confirmation qu'après sa propre synchronisation LoTW/eQSL : lancez-la (ou attendez sa tâche planifiée) avant de relever ici.</div>
     </div>
     <details class="carte">
       <summary class="t" style="cursor:pointer;margin:0">Importer</summary>
@@ -7449,15 +7480,65 @@ async function chargeCarnet() {
     txt('c-nb', String(j.total)); txt('c-auto', j.auto || ''); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
     dessineCarnet();
   } catch (x) {}
+  chargeControle(); chargeQsl();
 }
+// The ADIF check: counts by severity, the list opened on demand; a line opens its contact.
+async function chargeControle() {
+  try {
+    const r = await fetch('api/carnet/controle'); if (!r.ok) return;
+    const j = await r.json();
+    g('c-ctrl').hidden = false;
+    const p = [];
+    if (j.bloquants) p.push('<span class="bq">' + j.bloquants + ' bloquant' + (j.bloquants > 1 ? 's' : '') + '</span>');
+    if (j.avertissements) p.push('<span class="av">' + j.avertissements + ' avertissement' + (j.avertissements > 1 ? 's' : '') + '</span>');
+    g('c-ctrl-res').innerHTML = p.length ? p.join(' · ') + ' <span class="petit">(' + j.contacts + ' contact' + (j.contacts > 1 ? 's' : '') + ')</span>' : '<span class="ok">✓ rien à signaler</span>';
+    g('c-ctrl-liste').innerHTML = j.anomalies.slice(0, 300).map(a =>
+      '<div class="c-ctrl-l ' + a.g + '" onclick="ouvreAnomalie(' + a.t + ')" title="' + escA(a.g === 'bloquant' ? 'Bloquant : refusé par LoTW, eQSL ou Wavelog' : 'Avertissement') + '"><span class="g"></span><span class="c">' + esc(a.c || '—') + '<small>' + new Date(a.t).toISOString().slice(2, 16).replace('T', ' ') + '</small></span><span class="m">' + esc(a.m) + (a.auto ? ' <span class="auto">✓ auto</span>' : '') + '</span></div>').join('') +
+      (j.anomalies.length > 300 ? '<div class="petit">… et ' + (j.anomalies.length - 300) + ' autres</div>' : '');
+  } catch (x) {}
+}
+function ouvreAnomalie(t) {
+  if (C.some(e => e.t === t)) edite(t);
+  else { vueCarnet('contacts'); g('c-filtre').value = ''; dessineCarnet(); }
+}
+// The confirmations (eQSL, LoTW, paper) as the online log knows them: the summary, read again on demand.
+let qslInfo = null;
+async function chargeQsl() {
+  try {
+    const r = await fetch('api/carnet/qsl'); if (!r.ok) return;
+    const j = await r.json(); if (j.absent) return;
+    qslInfo = j;
+    g('c-qsl').hidden = false;
+    const l = (n, o) => '<b>' + n + '</b><span>' + (o.ok ? '<span class="vert">' + o.ok + ' ✓</span>' : '<span class="petit">0 ✓</span>') + (o.attente ? ' · <span class="ambre">' + o.attente + ' en attente</span>' : '') + '</span>';
+    g('c-qsl-res').innerHTML = j.releveMs ? l('LoTW', j.lotw) + l('eQSL', j.eqsl) + l('Papier', j.papier) +
+      (j.sansStatut ? '<span class="petit">—</span><span class="petit">' + j.sansStatut + ' contact' + (j.sansStatut > 1 ? 's' : '') + ' pas (encore) retrouvé' + (j.sansStatut > 1 ? 's' : '') + ' dans Wavelog</span>' : '')
+      : '<span class="petit" style="grid-column:1/-1">' + (j.configure ? 'Pas encore relevé.' : 'Renseignez le carnet en ligne (Réglages) pour lire les QSL.') + '</span>';
+    txt('c-qsl-quand', j.releveMs ? 'relevé ' + new Date(j.releveMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '');
+    if (j.message && !v('c-qsl-etat')) txt('c-qsl-etat', j.message);
+  } catch (x) {}
+}
+async function releveQsl(tout) {
+  txt('c-qsl-etat', 'lecture du carnet en ligne…');
+  try { const j = await post('api/carnet/qsl/releve?tout=' + tout); txt('c-qsl-etat', (j && j.dit) || (j && j.erreur) || ''); } catch (x) { txt('c-qsl-etat', 'échec'); }
+  chargeCarnet();
+}
+/** The confirmation pills under a callsign: ✓ confirmed, … waiting; nothing for a service not used. */
+function qslPills(e) {
+  const q = e.qsl; if (!q) return '';
+  const p = [['lotw', 'LoTW'], ['eqsl', 'eQSL'], ['papier', 'papier']].filter(([k]) => q[k]).map(([k, n]) =>
+    '<span class="qp ' + q[k] + '" title="' + n + (q[k] === 'ok' ? ' : confirmé' : ' : envoyé, en attente de confirmation') + '">' + n + (q[k] === 'ok' ? '✓' : '…') + '</span>');
+  return p.length ? '<div class="qps">' + p.join('') + '</div>' : '';
+}
+const qslEnAttente = e => e.qsl && ['lotw', 'eqsl', 'papier'].some(k => e.qsl[k] === 'attente');
 function dessineCarnet() {
   const f = v('c-filtre').toUpperCase();
-  const tous = C.filter(e => !f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f));
+  const attente = g('c-qsl-attente') && g('c-qsl-attente').checked;
+  const tous = C.filter(e => (!f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f)) && (!attente || qslEnAttente(e)));
   // A thousand lines at most: beyond that, the filter finds faster than the eye.
   const reste = tous.length > 1000 ? '<tr><td colspan="8" class="petit">… et ' + (tous.length - 1000) + ' autres : filtre pour les voir</td></tr>' : '';
   vusCarnet = tous.slice(0, 1000).map(e => e.t);
   g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
-    '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + drC(e) + '<b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
+    '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + drC(e) + '<b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + qslPills(e) + '</td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) +
     '</td><td class="act">' + envoiCarnet(e) + (e.sat ? '<button title="Son passage et le chemin du rotor (journal des passages)" onclick="cheminContact(this, ' + e.t + ', ' + JSON.stringify(String(e.sat)).replace(/"/g, '&quot;') + ')">⌖</button> ' : '') +
     siteBouton('qso', e.t) + '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||

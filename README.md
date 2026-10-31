@@ -302,6 +302,7 @@ Older versions: [the wiki's release notes](https://github.com/f4ioz/SatMe/wiki/R
 - One-handed callsign keypad, QRZ.com lookup, new locator and duplicate flagged while typing.
 - Wavelog and Cloudlog: contacts uploaded, optionally by themselves a minute after entry, with your station profiles. SatMe also shows up as a radio in Wavelog and Cloudlog: satellite, mode and Doppler-corrected frequencies are filled in.
 - LoTW confirmations, locator map, ADIF export, PDF QSL cards and activation sheets.
+- SatMe-PC checks the log before export (« Contrôle ADIF »: what LoTW, eQSL or Wavelog would refuse, what looks wrong, a click opens the contact) and shows each contact's **QSL status** — LoTW, eQSL, paper — read from Wavelog (read only: SatMe-PC stores no LoTW or eQSL password).
 
 ### Recording and decoding
 - Every pass recorded to MP3 — phone microphone, Bluetooth hands-free or the rig's USB sound card — with a spoken header (satellite, UTC time, locator) and a copy in the folder of your choice.

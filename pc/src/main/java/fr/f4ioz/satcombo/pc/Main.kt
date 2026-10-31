@@ -111,6 +111,7 @@ fun main(args: Array<String>) {
     station.dossierDoppler = File(dossier, "doppler")
     station.demarre()
     val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
+    carnet.qsl = QslPc(station, carnet, fr.f4ioz.satcombo.data.StatutsQsl.Store(File(dossier, "qsl_statuts.json")))
     // The satellite link (a local WebSocket for other programs): only when chosen in Réglages.
     val lien = LienSatellitePc(station, reseau)
     carnet.ecouteurs += { lien.qso(it) }

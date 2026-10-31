@@ -314,6 +314,9 @@ object PagesPcTelephone {
                 // Spoken announcements are SatMe-PC's: their card and the header's speaker hidden here.
                 "/api/annonces" -> json(JSONObject().put("absent", true))
                 "/api/carnet" -> json(carnet(vm))
+                // The log checked before export (the same check as SatMe-PC's).
+                "/api/carnet/controle" -> json(fr.f4ioz.satcombo.domain.ControleAdif.json(
+                    fr.f4ioz.satcombo.domain.ControleAdif.controle(u.log), u.log.size))
                 "/api/carnet/records" -> json(ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(u.log, vm.myLocator())))
                 // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
                 "/api/carnet/adif", "/api/carnet/lot" -> {
