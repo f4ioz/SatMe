@@ -643,7 +643,10 @@ fun main(args: Array<String>) {
     }
     son.enregistreSerie = { optionsSstv.enregistreSerie() }
     // « Re-décoder chaque image à la fin »: each picture kept live, decoded again from its sound in the background.
-    val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin })
+    // A better version kept: its IA made too when the picture has it (the automatic IA, below).
+    var iaApresCorrection: (String) -> Unit = {}
+    val redecodageAuto = fr.f4ioz.satcombo.sstv.RedecodageAuto(classement.corrections.api.corrections, { optionsSstv.options.redecodeFin },
+        fini = { png, issue -> if (issue.fiche != null) iaApresCorrection(png) })
     son.sstv.imageGardee = { d, s -> redecodageAuto.demande(d, s) }
     // « Réunir »: two partial pictures put together from the pass recording when their own sounds are gone.
     son.sstv.enregistrementDe = { son.fichierEnregistrement(it) }
@@ -659,8 +662,10 @@ fun main(args: Array<String>) {
     // « Débruitage IA automatique » (off by default): each noisy picture received, in the background; the site told when done.
     var siteIa: (String) -> Unit = {}
     val iaAuto = fr.f4ioz.satcombo.sstv.IaAuto(retouches, { optionsSstv.options.regleIaAuto },
-        fini = { png, issue -> if (issue == fr.f4ioz.satcombo.sstv.IaAuto.FAITE) siteIa(png) })
+        fini = { png, issue -> if (issue == fr.f4ioz.satcombo.sstv.IaAuto.FAITE) siteIa(png) },
+        corrigee = { g, png -> classement.corrections.api.corrections.corrigee(g, png)?.let { File(fr.f4ioz.satcombo.sstv.CorrectionsGalerie.dossier(g), it.fichier) } })
     optionsSstv.iaAuto = iaAuto
+    iaApresCorrection = { png -> iaAuto.apresCorrection(son.sstv.dossier, png) }
     // « Réglages › Envoyer vers un site web »: the SSTV pictures, planches, reports, contacts and videos sent to the owner's site (or a folder),
     // each kind by itself, at a click or never; a queue on disk sent again until the site takes it.
     val site = SitePc(station.stockage, dossier)

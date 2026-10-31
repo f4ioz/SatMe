@@ -298,7 +298,7 @@ object PagePc {
     #h-pass .h-f, .h-cmd span, .h-cmd kbd, #h-aide, #tete .g, .h-utc { display:none; }
     #h-pass { max-width:120px; overflow:hidden; text-overflow:ellipsis; }
     #heure { font-size:var(--fs-s); padding:0; }
-    #v-station .col2 .paire { flex-wrap:wrap !important; } .amsat-boite { max-width:none; margin-left:0; justify-content:flex-start; }
+    #v-station .col2 .paire { flex-wrap:wrap !important; }
     #tete h1 { font-size:15px; }
   }
 """
@@ -755,17 +755,17 @@ ${STYLE_JETONS}
   .cr-corps { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
   .cr-ciel { width:min(100%, 280px); flex:none; }
   .cr-infos { flex:1; min-width:200px; }
-  .amsat-boite { display:flex; align-items:center; gap:4px 6px; flex-wrap:wrap; justify-content:flex-end; margin-left:auto; max-width:230px;
-    padding:4px 8px; border:1px solid rgba(234,3,3,.6); border-radius:10px; background:rgba(234,3,3,.06); font-size:12px; }
-  .amsat-boite .amsat-logo { width:18px; height:18px; flex:none; background:#fff; border-radius:50%; padding:1px; }
-  .amsat-boite button { padding:2px 8px; font-size:11px; }
+  .amsat-boite { display:inline-flex; align-items:center; gap:5px; flex-wrap:wrap; max-width:100%; margin:4px 0 2px;
+    padding:2px 6px 2px 3px; border:1px solid rgba(234,3,3,.35); border-radius:999px; background:rgba(234,3,3,.05); font-size:11px; }
+  .amsat-boite .amsat-logo { width:16px; height:16px; flex:none; background:#fff; border-radius:50%; padding:1px; }
+  .amsat-boite .amsat-pt { width:8px; height:8px; border-radius:50%; flex:none; background:var(--gris); }
+  .amsat-boite .amsat-bt { padding:0 6px; font-size:11px; line-height:18px; border-radius:999px; }
   .amsat-boite .petit { font-size:11px; }
   .materiel { cursor:pointer; }
   .materiel b { font-size:14px; }
   .coche { font-weight:800; }
   .coche.on { color:var(--vert); }
   .coche.off { color:var(--gris, #6B7C8F); font-weight:400; font-size:12px; }
-  .amsat-boite b { color:#FF6B6B; letter-spacing:.5px; }
   .cr-carte { position:relative; height:calc(100vh - 640px); min-height:260px; margin-top:10px; border-radius:8px; overflow:hidden; }
   .sked-bandeau { margin-top:6px; padding:6px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.45); font-size:12px; }
   .sked-bandeau b.k { color:var(--ambre); letter-spacing:1px; font-size:11px; margin-right:6px; }
@@ -2271,11 +2271,12 @@ ${rail()}
         <button onclick="choisitParNom()">Suivre</button>
       </div>
       <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><span id="nom-ap"></span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
-        <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
-          <b>AMSAT</b><span class="petit" id="amsat"></span>
-          <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
-          <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button>
-          <span class="petit" id="amsat-auto"></span></div></div>
+</div>
+      <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
+        <span class="amsat-pt" id="amsat-pt"></span><span class="petit" id="amsat"></span>
+        <button class="amsat-bt" onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant" aria-label="Entendu">👂 ✓</button>
+        <button class="amsat-bt" onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas" aria-label="Pas entendu">👂 ✕</button>
+        <span class="petit" id="amsat-auto"></span></div>
       <div class="sked-bandeau" id="st-skeds" hidden></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
@@ -6432,9 +6433,11 @@ function dessine() {
   g('fav').style.display = E.suivi ? '' : 'none';
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
-  txt('amsat', am ? (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs : 'pas de statut');
+  const amS = am ? (AMSAT[am.statut] || AMSAT.UNKNOWN) : null;
+  txt('amsat', am ? amS[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs : 'pas de statut');
+  g('amsat-pt').style.background = amS ? amS[0] : 'var(--gris)';
   g('amsat').title = am ? am.actifs + ' rapport(s) « entendu » sur amsat.org ces derniers jours' : 'amsat.org n’a pas de statut pour ce satellite';
-  txt('amsat-auto', E.amsatAuto ? 'auto ✓' : 'auto ✕');
+  txt('amsat-auto', E.amsatAuto ? '⟳ ✓' : '⟳ ✕');
   g('amsat-auto').dataset.etat = E.amsatEtat || '';
   g('amsat-auto').title = (E.amsatAuto ? 'Signalement automatique à amsat.org activé' + (E.amsatEtat ? ' : ' + E.amsatEtat : '') : 'Signalement automatique à amsat.org coupé') + ' (Réglages)';
   carnetRend();
@@ -8489,7 +8492,9 @@ async function ticDatv(premier) {
   txt('d-modcod', D.verrouille ? D.modcod : '');
   txt('d-porteuse', D.cielTrouve ? mhz3(D.cielTrouve) + ' MHz' + (D.srTrouve ? ' · ' + D.srTrouve + ' kS/s' : '') + (D.verrouille ? ' · écart ' + (D.fiTrouvee - D.fi) + ' kHz' : '') : '');
   txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
-  txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
+  // What the transmitting station puts in its stream (SDT): its callsign and often its transmitter's firmware, never this receiver.
+  const dEmis = [D.fournisseur, D.service].filter(x => x).join(' · ');
+  txt('d-service', (dEmis ? 'Émis par la station : ' + dEmis : '') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
   // The service name is a callsign: its QRZ record under it (unless the station card shows it already).
   // The callsign read in the picture since this lock comes first when it differs from the service name (often the transmitter's own setting).
   const lu = D.verrouille ? dLuActuel() : null;

@@ -90,6 +90,35 @@ class IaAutoTest {
         assertEquals(IaAuto.FAITE, IaAuto.decide(o.regleIaAuto, true, 0.0))
     }
 
+    @Test fun `the version decoded again at the end gets its IA too, before or after the picture's turn`() {
+        recue(bruite, bruitee(mire(), 14.0))
+        r.ia = Modele()
+        val c = File(CorrectionsGalerie.dossier(d), bruite.removeSuffix(".png") + "_corrigee.png")
+        var corrigee: File? = null
+        val a = IaAuto(r, { IaAuto.Regle(actif = true) }, { it.run() }, corrigee = { _, _ -> corrigee })
+        // Not there yet when the IA's turn comes (the usual order): made once it is kept.
+        assertTrue(a.demande(d, bruite))
+        assertEquals(IaAuto.FAITE, a.dernier.second)
+        c.parentFile.mkdirs(); ecrit(c, bruitee(mire(), 9.0), 320, 256); corrigee = c
+        assertNull(r.existante(d, c, r.effet(d, bruite)))
+        assertTrue(a.apresCorrection(d, bruite))
+        assertNotNull(r.existante(d, c, r.effet(d, bruite)))
+        // Already there: made with the picture's own.
+        val bruite2 = "SatMe_SSTV_ISS_20261024_021607Z_Robot36.png"
+        recue(bruite2, bruitee(mire(), 14.0))
+        val c2 = File(CorrectionsGalerie.dossier(d), bruite2.removeSuffix(".png") + "_corrigee.png")
+        ecrit(c2, bruitee(mire(), 9.0), 320, 256); corrigee = c2
+        assertTrue(a.demande(d, bruite2))
+        assertNotNull(r.existante(d, c2, r.effet(d, bruite2)))
+        // A picture without IA: its version decoded again left alone.
+        val sans = "SatMe_SSTV_ISS_20261024_021807Z_Robot36.png"
+        recue(sans, mire())
+        val c3 = File(CorrectionsGalerie.dossier(d), sans.removeSuffix(".png") + "_corrigee.png")
+        ecrit(c3, mire(), 320, 256); corrigee = c3
+        a.apresCorrection(d, sans)
+        assertFalse(CorrectionsGalerie.dossier(d).listFiles()!!.any { it.name.startsWith(sans.removeSuffix(".png") + "_corrigee_") })
+    }
+
     @Test fun `the settings kept in their ranges`() {
         val o = OptionsSstv(StockageMemoire())
         assertEquals(IaSstv.Reglages(), o.reglagesIa)

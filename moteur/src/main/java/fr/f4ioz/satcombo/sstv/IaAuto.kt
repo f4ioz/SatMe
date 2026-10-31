@@ -27,12 +27,18 @@ import java.util.concurrent.atomic.AtomicInteger
  * with a switch of its own in the viewer (IA on or off) is not touched. The
  * picture as received is never changed.
  *
+ * The version the viewer shows first — the one decoded again at the end
+ * ([corrigee], `corrigees/`), when there is one — gets its IA too: made with
+ * the other when it is already there, else once it comes
+ * ([apresCorrection]); the owner never has to switch the IA off and on.
+ *
  * [fini] hears each picture's outcome (the site sends the new version).
  */
 class IaAuto(
     private val retouches: RetouchesGalerie,
     private val regle: () -> Regle,
     private val lance: (Runnable) -> Unit = RedecodageAuto.filBas(nom = "sstv-ia-auto"),
+    private val corrigee: (galerie: File, png: String) -> File? = { _, _ -> null },
     private val fini: (png: String, issue: String) -> Unit = { _, _ -> },
 ) {
     /**
@@ -58,18 +64,38 @@ class IaAuto(
     fun demande(galerie: File, png: String): Boolean {
         val r = runCatching(regle).getOrDefault(Regle())
         if (!r.actif || retouches.ia == null) return false
-        if (attente.get() >= RedecodageAuto.MAX_ATTENTE) return false
-        attente.incrementAndGet()
-        try {
-            lance(Runnable {
-                try {
+        return file {
                     val i = runCatching { traite(galerie, png) }.getOrElse { Triple(it.javaClass.simpleName, -1.0, null) }
                     dernier = Triple(png, i.first, i.second)
                     runCatching { fini(png, i.first) }
-                } finally { attente.decrementAndGet() }
-            })
+        }
+    }
+
+    /**
+     * Picture [png] decoded again at the end, a better version kept: when its
+     * IA is on (by itself or asked), that version gets it too — on the same
+     * thread, after the picture's own turn. Returns at once.
+     */
+    fun apresCorrection(galerie: File, png: String): Boolean {
+        if (retouches.ia == null) return false
+        return file { runCatching { iaCorrigee(galerie, png) } }
+    }
+
+    private fun file(travail: () -> Unit): Boolean {
+        if (attente.get() >= RedecodageAuto.MAX_ATTENTE) return false
+        attente.incrementAndGet()
+        try {
+            lance(Runnable { try { travail() } finally { attente.decrementAndGet() } })
         } catch (e: Exception) { attente.decrementAndGet(); return false }
         return true
+    }
+
+    /** The version decoded again of [png], its IA made when the picture wants it and it has none yet. */
+    private fun iaCorrigee(galerie: File, png: String): RetouchesGalerie.Finie? {
+        val c = runCatching { corrigee(galerie, png) }.getOrNull()?.takeIf { it.isFile } ?: return null
+        val e = retouches.effet(galerie, png)
+        if (!e.ia || retouches.ia == null) return null
+        return retouches.existante(galerie, c, e) ?: retouches.finie(galerie, c, e)
     }
 
     /** Picture [png] measured and, when it should, denoised: the outcome, its noise, the version made. */
@@ -87,6 +113,7 @@ class IaAuto(
         val f = retouches.finie(galerie, base, e) ?: return Triple(ECHEC, bruit, null)
         // Marked once the version is there: never « IA » without its picture.
         if (!retouches.change(galerie, png, apres)) return Triple(ECHEC, bruit, f)
+        runCatching { iaCorrigee(galerie, png) }
         return Triple(FAITE, bruit, f)
     }
 
