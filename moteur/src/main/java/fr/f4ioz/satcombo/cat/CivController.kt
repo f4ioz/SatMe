@@ -82,6 +82,24 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         private set
 
     /**
+     * The last frame the rig refused (`FA`, NG), in words, and when (ms; 0
+     * never): a refusal is an answer — the rig hears — but never a success.
+     */
+    @Volatile var dernierRefus: String = ""
+        private set
+    @Volatile var dernierRefusMs: Long = 0L
+        private set
+    /** Refusals since the link was opened. */
+    @Volatile var refus: Int = 0
+        private set
+
+    private fun noteRefus(question: ByteArray) {
+        refus++
+        dernierRefus = CatDecode.describeCiv(question)
+        dernierRefusMs = System.currentTimeMillis()
+    }
+
+    /**
      * All visible serial ports, device by device, flattened.
      * An IC-9700 alone gives two entries, not one.
      */
@@ -161,7 +179,25 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         link = l
         lastError = ""
         ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
+        refus = 0
         return true
+    }
+
+    /**
+     * Opens exactly [p] at [baud], nothing else tried — not the first port
+     * when [p] is gone: the CAT link opened again on the port it was on.
+     *
+     * **RTS and DTR low** unless [lignes] says otherwise: this is the
+     * unattended reopening ([fr.f4ioz.satcombo.station.RepriseCat]), and an
+     * Icom whose « USB SEND » / « USB Keying » menu is set to DTR or RTS
+     * keys its transmitter when a line goes up. Nothing unattended may key a
+     * rig: a bridge that stays silent with its lines low leaves the rig
+     * silent, to be reconnected by hand.
+     */
+    suspend fun ouvrePort(p: fr.f4ioz.satcombo.plateforme.PortSerie, baud: Int, lignes: Lignes = Lignes.BASSES): Boolean {
+        val pp = ports ?: return false
+        close()
+        return branche(pp.ouvre(p, baud, lignes))
     }
 
     /** Serial ports of the adapter with key [cle] (an Icom shows two). */
@@ -244,8 +280,10 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         }
         if (CatDecode.isAck(frames, radioAddr, controllerAddr) || CatDecode.isNak(frames, radioAddr, controllerAddr))
             derniereReponseMs = System.currentTimeMillis()
+        val refuse = CatDecode.isNak(frames, radioAddr, controllerAddr)
+        if (refuse) noteRefus(bytes)
         // A write counts as done unless refused: the rig may take it without being heard back.
-        !CatDecode.isNak(frames, radioAddr, controllerAddr)
+        !refuse
     } }
 
     /**
@@ -280,6 +318,7 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         if (CatDecode.isAck(frames, radioAddr, controllerAddr) || CatDecode.isNak(frames, radioAddr, controllerAddr) ||
                 (expect >= 0 && CatDecode.payload(frames, radioAddr, controllerAddr, expect, expectSub) != null))
             derniereReponseMs = System.currentTimeMillis()
+        if (CatDecode.isNak(frames, radioAddr, controllerAddr)) noteRefus(out)
         if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)
         frames
     } }

@@ -117,6 +117,17 @@ The header's **Son** chip (key **S**) says what SSTV, FT8, CW, APRS and voice to
 
 <p align="center"><img src="images/pc-son.png" width="100%" alt="The header's Son chip open: the motherboard card, the IC-9700's sound card (the rig), the SDR receiver running, the SSTV and APRS decoders listening, Record the sound, Prepare the pass, Listen here"></p>
 
+### « Pourquoi rien ? »: the line that names the fault
+
+When a receiver decodes nothing — live SSTV, APRS, FT8 / FT4, telemetry packets, DATV, QO-100's narrow band and the wide band spectrum — its tab shows **one short line** with the most likely cause, from what SatMe already knows, every fact dated:
+
+- **The rig elsewhere**: « IC-9700 sur 145,990 FM (lu il y a 3 s) — la SSTV de ISS est sur 145,800 FM », with **Accorder**, which only chooses that transmitter again (the Doppler loop then writes its downlink and mode, as when you pick it in the list) — or **Reprendre le Doppler** when the Doppler is on hold. The wrong mode likewise (FM where SSB is needed, FM for FT8), the wrong transmitter chosen.
+- **The sound input**: a card that gives no samples at all (dead, unplugged, taken by another program) is a fault; a card alive but quiet (« −72 dBFS en moyenne sur 10 s ») is a squelch shut or the AF gain down — said so, *not a fault*. Clipping is said too.
+- **The sky**: the satellite below the horizon, with the next pass.
+- **The rest**: the SDR stopped or elsewhere, a signal seen but no valid frame (rate or modulation), the node no longer answering, DATV not locked — the LNB fed 13 V (vertical) while the wide band is horizontal, the beacon's own verdict, the last MER read on the beacon —, QO-100's beacon unseen for some minutes.
+
+Read only: the line never starts nor tunes anything by itself, and its one button is a receive tuning the page already had — never a transmit. Facts SatMe does not have are left out; an old reading is shown as old (« relevé ancien »).
+
 ### Keyboard shortcuts
 
 | Key | Effect |
@@ -1086,6 +1097,10 @@ By category, a list on the left: **Ma station** (callsign, locator, minimum elev
 ### The rig and the rotator
 
 The rig's model (IC-9700, IC-9100, IC-910H, TS-2000, two rigs FT-817 / IC-705, TH-D72, or simulated), its port and speed, Connect / Disconnect; the rotator (GS-232 over serial, rotctld over the network, or simulated), Follow the satellite, Park, Stop, its end stops and parking. The Suivi tab keeps only their name and a green tick.
+
+**When the rig stops answering** (switched off, USB unplugged, the network dropped) — IC-9700, IC-9100, IC-910H over USB or the network, TS-2000: SatMe stops writing to it after 4 s of silence (one read checks first), then tries a single read after 2, 4, 8, 16, then every 30 s, opening the same port again from the second try on (that port only, never another adapter). **Automatic reconnection never raises RTS or DTR**: the port is reopened with both lines low (a rig whose « USB SEND » / keying menu is set to DTR or RTS would otherwise go on the air); an interface that needs them up to answer leaves the rig silent, with « reconnexion automatique sans lignes RTS/DTR : si le poste reste muet, le reconnecter à la main ». The status line says it: « IC-9700 muet depuis 2 min — nouvel essai dans 20 s ». A port that vanished is waited for and opened again as soon as it is back; the IC-9700's network session reconnects by itself and the rig is read at once when it is up. Once it answers, the rig is set up again (frequencies, modes, tone) — **never its transmitter**: nothing keys after a reconnection. A command the rig refuses (CI-V `FA`, Kenwood `?;`, `E;`, `O;`) counts as a refusal, never as done, and the last one shows dated in the status line. Not watched: the simulated rigs, the FT-817 / IC-705 pairs, the TH-D72.
+
+**What each rig is sent**: a frequency outside the rig's own bands (maker's figures: IC-9700 2 m, 70 cm, 23 cm; IC-9100 and TS-2000 HF and 6 m too, but not in satellite mode; 23 cm as an option on the IC-910H, IC-9100, TS-2000) is not sent, and the status line says why: « IC-9700 : 29,400 MHz hors de ses bandes (2 m, 70 cm, 23 cm) — commande non envoyée ». A converter's IF in the [converter table](#converters-transverters-and-calibration) is still sent.
 
 **The pass plan** (Réglages › Poste et rotor › Rotor): the **azimuth travel** (360°, or 450° / 540° with an overlap), **Monte à 180° ?** (only a rotator that goes to 180° can flip), the north or south end stop, the **wait before AOS**, and **hidden zones** (roof, tree, hill: `170-190<20 ; 300-330<10`, or drawn by dragging on the small sky) — the plan gives them almost no weight and puts its unwinds there. It keeps the most of the pass, weighed by elevation (a minute at 60° is worth far more than at 5°), then the shortest travel, then the fewest changes. The small sky shows the next pass's plan with the settings applied. The rotator's speed is measured while the mast runs far from its command.
 

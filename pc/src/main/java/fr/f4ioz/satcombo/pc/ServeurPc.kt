@@ -65,6 +65,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** QO-100 operated from one screen: the reception in one gesture, the session kept. */
     private val trafic: TraficQo100Pc? = null) {
 
+    /** « Pourquoi rien ? »: why each receiver decodes nothing, from what SatMe-PC holds (GET /api/pourquoi). */
+    private val pourquoi by lazy { PourquoiRienPc(station, son, sdr, datv, { telemesure }, qo100, { large }, { balises }) }
+
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
 
@@ -1470,6 +1473,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/ft8/cascade" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 fr.f4ioz.satcombo.demo.ApiRadio.ft8Cascade(son?.ft8?.cascade, q["depuis"]?.toLongOrNull() ?: 0L, son?.ft8?.derniereLigneMs ?: 0L).toString().toByteArray())
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
+            // « Pourquoi rien ? »: each receiver's one line, read only.
+            "/api/pourquoi" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", pourquoi.json().toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr, phonie?.actif == true).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/mire" -> {
@@ -3020,7 +3025,7 @@ object JsonPc {
             .put("rxOl", rx?.olHz ?: 0).put("rxInv", rx?.inverse == true)
             .put("txOl", tx?.olHz ?: 0).put("txInv", tx?.inverse == true))
         o.put("conversion", conversionCat(st, dl, ul, c.descenteHz, c.monteeHz, e.catConnecte))
-        o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler))
+        o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler, e.catMuet, e.catLiaison))
         o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r))
         // The log's pass: the skeds announced for the pass under way or next, the contacts of the one under way
         // (or of the one just over, an hour after it).

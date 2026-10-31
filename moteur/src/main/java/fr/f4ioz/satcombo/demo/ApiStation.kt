@@ -111,9 +111,10 @@ object ApiStation {
     })
 
     /** The rig, as the Doppler loop sees it ([modele], [port]… what the server knows of the link). */
-    fun cat(c: EtatBoucleCat, modele: String, port: Int, connecte: Boolean, simule: Boolean, statut: String, maintien: Boolean): JSONObject =
+    fun cat(c: EtatBoucleCat, modele: String, port: Int, connecte: Boolean, simule: Boolean, statut: String, maintien: Boolean,
+            muet: Boolean = false, liaison: String = ""): JSONObject =
         JSONObject().put("modele", modele).put("port", port).put("connecte", connecte).put("simule", simule)
-            .put("statut", statut).put("maintien", maintien)
+            .put("statut", statut).put("maintien", maintien).put("muet", muet).put("liaison", liaison)
             .put("dl", c.descenteHz ?: JSONObject.NULL).put("ul", c.monteeHz ?: JSONObject.NULL)
             .put("pilote", c.rxPilote).put("mode", c.mode ?: "").put("modeEcart", c.modeEcart)
 

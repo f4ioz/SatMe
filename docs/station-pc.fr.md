@@ -117,6 +117,17 @@ La puce **Son** du bandeau (touche **S**) dit ce qu'entendent SSTV, FT8, CW, APR
 
 <p align="center"><img src="images/pc-son.png" width="100%" alt="La puce Son du bandeau ouverte : la carte mère, la carte son de l'IC-9700 (le poste), le récepteur SDR en marche, les décodeurs à l'écoute SSTV et APRS, Enregistrer le son, Préparer le passage, Écouter ici"></p>
 
+### « Pourquoi rien ? » : la ligne qui nomme la panne
+
+Quand un récepteur ne décode rien — SSTV en direct, APRS, FT8 / FT4, paquets de télémesure, DATV, bande étroite de QO-100 et spectre de la bande large —, son onglet montre **une ligne courte** avec la cause la plus probable, tirée de ce que SatMe sait déjà, chaque fait daté :
+
+- **Le poste ailleurs** : « IC-9700 sur 145,990 FM (lu il y a 3 s) — la SSTV de ISS est sur 145,800 FM », avec **Accorder**, qui ne fait que rechoisir cet émetteur (la boucle Doppler écrit alors sa descente et son mode, comme quand on le choisit dans la liste) — ou **Reprendre le Doppler** quand il est en maintien. De même le mauvais mode (FM au lieu de BLU, FM pour du FT8), le mauvais émetteur choisi.
+- **L'entrée son** : une carte qui ne donne plus aucun échantillon (morte, débranchée, prise par un autre logiciel) est une panne ; une carte vivante mais calme (« −72 dBFS en moyenne sur 10 s ») est un silencieux (squelch) fermé ou un volume AF bas — dit comme tel, *pas une panne*. La saturation aussi.
+- **Le ciel** : le satellite sous l'horizon, avec le prochain passage.
+- **Le reste** : la clé SDR arrêtée ou ailleurs, un signal vu mais aucune trame valide (débit ou modulation), le node qui ne répond plus, la DATV qui n'accroche pas — le LNB alimenté en 13 V (verticale) alors que la bande large est en horizontale, l'avis des balises, le dernier MER lu sur la balise —, la balise de QO-100 non vue depuis quelques minutes.
+
+Lecture seule : la ligne ne démarre ni n'accorde rien d'elle-même, et son unique bouton est un accord de réception que la page avait déjà — jamais une émission. Ce que SatMe ne sait pas est laissé de côté ; un relevé ancien est dit ancien (« relevé ancien »).
+
 ### Raccourcis clavier
 
 | Touche | Effet |
@@ -1087,6 +1098,10 @@ Par catégorie, une liste à gauche : **Ma station** (indicatif, locator, élév
 ### Le poste et le rotor
 
 Le modèle du poste (IC-9700, IC-9100, IC-910H, TS-2000, deux postes FT-817 / IC-705, TH-D72, ou simulé), son port et sa vitesse, Connecter / Déconnecter ; le rotor (GS-232 en série, rotctld par le réseau, ou simulé), Suivre le satellite, Parquer, Stop, ses butées et son parking. L'onglet Suivi ne garde que leur nom et une coche verte.
+
+**Quand le poste ne répond plus** (éteint, câble USB débranché, réseau coupé) — IC-9700, IC-9100, IC-910H en USB ou par le réseau, TS-2000 : SatMe cesse de lui écrire après 4 s de silence (une lecture vérifie d'abord), puis tente une seule lecture après 2, 4, 8, 16, puis toutes les 30 s, en rouvrant le même port à partir du deuxième essai (ce port seulement, jamais un autre adaptateur). **La reconnexion automatique ne lève jamais RTS ni DTR** : le port est rouvert lignes basses (un poste dont le menu « USB SEND » / manipulation est réglé sur DTR ou RTS passerait sinon en émission) ; une interface qui les veut levées pour répondre laisse le poste muet, avec « reconnexion automatique sans lignes RTS/DTR : si le poste reste muet, le reconnecter à la main ». La ligne d'état le dit : « IC-9700 muet depuis 2 min — nouvel essai dans 20 s ». Un port disparu est attendu, puis rouvert dès son retour ; la session réseau de l'IC-9700 se reconnecte d'elle-même et le poste est relu dès qu'elle revient. Dès qu'il répond, le poste est réglé à nouveau (fréquences, modes, subton) — **jamais son émetteur** : rien n'émet après une reconnexion. Une commande refusée par le poste (CI-V `FA`, Kenwood `?;`, `E;`, `O;`) compte comme un refus, jamais comme faite, et le dernier refus s'affiche, daté, dans la ligne d'état. Non surveillés : les postes simulés, les paires FT-817 / IC-705, le TH-D72.
+
+**Ce que reçoit chaque poste** : une fréquence hors des bandes du poste (chiffres du fabricant : IC-9700 2 m, 70 cm, 23 cm ; IC-9100 et TS-2000 aussi la HF et le 6 m, mais pas en mode satellite ; 23 cm en option sur l'IC-910H, l'IC-9100, le TS-2000) n'est pas envoyée, et la ligne d'état dit pourquoi : « IC-9700 : 29,400 MHz hors de ses bandes (2 m, 70 cm, 23 cm) — commande non envoyée ». La FI d'un convertisseur de la [table des convertisseurs](#convertisseurs-transverters-et-calibration) reste envoyée.
 
 **Le plan du passage** (Réglages › Poste et rotor › Rotor) : la **course en azimut** (360°, ou 450° / 540° avec un recouvrement), **Monte à 180° ?** (seul un rotor qui monte à 180° peut se retourner), la butée nord ou sud, l'**attente avant l'AOS**, et les **zones cachées** (toit, arbre, colline : `170-190<20 ; 300-330<10`, ou tracées en glissant sur le petit ciel) — le plan n'y tient presque pas et y place ses déroulements. Il garde le plus de passage, compté selon l'élévation (une minute à 60° vaut bien plus qu'à 5°), puis la plus petite course, puis le moins de changements. Le petit ciel montre le plan du prochain passage avec les réglages appliqués. La vitesse du rotor est mesurée quand le pylône court loin de sa consigne.
 

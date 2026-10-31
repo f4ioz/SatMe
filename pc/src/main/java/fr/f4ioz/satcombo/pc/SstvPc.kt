@@ -152,6 +152,8 @@ class SstvPc(
     @Volatile var rateActif = 0; private set
     /** When the last block reached the decoder (0: never). */
     @Volatile var derniereMs = 0L; private set
+    /** When the last picture was kept (ms), 0: none since SatMe-PC started. */
+    @Volatile var derniereImageMs = 0L; private set
     @Volatile private var enCours: Pair<SstvMode, IntArray>? = null
     @Volatile private var pannes = 0
 
@@ -272,6 +274,7 @@ class SstvPc(
             }
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
+            if (nom != null && h == null) derniereImageMs = horloge()
         }
     }
 
