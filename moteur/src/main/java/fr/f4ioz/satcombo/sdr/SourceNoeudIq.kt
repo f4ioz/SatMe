@@ -62,7 +62,9 @@ class SourceNoeudIq private constructor(
     @Volatile private var socket: Socket? = null
     @Volatile private var ecrivain: FluxNoeud.Ecrivain? = null
     @Volatile private var lecteur: FluxNoeud.Lecteur? = null
-    private val file = ArrayBlockingQueue<ShortArray>(PROFONDEUR)
+    /** Blocks waiting for the reception, each with the centre the node read it at. */
+    private class Bloc(val iq: ShortArray, val centreHz: Long)
+    private val file = ArrayBlockingQueue<Bloc>(PROFONDEUR)
     @Volatile private var pertesIci = 0L
     @Volatile private var pertesAvant = 0L
     @Volatile private var octetsAvant = 0L
@@ -93,15 +95,32 @@ class SourceNoeudIq private constructor(
 
     override fun setAgc(on: Boolean) {}
 
+    /**
+     * The next block at the centre asked. Blocks queued before a retune
+     * (up to a second of them at the full rate) are still at the old centre:
+     * given to the reception they put the beacon tens of kHz off under the
+     * new tuning, and a calibration taken from that panorama is wrong.
+     */
+    private fun prochain(timeoutMs: Int): ShortArray? {
+        while (true) {
+            val b = file.poll(timeoutMs.toLong(), TimeUnit.MILLISECONDS) ?: return null
+            if (anciens(b.centreHz)) { enTransit++; continue }
+            return b.iq
+        }
+    }
+
+    /** Still the old centre a moment after a retune: the samples are not where the reception thinks. */
+    private fun anciens(centre: Long) = centre != centreHz && centreHz > 0 && horloge() - centreMs < TRANSIT_MS
+
     override fun read(buf: ByteArray, timeoutMs: Int): Int {
-        val b = file.poll(timeoutMs.toLong(), TimeUnit.MILLISECONDS) ?: return if (ouvert) 0 else -1
+        val b = prochain(timeoutMs) ?: return if (ouvert) 0 else -1
         val n = minOf(b.size, buf.size) and 1.inv()
         for (k in 0 until n) buf[k] = ((b[k] + 32768) shr 8).toByte()
         return n
     }
 
     override fun read16(buf: ShortArray, timeoutMs: Int): Int {
-        val b = file.poll(timeoutMs.toLong(), TimeUnit.MILLISECONDS) ?: return if (ouvert || file.isNotEmpty()) 0 else -1
+        val b = prochain(timeoutMs) ?: return if (ouvert || file.isNotEmpty()) 0 else -1
         val n = minOf(b.size, buf.size) and 1.inv()
         System.arraycopy(b, 0, buf, 0, n)
         return n
@@ -182,14 +201,13 @@ class SourceNoeudIq private constructor(
                     val t = l.lit()
                     when (t.type) {
                         FluxNoeud.IQ -> {
-                            // Still the old centre a moment after a retune: the samples are not where the reception thinks.
-                            if (t.centreHz != centreHz && centreHz > 0 && horloge() - centreMs < TRANSIT_MS) { enTransit++; continue }
+                            if (anciens(t.centreHz)) { enTransit++; continue }
                             if (sortie.size < t.n * (1 shl etages)) sortie = ShortArray(t.n * (1 shl etages))
                             val n = u.traite(t.iq!!, t.n, sortie)
                             var k = 0
                             while (k < n) {
                                 val m = minOf(BLOC, n - k)
-                                val b = sortie.copyOfRange(k, k + m)
+                                val b = Bloc(sortie.copyOfRange(k, k + m), t.centreHz)
                                 if (!file.offer(b)) { file.poll(); pertesIci++; file.offer(b) }
                                 k += m
                             }
