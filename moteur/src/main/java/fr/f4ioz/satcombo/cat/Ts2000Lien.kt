@@ -37,7 +37,18 @@ class Ts2000Lien(
     var cle: String? = null
         private set
 
-    fun attach(l: SerialLink) { link = l }
+    fun attach(l: SerialLink) { link = l; ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs }
+
+    /** When the rig last answered anything (a refusal too), ms; set to the opening at first. */
+    @Volatile var derniereReponseMs: Long = 0L
+        private set
+    @Volatile var ouvertMs: Long = 0L
+        private set
+    /** The last command refused (`?;`, `E;`, `O;`) and when (ms, 0 never). */
+    @Volatile var dernierRefus: String = ""
+        private set
+    @Volatile var dernierRefusMs: Long = 0L
+        private set
 
     /**
      * Opens the adapter with key [cle]: each of its ports (the RigExpert Tiny
@@ -84,7 +95,7 @@ class Ts2000Lien(
         link = l
         val r = identifie()
         trace("port ${p.port} à $v bauds : ID; → ${r ?: "rien"}")
-        if (r == Ts2000.ID) { vitesse = v; cle = p.cle; return Essai.TROUVE }
+        if (r == Ts2000.ID) { vitesse = v; cle = p.cle; ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs; return Essai.TROUVE }
         link = null
         runCatching { l.close() }
         return if (r == "ID;") Essai.ECHO else Essai.RIEN
@@ -142,6 +153,8 @@ class Ts2000Lien(
                 if (k >= 0) {
                     val r = recu.substring(0, k + 1).trim()
                     CatJournal.log(false, r.toByteArray(Charsets.US_ASCII), r)
+                    derniereReponseMs = System.currentTimeMillis()
+                    if (Ts2000.refuse(r) && c != ";") { dernierRefus = c; dernierRefusMs = derniereReponseMs }
                     if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)
                     return@withLock r
                 }
@@ -199,7 +212,7 @@ class Ts2000Cote(val lien: Ts2000Lien, val descente: Boolean) : PosteSimple {
 
     override suspend fun setFrequency(hz: Long): Boolean {
         if (hz <= 0) return false
-        if (lien.commande(Ts2000.ecrit(vfo, hz)) == "?;") return false
+        if (Ts2000.refuse(lien.commande(Ts2000.ecrit(vfo, hz)))) return false
         return Ts2000.frequence(lien.commande("F$vfo;"), vfo) == hz
     }
 
@@ -220,8 +233,8 @@ class Ts2000Cote(val lien: Ts2000Lien, val descente: Boolean) : PosteSimple {
     override suspend fun setCtcss(tenthHz: Int): Boolean {
         if (descente) return true
         return lien.surLaMontee {
-            if (tenthHz <= 0) lien.commande("TO0;") != "?;"
-            else lien.commande("TN%02d;".format(Ts2000.numeroTon(tenthHz))) != "?;" && lien.commande("TO1;") != "?;"
+            if (tenthHz <= 0) !Ts2000.refuse(lien.commande("TO0;"))
+            else !Ts2000.refuse(lien.commande("TN%02d;".format(Ts2000.numeroTon(tenthHz)))) && !Ts2000.refuse(lien.commande("TO1;"))
         }
     }
 

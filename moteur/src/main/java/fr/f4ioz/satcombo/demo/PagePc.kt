@@ -269,6 +269,9 @@ object PagePc {
   @media (max-width:1800px) { header.a-ctx #info-station { display:none; } }
   @media (max-width:1500px) { #info-station { display:none; } .h-cmd span, .h-cmd kbd { display:none; } }
   @media (max-width:1250px) { #cat-statut-court, #h-rx-m { display:none; } }
+  .pq { font-size:13px; margin-top:6px; padding:4px 8px; border-left:3px solid var(--bord, #2A3A4A); border-radius:3px; }
+  .pq.ok { border-left-color:var(--vert); } .pq.attention { border-left-color:var(--ambre); } .pq.panne { border-left-color:var(--rose); }
+  .pq button { margin-left:8px; padding:1px 8px; font-size:12px; }
   #sb { display:flex; align-items:center; gap:2px; padding:0 6px; height:24px; background:var(--s1); border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-2); white-space:nowrap; overflow:hidden; }
   .sb-i { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border:none; border-radius:4px; background:transparent; color:var(--texte-2); font-size:var(--fs-xs); font-weight:500; }
   .sb-i:hover { background:var(--s3); color:var(--texte); }
@@ -2689,6 +2692,7 @@ ${TraficLeoJs.HTML}
       <div class="pi-compte" id="sstv-prochaine" hidden role="timer" aria-live="off"></div>
       <div class="val" id="sstv-statut" style="font-size:15px"></div>
       <div class="avert" id="sstv-conseil" hidden></div>
+      <div class="pq" id="pq-sstv" data-pq="sstv" hidden></div>
       <div class="ligne" id="sstv-repare-l" hidden style="margin-top:4px"><button class="primaire repare" id="sstv-repare" style="margin-left:0" onclick="hsRepare()"></button></div>
       <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Niveau</span>
         <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
@@ -2901,6 +2905,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <span><span class="val" id="a-loin">—</span> <span class="petit">km au plus loin</span></span>
       <span class="petit" id="a-etat" style="margin-left:auto"></span>
     </div>
+    <div class="pq" id="pq-aprs" data-pq="aprs" hidden></div>
     <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
   </div>
   <details class="carte" id="kiss-carte">
@@ -3167,6 +3172,7 @@ ${OngletSked.HTML}
       <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
     </div>
     <div class="petit" id="d-service" style="margin-top:4px"></div>
+    <div class="pq" id="pq-datv" data-pq="datv" hidden></div>
     <div id="d-qrz-spectre" class="dc-qrz dc-sel" hidden></div>
     <div id="d-qrz-service" class="dc-qrz" hidden></div>
         <div id="q-resume" hidden>
@@ -3191,6 +3197,7 @@ ${OngletSked.HTML}
       </div>
     </div>
     <div id="wb-boite" class="wb-boite" hidden>
+      <div class="pq" id="pq-large" data-pq="large" hidden></div>
       <div class="paire wb-tete">
         <label class="petit" title="Ce n’est pas votre réception : c’est le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert (rien n’y est envoyé). Votre niveau, celui du récepteur DATV, est superposé en violet sur la même échelle."><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large — <b>station sol, par Internet</b> (pas ma réception)</label>
         <span class="petit" id="wb-etat"></span>
@@ -3767,6 +3774,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
         <label style="display:block;margin-top:8px"><input type="checkbox" id="o-cle" onchange="qPost('cle?on=' + (this.checked ? 1 : 0))"> Appliquer à la clé SDR</label>
         <div class="paire" style="margin-top:4px"><span>Clé RX <span class="val cyan" id="o-crx">—</span></span><span class="petit" id="o-cmsg2"></span></div>
         <div class="etat" id="o-statut"></div>
+        <div class="pq" id="pq-qo100" data-pq="qo100" hidden></div>
         <div class="petit aide" style="margin-top:6px">Les fréquences du cockpit sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que « Appliquer au poste » est coché, le Doppler du satellite suivi est en pause et le carnet note sur QO-100.</div>
         <div class="petit aide" style="margin-top:4px">« Démarrer la réception QO-100 » coche « Appliquer à la clé » et démarre le récepteur ; l'onglet SDR garde tous ses réglages.</div>
       </div>
@@ -4455,6 +4463,7 @@ ${Ft8EmissionJs.BANDEAU}
         <span class="petit" id="8-etat"></span>
         <button class="primaire repare" id="f8-repare" hidden onclick="hsRepare()"></button>
       </div>
+      <div class="pq" id="pq-ft8" data-pq="ft8" hidden></div>
       <div class="ligne">
         <div class="f8-puces" id="8-puces"></div>
         <label class="petit" for="8-guet" style="margin-left:auto" title="Une ligne de ces stations est surlignée, et signalée ici. Réception seule : rien n’est émis.">👁 Stations guettées</label>
@@ -4517,6 +4526,7 @@ ${Ft8SiteJs.HTML}    </div>
       <label class="petit"><input type="checkbox" id="tp-kiss" onchange="tlmPost('paquets/kiss?on=' + (this.checked ? 1 : 0))"> fichier KISS</label></div>
     <div class="petit" id="tp-em"></div>
     <div class="paire" id="tp-etat" style="margin-top:6px"></div>
+    <div class="pq" id="pq-tlm" data-pq="tlm" hidden></div>
     <div class="ligne"><button id="tp-essai" onclick="tlmPost('paquets/essai')" title="Une salve fabriquée (télémesure, paquets SSDV) passée dans un décodeur à part">Essai</button><button class="discret" onclick="tlmPost('paquets/vide')">Effacer</button></div>
     <div id="tp-derniere" class="tp-derniere"></div>
     <div class="tp-sids">
@@ -6528,8 +6538,8 @@ function dessine() {
   txt('st-poste-ok', c.connecte ? '✓' : 'non connecté');
   etatMarche('cat', c.connecte);
   txt('cat-pastille', c.connecte ? (c.simule ? 'simulé' : 'connecté') : 'déconnecté');
-  txt('cat-statut', c.statut);
-  txt('cat-statut-court', c.connecte ? 'CAT ' + c.modele + (c.simule ? ' (simulé)' : '') : '');
+  txt('cat-statut', c.statut + (c.liaison ? ' · ' + c.liaison : ''));
+  txt('cat-statut-court', c.connecte ? 'CAT ' + c.modele + (c.simule ? ' (simulé)' : '') + (c.muet ? ' muet' : '') : '');
   txt('cat-dl', mhz(c.dl)); txt('cat-ul', mhz(c.ul));
   txt('cat-mode', (c.mode || '') + (c.modeEcart ? ' (corrigé)' : '') + (c.connecte ? (c.pilote ? ' · Doppler' : ' · bouton') : ''));
   g('maintien').checked = c.maintien;
@@ -15588,6 +15598,33 @@ async function hsSource(nom) {
   HX.t = {}; await hsRafraichit(); ticTete();
 }
 function hsRepare() { const a = S && S.conseil && S.conseil.action; if (a) hsSource(a.indexOf('carte:') === 0 ? a.slice(6) : a); }
+
+// « Pourquoi rien ? »: each receiver's one dated line, asked every 2 s while one of their places is on screen.
+// The button only does what the page already does to tune the receive side (follow, choose the transmitter, Doppler).
+async function pqTic() {
+  if (document.hidden) return;
+  const l = [...document.querySelectorAll('.pq')].filter(e => e.parentElement && e.parentElement.offsetParent !== null);
+  if (!l.length) return;
+  let j; try { j = await (await fetch('api/pourquoi')).json(); } catch (x) { return; }
+  l.forEach(e => {
+    const d = j[e.dataset.pq];
+    if (!d) { e.hidden = true; return; }
+    const cle = d.gravite + '|' + d.texte + '|' + (d.action ? d.action.libelle : '');
+    e.hidden = false;
+    if (e.dataset.cle === cle) return;
+    e.dataset.cle = cle;
+    e.className = 'pq ' + d.gravite;
+    e.textContent = d.texte;
+    if (d.action) {
+      const b = document.createElement('button');
+      b.textContent = d.action.libelle;
+      const q = Object.entries(d.action.params || {}).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+      b.onclick = () => post(d.action.chemin + (q ? '?' + q : '')).then(pqTic);
+      e.appendChild(b);
+    }
+  });
+}
+setInterval(pqTic, 2000);
 g('hs-src').addEventListener('click', ev => {
   const b = ev.target.closest('button[data-src]');
   if (b && b.getAttribute('aria-pressed') !== 'true') hsSource(b.dataset.src);

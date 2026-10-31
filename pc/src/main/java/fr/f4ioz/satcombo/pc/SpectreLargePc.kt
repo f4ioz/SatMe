@@ -143,6 +143,8 @@ class SpectreLargePc(
 
     /** Fresh frames (the last within 5 s). */
     fun frais(): Boolean = numero > 0 && horloge() - trameMs < 5_000L
+    /** When the last frame came (ms), 0: none. */
+    val derniereTrameMs: Long get() = trameMs
 
     // ------------------------------------------------------------ the receiver
 

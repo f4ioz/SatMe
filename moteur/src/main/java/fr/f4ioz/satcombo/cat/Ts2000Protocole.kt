@@ -95,6 +95,14 @@ object Ts2000 {
     fun numeroTon(dixiemesHz: Int): Int =
         (Thd72.TONS.indices.minByOrNull { kotlin.math.abs(Thd72.TONS[it] - dixiemesHz) } ?: 0) + 1
 
+    /**
+     * The rig's refusals: `?;` (unknown, or not now — FR in SAT mode), `E;`
+     * (a communication error), `O;` (its buffer overflowed). An answer — the
+     * rig hears — but never a success.
+     */
+    fun refuse(reponse: String?): Boolean = reponse?.trim() in REFUS
+    val REFUS = setOf("?;", "E;", "O;")
+
     /** A command that keys the transmitter: never sent, refused by [Ts2000Lien]. */
     fun emet(c: String): Boolean = c.startsWith("TX") || c.startsWith("KY")
 }

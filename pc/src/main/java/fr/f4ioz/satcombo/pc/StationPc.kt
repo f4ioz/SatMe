@@ -75,6 +75,10 @@ data class EtatPc(
     val catConnecte: Boolean = false,
     val catStatut: String = "",
     val catSimule: Boolean = false,
+    /** Connected, but the rig no longer answers: the loop waits, a read is tried now and then (see [fr.f4ioz.satcombo.station.RepriseCat]). */
+    val catMuet: Boolean = false,
+    /** The link's state in words: silent since, next try, the last refusal (dated); "" when all is well. */
+    val catLiaison: String = "",
     val maintienDoppler: Boolean = false,
     /** The satellites marked ★ (catalog numbers). */
     val favoris: Set<Int> = emptySet(),
@@ -176,7 +180,8 @@ class StationPc(
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
         // Behind the converter table's guard: a frequency no rig band and no line's IF holds is not sent.
-        override fun poste(): PosteCat = fr.f4ioz.satcombo.cat.PosteCatFiltre(if (_etat.value.catModele in PAIRES) postePaire else posteCiv, ::atteignableCat)
+        override fun poste(): PosteCat = fr.f4ioz.satcombo.cat.PosteCatFiltre(if (_etat.value.catModele in PAIRES) postePaire else posteCiv) { hz ->
+            atteignableCat(hz).also { if (!it) noteRefusBande(hz) } }
         override fun atteignable(posteHz: Long) = atteignableCat(posteHz)
         // A pair with only its TX rig: nothing to read back.
         override fun emetSeul() = _etat.value.catModele in PAIRES && !paire.rx.isOpen && paire.tx.isOpen
@@ -335,8 +340,36 @@ class StationPc(
      * front of it (a 28 MHz transverter's, which no satellite rig band holds).
      */
     fun atteignableCat(posteHz: Long): Boolean =
-        fr.f4ioz.satcombo.cat.BandPlan.band(posteHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE ||
+        (fr.f4ioz.satcombo.cat.BandPlan.band(posteHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE && couvertParLePoste(posteHz)) ||
             TableConversion.fiConnue(bandes(), posteHz, UsageConversion.CAT_RX) || TableConversion.fiConnue(bandes(), posteHz, UsageConversion.CAT_TX)
+
+    /** The rig's own coverage ([fr.f4ioz.satcombo.cat.BandesPoste]): a pair, either of its two rigs. */
+    private fun couvertParLePoste(hz: Long): Boolean {
+        val m = _etat.value.catModele
+        if (m == "PAIRE") {
+            val c = choixCat
+            return fr.f4ioz.satcombo.cat.BandesPoste.couvre(fr.f4ioz.satcombo.cat.BandesPoste.modelePaire(c?.rxIc705 == true), hz) ||
+                fr.f4ioz.satcombo.cat.BandesPoste.couvre(fr.f4ioz.satcombo.cat.BandesPoste.modelePaire(c?.txIc705 == true), hz)
+        }
+        return fr.f4ioz.satcombo.cat.BandesPoste.couvre(m, hz)
+    }
+
+    /** Why the rig is not sent [hz], in words: its bands, or no converter line. */
+    fun refusBande(hz: Long): String {
+        val m = _etat.value.catModele.let { if (it == "PAIRE") fr.f4ioz.satcombo.cat.BandesPoste.modelePaire(choixCat?.rxIc705 == true) else it }
+        return fr.f4ioz.satcombo.cat.BandesPoste.refus(m, hz)
+            ?: String.format(java.util.Locale.FRANCE, "%.3f MHz hors des bandes du poste et d'aucune ligne de conversion — commande non envoyée", hz / 1e6)
+    }
+
+    /** The last frequency the guard kept from the rig (in words) and when (ms). */
+    @Volatile private var refusBandeTexte = ""
+    @Volatile private var refusBandeMs = 0L
+    @Volatile private var refusBandeHz = 0L
+
+    private fun noteRefusBande(hz: Long) {
+        if (hz != refusBandeHz || refusBandeTexte.isEmpty()) { refusBandeHz = hz; refusBandeTexte = refusBande(hz) }
+        refusBandeMs = horlogeCat()
+    }
 
     /** The sky frequency the rig should be near: QO-100's when its tab holds the rig, else the transmitter followed. */
     private fun cielAttendu(descente: Boolean): Long? {
@@ -354,9 +387,15 @@ class StationPc(
         val b = TableConversion.bande(bandes(), cielHz, usage)
         val fi = b?.fi(cielHz) ?: cielHz
         val cote = if (usage == UsageConversion.CAT_TX) "émission" else "réception"
-        val refus = if (b == null && !atteignableCat(cielHz)) String.format(java.util.Locale.FRANCE,
-            "%.3f MHz (%s) : aucune ligne de conversion pour le poste, commande non envoyée (Réglages › Poste et rotor › Convertisseurs)", cielHz / 1e6, cote)
-            else null
+        val m = _etat.value.catModele
+        // In a band SatMe drives, but not one this rig has: its own words; else the converter table's.
+        val horsPoste = fr.f4ioz.satcombo.cat.BandPlan.band(cielHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE && m != "PAIRE"
+        val refus = when {
+            b != null || atteignableCat(cielHz) -> null
+            horsPoste && fr.f4ioz.satcombo.cat.BandesPoste.refus(m, cielHz) != null -> fr.f4ioz.satcombo.cat.BandesPoste.refus(m, cielHz) + " ($cote)"
+            else -> String.format(java.util.Locale.FRANCE,
+                "%.3f MHz (%s) : aucune ligne de conversion pour le poste, commande non envoyée (Réglages › Poste et rotor › Convertisseurs)", cielHz / 1e6, cote)
+        }
         return FiCat(cielHz, fi, b?.nom, refus)
     }
 
@@ -1266,12 +1305,20 @@ class StationPc(
         derniereChoixCat?.let { connecteCat(it.copy(bandeTx = settings.thd72BandeTx)) }
     }
 
+    /** The connection asked last, whatever the model (the pair's rigs for their bands). */
+    @Volatile private var choixCat: ChoixCat? = null
+
+    /** The USB port the CAT was opened on (adapter key, port number) and its speed: opened again there only. */
+    @Volatile private var portCat: Triple<String, Int, Int>? = null
+
     fun connecteCat(c: ChoixCat) {
         if (c.modele == "THD72") { derniereChoixCat = c; settings.thd72BandeTx = c.bandeTx.coerceIn(0, 1) }
         portee.launch {
             fil.withLock {
                 deconnecteCatDedans()
                 catParReseau = false
+                choixCat = c
+                portCat = null
                 val m = modeleDe(c.modele)
                 if (m !in SIMULES) settings.rigModel = m
                 val liste = ports.liste()
@@ -1323,6 +1370,7 @@ class StationPc(
                         if (!l.ouvrePort(p, if (c.baud > 0) c.baud else 57_600))
                             { echec("pas de TS-2000 qui réponde sur ${p.libelle} (vitesse : menu 56 ; RigExpert : port A)"); return@withLock }
                         clePoste = p.cle
+                        portCat = Triple(p.cle, p.port, l.vitesse)
                         change { copy(catModele = m, catConnecte = true, catSimule = false,
                             catStatut = "Kenwood TS-2000 sur ${p.libelle} à ${l.vitesse} bauds") }
                     }
@@ -1369,6 +1417,7 @@ class StationPc(
                         if (ok) {
                             clePoste = p!!.cle
                             settings.civUsbIndex = c.port
+                            portCat = Triple(p.cle, p.port, if (c.baud > 0) c.baud else mi.baud)
                         }
                         change { copy(catModele = m, catConnecte = ok, catSimule = false,
                             catStatut = if (ok) "${mi.libelle} sur ${p!!.libelle}" else "échec : ${civ.lastError.ifBlank { "port introuvable" }}") }
@@ -1396,21 +1445,156 @@ class StationPc(
         civ.close()
         paire.close()
         stationCat.deconnecte()
-        change { copy(catConnecte = false, catSimule = false, catStatut = "poste déconnecté") }
+        reprise = null
+        change { copy(catConnecte = false, catSimule = false, catMuet = false, catLiaison = "", catStatut = "poste déconnecté") }
     }
 
-    /** The Doppler loop, ten times a second, as on the phone; between two rounds the knob's direct tuning and the RF power. */
+    /**
+     * The Doppler loop, ten times a second, as on the phone; between two
+     * rounds the knob's direct tuning and the RF power. Watched by
+     * [RepriseCat]: a rig that stops answering is no longer written to, a
+     * read is tried now and then (the port opened again), and once it
+     * answers, it is set up again by itself.
+     */
     private fun lanceBoucleCat() {
         boucleCat?.cancel()
+        refusBandeTexte = ""; refusBandeMs = 0L
+        gardeCat = fr.f4ioz.satcombo.cat.GardeLiaisonCat()
+        gardeCat.ouvert(horlogeCat())
+        val r = repriseCat(gardeCat)
+        reprise = r
         boucleCat = portee.launch {
             while (_etat.value.catConnecte) {
-                runCatching { stationCat.tour() }
-                runCatching { tourDonnees() }
-                runCatching { tourPoste() }
-                runCatching { lisSmetre() }
+                val tourne = r == null || runCatching { r.avantTour() }.getOrDefault(true)
+                if (tourne) {
+                    runCatching { stationCat.tour() }
+                    runCatching { tourDonnees() }
+                    runCatching { tourPoste() }
+                    runCatching { lisSmetre() }
+                }
+                runCatching { etatLiaison() }
                 delay(100)
             }
         }
+    }
+
+    // ------------------------------------------------------- the link kept alive
+
+    /** The rig's answers watched (silent since, next try): one per connection. */
+    @Volatile var gardeCat = fr.f4ioz.satcombo.cat.GardeLiaisonCat(); private set
+    /** What keeps the link alive for the connection made; null: not watched (simulated rigs, FT-817 pairs, TH-D72). */
+    @Volatile internal var reprise: fr.f4ioz.satcombo.station.RepriseCat? = null; private set
+
+    /**
+     * When the rig last answered (PC clock, ms): what its dial and mode shown
+     * are as old as. The simulated rigs and the pairs, not watched: now.
+     */
+    fun reponduCatMs(): Long {
+        val e = _etat.value
+        if (!e.catConnecte) return 0L
+        if (e.catSimule) return System.currentTimeMillis()
+        return when {
+            e.catModele in ICOMS -> civ.derniereReponseMs
+            e.catModele == "TS2000" -> paire.lienTs2000?.derniereReponseMs ?: 0L
+            else -> System.currentTimeMillis()
+        }
+    }
+
+    /** The link's watch runs on the PC's clock, the one the drivers date the rig's answers with (not [horloge], fixed in tests). */
+    private val horlogeCat: () -> Long = System::currentTimeMillis
+
+    /** The rig as named in the status line. */
+    private fun nomPosteCat(): String = fr.f4ioz.satcombo.cat.BandesPoste.libelle(_etat.value.catModele)
+
+    /** Is the port still there? Asked at most once a second (listing the ports is not free). */
+    private fun portPresentCache(cle: String, port: Int): () -> Boolean {
+        var vuMs = Long.MIN_VALUE / 2
+        var present = true
+        return {
+            val t = horlogeCat()
+            if (t - vuMs >= 1_000L || t < vuMs) { vuMs = t; present = runCatching { ports.liste().any { it.cle == cle && it.port == port } }.getOrDefault(true) }
+            present
+        }
+    }
+
+    /**
+     * The watch for the rig connected: Icom on CI-V (USB or network) and
+     * TS-2000. The read is a frequency read; reopening uses the very port it
+     * was on (never another adapter: opening one with its lines up could key
+     * another rig); once back, the Doppler loop sets the rig up again. None of
+     * it keys the transmitter.
+     */
+    private fun repriseCat(g: fr.f4ioz.satcombo.cat.GardeLiaisonCat): fr.f4ioz.satcombo.station.RepriseCat? {
+        val e = _etat.value
+        if (e.catSimule) return null
+        val revient: suspend () -> Unit = {
+            stationCat.relache()
+            puissanceARelire = true
+            modeLu = null
+        }
+        val usb = portCat
+        return when {
+            e.catModele in ICOMS && catParReseau -> fr.f4ioz.satcombo.station.RepriseCat(g,
+                reponduMs = { civ.derniereReponseMs },
+                sonde = { civ.readFrequency() != null },
+                // The session reconnects by itself (PosteIcomReseau): its being up stands for the port.
+                portPresent = { icomReseau.session?.connecte == true },
+                rouvre = null, repris = revient, horloge = horlogeCat)
+            e.catModele in ICOMS && usb != null -> {
+                val (cle, port, baud) = usb
+                fr.f4ioz.satcombo.station.RepriseCat(g,
+                    reponduMs = { civ.derniereReponseMs },
+                    sonde = { civ.readFrequency() != null },
+                    portPresent = portPresentCache(cle, port),
+                    rouvre = { rouvreCat { p -> civ.ouvrePort(p, baud) } },
+                    repris = revient, horloge = horlogeCat)
+            }
+            e.catModele == "TS2000" && usb != null -> {
+                val (cle, port, baud) = usb
+                val l = paire.lienTs2000 ?: return null
+                fr.f4ioz.satcombo.station.RepriseCat(g,
+                    reponduMs = { l.derniereReponseMs },
+                    sonde = { l.commande("FA;") != null },
+                    portPresent = portPresentCache(cle, port),
+                    rouvre = { rouvreCat { p -> l.ouvrePort(p, baud) } },
+                    repris = revient, horloge = horlogeCat)
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * Opens the CAT's own port again (same adapter key, same port number),
+     * under the connection's lock; false when it is not there, or is now an
+     * interface named for another rig.
+     */
+    private suspend fun rouvreCat(ouvre: suspend (fr.f4ioz.satcombo.plateforme.PortSerie) -> Boolean): Boolean {
+        val (cle, port, _) = portCat ?: return false
+        return fil.withLock {
+            if (!_etat.value.catConnecte) return@withLock false
+            val p = ports.liste().firstOrNull { it.cle == cle && it.port == port } ?: return@withLock false
+            if (fr.f4ioz.satcombo.cat.CatScan.nomAutrePoste(p.produit) && _etat.value.catModele in ICOMS) return@withLock false
+            kotlinx.coroutines.withContext(Dispatchers.IO) { ouvre(p) }
+        }
+    }
+
+    /** The link's words for the status line: silent, the guard's refusal, the rig's refusal (dated, recent only). */
+    private fun etatLiaison() {
+        val t = horlogeCat()
+        val g = gardeCat
+        val m = _etat.value.catModele
+        val (rq, rms) = when {
+            m in ICOMS -> civ.dernierRefus to civ.dernierRefusMs
+            m == "TS2000" -> (paire.lienTs2000?.dernierRefus ?: "") to (paire.lienTs2000?.dernierRefusMs ?: 0L)
+            else -> "" to 0L
+        }
+        if (rq.isNotBlank() && rms != g.dernierRefusMs) g.refus(rq, rms)
+        val texte = g.message(t, nomPosteCat()).ifBlank {
+            if (refusBandeTexte.isNotBlank() && t - refusBandeMs <= 30_000L) refusBandeTexte + " (" + fr.f4ioz.satcombo.cat.GardeLiaisonCat.ilYa(t - refusBandeMs) + ")"
+            else g.messageRefus(t)
+        }
+        val muet = g.muet
+        if (_etat.value.catLiaison != texte || _etat.value.catMuet != muet) change { copy(catLiaison = texte, catMuet = muet) }
     }
 
     // ------------------------------------------------------- the rig's dial, its power, its PTT

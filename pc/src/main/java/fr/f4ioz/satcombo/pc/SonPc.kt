@@ -45,6 +45,9 @@ class SonPc {
     private val _etat = MutableStateFlow(Etat())
     val etat: StateFlow<Etat> = _etat.asStateFlow()
 
+    /** The input's level and liveness over the last 10 s (« Pourquoi rien ? »): reset when another source starts. */
+    val mesure = fr.f4ioz.satcombo.audio.MesureEntree()
+
     /** Who gets each block: (samples, count, rate). */
     val auditeurs = CopyOnWriteArrayList<(ShortArray, Int, Int) -> Unit>()
 
@@ -86,6 +89,7 @@ class SonPc {
     fun demarre(nom: String): Boolean {
         reprendre = null
         arrete()
+        mesure.remet()
         virtuelles.firstOrNull { it.nom == nom }?.let { v ->
             _etat.update { Etat(actif = false, appareil = nom, erreur = "connexion…") }
             val err = runCatching { v.demarre { pcm, n, rate -> if (virtuelle === v) distribue(pcm, n, rate) } }
@@ -168,6 +172,7 @@ class SonPc {
     /** One block to every listener (also what the tests feed). */
     fun distribue(pcm: ShortArray, n: Int, rate: Int, crete: Int = pcm.take(n).maxOfOrNull { kotlin.math.abs(it.toInt()) } ?: 0) {
         _etat.update { it.copy(niveau = crete / 32768f) }
+        mesure.bloc(pcm, n, System.currentTimeMillis())
         for (a in auditeurs) runCatching { a(pcm, n, rate) }
     }
 
@@ -183,6 +188,7 @@ class SonPc {
         if (carte && gardeCarte()) return
         reprendre = if (carte) _etat.value.appareil else null
         arrete()
+        mesure.remet()
         _etat.update { Etat(actif = true, appareil = nom, rate = rate) }
     }
 
