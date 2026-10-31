@@ -172,6 +172,83 @@ class DirectSitePcTest {
         assertNull(DirectSitePc.ligneSpectre(FloatArray(10), 10_489_750_000.0, 1e6))
     }
 
+    /** The wide band as the DATV tab has it: a frame with the noise and two signals, the second one received and named. */
+    private fun large(verrouille: Boolean = true): DirectSitePc.Large {
+        val v = IntArray(922) { 11_000 }.also { for (i in 100..250) it[i] = 38_000; for (i in 430..440) it[i] = 25_000 }
+        fun sg(c: Long, sr: Int, balise: Boolean) = fr.f4ioz.satcombo.datv.SignalLarge(c - sr / 2, c + sr / 2, c, sr.toLong(), sr, if (balise) 38_000 else 25_000,
+            if (balise) 0.0 else -4.1, balise, false)
+        val l = listOf(sg(10_491_500L, 1500, true), sg(10_494_750L, 250, false))
+        val m = fr.f4ioz.satcombo.datv.MonNiveau(10_494_750L, 250, 338, true, verrouille, if (verrouille) 4 else 1, if (verrouille) 7.4 else null,
+            if (verrouille) 8.1 else null, if (verrouille) 26_900 else null, if (verrouille) 4.0 else null, if (verrouille) "QPSK 3/4" else "", l[1], 4.2, true)
+        return DirectSitePc.Large(v, l, listOf("", "F4XYZ\u0007 et un nom bien trop long pour la page"), listOf(false, true), m)
+    }
+
+    @Test fun `the wide band for the site - small, scaled, its signals and our reception, only the listed keys`() {
+        val o = DirectSitePc.largeJson(large())
+        assertEquals(DirectSitePc.CLES_LARGE.getValue(""), o.keySet())
+        val b = Base64.getDecoder().decode(o.getString("points"))
+        assertEquals(DirectSitePc.POINTS_LARGE, b.size)
+        // The noise low on the scale, the beacon high.
+        assertTrue((b[0].toInt() and 0xFF) in 20..30)
+        assertTrue((b[100].toInt() and 0xFF) > 200)
+        val l = o.getJSONArray("signaux")
+        assertEquals(2, l.length())
+        for (i in 0 until l.length()) assertTrue(DirectSitePc.CLES_LARGE.getValue("signal").containsAll(l.getJSONObject(i).keySet()))
+        assertTrue(l.getJSONObject(0).getBoolean("balise")); assertFalse(l.getJSONObject(0).has("nom"))
+        val recu = l.getJSONObject(1)
+        assertTrue(recu.getBoolean("tenu")); assertEquals(250, recu.getInt("sr"))
+        assertEquals(24, recu.getString("nom").length); assertFalse(recu.getString("nom").contains("\u0007"))
+        val r = o.getJSONObject("recepteur")
+        assertEquals(DirectSitePc.CLES_LARGE.getValue("recepteur"), r.keySet())
+        assertEquals(7.4, r.getDouble("mer"), 0.0); assertTrue(r.getBoolean("verrouille"))
+        // Not locked: no MER, no level.
+        val n = DirectSitePc.largeJson(large(verrouille = false)).getJSONObject("recepteur")
+        assertFalse(n.has("mer")); assertFalse(n.has("niveau")); assertFalse(n.getBoolean("verrouille"))
+        // Small enough for the home connection: a few KB.
+        assertTrue(o.toString().length < 2_000)
+        // Thirty signals at most, the one received kept.
+        val beaucoup = DirectSitePc.Large(IntArray(922) { 11_000 }, (0 until 50).map { fr.f4ioz.satcombo.datv.SignalLarge(10_491_000L + it * 150, 10_491_100L + it * 150,
+            10_491_050L + it * 150, 100, 125, 20_000 + it, null, false, false) }, List(50) { "" }, List(50) { it == 3 }, null)
+        val lb = DirectSitePc.largeJson(beaucoup).getJSONArray("signaux")
+        assertEquals(DirectSitePc.SIGNAUX_LARGE, lb.length())
+        assertTrue((0 until lb.length()).any { lb.getJSONObject(it).getBoolean("tenu") })
+        assertFalse(DirectSitePc.largeJson(beaucoup).has("recepteur"))
+    }
+
+    @Test fun `the wide band goes only when chosen, every period while there is one, actif false once when it stops`() {
+        val (site, d) = direct()
+        var l: DirectSitePc.Large? = large()
+        d.large = { l }
+        d.tic()
+        assertTrue(envois.isEmpty())
+        site.sert("/api/site/direct", "POST") { k -> if (k == "on_large") "1" else "" }
+        d.tic()
+        assertEquals(listOf("https://example.org/api/publication/direct-large"), envois.map { it.url })
+        assertEquals("direct-large", envois[0].entetes["X-SatMe-Type"])
+        val o = JSONObject(String(envois[0].corps!!))
+        assertEquals(t, o.getLong("t")); assertTrue(o.has("points")); assertFalse(o.toString().contains("le-jeton"))
+        // Every two seconds by default.
+        t += 1_000L; d.tic()
+        assertEquals(1, envois.size)
+        t += 1_000L; d.tic()
+        assertEquals(2, envois.size)
+        // The receiver stopped: « actif: false » once, then nothing.
+        l = null
+        t += 2_000L; d.tic()
+        assertEquals(3, envois.size)
+        assertFalse(JSONObject(String(envois[2].corps!!)).getBoolean("actif"))
+        repeat(5) { t += 2_000L; d.tic() }
+        assertEquals(3, envois.size)
+        // A site that does not know the type: left alone ten minutes, without an error.
+        l = large()
+        reponse = { 404 to "{\"ok\":false,\"erreur\":\"type inconnu\"}" }
+        t += 2_000L; d.tic()
+        val c = d.json().getJSONArray("canaux").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("nom") == "large" }
+        assertTrue(c.getBoolean("nonPris")); assertEquals("", c.getString("erreur"))
+        repeat(5) { t += 60_000L; d.tic() }
+        assertEquals(4, envois.size)
+    }
+
     @Test fun `a DATV picture is made small`() {
         val j = DirectSitePc.jpegReduit(jpeg(1920, 1080))!!
         assertTrue(j.size <= 190 * 1024)

@@ -281,6 +281,7 @@ Content-Type: image/png
 | `diplomes` | JSON | — | les [diplômes](#les-diplômes) suivis et votre progression, seulement si coché |
 | `diplome-image` | multipart | PNG, JPEG, PDF | l'image d'un [diplôme reçu](#les-diplômes), seulement sur un clic |
 | `direct-ft8` | JSON | — | chaque créneau [FT8 / FT4](#ft8--ft4) décodé, seulement si coché |
+| `direct-large` | JSON | — | la [bande large QO-100](#la-bande-large-qo-100) et votre réception, tant que le récepteur DATV est en marche, seulement si coché |
 | `direct-video`, `direct-soustitres` (+ `PUT …/direct-video/<qualité>/<n>.ts`, et le WebSocket `/ws/direct/station`) | JSON, MPEG-TS | `video/mp2t` | le [direct rapide](#direct-rapide-facultatif-pour-une-connexion-à-haut-débit), seulement si coché |
 | `ft8-passage` | multipart | JSON | un passage du journal avec ses messages [FT8 / FT4](#ft8--ft4) (sur clic, ou chaque passage en Automatique) |
 
@@ -642,6 +643,42 @@ comme plus haut (60 au plus), `cascade` seulement pour les créneaux que
 SatMe-PC avait encore en mémoire (les trois dernières heures). `stations`,
 `carres`, `dxcc` : combien d'indicatifs (pas celui de la station), de locators
 et d'entités DXCC ont été entendus.
+
+### La bande large QO-100
+
+Sous **En direct**, la ligne **Bande large QO-100 (DATV)** (décochée d'origine)
+envoie la barre de l'onglet DATV — le transpondeur large tel que la station sol
+le mesure (son spectre public), les signaux trouvés et votre réception
+par-dessus — pour qu'une page en direct la dessine sous l'image DATV : type
+`direct-large`, JSON, 2 à 4 Ko, toutes les 2 s (1 à 10 s, au choix sur la
+ligne), **seulement tant que le récepteur DATV est en marche** et que *Spectre
+de la bande large* est coché dans l'onglet DATV. Quand le récepteur s'arrête :
+`{"actif": false}` une fois, puis plus rien. La connexion à la station sol
+reste celle de SatMe-PC (ouverte tant que la ligne est cochée et le récepteur
+en marche) : le site redistribue, ses visiteurs ne s'y connectent jamais.
+
+```json
+{"type":"direct-large","version":1,"t":1798000000000,
+ "debutKhz":10490500,"largeurKhz":9000,"bas":8000,"haut":44000,"unitesDb":3276.8,"bruit":11000,"balise":10491500,
+ "points":"<base64, 512 octets>",
+ "signaux":[{"debut":10490750,"fin":10492250,"centre":10491500,"sr":1500,"niveau":38200,"balise":true,"auDessus":false,"tenu":false},
+            {"debut":10494620,"fin":10494880,"centre":10494750,"sr":250,"niveau":24800,"db":-4.1,"balise":false,"auDessus":false,"tenu":true,"nom":"F4XYZ"}],
+ "recepteur":{"khz":10494750,"sr":250,"largeur":338,"actif":true,"verrouille":true,"mer":7.4,"niveau":26900,"modcod":"QPSK 3/4","seuil":4.0}}
+```
+
+| Clé | Sens |
+|---|---|
+| `debutKhz`, `largeurKhz` | l'axe (kHz ciel) : `points` va de `debutKhz` à `debutKhz + largeurKhz` |
+| `points` | le spectre en 512 points (chacun la moyenne de son groupe), un octet chacun, base64 : `0` = `bas`, `255` = `haut`, dans les unités du spectre de la station sol (échelle log, `unitesDb` unités par dB, le bruit vers `bruit`) |
+| `balise` | la fréquence de la balise DATV (kHz) |
+| `signaux` | 30 au plus, de bas en haut : `debut`, `fin`, `centre` (kHz), `sr` le débit symbole standard le plus proche (kS/s), `niveau` (unités), `db` face à la balise, `balise`, `auDessus` (au-dessus de la balise − 1 dB), `tenu` (votre récepteur est dessus), `nom` (l'indicatif lu, quand il est connu) |
+| `recepteur` | votre récepteur DATV quand il écoute dans la bande large : `khz`, `sr`, `largeur` (kHz occupés), `actif`, `verrouille` ; verrouillé, `mer` (dB), `niveau` (la hauteur que fait la MER sur la même échelle), `modcod`, `seuil` (la MER minimale de ce MODCOD) |
+
+Seulement ces clés : aucun réglage, adresse, chemin ni rien d'autre de la
+station. Pas vers un dossier. Un récepteur qui ne connaît pas le type répond
+`400`, `404` ou `415` : laissé tranquille dix minutes, sans erreur. L'appel de
+réglage : `POST /api/site/direct?on_large=1` (ou `0`), `&periode_large=2`
+(1 à 10 s).
 
 ### Direct rapide (facultatif, pour une connexion à haut débit)
 

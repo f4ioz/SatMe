@@ -244,6 +244,20 @@ class SpectreLargePc(
     }
 
     /**
+     * The strip for the site's live page (« Publication web › Bande large QO-100 (DATV) », [DirectSitePc.Large]): the
+     * last frame, the signals with their names as [json] gives them, our level where the receiver listens. Null unless
+     * the option is on, the spectrum fresh and the DATV receiver on (the live is then on QO-100's DATV).
+     */
+    fun pourSite(): DirectSitePc.Large? {
+        if (!on || !frais() || !datv.etat.actif) return null
+        val maintenant = horloge()
+        val l = signaux
+        val tenus = l.map { tenu(it) }
+        val n = l.mapIndexed { i, sg -> noms.nom(sg.centreKhz, sg.srKs, maintenant) ?: if (tenus[i] && datv.etat.verrouille) nomRecu() else "" }
+        return DirectSitePc.Large(derniere, l, n, tenus, NiveauRecu.calcule(datv.etat, datv.reglage, l))
+    }
+
+    /**
      * The band plan's channels at [srKs] free or busy as the spectrum shows
      * them now (unknown without a fresh one): for the transmission's page.
      */

@@ -87,6 +87,16 @@ class SpectreLargePcTest {
         assertEquals(2, ouvertures)
     }
 
+    @Test fun `rien pour le site sans l'option, sans trames fraiches ou sans recepteur`() {
+        val s = spectre()
+        assertNull(s.pourSite())
+        s.action("/api/datv/large/reglage", mapOf("on" to "1"))
+        s.json(-1); s.boucle()
+        assertTrue(s.frais())
+        // The DATV receiver stopped: the live is not on QO-100's DATV, nothing for the site.
+        assertNull(s.pourSite())
+    }
+
     @Test fun `le signal selectionne, la balise a part`() {
         fun sg(c: Long, sr: Int, balise: Boolean = false) = fr.f4ioz.satcombo.datv.SignalLarge(c - sr / 2, c + sr / 2, c, sr.toLong(), sr, 30_000, 0.0, balise, false)
         val l = listOf(sg(Datv.BALISE_KHZ, 1500, true), sg(10_494_750L, 333), sg(10_495_250L, 333))

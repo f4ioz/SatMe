@@ -15,6 +15,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 
 ## Prochaine version
 
+### fr
+- **Publication web : la bande large QO-100 et votre réception sur le site** — une nouvelle ligne **Bande large QO-100 (DATV)** sous *En direct* (décochée d'origine) envoie à votre site, toutes les 2 s (1 à 10 s) tant que le récepteur DATV est en marche, la barre de l'onglet DATV : le spectre public de la station sol réduit à 512 points, les signaux trouvés et leur nom, et votre réception par-dessus (fréquence, débit symbole, verrouillage, MER) — 2 à 4 Ko par envoi (type `direct-large`). Il faut *Spectre de la bande large* coché dans l'onglet DATV ; la connexion à la station sol reste la seule de SatMe-PC, les visiteurs de votre site ne s'y connectent jamais.
+
+### en
+- **Web publishing: QO-100's wide band and your reception on your site** — a new line **Bande large QO-100 (DATV)** under *En direct* (unticked by default) sends your site, every 2 s (1 to 10 s) while the DATV receiver is on, the DATV tab's strip: the ground station's public spectrum made 512 points, the signals found and their names, and your reception over it (frequency, symbol rate, lock, MER) — 2 to 4 KB each time (type `direct-large`). *Spectre de la bande large* must be ticked in the DATV tab; the connection to the ground station stays SatMe-PC's only one, your site's visitors never connect to it.
+
 ## 2026.10.35
 
 ### fr
