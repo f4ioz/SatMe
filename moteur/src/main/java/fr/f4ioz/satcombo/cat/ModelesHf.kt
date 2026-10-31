@@ -9,7 +9,7 @@
 package fr.f4ioz.satcombo.cat
 
 /**
- * The terrestrial rigs (TellusMe, the SatMe ecosystem's HF station), apart
+ * The terrestrial (HF) rigs, apart
  * from [ModeleIcom]: that table lists the **satellite** rigs SatMe offers,
  * and an IC-7000 there would show up in the satellite rig choice.
  *
