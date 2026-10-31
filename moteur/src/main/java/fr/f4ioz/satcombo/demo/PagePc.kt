@@ -58,10 +58,11 @@ object PagePc {
         Onglet("son", "Son", "mic", "La carte son, l'enregistrement"),
         Onglet("noeud", "SatMe-Node", "noeud", "Le Raspberry Pi près de l'antenne : santé, cartes et leurs rôles, services, version"),
         Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
+        Onglet("images", "Images", "photo_library", "Toutes les images reçues : SSTV, SSDV, Geoscan"),
         Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
         Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
         Onglet("ft8", "FT8/FT4", "graphic_eq", "FT8 et FT4 : décodage, émission, messages, radar"),
-        Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure : paquets 1200 à 9600 bit/s, images SSDV, FUNcube, balise QO-100"),
+        Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure : paquets 1200 à 9600 bit/s, SSDV, FUNcube, balise QO-100"),
         Onglet("journal", "Journal", "history", "Les passages enregistrés, rejoués"),
         Onglet("reglages", "Réglages", "settings", "Toute la station : réglages par catégorie"))
 
@@ -75,7 +76,7 @@ object PagePc {
         Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
         Triple("tv", "DATV", "tv") to listOf("datv"),
         Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8", "tlm"),
-        Triple("log", "Carnet", "menu_book") to listOf("carnet", "journal", "planche"),
+        Triple("log", "Carnet", "menu_book") to listOf("carnet", "journal", "images", "planche"),
         Triple("poste", "Station", "radio") to listOf("montage", "sdr", "son", "noeud", "reglages"))
 
     /** Every tab's id: what a server offering all of them answers to `api/capacites`. */
@@ -938,7 +939,6 @@ ${DiplomesJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
   .tp-sids { margin-top:10px; padding-top:8px; border-top:1px solid var(--ligne); }
   #tp-trames { max-height:calc(100vh - 250px); }
   .tlm-b.ax { background:rgba(63,224,200,.14); color:var(--cyan); } .tlm-b.ssdv { background:rgba(176,124,255,.18); color:#C9A8FF; }
-  .ts-galerie { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-top:8px; max-height:calc(100vh - 230px); overflow:auto; }
   .ts-img { background:var(--s3); border-radius:var(--r2); padding:6px; font-size:var(--fs-s); }
   .ts-img img { display:block; width:100%; height:auto; border-radius:4px; background:#7f7f7f; }
   .ts-img .tlm-h { margin-top:4px; }
@@ -1435,6 +1435,27 @@ ${EncartSstvJs.CSS}  #i-galerie .petit { font-size:11px; line-height:1.3; }
   .cl-badge.o-main { box-shadow:inset 0 -2px 0 #FFB454; } .cl-badge.o-estime { font-style:italic; color:#cfd8e0; background:rgba(60,70,80,.85); }
   .cl-badge.grand { top:8px; right:8px; font-size:16px; padding:2px 9px; }
   #i-galerie a { position:relative; }
+  /* The common « Images » gallery (SSTV, SSDV, Geoscan): the kind's chips, the tiles, an SSDV picture's viewer. */
+  #gal { display:flex; flex-direction:column; }
+  /* In its own tab the pictures come first, the ARISS series under them; SSDV or Geoscan alone: no series. */
+  #gal-slot-images #cl-serie { order:2; } #gal.gal-num #cl-serie { display:none; }
+  .gal-puces { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 8px; }
+  .gal-puces button { border-radius:16px; padding:3px 12px; font-size:var(--fs-s); }
+  .gal-puces button[aria-pressed="true"] { border-color:var(--rx); background:rgba(63,224,200,.12); color:var(--texte); }
+  .gal-puces .gal-n { color:var(--texte-2); font-size:var(--fs-xs); }
+  .gal-grille { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:6px; margin-top:8px; }
+  .gal-grille .petit { font-size:11px; line-height:1.3; }
+  .gal-grille > a { position:relative; display:block; text-decoration:none; color:inherit; min-width:0; }
+  .gal-grille > a img { width:100%; border-radius:6px; display:block; background:#7f7f7f; }
+  .gal-vide { aspect-ratio:4/3; border-radius:6px; background:var(--s3); display:flex; align-items:center; justify-content:center; text-align:center; padding:6px; font-size:11px; color:var(--texte-2); }
+  .gal-type { position:absolute; top:4px; left:4px; border-radius:6px; padding:0 5px; font-size:11px; font-weight:700; background:rgba(0,0,0,.72); color:#fff; }
+  .gal-type.ssdv { color:#C9A8FF; } .gal-type.geoscan { color:#FFB454; } .gal-type.sstv { color:#7FD3FA; }
+  .gal-avance { display:block; height:4px; margin-top:3px; border-radius:2px; background:var(--s1); overflow:hidden; }
+  .gal-avance i { display:block; height:100%; background:#C9A8FF; }
+  .gal-dlg { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; width:min(760px, calc(100vw - 32px)); max-height:calc(100vh - 32px); }
+  .gal-dlg .ts-img img { max-height:calc(100vh - 260px); object-fit:contain; }
+  .ts-resume { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:8px; }
+  .ts-resume img { height:72px; width:auto; max-width:120px; object-fit:cover; border-radius:4px; background:#7f7f7f; cursor:pointer; }
   /* Corrected pictures (kept apart from those received): the viewer's comparison, the gallery's marks. */
   #vi-cadre, #so-ia-essai-cadre { position:relative; display:inline-block; max-width:100%; }
   #vi-img2, #so-ia-essai-b { position:absolute; left:0; top:0; width:100%; border-radius:6px; pointer-events:none; }
@@ -2707,7 +2728,7 @@ ${TraficLeoJs.HTML}
         <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
   </div>
 ${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
-    <div class="st-nav"><button data-p="sx-p-rx" title="Source, mode imposé, calage, indicateur d’accord">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Réception</span></button><button data-p="sx-p-tx" title="L’émission SSTV par l’ADALM-PLUTO ou le bladeRF">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="sx-p-mire" title="La mire SSTV jouée sur une sortie son">${IconesPc.svg("tv", "st-ico")}<span>Mire</span></button><button data-p="sx-p-img" title="Les images reçues">${IconesPc.svg("grid_on", "st-ico")}<span>Images</span></button><button data-p="sx-p-reg" title="Décodage continu, nettoyage, décoder un enregistrement">${IconesPc.svg("settings", "st-ico")}<span>Réglages</span></button></div>
+    <div class="st-nav"><button data-p="sx-p-rx" title="Source, mode imposé, calage, indicateur d’accord">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Réception</span></button><button data-p="sx-p-tx" title="L’émission SSTV par l’ADALM-PLUTO ou le bladeRF">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="sx-p-mire" title="La mire SSTV jouée sur une sortie son">${IconesPc.svg("tv", "st-ico")}<span>Mire</span></button><button data-p="sx-p-img" title="Les images reçues : la galerie commune (SSTV, SSDV, Geoscan), la même que l’onglet Images">${IconesPc.svg("grid_on", "st-ico")}<span>Images</span></button><button data-p="sx-p-reg" title="Décodage continu, nettoyage, décoder un enregistrement">${IconesPc.svg("settings", "st-ico")}<span>Réglages</span></button></div>
     <div class="st-pan" id="sx-p-rx">
     <div class="carte">
       <div class="t">Réception</div>
@@ -2790,11 +2811,8 @@ ${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
     </div>
     </div>
     <div class="st-pan" id="sx-p-img">
-    <div class="carte" id="sx-ssdv-c" hidden>
-      <div class="t">Images SSDV <span class="petit">— les paquets numériques (SO-127, trames 1200–9600 bit/s), image remplie au fil des paquets, passage après passage</span>
-        <button class="discret" style="margin-left:auto" onclick="vue('tlm'); const b = document.querySelector('#v-tlm .st-nav button[data-p=tl-p-ssdv]'); if (b) b.click()">Toutes ›</button></div>
-      <div id="sx-ssdv" class="ts-galerie" style="max-height:none"></div>
-    </div>
+    <div id="gal-slot-sstv">
+    <div id="gal">
     <div class="carte" id="cl-serie" hidden>
       <div class="t">Diapos de la série <span class="petit" id="cl-nom"></span></div>
       <div class="petit" id="cl-fenetre"></div>
@@ -2810,14 +2828,20 @@ ${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
     </div>
     <div class="carte">
       <div class="t">Images reçues <span class="petit" id="i-nombre"></span></div>
+      <div class="gal-puces" id="gal-puces" role="group" aria-label="Le genre d’images">${listOf("" to "Toutes", "sstv" to "SSTV", "ssdv" to "SSDV", "geoscan" to "Geoscan").joinToString("") { (k, n) ->
+        "<button type=\"button\" data-t=\"$k\" onclick=\"galType('$k')\">$n <span class=\"gal-n\"></span></button>" }}</div>
       <div class="ligne" style="margin-top:0"><select id="i-filtre" style="flex:none" onchange="imagesVus = ''; clVu = ''; rendSon()"><option value="">tous les satellites</option></select>
         <select id="i-vue" style="flex:none" onchange="imagesVus = ''; clVu = ''; try { localStorage.setItem('satme-sstv-vue', this.value) } catch (x) {} rendSon()" title="Par diapo : les copies d’une même diapo ensemble, la mieux notée d’abord (note 0–100 : bruit, lignes abîmées, image incomplète, glissements)">
           <option value="diapo">par diapo</option><option value="">par réception</option></select>
         <span class="petit" id="cl-calcul"></span>
         <button id="cl-relance" onclick="clRelance(event)" title="Mesurer à nouveau chaque image, relire le numéro au bas des diapos et refaire les groupes. Les numéros et groupes donnés à la main sont gardés (Maj+clic : les oublier aussi).">⟳ Relancer l’analyse</button>
         <a class="bouton" id="i-planche" href="planche" style="margin-left:auto" title="La planche SSTV : les images reçues posées sur un modèle, à télécharger (Carnet › Planche SSTV)">${IconesPc.svg("view_quilt", "mt-ico")} Planche SSTV ›</a></div>
-      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px"></div>
+      <div class="petit aide" id="gal-aide" hidden>SSDV et Geoscan : les images envoyées en paquets numériques par certains satellites (SO-127, IO-86, Geoscan…), reconstituées au fil des paquets, passage après passage ; elles grandissent ici en direct. Les décodeurs et leurs réglages : onglet Télémesure.</div>
+      <div id="gal-tlm" class="gal-grille" hidden></div>
+      <div id="i-galerie" class="gal-grille"></div>
       <div id="i-groupes" hidden></div>
+    </div>
+    </div>
     </div>
     </div>
     <div class="st-pan" id="sx-p-reg">
@@ -3016,7 +3040,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
         <label><input type="checkbox" id="ap-enreg" checked> Enregistrer le son</label>
         <label><input type="checkbox" id="ap-parquer"> Parquer le rotor après</label>
         <label><input type="checkbox" id="ap-sstv" checked> Décodeur SSTV prêt</label>
-        <label title="SO-127 (HADES-SA) et la FSK étroite reçue en BLU : les paquets SSDV du passage décodés depuis le même son (le poste en USB-D, ou le SDR), les images avec les autres (Télémesure › Images SSDV). Réception seulement"><input type="checkbox" id="ap-ssdv"> Décodeur SSDV en BLU (SO-127)</label>
+        <label title="SO-127 (HADES-SA) et la FSK étroite reçue en BLU : les paquets SSDV du passage décodés depuis le même son (le poste en USB-D, ou le SDR), les images avec les autres (onglet Images). Réception seulement"><input type="checkbox" id="ap-ssdv"> Décodeur SSDV en BLU (SO-127)</label>
         <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
       </div>
       <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
@@ -4502,9 +4526,11 @@ ${Ft8SiteJs.HTML}    </div>
   </div>
 </div>
 </div>
+<div class="vue" id="v-images" hidden><div id="gal-slot-images"></div></div>
+<dialog id="gal-dlg" class="gal-dlg" aria-label="Image reçue"><div class="ligne" style="margin-top:0"><b id="gal-dlg-t"></b><button class="discret" style="margin-left:auto" onclick="g('gal-dlg').close()" aria-label="Fermer">✕</button></div><div id="gal-dlg-c"></div></dialog>
 <div class="vue" id="v-tlm" hidden>
 <div class="st tl-st" data-st="tlm">
-  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-blu" title="SSDV et télémesure en FSK étroite reçue en BLU : SO-127 (HADES-SA), « GENESIS FSK » 800 / 200 bit/s">${IconesPc.svg("radio", "st-ico")}<span>SSDV en BLU</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
+  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-blu" title="SSDV et télémesure en FSK étroite reçue en BLU : SO-127 (HADES-SA), « GENESIS FSK » 800 / 200 bit/s">${IconesPc.svg("radio", "st-ico")}<span>SSDV en BLU</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames : comment, l’import de paquets ; les images elles-mêmes sont dans l’onglet Images">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
   <div class="st-pan" id="tl-p-paq">
 <div class="grille2">
   <div class="carte">
@@ -4536,7 +4562,7 @@ ${Ft8SiteJs.HTML}    </div>
 <div class="grille2">
   <div class="carte">
     <div class="t">SSDV en BLU · GENESIS FSK <span id="bl-pastille" class="pastille coupe">coupé</span></div>
-    <div class="petit aide">SO-127 (HADES-SA) et les satellites GENESIS d’AMSAT-EA émettent en FSK directe sur la porteuse : 800 bit/s avec 1600 Hz entre les deux tons (ou 200 bit/s, 1125 Hz). Un récepteur FM les perd ; en BLU (USB) ce sont deux tons dans le son. SatMe les cherche dans toute la bande audio (le reste du Doppler suivi), les démodule (deux filtres adaptés, horloge), lit les trames GENESIS (synchro 0xBF35, CRC-16, désembrouilleur x¹⁷ + x¹² + 1) et cherche les paquets SSDV dans les bits, quel que soit leur emballage. Les images rejoignent celles du décodeur de paquets (onglet Images SSDV), passage après passage.</div>
+    <div class="petit aide">SO-127 (HADES-SA) et les satellites GENESIS d’AMSAT-EA émettent en FSK directe sur la porteuse : 800 bit/s avec 1600 Hz entre les deux tons (ou 200 bit/s, 1125 Hz). Un récepteur FM les perd ; en BLU (USB) ce sont deux tons dans le son. SatMe les cherche dans toute la bande audio (le reste du Doppler suivi), les démodule (deux filtres adaptés, horloge), lit les trames GENESIS (synchro 0xBF35, CRC-16, désembrouilleur x¹⁷ + x¹² + 1) et cherche les paquets SSDV dans les bits, quel que soit leur emballage. Les images rejoignent celles du décodeur de paquets (onglet Images), passage après passage.</div>
     <div class="petit aide">Le poste : IC-9700 en USB-D sur la descente (SatMe le règle ainsi pour un émetteur GENESIS, SSDV ou FSK lente), le son par sa carte USB (onglet Son). Ou le récepteur SDR en USB. Réception seulement : SatMe n’émet jamais vers le satellite.</div>
     <label style="display:block"><input type="checkbox" id="bl-on" onchange="tlmPost('genesis?on=' + (this.checked ? 1 : 0))"> <b>Décoder la FSK étroite en BLU</b></label>
     <div class="ligne"><span class="petit">Son</span><select id="bl-source" style="flex:none" onchange="tlmPost('genesis/source?v=' + this.value)"><option value="carte">carte son (onglet Son : le poste en USB-D)</option><option value="sdr">récepteur SDR (en USB)</option></select></div>
@@ -4559,10 +4585,10 @@ ${Ft8SiteJs.HTML}    </div>
   <div class="st-pan" id="tl-p-ssdv">
   <div class="carte">
     <div class="t">Images SSDV <span class="petit" id="ts-n"></span></div>
-    <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Une image renvoyée à un passage suivant (même indicatif, même numéro, dans les 3 jours) est complétée avec ses nouveaux paquets : la bande sous l’image montre quel passage a apporté quels paquets. Les paquets sont gardés dans telemesure/ssdv/paquets (l’image en cours survit à un redémarrage) ; une image complète rejoint la galerie (telemesure/ssdv).</div>
-    <div class="petit aide">D’où viennent les paquets, selon le satellite (la chaîne se choisit d’après son émetteur dans SatNOGS DB) : <b>SO-127 (HADES-SA)</b>, FSK étroite reçue en BLU, poste en USB-D (onglet <i>SSDV en BLU</i>) ; <b>IO-86 (LAPAN-A2)</b>, AFSK 1200 par son répéteur FM (le décodeur APRS de la carte son, poste en FM) ; les cubesats en <b>FSK/GMSK 1200–9600 bit/s</b> (onglet <i>Paquets</i>, récepteur SDR). Les satellites <b>Geoscan</b> (Geoscan-2/4/5, 239Alferov) n’envoient pas de SSDV mais des morceaux de JPEG dans leurs trames GFSK 9600 : lues par le même décodeur de paquets, leurs images s’affichent ici au fil des morceaux. Pas encore lu : ASRTU-1 (BPSK 9600 codé CCSDS). Rien n’est envoyé sur Internet, sauf par la Publication web si vous la réglez (🌐).</div>
+    <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Une image renvoyée à un passage suivant (même indicatif, même numéro, dans les 3 jours) est complétée avec ses nouveaux paquets : la bande sous l’image montre quel passage a apporté quels paquets. Les paquets sont gardés dans telemesure/ssdv/paquets (l’image en cours survit à un redémarrage) ; une image complète est écrite en JPEG (telemesure/ssdv). Les images, en cours ou finies, s’affichent dans l’onglet <b>Images</b>, avec celles de la SSTV : ouvrir une image y montre ses paquets par passage, ses exports et le 🌐.</div>
+    <div class="petit aide">D’où viennent les paquets, selon le satellite (la chaîne se choisit d’après son émetteur dans SatNOGS DB) : <b>SO-127 (HADES-SA)</b>, FSK étroite reçue en BLU, poste en USB-D (onglet <i>SSDV en BLU</i>) ; <b>IO-86 (LAPAN-A2)</b>, AFSK 1200 par son répéteur FM (le décodeur APRS de la carte son, poste en FM) ; les cubesats en <b>FSK/GMSK 1200–9600 bit/s</b> (onglet <i>Paquets</i>, récepteur SDR). Les satellites <b>Geoscan</b> (Geoscan-2/4/5, 239Alferov) n’envoient pas de SSDV mais des morceaux de JPEG dans leurs trames GFSK 9600 : lues par le même décodeur de paquets, leurs images s’affichent dans l’onglet Images au fil des morceaux. Pas encore lu : ASRTU-1 (BPSK 9600 codé CCSDS). Rien n’est envoyé sur Internet, sauf par la Publication web si vous la réglez (🌐).</div>
     <div class="ligne"><input type="file" id="ts-fichier" hidden onchange="tsImporte(this)"><button class="discret" onclick="g('ts-fichier').click()" title="Des paquets SSDV d’un passage manqué : paquets bruts à la suite, fichier KISS, ou journal de trames de SatMe (telemesure/paquets/*.jsonl). Les doublons sont écartés.">⤒ Importer des paquets…</button><span class="petit" id="ts-imp"></span></div>
-    <div id="ts-galerie" class="ts-galerie"></div>
+    <div id="ts-resume" class="ts-resume"></div>
   </div>
   </div>
   <div class="st-pan" id="tl-p-bpsk">
@@ -7373,6 +7399,7 @@ function vue(n) {
   setTimeout(majFlux, 0);
   tqRange(n);
   pxPlace(n);
+  galPlace(n);
   const ns = nsOff(n);
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== (ns ? 'v-nonsat' : 'v-' + n));
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
@@ -7384,7 +7411,8 @@ function vue(n) {
   if (n === 'reglages') chargePhonieReglages();
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
-  if (n === 'son' || n === 'sstv') ticSon();
+  if (n === 'son' || n === 'sstv' || n === 'images') ticSon();
+  if (n === 'sstv' || n === 'images' || n === 'tlm') galTic(true);
   if (n === 'sstv') { ticMire(true); xsCharge(); esRend(true); }
   if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); acVu = ''; acCharge(); }
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
@@ -10580,36 +10608,141 @@ function rendSon() {
     if (S.sstvMode) g('i-encours').src = 'api/sstv/encours.png?v=' + S.sstvVersion;
     else if (S.sstvDerniere) g('i-encours').src = 'sstv/' + enc(S.sstvDerniere);
   }
-  // The gallery, by satellite when one is chosen.
-  const sats = JSON.stringify([...new Set(S.images.map(i => i.sat).filter(x => x))].sort());
+  // The common gallery (SSTV here, SSDV and Geoscan from api/telemesure/images), by kind and by satellite when chosen.
+  const tlm = GAL && GAL.images || [], type = galTypeVu();
+  const sats = JSON.stringify([...new Set(S.images.map(i => i.sat).concat(tlm.map(i => i.satellite)).filter(x => x))].sort());
   if (sats !== satsVus) {
     satsVus = sats;
     const f = g('i-filtre').value;
     g('i-filtre').innerHTML = '<option value="">tous les satellites</option>' + JSON.parse(sats).map(x => '<option>' + esc(x) + '</option>').join('');
     g('i-filtre').value = f;
   }
-  const filtre = g('i-filtre').value;
-  imagesMontrees = S.images.filter(i => !filtre || i.sat === filtre);
-  txt('i-nombre', String(imagesMontrees.length));
-  const parDiapo = g('i-vue').value === 'diapo' && CL && CL.groupes;
+  const filtre = g('i-filtre').value, numerique = type === 'ssdv' || type === 'geoscan';
+  imagesMontrees = numerique ? [] : S.images.filter(i => !filtre || i.sat === filtre);
+  const autres = type === 'sstv' ? [] : tlm.filter(i => (!type || i.type === type) && (!filtre || i.satellite === filtre));
+  txt('i-nombre', String(imagesMontrees.length + autres.length));
+  galPuces();
+  // By slide: SSTV only; the SSDV and Geoscan pictures then above the slides.
+  ['i-vue', 'cl-relance', 'cl-calcul', 'i-planche'].forEach(id => { const e = g(id); if (e && e.hidden !== numerique) e.hidden = numerique; });
+  g('gal-aide').hidden = !numerique;
+  g('gal').classList.toggle('gal-num', numerique);
+  const parDiapo = !numerique && g('i-vue').value === 'diapo' && CL && CL.groupes;
   g('i-galerie').hidden = !!parDiapo; g('i-groupes').hidden = !parDiapo;
-  if (ouverte('sstv')) clTic();
-  if (parDiapo) { clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return; }
+  g('gal-tlm').hidden = !(parDiapo && autres.length);
+  if (galOuverte()) clTic();
+  if (parDiapo) {
+    const ct = JSON.stringify(autres.map(i => i.cle + i.src + i.complete)) + utc();
+    if (ct !== galTlmVu && galOuverte()) { galTlmVu = ct; g('gal-tlm').innerHTML = autres.map(galTuile).join(''); }
+    clGalerie(filtre); if (g('visionneuse').open) voisOutils(); hsRend(); return;
+  }
   // The sorting's numbers too: each picture's slide badge.
-  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '') + (i.ia ? 'i' : '') + (i.couleur ? 'c' : i.couleur === false ? 'x' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '');
-  if (imgs !== imagesVus && ouverte('sstv')) {
+  const imgs = type + JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '') + (i.ia ? 'i' : '') + (i.couleur ? 'c' : i.couleur === false ? 'x' : ''))) + utc() + (CL && CL.groupes ? CL.groupes.map(x => x.id + x.diapo + x.origine).join() : '') +
+    JSON.stringify(autres.map(i => i.cle + i.src + i.complete + i.manquants));
+  if (imgs !== imagesVus && galOuverte()) {
     imagesVus = imgs;
-    g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
-      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
-      ' · ' + (i.t ? clJour(i.t) + '/' + new Date(i.t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(i.t) + (utc() ? ' UTC' : '') : '') + (i.complete ? '' : ' · partielle') +
-      (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
-      (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="' + (i.iaAuto ? 'Débruitage appris (IA), fait automatiquement' : 'Débruitage appris (IA) demandé pour cette image') + '">IA</b>' : '') + '</div></a>').join('') ||
-      '<div class="petit">aucune image</div>';
+    // All kinds: newest first; SSTV alone keeps its own order (the viewer's arrows follow it).
+    const l = imagesMontrees.map((i, n) => ({ t: i.t || 0, h: sstvTuile(i, n, !type) })).concat(autres.map(i => ({ t: i.t || 0, h: galTuile(i) })));
+    if (!type) l.sort((a, b) => b.t - a.t);
+    g('i-galerie').innerHTML = l.map(x => x.h).join('') ||
+      '<div class="petit">' + (type === 'ssdv' ? 'Aucune image SSDV. Les paquets SSDV sont cherchés dans chaque trame décodée (onglet Télémesure).' : type === 'geoscan' ? 'Aucune image Geoscan. Leurs morceaux de JPEG sont lus par le décodeur de paquets (onglet Télémesure).' : 'aucune image') + '</div>';
   }
   if (g('visionneuse').open) voisOutils();
   hsRend();
 }
 let satsVus = '', imagesMontrees = [], modesSstvVus = '';
+/** An SSTV picture in the gallery; [genre]: its kind's badge (all kinds shown). */
+function sstvTuile(i, n, genre) {
+  return '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
+    '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy">' + (genre ? '<span class="gal-type sstv">SSTV</span>' : '') + clBadge(clGroupeDe(i.nom)) + '<div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
+    ' · ' + (i.t ? galQuand(i.t) : '') + (i.complete ? '' : ' · partielle') +
+    (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') +
+    (i.couleur ? ' · <span title="Couleurs corrigées (une version à part)">🎨</span>' : '') + (i.ia ? ' · <b class="badge-ia" title="' + (i.iaAuto ? 'Débruitage appris (IA), fait automatiquement' : 'Débruitage appris (IA) demandé pour cette image') + '">IA</b>' : '') + '</div></a>';
+}
+function galQuand(t) { return clJour(t) + '/' + new Date(t)[utc() ? 'getUTCFullYear' : 'getFullYear']() + ' ' + hm(t) + (utc() ? ' UTC' : ''); }
+// ---- the common « Images » gallery: SSTV, SSDV and Geoscan pictures; shown in its tab and in SSTV › Images (the same block, moved)
+var GAL = null, galTlmVu = '', galDlgCle = '', galDlgVu = '', GAL_TYPE = '';
+try { GAL_TYPE = localStorage.getItem('satme-galerie-type') || ''; } catch (x) {}
+function galOuverte() { return ouverte('images') || ouverte('sstv'); }
+function galTypeVu() { return ['', 'sstv', 'ssdv', 'geoscan'].includes(GAL_TYPE) ? GAL_TYPE : ''; }
+/** The gallery where it is looked at: its own tab, else SSTV › Images. */
+function galPlace(n) {
+  const c = g('gal'), s = g(n === 'images' ? 'gal-slot-images' : 'gal-slot-sstv');
+  if (c && s && c.parentElement !== s) { s.appendChild(c); imagesVus = ''; clVu = ''; galTlmVu = ''; }
+}
+function galType(k) {
+  GAL_TYPE = k || '';
+  try { localStorage.setItem('satme-galerie-type', GAL_TYPE); } catch (x) {}
+  imagesVus = ''; clVu = ''; galTlmVu = '';
+  galPuces(); rendSon();
+}
+/** The Images tab, on one kind (« ssdv » from Télémesure). */
+function galVers(k) { galType(k); vue('images'); galTic(true); }
+function galPuces() {
+  const n = GAL && GAL.n || {}, ns = S && S.images ? S.images.length : 0, t = galTypeVu();
+  const c = { '': ns + (n.ssdv || 0) + (n.geoscan || 0), sstv: ns, ssdv: n.ssdv || 0, geoscan: n.geoscan || 0 };
+  document.querySelectorAll('#gal-puces button').forEach(b => {
+    const k = b.dataset.t, on = String(k === t);
+    if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
+    const e = b.querySelector('.gal-n'), v = String(c[k]);
+    if (e.textContent !== v) e.textContent = v;
+  });
+}
+/** An SSDV or Geoscan picture in the gallery: its kind, satellite, time, how complete; growing while its pass goes on. */
+function galTuile(i) {
+  const k = escA(JSON.stringify(i.cle)), ssdv = i.type === 'ssdv';
+  // A JPEG too damaged for the browser yet (a hole early in it): said, until more comes.
+  const img = i.src ? '<img src="' + escA(i.src) + '" loading="lazy" alt="" onerror="this.outerHTML = &quot;<div class=gal-vide>Pas encore lisible : il manque des morceaux au début</div>&quot;">'
+    : '<div class="gal-vide">Le début de l’image (FF D8) n’est pas encore arrivé</div>';
+  const pl = n => n > 1 ? 's' : '';
+  const etat = i.complete ? '<b class="tlm-b ok">complète</b>' : ssdv ? i.recus + '/' + (i.estime ? '≈' : '') + i.total + ' paquets' + (i.manquants ? ' · ' + i.manquants + ' manquant' + pl(i.manquants) : '')
+    : i.morceaux + ' morceau' + (i.morceaux > 1 ? 'x' : '') + (i.manquants > 0 ? ' · ' + (Math.round(i.manquants / 102.4) / 10) + ' ko manquants' : '');
+  const qui = [ssdv ? i.satellite : '', i.titre].filter(x => x).join(' · ');
+  return '<a href="' + escA(i.src || '#') + '" onclick="galOuvre(' + k + '); return false" title="' + escA(qui) + '">' + img +
+    '<span class="gal-type ' + i.type + '">' + (ssdv ? 'SSDV' : 'Geoscan') + '</span>' +
+    (!i.complete && ssdv ? '<span class="gal-avance" title="' + (i.pourcent || 0) + ' %"><i style="width:' + (i.pourcent || 0) + '%"></i></span>' : '') +
+    '<div class="petit">' + esc(qui) + ' · ' + (i.t ? galQuand(i.t) : '') + ' · ' + etat + (i.enCours ? ' · <span style="color:#7FD3FA">en cours</span>' : '') + (i.essai ? ' · essai' : '') + '</div></a>';
+}
+/** The SSDV and Geoscan pictures, every 3 s while the gallery or Télémesure is shown. */
+async function galTic(force) {
+  if (!force && (document.hidden || !(galOuverte() || ouverte('tlm')))) return;
+  let j = null;
+  try { const r = await fetch('api/telemesure/images'); if (r.ok) j = await r.json(); } catch (x) {}
+  if (!j) return;
+  GAL = j.ok ? j : { images: [], n: {} };
+  rendSon(); galPuces(); tsResume(); galDlgRend();
+}
+setInterval(galTic, 3000);
+/** One SSDV or Geoscan picture opened: the Télémesure card (packets by pass, exports, 🌐), kept live while open. */
+function galOuvre(cle) {
+  galDlgCle = cle; galDlgVu = '';
+  galDlgRend();
+  if (galDlgCle && !g('gal-dlg').open) g('gal-dlg').showModal();
+}
+function galDlgRend() {
+  const d = g('gal-dlg');
+  if (!galDlgCle) return;
+  const i = (GAL && GAL.images || []).find(x => x.cle === galDlgCle);
+  if (!i) { if (d.open && GAL) d.close(); galDlgCle = d.open ? galDlgCle : ''; return; }
+  const h = i.detail ? (i.type === 'ssdv' ? tsImageHtml(i.detail) : tsGeoscanHtml(i.detail)) :
+    '<div class="ts-img"><a href="' + escA(i.src) + '" target="_blank"><img alt="" src="' + escA(i.src) + '"></a><div class="tlm-h"><span class="tlm-b ssdv">' + (i.type === 'ssdv' ? 'SSDV' : 'Geoscan') + '</span>' +
+    '<span class="tlm-b ok">complète</span><b>' + esc(i.titre) + '</b><span>' + galQuand(i.t) + '</span></div>' +
+    '<div class="ts-act"><a class="bouton-lien" href="' + escA(i.src.replace('ssdv.jpg', 'ssdv.png')) + '&dl=1" download>⤓ PNG</a><a class="bouton-lien" href="' + escA(i.src) + '&dl=1" download>⤓ JPEG</a></div></div>';
+  txt('gal-dlg-t', (i.type === 'ssdv' ? 'SSDV' : 'Geoscan') + ' · ' + [i.type === 'ssdv' ? i.satellite : '', i.titre].filter(x => x).join(' · '));
+  if (h !== galDlgVu) { galDlgVu = h; g('gal-dlg-c').innerHTML = h; }
+}
+g('gal-dlg').addEventListener('close', () => { galDlgCle = ''; });
+g('gal-dlg').addEventListener('click', e => { if (e.target === g('gal-dlg')) g('gal-dlg').close(); });
+/** Télémesure › Images SSDV: how many, the latest one, and the way to the gallery. */
+function tsResume() {
+  if (!g('ts-resume') || !GAL) return;
+  const n = GAL.n || {}, d0 = (GAL.images || []).find(i => i.src && !i.essai) || (GAL.images || []).find(i => i.src);
+  const pl = k => k > 1 ? 's' : '';
+  txt('ts-n', (n.ssdv || 0) + (n.geoscan || 0) ? '— ' + ((n.ssdv || 0) + (n.geoscan || 0)) : '');
+  tlmPose('ts-resume', (d0 ? '<img alt="" src="' + escA(d0.src) + '" title="La dernière : ' + escA(d0.titre) + ' — l’ouvrir" onclick="galOuvre(' + escA(JSON.stringify(d0.cle)) + ')">' : '') +
+    '<span><b>' + (n.ssdv || 0) + '</b> image' + pl(n.ssdv) + ' SSDV' + (n.geoscan ? ' · <b>' + n.geoscan + '</b> Geoscan' : '') + (n.enCours ? ' · ' + n.enCours + ' en cours' : '') + '</span>' +
+    '<button onclick="galVers(\'ssdv\')" title="L’onglet Images, sur les images SSDV : la galerie commune (SSTV, SSDV, Geoscan)">Voir dans Images ›</button>' +
+    (n.geoscan ? '<button class="discret" onclick="galVers(\'geoscan\')">Geoscan ›</button>' : ''));
+}
 // ---- the gallery sorted by slide, the series' timetable (api/sstv/classement)
 let CL = null, clVu = '', clMs = 0, clCle = '', clEnCours = false;
 const clOuverts = new Set();
@@ -10659,7 +10792,7 @@ function clGalerie(filtre) {
   imagesMontrees = gs.flatMap(gr => gr.images.map(i => parNom.get(i.nom)).filter(x => x));
   txt('cl-calcul', CL.restent ? 'tri : ' + CL.restent + ' image' + (CL.restent > 1 ? 's' : '') + ' à mesurer…' : '');
   const cle = JSON.stringify([filtre, gs.map(gr => [gr.id, gr.diapo, gr.origine, gr.images.map(i => i.nom + i.note), gr.traite || 0]), [...clOuverts], utc()]);
-  if (cle === clVu || !ouverte('sstv')) return;
+  if (cle === clVu || !galOuverte()) return;
   clVu = cle;
   let n = 0; const index = new Map(imagesMontrees.map((i, k) => [i.nom, k]));
   g('i-groupes').innerHTML = gs.map(gr => {
@@ -13141,9 +13274,7 @@ let TLM = null, tlmBrut = false;
 const tlmVu = {};
 async function tlmTic(force) {
   const q = !g('v-qo100').hidden && !g('tq-p-balise').hidden, t = !g('v-tlm').hidden;
-  // The SSTV pictures' panel shows the SSDV ones under way too.
-  const sx = g('sx-p-img') && !g('sx-p-img').hidden && g('sx-p-img').offsetParent !== null;
-  if (!force && !q && !t && !sx) return;
+  if (!force && !q && !t) return;
   let j = null;
   try { j = await (await fetch('api/telemesure')).json(); } catch (x) {}
   if (j) TLM = j;
@@ -13155,6 +13286,7 @@ async function tlmPost(u) {
   try { j = await (await fetch('api/telemesure/' + u, { method: 'POST' })).json(); } catch (x) {}
   if (j && j.ok === false) toast(j.erreur || 'refusé');
   await tlmTic(true);
+  galTic(true);
   if (typeof muTic === 'function') muTic();
   return j;
 }
@@ -13225,12 +13357,6 @@ function tlmRend() {
   tlmPose('tl-trames', ll.slice(0, 12).map((t, i) => tlmTrameHtml(t, i === 0)).join('') || '<div class="petit">Aucune trame. Accorde le récepteur SDR en BLU sur la descente de télémesure du satellite (AO-73 : 145,935 MHz) et coche la case.</div>');
   if (j.paquets) tpRend(j.paquets);
   if (j.genesis) blRend(j.genesis, j.paquets);
-  if (j.paquets) {
-    // The SSTV area: the SSDV pictures of the last three days, under way or finished.
-    const im = (j.paquets.images || []).filter(i => !i.essai && Date.now() - i.t < 3 * 86400000).slice(0, 6);
-    g('sx-ssdv-c').hidden = !im.length;
-    tlmPose('sx-ssdv', im.map(tsImageHtml).join(''));
-  }
 }
 // ---- 1200–9600 bit/s packets (FSK, GMSK, G3RUH), SSDV pictures, SiDS sharing (receive only; sharing off unless ticked)
 const tpMhz = f => f ? (f / 1e6).toFixed(4).replace('.', ',') + ' MHz' : '—';
@@ -13329,19 +13455,11 @@ function tpRend(p) {
     (s.attente ? ' · ' + s.attente + ' en attente' : '') + (s.erreur ? ' · dernier échec : ' + s.erreur : '') + (s.essai ? ' · serveur d’essai' : ''));
   tlmPose('tp-trames', (p.trames || []).map(tpTrameHtml).join('') ||
     '<div class="petit">Aucune trame. Suis un satellite qui émet en FSK/GMSK (9600 bit/s le plus souvent), démarre le récepteur SDR sur sa descente et coche la case. Sans antenne : le générateur d’essai du SDR a un signal « Paquets 9600 ».</div>');
-  // The gallery: pictures being put together first (over one pass or several), then those saved.
-  const vus = {}, l = [];
-  (p.images || []).forEach(i => { vus[i.fichier] = 1; l.push(tsImageHtml(i)); });
-  // The Geoscan satellites' pictures: JPEG chunks (not SSDV), shown as far as they came.
-  (p.geoscan || []).forEach(i => l.push(tsGeoscanHtml(i)));
-  (p.sauvees || []).forEach(s2 => { if (!vus[s2.f]) l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?f=' + encodeURIComponent(s2.f) + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?f=' +
-    encodeURIComponent(s2.f) + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span><span>' + esc(s2.f) + '</span></div></div>'); });
-  txt('ts-n', l.length ? '— ' + l.length : '');
   // The latest picture under the options, as it fills.
   const d0 = (p.images || [])[0];
   tlmPose('tp-derniere', d0 ? '<div class="petit">Dernière image SSDV : ' + esc(d0.indicatif) + ' n° ' + d0.numero + ' — ' + tsAvance(d0) + '</div><img alt="" src="api/telemesure/ssdv.jpg?cle=' +
-    encodeURIComponent(d0.cle) + '&v=' + d0.recus + '" onclick="document.querySelector(&quot;#v-tlm .st-nav button[data-p=tl-p-ssdv]&quot;).click()" title="Toutes les images">' : '');
-  tlmPose('ts-galerie', l.join('') || '<div class="petit">Aucune image. Les paquets SSDV sont cherchés dans chaque trame décodée (onglet Paquets).</div>');
+    encodeURIComponent(d0.cle) + '&v=' + d0.recus + '" onclick="galVers(&quot;ssdv&quot;)" title="Toutes les images (onglet Images)">' : '');
+  tsResume();
 }
 
 // One colour a pass, in the strip under an SSDV picture and its list of passes.

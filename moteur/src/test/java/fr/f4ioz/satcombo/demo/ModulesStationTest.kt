@@ -105,8 +105,12 @@ class ModulesStationTest {
         assertEquals(listOf("station", "datv", "carnet", "avions", "reglages"), ModulesStation.onglets(t, setOf("qo100", "sstv")))
         // The core is never anyone's.
         val coeur = PagePc.TOUS.filter { ModulesStation.proprietaire(it) == null }
-        assertEquals(listOf("station", "carnet", "agenda", "carres", "frise", "sked", "carte", "son", "journal", "reglages"), coeur)
-        assertEquals(coeur, ModulesStation.onglets(PagePc.TOUS, tous))
+        assertEquals(listOf("station", "carnet", "agenda", "carres", "frise", "sked", "carte", "son", "images", "journal", "reglages"), coeur)
+        // « Images » leaves with both SSTV and Télémesure, stays with either.
+        assertEquals(coeur - "images", ModulesStation.onglets(PagePc.TOUS, tous))
+        assertTrue("images" in ModulesStation.onglets(PagePc.TOUS, setOf("sstv")))
+        assertTrue("images" in ModulesStation.onglets(PagePc.TOUS, setOf("tlm")))
+        assertFalse("images" in ModulesStation.onglets(PagePc.TOUS, setOf("sstv", "tlm")))
         // Every module's tab exists.
         ModulesStation.MODULES.flatMap { it.onglets }.forEach { assertTrue(it, it in PagePc.TOUS) }
     }

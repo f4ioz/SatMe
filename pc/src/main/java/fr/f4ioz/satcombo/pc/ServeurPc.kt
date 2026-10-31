@@ -886,6 +886,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val o = when {
                 k == null -> JSONObject().put("absent", true)
                 r.methode == "POST" -> runCatching { k.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                // The common « Images » gallery: the SSDV and Geoscan pictures, in one list (read only).
+                chemin == "/api/telemesure/images" -> k.galerie()
                 else -> k.json()
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return

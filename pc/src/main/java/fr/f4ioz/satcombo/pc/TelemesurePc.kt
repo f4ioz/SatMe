@@ -313,9 +313,15 @@ class TelemesurePc(
         // A Geoscan picture (JPEG chunks): as it stands, cut after the last chunk received.
         q["geo"]?.let { c -> return (paquets.geoscan.image(c) ?: essaiPaquets.geoscanEssai.image(c))?.jpeg() }
         q["cle"]?.let { c -> return paquets.jpeg(c) ?: essaiPaquets.jpeg(c) }
-        val f = q["f"]?.takeIf { Regex("[A-Za-z0-9_.-]+\\.jpg").matches(it) } ?: return null
-        return File(dossier, "telemesure/ssdv/$f").takeIf { it.isFile }?.readBytes()
+        val f = q["f"]?.takeIf { fr.f4ioz.satcombo.telemesure.GalerieTelemesure.FICHIER.matches(it) } ?: return null
+        // A finished Geoscan picture is kept with the Geoscan ones (its name says it).
+        val rep = if (f.startsWith("geoscan-")) "telemesure/geoscan" else "telemesure/ssdv"
+        return File(dossier, "$rep/$f").takeIf { it.isFile }?.readBytes()
     }
+
+    /** The SSDV and Geoscan pictures (the station's and the test's, then those saved), as the common « Images » gallery lists them. */
+    fun galerie(): JSONObject = fr.f4ioz.satcombo.telemesure.GalerieTelemesure.json(
+        listOf(paquets.assemblage, essaiPaquets.assemblage), listOf(paquets.geoscan to false, essaiPaquets.geoscanEssai to true), dossier)
 
     /** A picture (live, test, or saved) as PNG, for « Exporter ». */
     fun pngSsdv(q: Map<String, String>): ByteArray? {
