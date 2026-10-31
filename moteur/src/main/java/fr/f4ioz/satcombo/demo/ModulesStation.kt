@@ -178,8 +178,13 @@ object ModulesStation {
     /** The module owning tab [onglet], if any (the core's tabs have none). */
     fun proprietaire(onglet: String): Module? = MODULES.firstOrNull { onglet in it.onglets }
 
-    /** [tous] without the tabs of the modules off. */
+    /** [tous] without the tabs of the modules off; « Images » (SSTV, SSDV and Geoscan pictures) without both SSTV and Télémesure. */
     fun onglets(tous: List<String>, coupes: Set<String>): List<String> = tous.filter { o -> proprietaire(o)?.let { it.id in coupes } != true }
+        .filter { o -> o != IMAGES || !coupes.containsAll(MODULES_IMAGES) }
+
+    /** The common gallery's tab, and the modules whose pictures it shows. */
+    const val IMAGES = "images"
+    val MODULES_IMAGES = setOf("sstv", "tlm")
 
     /** The page's elements to hide: those of the modules off. */
     fun masques(coupes: Set<String>): List<String> = MODULES.filter { it.id in coupes }.flatMap { it.masques }

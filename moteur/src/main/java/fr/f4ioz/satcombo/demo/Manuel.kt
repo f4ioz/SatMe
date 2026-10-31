@@ -55,6 +55,7 @@ object Manuel {
         "tlm" to "télémesure",
         "son" to "enregistrer-le-son",
         "sstv" to "sstv",
+        "images" to "la-galerie-images",
         "planche" to "sstv",
         "ft8" to "ft8--ft4",
         "journal" to "journal-des-passages",
