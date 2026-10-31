@@ -53,6 +53,7 @@ position; it is also the tradition of amateur radio software.
 | satellite.js 5.0.0 (`satellite.min.js`, bundled unmodified, `LICENSE-satellite.txt` beside it) | MIT | SatMe-PC only: the orbits worked out in the page for the globes, the map and the animated pass |
 | `com.google.android.gms:play-services-code-scanner` | Google proprietary | Scanning SatMe-PC's QR code (no camera permission) |
 | LongMynd (BATC), run as a separate program, not bundled | GPL-3.0 | Driving the MiniTiouner (DATV), SatMe-PC and SatMe-Node |
+| Signal Hound BB60 API (`bb_api`, with its FTDI library), **not bundled**: installed by the user from Signal Hound's SDK, loaded at run time if present | Signal Hound's own licence (proprietary) | SatMe-PC only: the BB60C / BB60D receiver |
 | FFmpeg (`ffmpeg`, `ffplay`), separate programs, in the Windows package only | GPL-3.0 | Videos, GIFs, DATV pictures and sound; BtbN/FFmpeg-Builds build, sources named in `outils/SOURCES.txt` |
 | rtl-sdr (`rtl_tcp`, `rtl_test`), separate programs, in the Windows package only | GPL-2.0 | RTL-SDR dongle; github.com/rtlsdrblog/rtl-sdr-blog |
 | Java (Eclipse Temurin), in the Windows package only | GPL-2.0 with Classpath exception | Runs SatMe-PC |
@@ -61,6 +62,11 @@ position; it is also the tradition of amateur radio software.
 | JUnit, Robolectric (tests only) | EPL-1.0, Apache-2.0 | Test harness |
 | `ft8_lib` by Kārlis Goba (error-correcting code tables, copied) | MIT | FT8 and FT4 decoding |
 | Twemoji Country Flags font (`drapeaux.woff2`, from country-flag-emoji-polyfill 0.1.10; flag art by Twemoji, Twitter, Inc. and contributors; `drapeaux-LICENCE.txt` beside it) and its flags drawn as images (`pc/src/main/resources/…/pc/drapeaux/drapeaux.png`, made by `tools/drapeaux/genere-atlas.mjs`, `LICENCE.txt` beside it) | CC BY 4.0 | The countries' flags in the pages; the same flags in SatMe-PC's videos and pictures (journal: FT4/FT8 panel, globe capitals) |
+
+**On Signal Hound's library.** SatMe ships no part of Signal Hound's SDK —
+no library, no header, no code from it. SatMe-PC only looks for the library
+the user installed and calls its documented functions; without it, the BB60
+is simply not available.
 
 **On LAME and the LGPL.** The native library is bundled as a separate `.so`,
 not merged into the rest of the app. That is what lets a user replace it with
