@@ -1166,6 +1166,8 @@ val FR: Map<String, String> = mapOf(
     "rotor_manual_go" to "Envoyer la consigne",
     "rotor_manual_sent" to "Consigne partie : {0}° / {1}°",
     "rotor_manual_refused" to "Cet angle est hors de la course des antennes.",
+    "rotor_pause_manuelle" to "Pointé à la main, « Suivre » gardé : le suivi reprend avant le prochain passage.",
+    "rotor_pause_fin" to "Le suivi reprend la main pour le passage.",
     "rotor_jog" to "Pas à pas, depuis la position lue",
     "rotor_frames" to "Trames",
     "rotor_read_now" to "Demander la position",

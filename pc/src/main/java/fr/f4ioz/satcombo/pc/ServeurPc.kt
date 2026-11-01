@@ -274,6 +274,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** Who drives the transmissions now, for every client ([fr.f4ioz.satcombo.datv.ControleEmission]). */
     val controle = fr.f4ioz.satcombo.datv.ControleEmission().also { it.chienLocal = station.txChienLocal }
 
+    /** Another program sharing the rig and the mast through SatMe-PC ([partage]). */
+    private val ROUTES_PARTAGE = setOf("/api/cat/accord", "/api/rotor/pointer", "/api/rotor/pointer/stop")
+
     private val ROUTES_TX = setOf("/api/datv/emission/demarre", "/api/datv/emission/vie", "/api/datv/emission/arrete",
         "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete",
         "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete",
@@ -1259,6 +1262,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (r.methode == "POST" && (chemin == "/api/modules" || chemin == "/api/nonsat") && !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"])) {
             envoie(sortie, "403 Forbidden", "application/json; charset=utf-8", JSONObject().put("ok", false).put("erreur", "origine refusée").toString().toByteArray()); return
         }
+        // Another program on this PC sharing the rig and the mast through SatMe-PC: its own routes, refused near a pass.
+        if (r.methode == "POST" && chemin in ROUTES_PARTAGE) {
+            val (statut, o) = runCatching { partage(chemin, q, r) }.getOrElse { "200 OK" to JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            envoie(sortie, statut, "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
@@ -1276,7 +1284,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 fr.f4ioz.satcombo.demo.Manuel.chercheJson(q["q"].orEmpty().take(200)).toString().toByteArray())
             // Every tab here but the functions not about satellites left unticked; the phone offers some of them.
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", capacites().toString().toByteArray())
-            "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
+            "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", etat().toString().toByteArray())
             // This SatMe-PC's start: a page left open sees a new one (updated, restarted) and reloads, never while transmitting.
             "/api/lancement" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("id", lancement).put("emet", emetQuelqueChose()).toString().toByteArray())
@@ -1741,6 +1749,98 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     private fun origine(proposee: Boolean) =
         if (proposee) fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE else fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN
+
+    /**
+     * The station's state (`GET /api/etat`), with what another program on
+     * this PC needs to share the rig and the mast through SatMe-PC: the
+     * pass window and what holds them now ([OccupationPc]), and the sound
+     * card's stream (`/api/son/flux?source=carte`) running or not.
+     */
+    private fun etat(): JSONObject {
+        val o = JsonPc.etat(station, carnet)
+        val oc = occupation()
+        o.put("passageEnCours", oc.passageEnCours).put("occupation", OccupationPc.json(oc))
+        son?.let { s -> val c = s.son.etat.value
+            o.put("sonCarte", JSONObject().put("actif", c.actif).put("rate", c.rate).put("carte", s.carte)
+                .put("flux", if (diffusion != null) "/api/son/flux?source=carte" else "")) }
+        return o
+    }
+
+    /** What holds the rig and the mast now (see [OccupationPc]). */
+    fun occupation(): OccupationPc.Resultat {
+        val e = station.etat.value
+        val r = station.stationRotor.etat.value
+        val t = e.maintenant.takeIf { it > 0L } ?: System.currentTimeMillis()
+        fun pass(p: fr.f4ioz.satcombo.data.SatPass) = OccupationPc.Passage(p.satName, p.catalogNumber, p.aosEpochMs, p.losEpochMs)
+        val veille = if (station.veille) runCatching { station.planVeille(t).firstOrNull { it.garde }?.passage }.getOrNull() else null
+        val ap = autopilote?.pilote?.enCours
+        return OccupationPc.calcule(OccupationPc.Entree(t, e.passage?.let(::pass), r.rotorPreAos, veille?.let(::pass),
+            elevation = e.position?.elevationDeg, nomSuivi = e.suivi?.name.orEmpty(),
+            rotorSuit = r.rotorEnabled, rotorAttente = r.rotorPrePositioning,
+            pilotageDoppler = runCatching { station.pilotageDoppler() }.getOrDefault(false),
+            qo100AuPoste = station.qo100.etat.value.auPoste, emet = emetQuelqueChose(),
+            agenda = e.agenda.firstOrNull { it.enabled && it.activeAt(t, 0L) }?.title,
+            autopilote = ap?.let { it.campagne.satNom.ifBlank { it.passage.satName } }))
+    }
+
+    /**
+     * Another program on this PC (or a session) sharing SatMe-PC's rig and
+     * mast: a receive tuning of the IC-9700 (`/api/cat/accord`), a direction
+     * for the mast that leaves « Suivre » as it was (`/api/rotor/pointer`),
+     * and its STOP (`/api/rotor/pointer/stop`). Behind the same guard as
+     * every route (this PC, or a session), and from this page's own origin
+     * only; the mast moves only on an explicit gesture (`X-SatMe-Geste: clic`,
+     * a header a page of another site cannot send without asking first),
+     * STOP always. Refused while SatMe-PC needs the part touched (a pass
+     * near or under way, the autopilot, an agenda entry…); STOP never is.
+     * Nothing here transmits.
+     */
+    private fun partage(chemin: String, q: Map<String, String>, r: RequeteHttp.Requete): Pair<String, JSONObject> {
+        fun refus(raison: String, quoi: String, statut: String = "200 OK") =
+            statut to JSONObject().put("ok", false).put("erreur", raison).put("refus", quoi)
+        if (!SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"])) return refus("origine refusée", "origine", "403 Forbidden")
+        val rotor = station.stationRotor
+        val oc = occupation()
+        val etatOccupation = OccupationPc.json(oc)
+        return when (chemin) {
+            "/api/rotor/pointer/stop" -> {
+                // STOP: always. Outside a pass « Suivre » stays as it was; near or during one, a stop is a stop (« Suivre » off).
+                astre.arrete()
+                val coupe = oc.rotor != null && rotor.etat.value.rotorEnabled
+                if (oc.rotor != null) rotor.rotorStopNow() else rotor.rotorStopGardantSuivi()
+                "200 OK" to JSONObject().put("ok", true).put("suiviCoupe", coupe).put("occupation", etatOccupation)
+            }
+            "/api/rotor/pointer" -> {
+                if (r.entetes["x-satme-geste"]?.trim()?.lowercase() != "clic")
+                    return refus("geste requis : en-tête X-SatMe-Geste: clic (le rotor ne bouge que sur un geste)", "geste", "403 Forbidden")
+                val u = rotor.etat.value
+                val az = q["az"]?.trim()?.toIntOrNull() ?: return refus("azimut (az) manquant ou illisible", "parametre")
+                val el = q["el"]?.trim()?.let { it.toIntOrNull() ?: return refus("élévation (el) illisible", "parametre") } ?: 0
+                when {
+                    !u.rotorConnected -> refus("le rotor n'est pas connecté dans SatMe-PC", "rotor")
+                    u.rotorEtalonnage -> refus("étalonnage du rotor en cours dans SatMe-PC", "rotor")
+                    oc.rotor != null -> refus(oc.rotor, "occupe").also { it.second.put("occupation", etatOccupation) }
+                    az !in 0..u.rotorMaxAz -> refus("azimut hors de la course du rotor (0 à ${u.rotorMaxAz}°)", "parametre")
+                    el !in 0..(if (u.rotorFlip) 180 else u.rotorMaxEl) -> refus("élévation hors de la course du rotor", "parametre")
+                    else -> {
+                        astre.arrete()
+                        rotor.setRotorManualAz(az); rotor.setRotorManualEl(el)
+                        rotor.rotorGotoGardantSuivi()
+                        "200 OK" to JSONObject().put("ok", true).put("az", az).put("el", el)
+                            .put("suit", u.rotorEnabled).put("pauseManuelle", u.rotorEnabled)
+                    }
+                }
+            }
+            "/api/cat/accord" -> {
+                val d = AccordPostePc.lit(q).getOrElse { return refus(it.message ?: "demande illisible", "parametre") }
+                if (oc.poste != null) return refus(oc.poste, "occupe").also { it.second.put("occupation", etatOccupation) }
+                kotlinx.coroutines.runBlocking { station.accordePoste(d) }.fold(
+                    { "200 OK" to it },
+                    { refus(it.message ?: "erreur", "poste") })
+            }
+            else -> refus("inconnu : $chemin", "parametre", "404 Not Found")
+        }
+    }
 
     /** What a POST asks; the answer says whether it was done. */
     /**

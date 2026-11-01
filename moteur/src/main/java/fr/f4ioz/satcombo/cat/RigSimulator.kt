@@ -31,7 +31,8 @@ class Ic9700Sim(
     val modele: ModeleIcom = ModeleIcom.IC9700
 ) : SerialLink {
 
-    var satMode: Boolean = false; private set
+    /** Satellite mode; a test may set it (left on by the last pass). */
+    var satMode: Boolean = false
     var split: Boolean = false; private set
     /** Downlink: MAIN band. */
     var mainHz: Long = 435_000_000L; private set

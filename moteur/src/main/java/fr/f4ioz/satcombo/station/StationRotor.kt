@@ -259,6 +259,8 @@ class StationRotor(
      * operator's inclinometer.
      */
     fun setRotorEnabled(v: Boolean) {
+        // Ticked or unticked by hand: a manual pause ([rotorGotoGardantSuivi]) is over either way.
+        if (_etat.value.rotorPauseManuelle) change { copy(rotorPauseManuelle = false) }
         if (v && _etat.value.rotorEtalonnage) {
             suiviAvantEtalonnage = true
             change { copy(rotorStatus = t("rotor_etal_suivi_attend")) }
@@ -527,33 +529,81 @@ class StationRotor(
                 setRotorEnabled(false)
                 val u = _etat.value
                 val limits = rotorLimits(u)
-                val aim = RotorMath.manual(u.rotorManualAz.toDouble(), u.rotorManualEl.toDouble(), limits)
-                if (aim == null) {
-                    change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_manual_refused")) }
-                    return@rotorGuard
-                }
-                if (!atteignable(aim, limits, u)) {
-                    change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_corr_hors_portee")) }
-                    return@rotorGuard
-                }
-                launch {
-                    val cmdAz = RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
-                    val parti = rotorDriver?.moveTo(cmdAz, aim.elDeg) ?: false
-                    rotorAt = RotorPos(aim.azDeg, aim.elDeg)
-                    rotorDerniereCmd = if (parti) rotorAt else null
-                    rotorCmd = rotorAt
-                    rotorWasFlipped = false
-                    change { copy(
-                        rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg,
-                        rotorOutOfRange = false,
-                        rotorLastSent = rotorSerial?.lastSent ?: "",
-                        rotorStatus = if (parti)
-                            tf("rotor_manual_sent",
-                                String.format(java.util.Locale.US, "%.0f", cmdAz),
-                                String.format(java.util.Locale.US, "%.0f", aim.elDeg))
-                        else t("rotor_send_failed")) }
+                val aim = viseeManuelle(u, limits) ?: return@rotorGuard
+                launch { envoieManuel(u, limits, aim, pause = false) }
+            }
+        }
+    }
+
+    /** The hand-entered direction checked against the mast's travel, null (and said so) when refused. */
+    private fun viseeManuelle(u: EtatRotor, limits: RotorMath.Limits): RotorMath.Aim? {
+        val aim = RotorMath.manual(u.rotorManualAz.toDouble(), u.rotorManualEl.toDouble(), limits)
+        if (aim == null) {
+            change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_manual_refused")) }
+            return null
+        }
+        if (!atteignable(aim, limits, u)) {
+            change { copy(rotorOutOfRange = true, rotorStatus = t("rotor_corr_hors_portee")) }
+            return null
+        }
+        return aim
+    }
+
+    /** Sends [aim] (true azimuth) as a hand command; [pause]: tracking stays armed, the mast held there. */
+    private suspend fun envoieManuel(u: EtatRotor, limits: RotorMath.Limits, aim: RotorMath.Aim, pause: Boolean) {
+        val cmdAz = RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
+        val parti = rotorDriver?.moveTo(cmdAz, aim.elDeg) ?: false
+        rotorAt = RotorPos(aim.azDeg, aim.elDeg)
+        rotorDerniereCmd = if (parti) rotorAt else null
+        rotorCmd = rotorAt
+        rotorWasFlipped = false
+        change { copy(
+            rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg,
+            rotorOutOfRange = false,
+            rotorLastSent = rotorSerial?.lastSent ?: "",
+            rotorStatus = if (!parti) t("rotor_send_failed")
+                else if (pause) t("rotor_pause_manuelle")
+                else tf("rotor_manual_sent",
+                    String.format(java.util.Locale.US, "%.0f", cmdAz),
+                    String.format(java.util.Locale.US, "%.0f", aim.elDeg))) }
+    }
+
+    /**
+     * The hand-entered command **without** unticking « Suivre », for another
+     * program on this PC pointing the mast between passes: tracking stays
+     * armed, the loop leaves the mast where it was sent ([EtatRotor.rotorPauseManuelle])
+     * until the next pass's pre-positioning — or the satellite above the
+     * minimum elevation — takes it back, as it would have from the park.
+     * With « Suivre » unticked it is the plain [rotorGotoManual]. The line is
+     * held throughout: a loop round half done cannot send the park after it.
+     * Whoever calls it checks first that no pass is near (SatMe-PC's route does).
+     */
+    fun rotorGotoGardantSuivi() {
+        if (!_etat.value.rotorEnabled) { rotorGotoManual(); return }
+        portee.launch {
+            liaison.withLock {
+                rotorGuard("rotor_goto") {
+                    val u = _etat.value
+                    val limits = rotorLimits(u)
+                    val aim = viseeManuelle(u, limits) ?: return@rotorGuard
+                    change { copy(rotorPauseManuelle = true, rotorPrePositioning = false) }
+                    envoieManuel(u, limits, aim, pause = true)
                 }
             }
+        }
+    }
+
+    /**
+     * Stop, « Suivre » left as it was: with tracking armed the mast stays
+     * where it stopped (a manual pause) until the next pass takes it back.
+     * For another program's STOP outside passes; during one, SatMe-PC's
+     * route stops with [rotorStopNow] (a stop is a stop).
+     */
+    fun rotorStopGardantSuivi() {
+        if (_etat.value.rotorEnabled) change { copy(rotorPauseManuelle = true, rotorPrePositioning = false) }
+        portee.launch {
+            // The line held: a loop round half done sends nothing after the stop.
+            liaison.withLock { rotorGuard("rotor_stop") { rotorDriver?.stop(); rotorDerniereCmd = null } }
         }
     }
 
@@ -988,6 +1038,14 @@ class StationRotor(
             rotorLastSent = ser?.lastSent ?: rotorLastSent,
             rotorLastReply = ser?.lastReply ?: rotorLastReply) }
         if (!u.rotorEnabled) return
+        // Pointed by hand with tracking armed: left there until the pass's pre-positioning, or the satellite up.
+        if (u.rotorPauseManuelle) {
+            val s = monde.satellite()
+            val reprend = s != null && (s.elevationDeg >= u.rotorMinEl.toDouble() ||
+                RotorMath.prePositionDue(horloge(), monde.aosDuPassage().takeIf { it > 0L }, u.rotorPreAos))
+            if (!reprend) return
+            change { copy(rotorPauseManuelle = false, rotorStatus = t("rotor_pause_fin")) }
+        }
         val pos = monde.satellite()
         if (pos == null) {
             change { copy(rotorTargetAz = null, rotorTargetEl = null, rotorStatus = t("rotor_no_target")) }
