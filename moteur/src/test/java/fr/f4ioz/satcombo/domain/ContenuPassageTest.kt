@@ -45,6 +45,13 @@ class ContenuPassageTest {
     }
 
     @Test
+    fun une_voix_entendue_est_de_la_phonie_pas_du_numerique() {
+        val zones = listOf(ZonesNumeriques.PHONIE, ZonesNumeriques.FT4)
+        assertEquals(mapOf(C.FT4 to 153, C.PHONIE to 1), C.resume(C.Elements(zones = zones, messagesFt4 = 153)))
+        assertEquals(mapOf(C.NUM to 1, C.PHONIE to 2), C.resume(C.Elements(zones = zones, modesQso = listOf("SSB"))))
+    }
+
+    @Test
     fun le_mode_d_un_contact() {
         listOf("FM", "USB", "LSB", "SSB", "AM", "C4FM", "DIGITALVOICE").forEach { assertEquals(it, C.PHONIE, C.genreQso(it)) }
         assertEquals(C.CW, C.genreQso("cw"))

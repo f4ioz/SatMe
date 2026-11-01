@@ -31,8 +31,8 @@ import java.util.concurrent.ConcurrentHashMap
  *  - APRS: the frames received (`aprs/<day>.txt`, the ones sent left out);
  *  - telemetry and SSDV / Geoscan pictures: `telemesure/paquets/<passage>.jsonl` and
  *    `telemesure/<profile>-<day>.jsonl`, of the pass's satellite;
- *  - voice: the log's contacts in a voice mode and the overs written down
- *    (`phonie/<day>.jsonl`); CW: the log's CW contacts;
+ *  - voice: the log's contacts in a voice mode, the overs written down
+ *    (`phonie/<day>.jsonl`) and the voices the recordings' zones found (`.numerique` v2); CW: the log's CW contacts;
  *  - DATV: the transport streams recorded during the pass (`SatMe_DATV_….ts`).
  *
  * Each file is read once and kept until it changes (its date and length); each

@@ -2637,7 +2637,7 @@ val FR: Map<String, String> = mapOf(
     "pj_cu_u_messages" to "{0} message(s)",
     "pj_cu_u_zones" to "{0} zone(s) non décodée(s)",
     "pj_cu_u_trames" to "{0} trame(s)",
-    "pj_cu_u_phonie" to "{0} (contacts en phonie au carnet, paroles transcrites)",
+    "pj_cu_u_phonie" to "{0} (contacts en phonie au carnet, paroles transcrites, voix entendues dans le son)",
     "pj_cu_u_cw" to "{0} contact(s) en CW",
     "pj_cu_u_datv" to "{0} enregistrement(s) ou contact(s)",
     "pj_el_aide_tel" to "Chacun à sa place d'origine ; la page du journal servie au PC les place à la souris et choisit image par image.",

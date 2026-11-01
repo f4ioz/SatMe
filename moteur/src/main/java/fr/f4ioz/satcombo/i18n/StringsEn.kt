@@ -2613,7 +2613,7 @@ val EN: Map<String, String> = mapOf(
     "pj_cu_u_messages" to "{0} message(s)",
     "pj_cu_u_zones" to "{0} zone(s) not decoded",
     "pj_cu_u_trames" to "{0} frame(s)",
-    "pj_cu_u_phonie" to "{0} (voice contacts in the log, overs written down)",
+    "pj_cu_u_phonie" to "{0} (voice contacts in the log, overs written down, voices heard in the sound)",
     "pj_cu_u_cw" to "{0} CW contact(s)",
     "pj_cu_u_datv" to "{0} recording(s) or contact(s)",
     "pj_el_aide_tel" to "Each at its own place; the journal page served to the PC places them with the mouse and chooses picture by picture.",

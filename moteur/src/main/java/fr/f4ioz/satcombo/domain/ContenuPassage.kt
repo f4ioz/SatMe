@@ -12,7 +12,7 @@ package fr.f4ioz.satcombo.domain
  * What a journal pass holds, counted by kind — the list's coloured badges and
  * its filter. Each count comes from what the station already wrote beside the
  * pass (pictures' sidecars, the pass's FT8/FT4 messages, the recordings'
- * digital zones, the APRS and telemetry frames, the voices written down, the
+ * digital zones and voices, the APRS and telemetry frames, the voices written down, the
  * log's contacts, the DATV recordings): nothing is decoded nor measured here.
  *
  * A kind is there only when its count is above zero.
@@ -28,7 +28,7 @@ object ContenuPassage {
     const val APRS = "APRS"
     /** Telemetry frames (packet decoder, BPSK/FSK profiles). */
     const val TLM = "TLM"
-    /** Voice: a contact logged in a voice mode, or an over written down by the voice engine. */
+    /** Voice: a contact logged in a voice mode, an over written down by the voice engine, a voice heard in the sound. */
     const val PHONIE = "PHONIE"
     const val CW = "CW"
     const val DATV = "DATV"
@@ -62,7 +62,7 @@ object ContenuPassage {
         val imagesSsdv: Int = 0,
         val messagesFt8: Int = 0,
         val messagesFt4: Int = 0,
-        /** The recordings' digital zones, by their mode ([ZonesNumeriques.FT4], [ZonesNumeriques.FT8], [ZonesNumeriques.NUM]). */
+        /** The recordings' zones, by their mode ([ZonesNumeriques.FT4], [ZonesNumeriques.FT8], [ZonesNumeriques.NUM], [ZonesNumeriques.PHONIE]). */
         val zones: List<String> = emptyList(),
         val tramesAprs: Int = 0,
         val tramesTelemesure: Int = 0,
@@ -81,6 +81,7 @@ object ContenuPassage {
             when (z) {
                 ZonesNumeriques.FT4 -> x.messagesFt4 == 0 && (qso[FT4] ?: 0) == 0
                 ZonesNumeriques.FT8 -> x.messagesFt8 == 0 && (qso[FT8] ?: 0) == 0
+                ZonesNumeriques.PHONIE -> false
                 else -> true
             }
         }
@@ -93,7 +94,7 @@ object ContenuPassage {
             NUM to num,
             APRS to maxOf(x.tramesAprs, qso[APRS] ?: 0),
             TLM to x.tramesTelemesure,
-            PHONIE to x.paroles + (qso[PHONIE] ?: 0),
+            PHONIE to x.paroles + (qso[PHONIE] ?: 0) + x.zones.count { it == ZonesNumeriques.PHONIE },
             CW to (qso[CW] ?: 0),
             DATV to x.enregistrementsDatv + (qso[DATV] ?: 0),
         )

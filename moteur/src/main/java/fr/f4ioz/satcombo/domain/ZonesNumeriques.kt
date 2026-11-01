@@ -55,16 +55,19 @@ object ZonesNumeriques {
 
     /**
      * A zone of digital traffic: its time (UTC ms), its band, [mode] FT4, FT8 or
-     * NUM (narrow, regular, neither), how many bursts.
+     * NUM (narrow, regular, neither), how many bursts; or of voices ([PHONIE],
+     * its seconds that speak).
      */
     data class Zone(val debutMs: Long, val finMs: Long, val mode: String, val salves: Int, val basHz: Double, val hautHz: Double) {
         /** What the page writes on it. */
-        val libelle: String get() = if (mode == NUM) "numérique" else mode
+        val libelle: String get() = when (mode) { NUM -> "numérique"; PHONIE -> "phonie"; else -> mode }
     }
 
     const val FT4 = "FT4"
     const val FT8 = "FT8"
     const val NUM = "NUM"
+    /** Not digital: voices ([voix]), kept in the same file. */
+    const val PHONIE = "PHONIE"
 
     /** The spectrum measured as the samples come, any rate. */
     class Mesure(val cadence: Int) {
@@ -157,6 +160,117 @@ object ZonesNumeriques {
     }
 
     /**
+     * Where the recording holds **voices** (a [PHONIE] zone each): a frame
+     * speaks when at least [VOIX_BANDES] bands over [VOIX_ETENDUE_HZ] stand
+     * [VOIX_DB] above the floor, each a peak among its neighbours (FM hiss,
+     * however loud, is smooth), and most of them were not lit a second before
+     * nor are a second after — a voice's harmonics and formants move all the
+     * time, where FT4, FT8, a carrier or a wideband modem stay put for
+     * seconds (and SSTV, one tone at a time, is too narrow). A second speaks
+     * with [VOIX_PAR_SECONDE] such frames; seconds closer than [VOIX_JOINT_S]
+     * gathered, a zone when [VOIX_SECONDES_MIN] of them speak and they are
+     * [VOIX_DENSITE] of its length. Its band: where its frames were lit,
+     * a twentieth trimmed on each side; [Zone.salves], the seconds that speak.
+     */
+    fun voix(m: Mesure, origineMs: Long): List<Zone> {
+        val nT = m.trames.size; val nB = m.bandes
+        if (nT < 20) return emptyList()
+        val rel = Array(nT) { t -> val l = m.trames[t]; val f = mediane(l); FloatArray(nB) { l[it] - f } }
+        val usuel = FloatArray(nB) { b -> val v = FloatArray(nT) { rel[it][b] }; v.sort(); v[nT / 5] }
+        val b0 = ((VOIX_BASSE_HZ - BASSE_HZ) / BANDE_HZ).toInt(); val b1 = ((VOIX_HAUTE_HZ - BASSE_HZ) / BANDE_HZ).toInt()
+        // A band lit: above its usual level, and a peak among its neighbours (a harmonic, a formant): hiss, even
+        // loud, is smooth across the bands.
+        val voisins = FloatArray(7)
+        val allume = Array(nT) { t -> val l = m.trames[t]; BooleanArray(nB) { b ->
+            if (b !in b0 until b1 || rel[t][b] - usuel[b] < VOIX_DB) return@BooleanArray false
+            for (k in -3..3) voisins[k + 3] = l[(b + k).coerceIn(0, nB - 1)]
+            voisins.sort()
+            l[b] - voisins[3] >= VOIX_CONTRASTE_DB
+        } }
+        val recul = maxOf(1, Math.round(1000.0 / m.trameMs).toInt())
+        val parle = BooleanArray(nT) { t ->
+            val l = allume[t]
+            var n = 0; var bas = -1; var haut = -1; var reste = 0
+            for (b in 0 until nB) if (l[b]) {
+                n++; if (bas < 0) bas = b; haut = b
+                if ((t >= recul && allume[t - recul][b]) || (t + recul < nT && allume[t + recul][b])) reste++
+            }
+            n >= VOIX_BANDES && (haut - bas + 1) * BANDE_HZ >= VOIX_ETENDUE_HZ && reste < n * VOIX_RESTE
+        }
+        val seconde = { t: Int -> (t * m.trameMs / 1000).toInt() }
+        val parSeconde = IntArray(seconde(nT - 1) + 1)
+        for (t in 0 until nT) if (parle[t]) parSeconde[seconde(t)]++
+        val sortie = ArrayList<Zone>()
+        var debut = -1; var fin = -1; var dites = 0
+        fun ferme() {
+            if (debut >= 0 && dites >= VOIX_SECONDES_MIN && dites >= (fin - debut + 1) * VOIX_DENSITE) {
+                val compte = IntArray(nB)
+                for (t in 0 until nT) if (parle[t] && seconde(t) in debut..fin) for (b in 0 until nB) if (allume[t][b]) compte[b]++
+                val total = compte.sum(); var cumul = 0; var bas = b0; var haut = b1 - 1
+                for (b in 0 until nB) { cumul += compte[b]; if (cumul * 20 >= total) { bas = b; break } }
+                cumul = 0
+                for (b in nB - 1 downTo 0) { cumul += compte[b]; if (cumul * 20 >= total) { haut = b; break } }
+                sortie += Zone(origineMs + debut * 1000L, origineMs + (fin + 1) * 1000L, PHONIE, dites,
+                    BASSE_HZ + bas * BANDE_HZ, BASSE_HZ + (haut + 1) * BANDE_HZ)
+            }
+            debut = -1; dites = 0
+        }
+        for (s in parSeconde.indices) if (parSeconde[s] >= VOIX_PAR_SECONDE) {
+            if (debut >= 0 && s - fin > VOIX_JOINT_S) ferme()
+            if (debut < 0) debut = s
+            fin = s; dites++
+        }
+        ferme()
+        return sortie
+    }
+    /** Where a voice is looked for (Hz): SSB's and FM's speech band. */
+    const val VOIX_BASSE_HZ = 250.0
+    const val VOIX_HAUTE_HZ = 2800.0
+    /** A band speaks this far (dB) above its usual level… */
+    const val VOIX_DB = 6.0f
+    /** …and this far above the median of its seven neighbours (a peak: hiss is smooth). */
+    const val VOIX_CONTRASTE_DB = 3.0f
+    /** A frame speaks with this many such bands… */
+    const val VOIX_BANDES = 5
+    /** …spread over this much (Hz)… */
+    const val VOIX_ETENDUE_HZ = 300.0
+    /** …fewer than this share of them lit a second before or after. */
+    const val VOIX_RESTE = 0.5f
+    /** A second speaks with this many frames that speak. */
+    const val VOIX_PAR_SECONDE = 2
+    /** Seconds that speak closer than this (s) belong to the same voice… */
+    const val VOIX_JOINT_S = 8
+    /** …a zone with at least this many of them… */
+    const val VOIX_SECONDES_MIN = 6
+    /** …being this share of its length. */
+    const val VOIX_DENSITE = 0.3
+    /** A burst this close (ms) to a voice, in its band, is the voice's. */
+    const val VOIX_MARGE_MS = 8_000L
+    /** Two voices this close (ms): one QSO, the pause between them the voice's too. */
+    const val VOIX_PAUSE_MS = 45_000L
+
+    /**
+     * Everything at once: the voices ([voix]) and the digital zones ([zones]),
+     * in time order; a burst inside a voice and in its band left out (a
+     * harmonic held a moment looks narrow), one beside it kept (FT4 next to a
+     * QSO on a linear transponder).
+     */
+    fun toutes(m: Mesure, origineMs: Long): List<Zone> {
+        val v = voix(m, origineMs)
+        // The QSO goes on between two voices close together (the other station not heard, a pause): its gap too.
+        val qso = ArrayList<Zone>()
+        for (z in v) {
+            val d = qso.lastOrNull()
+            if (d != null && z.debutMs - d.finMs <= VOIX_PAUSE_MS) qso[qso.size - 1] = d.copy(finMs = z.finMs, basHz = minOf(d.basHz, z.basHz), hautHz = maxOf(d.hautHz, z.hautHz))
+            else qso += z
+        }
+        val s = salves(m, origineMs).filter { x ->
+            qso.none { z -> x.debutMs < z.finMs + VOIX_MARGE_MS && x.finMs > z.debutMs - VOIX_MARGE_MS && x.basHz < z.hautHz && x.hautHz > z.basHz }
+        }
+        return (v + zones(s)).sortedBy { it.debutMs }
+    }
+
+    /**
      * What a burst's length and start say: FT4 (about 5 s, starting near the
      * start of a 7.5 s slot), FT8 (about 12.6 s, near the start of a 15 s
      * slot), else NUM. The start is allowed from a second early to two late
@@ -210,19 +324,27 @@ object ZonesNumeriques {
 
     /** All at once: a recording's samples, its start (UTC ms), its zones. */
     fun cherche(audio: FloatArray, cadence: Int, origineMs: Long): List<Zone> =
-        zones(salves(Mesure(cadence).also { it.ajoute(audio) }, origineMs))
+        toutes(Mesure(cadence).also { it.ajoute(audio) }, origineMs)
 
     // ------------------------------------------------------------ kept beside the recording
 
-    /** "<name>.numerique": one zone a line — start, end (ms from the file's start), mode, bursts, low and high Hz. */
-    fun ecrit(l: List<Zone>, origineMs: Long): String = "# SatMe zones numériques v1\n" + l.joinToString("") {
+    /**
+     * "<name>.numerique": one zone a line — start, end (ms from the file's start), mode, bursts (a voice: its
+     * seconds that speak), low and high Hz. Since v2 the voices are there too ([PHONIE]); a v1 file is worked out again.
+     */
+    fun ecrit(l: List<Zone>, origineMs: Long): String = "$ENTETE\n" + l.joinToString("") {
         "${it.debutMs - origineMs}\t${it.finMs - origineMs}\t${it.mode}\t${it.salves}\t${it.basHz.toInt()}\t${it.hautHz.toInt()}\n"
     }
+
+    const val ENTETE = "# SatMe zones numériques v2"
+
+    /** Whether a kept file holds the voices too (v2), else it is worked out again. */
+    fun aJour(t: String): Boolean = t.startsWith(ENTETE)
 
     fun lit(t: String, origineMs: Long): List<Zone> = t.lines().filter { it.isNotBlank() && !it.startsWith("#") }.mapNotNull { l ->
         val c = l.split('\t'); if (c.size < 6) return@mapNotNull null
         runCatching {
-            Zone(origineMs + c[0].toLong(), origineMs + c[1].toLong(), c[2].takeIf { it in setOf(FT4, FT8, NUM) } ?: NUM,
+            Zone(origineMs + c[0].toLong(), origineMs + c[1].toLong(), c[2].takeIf { it in setOf(FT4, FT8, NUM, PHONIE) } ?: NUM,
                 c[3].toInt(), c[4].toDouble(), c[5].toDouble())
         }.getOrNull()
     }

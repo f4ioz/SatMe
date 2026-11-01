@@ -349,7 +349,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null || t.trouves >= 0},\"trouves\":${t.trouves},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}" +
                     (t.resultat?.let { ",\"resultat\":$it" } ?: "") + "}")
             }
-            // The digital zones of the pass's recordings (FT4, FT8, other narrow bursts), worked out once and kept.
+            // The digital zones of the pass's recordings (FT4, FT8, other narrow bursts) and its voices (PHONIE), worked out once and kept.
             "/numerique" -> {
                 val e = j.passage(p("id")) ?: return NON
                 json(zonesJson(j.zones(e)))
@@ -363,13 +363,14 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 kotlin.concurrent.thread(name = "JournalWebPc-num", isDaemon = true) {
                     runCatching {
                         t.progres = 0.02f
-                        val zs = j.zones(e, refait = true)
+                        val toutes = j.zones(e, refait = true)
+                        val zs = toutes.filter { it.mode != fr.f4ioz.satcombo.domain.ZonesNumeriques.PHONIE }
                         t.progres = 0.1f
                         var k = 0
                         zs.forEachIndexed { i, z ->
                             k += j.ft.stretch(e, m, JournalPc.decodeur, z.debutMs, z.finMs, modesZone(z)) { t.progres = 0.1f + 0.9f * (i + it) / zs.size }.size
                         }
-                        t.resultat = zonesJson(zs); t.trouves = k
+                        t.resultat = zonesJson(toutes); t.trouves = k
                     }.onFailure { System.err.println("journal : numérique de ${e.id} : $it") }
                     t.progres = 1f; t.fini = true
                 }
@@ -677,7 +678,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** Whether a pass's FT8/FT4 can go to the site now (the module on, the site ready, not « Jamais »), for the page's button. */
     @Volatile var siteFtPret: () -> Boolean = { false }
 
-    /** The zones for the page: start, end (UTC ms), mode (FT4, FT8, NUM), label, bursts, low and high Hz. */
+    /** The zones for the page: start, end (UTC ms), mode (FT4, FT8, NUM, PHONIE), label, bursts (a voice: seconds), low and high Hz. */
     private fun zonesJson(l: List<fr.f4ioz.satcombo.domain.ZonesNumeriques.Zone>): String = org.json.JSONArray(l.map { z ->
         org.json.JSONObject().put("de", z.debutMs).put("a", z.finMs).put("m", z.mode).put("l", z.libelle).put("n", z.salves)
             .put("bas", z.basHz.toInt()).put("haut", z.hautHz.toInt())

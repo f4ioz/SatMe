@@ -187,18 +187,31 @@ async function ftRedecode(mode, z, bt) {
 // labelled; a click in one chooses it (its strip opens it in Options); there, read now by both decoders, the messages
 // listed with their times and kept with the pass; « Rechercher le numérique » scans the recordings again and reads every
 // zone; the pass's messages then go to the web site as the FT8 tab's 🌐 (« Publication web », by hand).
-const NUM_COUL = '#9D6BFF';
-let numZones = [], numSel = null, numLignes = null, numMsg = '', numId = '';
+// The voices found with them (« PHONIE ») are a green strip under the violet ones, not a zone to read.
+const NUM_COUL = '#9D6BFF', VOIX_COUL = '#7CE38B';
+let numZones = [], numVoix = [], numSel = null, numLignes = null, numMsg = '', numId = '';
+/** The station's zones split: the digital ones (to read) and the voices (drawn only). */
+function numRange(a) { numZones = a.filter(z => z.m !== 'PHONIE'); numVoix = a.filter(z => z.m === 'PHONIE'); }
 function numPasse(id) {
-  if (id !== numId) { numId = id; numZones = []; numSel = null; numLignes = null; numMsg = ''; }
+  if (id !== numId) { numId = id; numZones = []; numVoix = []; numSel = null; numLignes = null; numMsg = ''; }
   if (!window.SATME_PC) return;
   lire('/numerique', { id: id }).then(a => {
     if (!P || P.id !== id || !Array.isArray(a)) return;
-    numZones = a; if (numSel) numSel = a.find(z => z.de === numSel.de) || null;
+    numRange(a); if (numSel) numSel = numZones.find(z => z.de === numSel.de) || null;
     dessineFrise(); if (onglet === 'options') panneau();
   }).catch(() => {});
 }
 function numDessine(x, w, h) {
+  numVoix.forEach(z => {
+    const a = tx(z.de, w), b = tx(z.a, w); if (b < 0 || a > w) return;
+    const l = Math.max(3, b - a);
+    x.fillStyle = VOIX_COUL; x.fillRect(a, 45, l, 10);
+    if (l > 30) {
+      x.save(); x.beginPath(); x.rect(a, 44, l, 12); x.clip();
+      x.fillStyle = '#0B1016'; x.font = 'bold 9px system-ui'; x.textAlign = 'left';
+      x.fillText(T.cu_phonie, a + 3, 53.5); x.restore();
+    }
+  });
   numZones.forEach(z => {
     const a = tx(z.de, w), b = tx(z.a, w); if (b < 0 || a > w) return;
     const l = Math.max(3, b - a), choisie = !!(numSel && numSel.de === z.de);
@@ -238,7 +251,7 @@ async function numCherche(z, bt) {
   if (!j || !j.ok) { z.textContent = T.echec; bt.disabled = false; return; }
   numSuit(j.travail, z, e => {
     if (!e || e.trouves < 0) { numMsg = T.echec; z.textContent = numMsg; bt.disabled = false; return; }
-    if (P && P.id === id) numZones = e.resultat || [];
+    if (P && P.id === id) numRange(e.resultat || []);
     numSel = null; numLignes = null;
     numMsg = tf('num_trouves', numZones.length, e.trouves);
     if (e.trouves > 0 && S && P && P.id === id) rechargeEditeur(); else { dessineFrise(); panneau(); }
