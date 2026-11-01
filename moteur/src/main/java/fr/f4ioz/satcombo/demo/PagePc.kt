@@ -3009,6 +3009,16 @@ ${AprsCarteJs.HTML}
     <div class="petit" id="igate-derniers" style="margin-top:4px;font-family:var(--mono, monospace);word-break:break-all"></div>
     <div class="petit aide" style="margin-top:6px">Réception seule : les trames APRS entendues par SatMe (carte son, radio KISS à l’écoute, satellites, ISS, 144,800) partent vers APRS-IS avec <code>qAR,</code> et l’indicatif de l’iGate ; celles reçues par un satellite gardent leur chemin. Jamais l’inverse : rien de ce qu’envoie APRS-IS n’est émis. Refusées : NOGATE, RFONLY, TCPIP, TCPXX, les requêtes, les doublons de moins de 30 s. Le passcode reste sur ce PC et n’est jamais affiché.</div>
   </details>
+  <details class="carte" id="partage-carte">
+    <summary class="t" style="cursor:pointer;margin:0">Trames pour d’autres logiciels · écoute seule <span id="partage-pastille" class="pastille coupe">coupé</span></summary>
+    <div class="ligne" style="margin-top:6px"><label class="petit" style="flex:1"><input type="checkbox" id="partage-kiss" onchange="paPost('kiss=' + (this.checked ? 1 : 0))"> <b>Serveur KISS TCP</b>, port</label>
+      <input id="partage-kiss-port" type="number" min="1024" max="65535" placeholder="8001" style="max-width:90px" onchange="paPost('kissPort=' + this.value)"></div>
+    <div class="ligne"><label class="petit" style="flex:1"><input type="checkbox" id="partage-agw" onchange="paPost('agw=' + (this.checked ? 1 : 0))"> <b>Serveur AGWPE</b> (moniteur), port</label>
+      <input id="partage-agw-port" type="number" min="1024" max="65535" placeholder="8000" style="max-width:90px" onchange="paPost('agwPort=' + this.value)"></div>
+    <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="partage-reseau" onchange="paPost('reseau=' + (this.checked ? 1 : 0))"> Ouvert au réseau local (sinon ce PC seulement, 127.0.0.1)</label>
+    <div class="petit" id="partage-etat" style="margin-top:6px"></div>
+    <div class="petit aide" style="margin-top:6px"><b>Écoute seule</b> : Xastir, YAAC, APRSIS32 ou un client packet reçoivent les trames AX.25 décodées par SatMe (carte son, radio KISS à l’écoute, décodeur de paquets). Une trame qu’ils envoient pour émission (trame KISS de données ; AGWPE K, M, V, C, D…) est refusée et comptée : rien n’est jamais émis par ce chemin. En AGWPE, le logiciel demande les trames brutes (k) ou le moniteur (m).</div>
+  </details>
   <details class="carte" id="tr-carte" open>
     <summary class="t" style="cursor:pointer">🏆 Trophées APRS <span class="petit" id="tr-resume"></span></summary>
     <div class="petit aide">Le jeu du téléphone : chaque station entendue, chaque locator, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
@@ -15807,10 +15817,29 @@ async function ticIGate() {
   g('igate-derniers').innerHTML = (IG.derniers || []).slice(0, 3).map(d => hm(d.t, true) + ' ' + esc(d.ligne)).join('<br>');
 }
 ['igate-serveur', 'igate-indicatif'].forEach(i => { g(i).oninput = () => { g(i).dataset.touche = '1'; }; });
+// KISS TCP and AGWPE servers: listening only (a client's frames to transmit are refused and counted).
+let PTR = null;
+async function paPost(a) { const j = await post('api/partage?' + a); if (j && j.ok === false && j.erreur) txt('partage-etat', j.erreur); else ticPartage(); return j; }
+async function ticPartage() {
+  try { PTR = await (await fetch('api/partage')).json(); } catch (x) { return; }
+  if (!PTR || !PTR.present) { g('partage-carte').hidden = true; return; }
+  const K = PTR.kiss, W = PTR.agw;
+  if (document.activeElement !== g('partage-kiss')) g('partage-kiss').checked = !!K.actif;
+  if (document.activeElement !== g('partage-agw')) g('partage-agw').checked = !!W.actif;
+  if (document.activeElement !== g('partage-reseau')) g('partage-reseau').checked = !!PTR.reseau;
+  if (document.activeElement !== g('partage-kiss-port')) g('partage-kiss-port').value = String(K.port);
+  if (document.activeElement !== g('partage-agw-port')) g('partage-agw-port').value = String(W.port);
+  const on = (K.actif && K.ecoute) || (W.actif && W.ecoute), p = g('partage-pastille');
+  p.className = 'pastille ' + (on ? 'marche' : 'coupe'); p.textContent = on ? 'à l’écoute' : 'coupé';
+  const l = (n, s) => !s.actif ? '' : n + ' ' + (s.ecoute ? 'sur ' + s.ecoute : s.erreur || 'fermé') + ' · ' + s.clients + ' client(s) · ' + s.envoyees + ' envoyée(s)' +
+    (s.refusees ? ' · ' + s.refusees + ' demande(s) d’émission refusée(s)' : '');
+  txt('partage-etat', [l('KISS', K), l('AGWPE', W)].filter(Boolean).join(' — ') || 'Coupés : aucun port ouvert.');
+}
 async function ticAprs() {
   if (!ouverte('aprs')) return;
   ticKiss();
   ticIGate();
+  ticPartage();
   try { A = await (await fetch('api/aprs')).json(); } catch (x) { return; }
   if (!A.present) return;
   txt('a-n', String(A.paquets.length)); txt('a-stations', String(A.nbStations)); txt('a-iss', String(A.viaIss));

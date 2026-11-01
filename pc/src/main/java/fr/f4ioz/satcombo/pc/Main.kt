@@ -146,6 +146,11 @@ fun main(args: Array<String>) {
     // The receive-only iGate: off until switched on in the APRS tab; frames heard on the air only.
     val igate = IGatePc(station.stockage, { station.settings.callsign }, version = versionPc())
     son.aprs.surRecue = { t, quand -> igate.recoit(t, quand) }
+    // The frames heard, for other programs (KISS TCP, AGWPE): listening only, off until ticked, 127.0.0.1 by default.
+    val partage = PartageTramesPc(station.stockage)
+    son.aprs.surAx25 = { o -> partage.diffuse(o) }
+    kiss.lien.surOctets = { o -> partage.diffuse(o) }
+    runCatching { partage.demarre() }
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
     val meteor = MeteorPc(station, File(dossier, "meteor"))
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
@@ -431,6 +436,8 @@ fun main(args: Array<String>) {
     serveur.canaux = canaux
     serveur.telemesure = telemesure
     serveur.igate = igate
+    serveur.partage = partage
+    telemesure.surAx25 = { o -> partage.diffuse(o) }
     // ADS-B on 1090 MHz (Avions tab): off until asked; the SDR tab's dongle taken only when the owner chooses.
     val adsb = AdsbPc(station, sdr, station.stockage, carnet)
     sdr.adsbTient = { if (adsb.tientCleSdr) SdrPc.RTL else if (adsb.tientPluto) SdrPc.PLUTO else null }
@@ -945,6 +952,7 @@ fun main(args: Array<String>) {
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }
         runCatching { igate.arrete() }
+        runCatching { partage.arrete() }
         runCatching { polarisation.arrete() }
         runCatching { sdr.arrete() }
         // Nor any bladeRF-cli (the receiver's stopped just above, gently).

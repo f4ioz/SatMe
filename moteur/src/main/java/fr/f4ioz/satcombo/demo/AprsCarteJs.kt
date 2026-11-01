@@ -543,7 +543,7 @@ g('aq-osm').onchange = () => { try { localStorage.setItem('cg-osm', g('aq-osm').
 aqPuces();
 // The whole tab in the window: the KISS radio, the trophies and the raw frames go in tabs beside the map
 // (same elements, moved), and the map with its column takes the height left above the status bar.
-[['kiss-carte', 'aq-p-kiss'], ['igate-carte', 'aq-p-partage'], ['tr-carte', 'aq-p-tr'], ['a-trames', 'aq-p-trames']].forEach(([d, p]) => {
+[['kiss-carte', 'aq-p-kiss'], ['igate-carte', 'aq-p-partage'], ['partage-carte', 'aq-p-partage'], ['tr-carte', 'aq-p-tr'], ['a-trames', 'aq-p-trames']].forEach(([d, p]) => {
   const e = g(d); if (!e || !g(p)) return; e.open = true; g(p).appendChild(e);
 });
 (function () { const t = g('a-trames'); const boite = t && t.querySelector('div[style*="max-height"]'); if (boite) { boite.style.maxHeight = 'none'; boite.style.flex = '1'; boite.style.minHeight = '0'; }

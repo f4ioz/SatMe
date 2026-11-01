@@ -117,11 +117,17 @@ class TelemesurePc(
 
     val sids = Sids(urlSids, horloge = horloge)
     @Volatile private var fictif = false
+    /** Each AX.25 frame of the packet decoder heard on the air: the KISS TCP and AGWPE servers (listening only). */
+    @Volatile var surAx25: ((ByteArray) -> Unit)? = null
 
     init {
         paquets.kiss = kiss
         paquets.contexte = { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_SON) contextePaquetsSon(fictifSon) else contextePaquets(fictif) }
-        paquets.surTrame = { t -> partage(t) }
+        paquets.surTrame = { t ->
+            partage(t)
+            // An AX.25 frame from the air (not the test's) for the KISS TCP and AGWPE servers.
+            if (!t.essai && t.ax25 != null && t.format == RecepteurPaquets.FORMAT_HDLC) surAx25?.let { f -> runCatching { f(t.octets) } }
+        }
         Thread({
             while (true) {
                 runCatching { Thread.sleep(5_000) }

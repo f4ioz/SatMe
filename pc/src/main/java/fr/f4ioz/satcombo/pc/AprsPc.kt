@@ -110,6 +110,9 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     /** Each HDLC frame heard on the air (AX.25 or bare, FCS removed): the SSDV packets looked for in them. */
     @Volatile var surOctets: ((ByteArray) -> Unit)? = null
 
+    /** The same frames again, for the KISS TCP and AGWPE servers (listening only): on the air only. */
+    @Volatile var surAx25: ((ByteArray) -> Unit)? = null
+
     /** The decoder's counts since it started: frames heard clean, mended (1 or 2 bits), FX.25, IL2P. */
     val statsDecodeur: fr.f4ioz.satcombo.aprs.StatsAfsk get() = demod?.statistiques ?: fr.f4ioz.satcombo.aprs.StatsAfsk()
 
@@ -122,7 +125,12 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
         val d = demod?.takeIf { rateDemod == rate } ?: AfskDemodulateur(rate) { t ->
             if (runCatching { horsAntenne() }.getOrDefault(false)) essais++ else ajoute(t, horloge())
         }.also { a ->
-            a.surOctets = { o -> if (!runCatching { horsAntenne() }.getOrDefault(false)) surOctets?.invoke(o) }
+            a.surOctets = { o ->
+                if (!runCatching { horsAntenne() }.getOrDefault(false)) {
+                    surOctets?.invoke(o)
+                    surAx25?.let { f -> runCatching { f(o) } }
+                }
+            }
             a.surReception = { r ->
                 val m = r.marque
                 if (m != null && !runCatching { horsAntenne() }.getOrDefault(false)) {

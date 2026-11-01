@@ -177,6 +177,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var telemesure: TelemesurePc? = null
     /** The receive-only iGate (APRS tab): RF → APRS-IS, off by default. */
     @Volatile var igate: IGatePc? = null
+    /** The frames heard offered to other programs (KISS TCP, AGWPE): listening only. */
+    @Volatile var partage: PartageTramesPc? = null
     /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
     @Volatile var adsb: AdsbPc? = null
     @Volatile var ais: AisPc? = null
@@ -878,6 +880,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // The receive-only iGate: its state (GET) and its settings (POST). The passcode is never given back.
         if (chemin == "/api/igate") {
             val k = igate
+            val o = when {
+                k == null -> JSONObject().put("present", false)
+                r.methode == "POST" -> runCatching { k.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", "réglage refusé") }
+                else -> k.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The KISS TCP and AGWPE servers (listening only): their state (GET) and settings (POST).
+        if (chemin == "/api/partage") {
+            val k = partage
             val o = when {
                 k == null -> JSONObject().put("present", false)
                 r.methode == "POST" -> runCatching { k.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", "réglage refusé") }
