@@ -264,6 +264,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
                 note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
                 nom = m.nom.trim(), qth = m.qth.trim(), courriel = m.courriel.trim(),
                 locatorOrigine = if (m.theirLocator.trim().uppercase() == it.theirLocator) it.locatorOrigine else m.locatorOrigine)
+                .let { c -> fr.f4ioz.satcombo.data.ChampsAdif.reprend(m, c) }
         }
     }
 

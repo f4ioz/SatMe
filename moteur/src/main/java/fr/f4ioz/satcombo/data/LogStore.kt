@@ -68,7 +68,49 @@ data class LogEntry(
      * The record's fields as the online log took them (JSON, [fr.f4ioz.satcombo.domain.ModifEnvoi]):
      * an edit after the upload shows against it. Empty: not uploaded, or uploaded before SatMe kept it.
      */
-    val envoiAdif: String = ""
+    val envoiAdif: String = "",
+    // ---- Contest and portable fields (ADIF 3.1.6), all empty by default ----
+    // Written to disk, ADIF and the online log only when set; [ChampsAdif]
+    // lists them once for every place that reads or writes them.
+    /** CONTEST_ID: the contest, as the ADIF Contest ID enumeration names it ("CQ-WW-SSB"). */
+    val contestId: String = "",
+    /** STX / SRX: serial numbers sent and received (≥ 0). */
+    val stx: Int? = null,
+    val srx: Int? = null,
+    /** STX_STRING / SRX_STRING: the rest of the exchange, Cabrillo style, when no field of its own holds it. */
+    val stxString: String = "",
+    val srxString: String = "",
+    /** OPERATOR and STATION_CALLSIGN of this contact, when they differ from the station's (a /P activation, a club call). */
+    val operateur: String = "",
+    val stationCallsign: String = "",
+    /** MY_SIG / MY_SIG_INFO, SIG / SIG_INFO: a special activity ("POTA", "WWFF"…) and its reference. */
+    val mySig: String = "",
+    val mySigInfo: String = "",
+    val sig: String = "",
+    val sigInfo: String = "",
+    /** POTA references, ours and theirs: "FR-0012" or a comma-separated list ("K-0817,K-4566@US-WY"). */
+    val myPotaRef: String = "",
+    val potaRef: String = "",
+    /** WWFF references ("FFF-1234"). */
+    val myWwffRef: String = "",
+    val wwffRef: String = "",
+    /** SOTA references ("F/AB-123"). */
+    val mySotaRef: String = "",
+    val sotaRef: String = "",
+    /** IOTA designators ("EU-064"). */
+    val myIota: String = "",
+    val iota: String = "",
+    /** CQZ / ITUZ of the other station when known better than its prefix tells (1–40, 1–90). */
+    val cqz: Int? = null,
+    val ituz: Int? = null,
+    /** Contest exchanges: PRECEDENCE, CHECK (Sweepstakes), CLASS (Field Day), ARRL_SECT, STATE, CNTY; MY_STATE ours. */
+    val precedence: String = "",
+    val check: String = "",
+    val classe: String = "",
+    val arrlSect: String = "",
+    val state: String = "",
+    val cnty: String = "",
+    val myState: String = "",
 )
 
 /** Persists quick log entries to disk (`qso_log.json`: the phone's files, the PC's folder). */
@@ -103,7 +145,7 @@ class LogStore(private val file: java.io.File) {
                     courriel = o.optString("em"),
                     retenu = o.optBoolean("rt", false),
                     envoiAdif = o.optString("es")
-                )
+                ).let { e -> o.optJSONObject("x")?.let { ChampsAdif.deJson(e, it) } ?: e }
             }
         }.getOrDefault(emptyList())
     }
@@ -123,6 +165,9 @@ class LogStore(private val file: java.io.File) {
                 put("nm", e.nom); put("qt", e.qth); put("em", e.courriel)
                 if (e.retenu) put("rt", true)
                 if (e.envoiAdif.isNotEmpty()) put("es", e.envoiAdif)
+                // Contest and portable fields in one object, only when one is set:
+                // an older version reads the file and ignores the key.
+                ChampsAdif.json(e)?.let { put("x", it) }
             })
         }
         runCatching { file.writeText(arr.toString()) }

@@ -157,7 +157,12 @@ object AdifImport {
         val rstEnvoye: String = "", val rstRecu: String = "", val nom: String = "", val qth: String = "",
         /** The station's grid line ("JN06,JN16"): MY_VUCC_GRIDS, or a list found in MY_GRIDSQUARE. */
         val monGrilles: String = "",
-    )
+        /** Its contest and portable fields ([ChampsAdif] tags → value), those present. */
+        val champs: Map<String, String> = emptyMap(),
+    ) {
+        /** [e] (the contact built from this one) with its contest and portable fields. */
+        fun complete(e: LogEntry): LogEntry = if (champs.isEmpty()) e else ChampsAdif.avec(e, champs)
+    }
 
     /**
      * A contact without its own square takes its station location's [carre].
@@ -206,7 +211,8 @@ object AdifImport {
                 freqMhz = f["FREQ"]?.trim()?.toDoubleOrNull() ?: 0.0,
                 freqRxMhz = f["FREQ_RX"]?.trim()?.toDoubleOrNull() ?: 0.0,
                 rstEnvoye = f["RST_SENT"].orEmpty().trim(), rstRecu = f["RST_RCVD"].orEmpty().trim(),
-                nom = f["NAME"].orEmpty().trim(), qth = f["QTH"].orEmpty().trim())
+                nom = f["NAME"].orEmpty().trim(), qth = f["QTH"].orEmpty().trim(),
+                champs = ChampsAdif.deAdif(f))
         }
         return out.sortedBy { it.quandMs }
     }

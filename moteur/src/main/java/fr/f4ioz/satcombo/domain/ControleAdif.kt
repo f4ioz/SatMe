@@ -89,6 +89,10 @@ object ControleAdif {
             locator(e.myLocator, "MY_GRIDSQUARE", "MY_VUCC_GRIDS", "Votre locator", ::a)
             locator(e.theirLocator, "GRIDSQUARE", "VUCC_GRIDS", "Locator du correspondant", ::a)
 
+            // Portable and contest references: a malformed one still goes out
+            // (the award's site may know better), but is said here.
+            references(e, ::a)
+
             // Frequencies: no BAND, and LoTW cannot match the contact.
             if (e.uplinkMhz <= 0.0)
                 a(Gravite.BLOQUANT, "montante-absente", "Fréquence montante absente : pas de BAND, LoTW refuse le contact.")
@@ -151,6 +155,28 @@ object ControleAdif {
                     "$quoi « $v » : une ligne de carrés doit en compter 2 ou 4 ; $champ et $champGrille omis à l'export.", false)
         } else if (!Adif.locatorValide(v))
             a(Gravite.AVERTISSEMENT, "locator-invalide", "$quoi « $v » n'est pas un locator valide : omis à l'export ($champ).", false)
+    }
+
+    /** POTA, WWFF, SOTA, IOTA references and contest numbers: warnings only, never blocking. */
+    private fun references(e: LogEntry, a: (Gravite, String, String, Boolean) -> Unit) {
+        fun ref(v: String, ok: (String) -> Boolean, code: String, quoi: String, forme: String) {
+            if (v.isNotBlank() && !ok(v))
+                a(Gravite.AVERTISSEMENT, code, "$quoi « ${v.trim()} » : format inattendu (attendu $forme), à vérifier.", false)
+        }
+        val C = fr.f4ioz.satcombo.data.ChampsAdif
+        ref(e.myPotaRef, C::potaValide, "pota-invalide", "Votre référence POTA", "XX-nnnn[@XX-YY], ou une liste séparée par des virgules")
+        ref(e.potaRef, C::potaValide, "pota-invalide", "Référence POTA du correspondant", "XX-nnnn[@XX-YY], ou une liste séparée par des virgules")
+        ref(e.myWwffRef, C::wwffValide, "wwff-invalide", "Votre référence WWFF", "XXFF-nnnn")
+        ref(e.wwffRef, C::wwffValide, "wwff-invalide", "Référence WWFF du correspondant", "XXFF-nnnn")
+        ref(e.mySotaRef, C::sotaValide, "sota-invalide", "Votre référence SOTA", "X/YY-nnn")
+        ref(e.sotaRef, C::sotaValide, "sota-invalide", "Référence SOTA du correspondant", "X/YY-nnn")
+        ref(e.myIota, C::iotaValide, "iota-invalide", "Votre référence IOTA", "CC-nnn, par exemple EU-064")
+        ref(e.iota, C::iotaValide, "iota-invalide", "Référence IOTA du correspondant", "CC-nnn, par exemple EU-064")
+        e.cqz?.let { if (it !in 1..40) a(Gravite.AVERTISSEMENT, "zone-invalide", "Zone CQ $it : hors de 1 à 40, à vérifier.", false) }
+        e.ituz?.let { if (it !in 1..90) a(Gravite.AVERTISSEMENT, "zone-invalide", "Zone UIT $it : hors de 1 à 90, à vérifier.", false) }
+        listOf("envoyé" to e.stx, "reçu" to e.srx).forEach { (quoi, n) ->
+            if (n != null && n < 0) a(Gravite.AVERTISSEMENT, "numero-invalide", "Numéro de série $quoi $n : négatif, à vérifier.", false)
+        }
     }
 
     private fun mhz(f: Double) = "%.3f".format(java.util.Locale.US, f)

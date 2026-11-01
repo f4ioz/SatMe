@@ -4112,7 +4112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
                 note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
                 nom = m.nom.trim(), qth = m.qth.trim(), courriel = m.courriel.trim(),
-                locatorOrigine = m.locatorOrigine)
+                locatorOrigine = m.locatorOrigine).let { c -> fr.f4ioz.satcombo.data.ChampsAdif.reprend(m, c) }
         }, express = _ui.value.express.copy(memoire = construitMemoire()))
     }
 
@@ -6656,7 +6656,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             latDeg = obs?.latDeg ?: 0.0,
             lonDeg = obs?.lonDeg ?: 0.0,
             callsign = _ui.value.callsign,
-            note = note.trim()
+            note = note.trim(),
+            // The park: typed in the name ("FR-0012 …"), else the one the POTA
+            // overlay says we stand in. Written on the session's contacts in its ADIF.
+            potaRef = fr.f4ioz.satcombo.data.ChampsAdif.potaDans(name)
+                .ifBlank { _ui.value.nearbyPota.firstOrNull { it.inside }?.park?.reference.orEmpty() }
         )
         _ui.value = _ui.value.copy(activations = activationStore.start(a))
     }
@@ -6692,7 +6696,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** ADIF limited to one session — ready to import in the logbook. */
     fun activationAdif(a: fr.f4ioz.satcombo.data.Activation): String =
-        LogStore.toAdif(activationQsos(a), settings.callsign)
+        fr.f4ioz.satcombo.data.ActivationStore.adifOf(a, _ui.value.log, settings.callsign)
 
     // ================= timeline =================
 
@@ -9883,7 +9887,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 nom = q.nom, qth = q.qth, mode = q.mode, rstSent = q.rstEnvoye, rstRcvd = q.rstRecu,
                 downlinkMhz = q.freqRxMhz, uplinkMhz = q.freqMhz,
                 // Already in the online log: never sent there again.
-                envoyeMs = maintenant))
+                envoyeMs = maintenant).let(q::complete))
             ajoutes++
         }
         if (ajoutes > 0) _ui.value = _ui.value.copy(log = l, express = _ui.value.express.copy(memoire = construitMemoire()))

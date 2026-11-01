@@ -51,7 +51,13 @@ object ModifEnvoi {
         "BAND" to "bande d'émission", "FREQ_RX" to "fréquence de réception", "BAND_RX" to "bande de réception",
         "GRIDSQUARE" to "locator", "VUCC_GRIDS" to "ligne de locators", "MY_GRIDSQUARE" to "mon locator",
         "MY_VUCC_GRIDS" to "ma ligne de locators", "NAME" to "nom", "QTH" to "ville", "EMAIL" to "courriel",
-        "COMMENT" to "commentaire")
+        "COMMENT" to "commentaire",
+        "CONTEST_ID" to "concours", "STX" to "numéro envoyé", "SRX" to "numéro reçu",
+        "STX_STRING" to "échange envoyé", "SRX_STRING" to "échange reçu",
+        "MY_SIG" to "mon activité", "MY_SIG_INFO" to "ma référence d'activité", "SIG" to "activité", "SIG_INFO" to "référence d'activité",
+        "MY_POTA_REF" to "ma référence POTA", "POTA_REF" to "référence POTA", "MY_WWFF_REF" to "ma référence WWFF",
+        "WWFF_REF" to "référence WWFF", "MY_SOTA_REF" to "ma référence SOTA", "SOTA_REF" to "référence SOTA",
+        "MY_IOTA" to "mon IOTA", "IOTA" to "IOTA", "CQZ" to "zone CQ", "ITUZ" to "zone UIT")
 
     /** What the record of [e] carries today, field by field. */
     fun empreinte(e: LogEntry): Map<String, String> =

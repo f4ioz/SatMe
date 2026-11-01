@@ -154,6 +154,9 @@ fun ActivationScreen(ui: UiState, vm: MainViewModel) {
                         }
                         val started = tzFormat("EEE dd/MM HH:mm", ui.useUtc).format(Date(running.startMs))
                         Text("$started ${tzTag(ui.useUtc)}", color = TextLo, fontSize = 12.sp)
+                        // The park written on the session's contacts in its ADIF.
+                        if (running.potaRef.isNotBlank())
+                            Text("POTA ${running.potaRef}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         ActivationStats(running, ui)
 
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -247,7 +250,7 @@ fun ActivationScreen(ui: UiState, vm: MainViewModel) {
                     val hm = tzFormat("HH:mm", ui.useUtc)
                     val period = df.format(Date(a.startMs)) + " → " +
                         (a.endMs?.let { hm.format(Date(it)) } ?: "…") + " " + tzTag(ui.useUtc)
-                    Text(period, color = TextLo, fontSize = 12.sp)
+                    Text(period + (if (a.potaRef.isNotBlank()) " · POTA ${a.potaRef}" else ""), color = TextLo, fontSize = 12.sp)
                     ActivationStats(a, ui)
 
                     if (open) {

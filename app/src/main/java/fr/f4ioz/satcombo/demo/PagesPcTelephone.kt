@@ -444,7 +444,10 @@ object PagesPcTelephone {
                 fun v(k: String, d: String) = p(k).takeIf { it.isNotEmpty() } ?: d
                 vm.updateLogEntry(t, a.copy(callsign = v("c", a.callsign).uppercase(), theirLocator = v("l", a.theirLocator).uppercase(),
                     rstSent = v("rs", a.rstSent), rstRcvd = v("rr", a.rstRcvd), note = v("n", a.note), mode = v("md", a.mode),
-                    nom = v("nm", a.nom), qth = v("qth", a.qth), locatorOrigine = v("lo", a.locatorOrigine)))
+                    nom = v("nm", a.nom), qth = v("qth", a.qth), locatorOrigine = v("lo", a.locatorOrigine))
+                    // Contest and portable fields, when the form sends them (x=1, then x_TAG=…, empty clears).
+                    .let { m -> if (p("x") != "1") m else fr.f4ioz.satcombo.data.ChampsAdif.avec(m,
+                        fr.f4ioz.satcombo.data.ChampsAdif.TAGS.associateWith { k -> p("x_$k") }) })
                 // The time last: it changes the key; az/el and the order follow.
                 val r = if (nouveau != null && nouveau != t) vm.redateContact(t, nouveau) else null
                 val apres = r?.contact ?: vm.ui.value.log.firstOrNull { it.timeMs == t }
@@ -1161,6 +1164,7 @@ object PagesPcTelephone {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+                    .also { o -> fr.f4ioz.satcombo.data.ChampsAdif.json(e)?.let { o.put("x", it) } }
                     .also { o -> drapeaux.getOrPut(e.callsign) { fr.f4ioz.satcombo.demo.ApiStation.drapeau(JSONObject(), e.callsign) }
                         .let { d -> d.optString("dr").takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }; d.optString("py").takeIf { it.isNotEmpty() }?.let { o.put("py", it) } } }
             }))
