@@ -135,6 +135,12 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
         runCatching { d.traite(pcm, n) }
     }
 
+    /**
+     * Each frame heard on the air and kept (not the ones sent, not the test
+     * generator's nor a recording's): the iGate's input.
+     */
+    @Volatile var surRecue: ((Trame, Long) -> Unit)? = null
+
     @Synchronized fun ajoute(t: Trame, quand: Long): Boolean {
         if (paquets.any { it.trame == t && kotlin.math.abs(it.quand - quand) < 5_000 }) return false
         trophees   // read (or worked out from the history) before this frame joins it: this one is cheered
@@ -149,6 +155,7 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
         garde(p)
         recues++
         runCatching { note(p) }
+        surRecue?.let { f -> runCatching { f(t, quand) } }
         return true
     }
 

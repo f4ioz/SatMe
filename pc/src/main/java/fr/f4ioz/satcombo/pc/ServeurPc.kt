@@ -175,6 +175,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** « Décodeurs multiples » in the QO-100 cockpit (set before [demarre]). */
     @Volatile var canaux: CanauxPc? = null
     @Volatile var telemesure: TelemesurePc? = null
+    /** The receive-only iGate (APRS tab): RF → APRS-IS, off by default. */
+    @Volatile var igate: IGatePc? = null
     /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
     @Volatile var adsb: AdsbPc? = null
     @Volatile var ais: AisPc? = null
@@ -870,6 +872,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 k == null -> JSONObject().put("present", false)
                 r.methode == "POST" -> k.action(q)
                 else -> k.json(station.settings.callsign).put("carte", son?.son?.etat?.value?.actif == true)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The receive-only iGate: its state (GET) and its settings (POST). The passcode is never given back.
+        if (chemin == "/api/igate") {
+            val k = igate
+            val o = when {
+                k == null -> JSONObject().put("present", false)
+                r.methode == "POST" -> runCatching { k.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", "réglage refusé") }
+                else -> k.json()
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }

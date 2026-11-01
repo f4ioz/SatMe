@@ -2997,6 +2997,18 @@ ${AprsCarteJs.HTML}
       Balise ISS pour ce passage : ma position une fois, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825 ; se décoche au LOS</label>
     <div class="petit aide" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
+  <details class="carte" id="igate-carte">
+    <summary class="t" style="cursor:pointer;margin:0">iGate APRS-IS · réception seule <span id="igate-pastille" class="pastille coupe">coupé</span></summary>
+    <div class="ligne" style="margin-top:6px"><label><input type="checkbox" id="igate-actif" onchange="igPost('actif=' + (this.checked ? 1 : 0))"> <b>Transmettre à APRS-IS</b> ce qui est entendu sur l’air</label></div>
+    <div class="ligne"><span class="petit" style="flex:none;width:70px">Serveur</span><input id="igate-serveur" placeholder="euro.aprs2.net:14580" style="flex:1"></div>
+    <div class="ligne"><span class="petit" style="flex:none;width:70px">Indicatif</span><input id="igate-indicatif" placeholder="F4XYZ-10" style="flex:1;text-transform:uppercase">
+      <input id="igate-passcode" type="password" autocomplete="off" inputmode="numeric" placeholder="Passcode APRS-IS" style="flex:1"></div>
+    <div class="ligne"><button class="primaire" onclick="igGarde()">Enregistrer</button><button onclick="igPost('passcodeEfface=1')" title="Oublier le passcode enregistré sur ce PC">Oublier le passcode</button><span class="petit" id="igate-reg"></span></div>
+    <div class="petit" id="igate-etat" style="margin-top:6px"></div>
+    <div class="petit" id="igate-refus" style="margin-top:4px"></div>
+    <div class="petit" id="igate-derniers" style="margin-top:4px;font-family:var(--mono, monospace);word-break:break-all"></div>
+    <div class="petit aide" style="margin-top:6px">Réception seule : les trames APRS entendues par SatMe (carte son, radio KISS à l’écoute, satellites, ISS, 144,800) partent vers APRS-IS avec <code>qAR,</code> et l’indicatif de l’iGate ; celles reçues par un satellite gardent leur chemin. Jamais l’inverse : rien de ce qu’envoie APRS-IS n’est émis. Refusées : NOGATE, RFONLY, TCPIP, TCPXX, les requêtes, les doublons de moins de 30 s. Le passcode reste sur ce PC et n’est jamais affiché.</div>
+  </details>
   <details class="carte" id="tr-carte" open>
     <summary class="t" style="cursor:pointer">🏆 Trophées APRS <span class="petit" id="tr-resume"></span></summary>
     <div class="petit aide">Le jeu du téléphone : chaque station entendue, chaque locator, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
@@ -15763,9 +15775,42 @@ async function ticKiss() {
   g('kiss-confirme-l').hidden = lue;
   if (KS.envoi && !g('kiss-envoi').textContent) txt('kiss-envoi', KS.envoi);
 }
+// The receive-only iGate: state and settings (the passcode is written, never read back).
+let IG = null;
+async function igPost(a) {
+  const j = await post('api/igate?' + a);
+  if (j && j.ok === false && j.erreur) txt('igate-reg', j.erreur); else if (j && j.ok) txt('igate-reg', 'enregistré');
+  ticIGate(); return j;
+}
+async function igGarde() {
+  const p = g('igate-passcode').value.trim();
+  await igPost('serveur=' + enc(g('igate-serveur').value.trim()) + '&indicatif=' + enc(g('igate-indicatif').value.trim().toUpperCase()) + (p ? '&passcode=' + enc(p) : ''));
+  g('igate-passcode').value = '';
+}
+async function ticIGate() {
+  try { IG = await (await fetch('api/igate')).json(); } catch (x) { return; }
+  if (!IG || !IG.present) { g('igate-carte').hidden = true; return; }
+  if (document.activeElement !== g('igate-actif')) g('igate-actif').checked = !!IG.actif;
+  if (document.activeElement !== g('igate-serveur') && !g('igate-serveur').dataset.touche) g('igate-serveur').value = IG.serveur || '';
+  if (document.activeElement !== g('igate-indicatif') && !g('igate-indicatif').dataset.touche) g('igate-indicatif').value = IG.indicatifPose ? IG.indicatif : '';
+  g('igate-indicatif').placeholder = IG.indicatif ? IG.indicatif + ' (indicatif de la station)' : 'F4XYZ-10';
+  g('igate-passcode').placeholder = IG.passcode ? 'passcode enregistré' : 'Passcode APRS-IS';
+  const p = g('igate-pastille');
+  p.className = 'pastille ' + (!IG.actif ? 'coupe' : IG.connecte && IG.verifie ? 'marche' : '');
+  p.textContent = !IG.actif ? 'coupé' : IG.connecte && IG.verifie ? 'connecté' : IG.connecte ? 'non vérifié' : 'hors ligne';
+  const R = IG.raisons || {}, f = IG.refuses || {};
+  const nRef = Object.keys(f).reduce((a, k) => a + f[k], 0);
+  txt('igate-etat', !IG.actif ? 'Coupé : rien ne part.' : (IG.manque ? IG.manque : IG.etat) +
+    (IG.connecte && IG.nomServeur ? ' · serveur ' + IG.nomServeur : '') + (IG.connecte && IG.depuis ? ' depuis ' + hm(IG.depuis, true) : '') +
+    ' · ' + IG.transmis + ' transmise(s) · ' + nRef + ' refusée(s)');
+  txt('igate-refus', nRef ? 'Refusées : ' + Object.keys(f).map(k => (R[k] || k) + ' ' + f[k]).join(' · ') : '');
+  g('igate-derniers').innerHTML = (IG.derniers || []).slice(0, 3).map(d => hm(d.t, true) + ' ' + esc(d.ligne)).join('<br>');
+}
+['igate-serveur', 'igate-indicatif'].forEach(i => { g(i).oninput = () => { g(i).dataset.touche = '1'; }; });
 async function ticAprs() {
   if (!ouverte('aprs')) return;
   ticKiss();
+  ticIGate();
   try { A = await (await fetch('api/aprs')).json(); } catch (x) { return; }
   if (!A.present) return;
   txt('a-n', String(A.paquets.length)); txt('a-stations', String(A.nbStations)); txt('a-iss', String(A.viaIss));

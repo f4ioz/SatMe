@@ -133,11 +133,13 @@ object AprsCarteJs {
         <button type="button" role="tab" data-p="aq-p-st" aria-selected="true">Stations</button>
         <button type="button" role="tab" data-p="aq-p-trames" aria-selected="false">Trames</button>
         <button type="button" role="tab" data-p="aq-p-kiss" aria-selected="false">Radio KISS</button>
+        <button type="button" role="tab" data-p="aq-p-partage" aria-selected="false" title="Partager ce qui est entendu : l’iGate vers APRS-IS, et les trames pour d’autres logiciels (KISS TCP, AGWPE). Réception seule">Partage</button>
         <button type="button" role="tab" data-p="aq-p-tr" aria-selected="false">Trophées</button>
         <button type="button" role="tab" data-p="aq-p-msg" aria-selected="false" title="Les messages APRS adressés à ton indicatif (tous SSID) et les bulletins : lecture seule, aucun accusé envoyé">Messages <span class="aq-badge" id="aq-msg-n" hidden></span></button>
       </div>
       <div class="aq-pan" id="aq-p-trames" hidden></div>
       <div class="aq-pan defile" id="aq-p-kiss" hidden></div>
+      <div class="aq-pan defile" id="aq-p-partage" hidden></div>
       <div class="aq-pan defile" id="aq-p-tr" hidden></div>
       <div class="aq-pan" id="aq-p-msg" hidden>${MessagesAprsJs.HTML}</div>
       <div class="carte aq-pan" id="aq-p-st">
@@ -541,7 +543,7 @@ g('aq-osm').onchange = () => { try { localStorage.setItem('cg-osm', g('aq-osm').
 aqPuces();
 // The whole tab in the window: the KISS radio, the trophies and the raw frames go in tabs beside the map
 // (same elements, moved), and the map with its column takes the height left above the status bar.
-[['kiss-carte', 'aq-p-kiss'], ['tr-carte', 'aq-p-tr'], ['a-trames', 'aq-p-trames']].forEach(([d, p]) => {
+[['kiss-carte', 'aq-p-kiss'], ['igate-carte', 'aq-p-partage'], ['tr-carte', 'aq-p-tr'], ['a-trames', 'aq-p-trames']].forEach(([d, p]) => {
   const e = g(d); if (!e || !g(p)) return; e.open = true; g(p).appendChild(e);
 });
 (function () { const t = g('a-trames'); const boite = t && t.querySelector('div[style*="max-height"]'); if (boite) { boite.style.maxHeight = 'none'; boite.style.flex = '1'; boite.style.minHeight = '0'; }
