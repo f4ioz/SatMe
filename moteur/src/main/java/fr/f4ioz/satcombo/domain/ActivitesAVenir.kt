@@ -187,6 +187,30 @@ object ActivitesAVenir {
 
     // ------------------------------------------------------------------ what to prepare
 
+    /**
+     * Whole days [debutMs]…[finMs] as read in [jours] (the day each falls on there), as the same days on
+     * [zone]'s clock: 00:00 of the first, 23:59 of the last.
+     */
+    fun joursLocaux(debutMs: Long, finMs: Long, jours: java.time.ZoneId, zone: java.time.ZoneId): Pair<Long, Long> {
+        val d = java.time.Instant.ofEpochMilli(debutMs).atZone(jours).toLocalDate()
+        val f = java.time.Instant.ofEpochMilli(finMs).atZone(jours).toLocalDate()
+        return d.atStartOfDay(zone).toInstant().toEpochMilli() to f.atTime(23, 59).atZone(zone).toInstant().toEpochMilli()
+    }
+
+    /**
+     * The period a campaign made from [a] covers on [zone]'s clock, from its draft's [debutMs]…[finMs]:
+     * the instants as they are when the times are known; whole days otherwise. The sources write days
+     * announced without a time (« du 27 au 29 octobre », an all-day ARISS event) as UTC days, 00:00 →
+     * 23:59 UTC: those very days here, never the next one (23:59 UTC is already the next day in Paris —
+     * the campaign used to run one day too long). Unknown dates (a week from the post): the days they
+     * fall on here.
+     */
+    fun periodeCampagne(a: Activite, debutMs: Long, finMs: Long, zone: java.time.ZoneId): Pair<Long, Long> = when (a.precision) {
+        Precision.EXACTE -> debutMs to finMs
+        Precision.JOURS -> joursLocaux(debutMs, finMs, java.time.ZoneOffset.UTC, zone)
+        Precision.INCONNUE -> joursLocaux(debutMs, finMs, zone, zone)
+    }
+
     /** An SSTV (or SSDV) activity's campaign draft, for the owner to check in Agenda › SSTV: never saved here. */
     fun campagne(a: Activite, maintenant: Long): CampagneSstv.Campagne = CampagneSstv.Campagne(
         id = "", nom = a.titre.take(60), catnum = a.catnum, satNom = a.satNom,

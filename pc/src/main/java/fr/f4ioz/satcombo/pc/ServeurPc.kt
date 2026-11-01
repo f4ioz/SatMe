@@ -195,6 +195,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** « Agenda › SSTV »: the campaigns and their auto-pilot (set before [demarre]). */
     @Volatile var autopilote: AutoPiloteSstvPc? = null
     @Volatile var activites: ActivitesPc? = null
+    /** « Agenda › Calendrier »: the items between two instants. */
+    @Volatile var calendrier: CalendrierPc? = null
     /** The SSTV gallery sorted by slide, the series' timetable (set before [demarre]). */
     @Volatile var classement: ClassementSstvPc? = null
     /** The SSTV options (missing slide's notice, retention, QSL, ARISS pack). */
@@ -1086,6 +1088,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // « Agenda › Diplômes »: the awards, what the station has for each, the request prepared (nothing sent).
         if (chemin == "/api/diplomes" || chemin.startsWith("/api/diplomes/")) {
             val rep = diplomes?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // « Agenda › Calendrier »: the appointments, campaigns, passes and activities between two instants (read only).
+        if (chemin == "/api/calendrier" && r.methode != "POST") {
+            val rep = calendrier?.sert { q[it].orEmpty() }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
@@ -2039,6 +2047,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val ids = q["profils"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
                 return JsonPc.bilan(kotlinx.coroutines.runBlocking { i.depuisEnLigne(ids) })
             }
+            // An appointment typed or changed in the page (its times as instants: the browser said them in its own clock).
+            "/api/agenda/garde" -> return station.gardeAgenda(q["id"]?.toLongOrNull() ?: 0L, q["titre"].orEmpty(), q["de"]?.toLongOrNull() ?: 0L,
+                q["a"]?.toLongOrNull() ?: 0L, q["sat"].orEmpty(), q["type"].orEmpty(), q["note"].orEmpty(), q["avance"]?.toIntOrNull() ?: 60,
+                ((q["freq"]?.replace(',', '.')?.trim()?.toDoubleOrNull() ?: 0.0) * 1e6).toLong()).fold(
+                { ok.put("id", it.id) }, { JSONObject().put("ok", false).put("erreur", it.message ?: "refusé") })
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")

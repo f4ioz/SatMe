@@ -809,6 +809,24 @@ class StationPc(
 
     fun retireAgenda(id: Long) { change { copy(agenda = AgendaStore.remove(stockageAgenda, id)) } }
 
+    /**
+     * An appointment typed in the page, new ([id] 0) or changed (its id kept, its reminder's state too):
+     * a title, a start, an end (0 or not after the start: an instant), the satellite, the kind, a note.
+     */
+    fun gardeAgenda(id: Long, titre: String, deMs: Long, aMs: Long, sat: String, type: String, note: String, avanceMin: Int, freqHz: Long): Result<AgendaStore.AgendaEvent> {
+        if (deMs <= 0L) return Result.failure(IllegalArgumentException("donner le début"))
+        if (aMs > deMs && aMs - deMs > 62 * 86_400_000L) return Result.failure(IllegalArgumentException("deux mois au plus"))
+        if (aMs in 1 until deMs) return Result.failure(IllegalArgumentException("la fin doit venir après le début"))
+        val ancien = if (id > 0L) _etat.value.agenda.firstOrNull { it.id == id } ?: return Result.failure(IllegalArgumentException("rendez-vous introuvable")) else null
+        val k = type.trim().uppercase().takeIf { it in AgendaStore.KINDS } ?: ""
+        val e = AgendaStore.AgendaEvent(id = ancien?.id ?: maxOf(horloge(), (_etat.value.agenda.maxOfOrNull { it.id } ?: 0L) + 1),
+            title = titre.trim().take(80).ifBlank { if (sat.isNotBlank()) "Rendez-vous " + sat.trim() else "Rendez-vous" }, timeMs = deMs,
+            satName = sat.trim().take(40), leadMin = avanceMin.coerceIn(0, 24 * 60), note = note.trim().take(300), enabled = ancien?.enabled ?: true,
+            endMs = if (aMs > deMs) aMs else 0L, kind = k, freqHz = freqHz.coerceIn(0L, 30_000_000_000L))
+        change { copy(agenda = AgendaStore.put(stockageAgenda, e)) }
+        return Result.success(e)
+    }
+
     fun activeAgenda(id: Long) {
         val e = _etat.value.agenda.firstOrNull { it.id == id } ?: return
         change { copy(agenda = AgendaStore.put(stockageAgenda, e.copy(enabled = !e.enabled))) }

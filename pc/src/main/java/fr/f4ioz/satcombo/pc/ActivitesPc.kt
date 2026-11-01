@@ -41,6 +41,8 @@ class ActivitesPc(
     private val fictives: (Long) -> List<Activite> = { emptyList() },
     /** The catalogue's satellites (name, NORAD number). */
     private val catalogue: () -> List<Pair<String, Int>> = { station.etat.value.satellites.map { it.name to it.catalogNumber } },
+    /** The clock whole days are counted on (this PC's). */
+    private val zone: () -> java.time.ZoneId = { java.time.ZoneId.systemDefault() },
 ) {
     /** Set by Main: the SSTV auto-pilote the one-click campaigns go to (absent in some tests). */
     @Volatile var autopilote: AutoPiloteSstvPc? = null
@@ -201,7 +203,10 @@ class ActivitesPc(
     private fun campagne(id: String, catnum: Int = 0): ReponseWeb {
         val a = liste().firstOrNull { it.id == id }?.let { if (catnum > 0) it.copy(catnum = catnum) else it } ?: return refus("activité introuvable")
         // A satellite not found: the form says so, the owner picks it there.
-        val c = ActivitesAVenir.campagne(a, horloge())
+        val c0 = ActivitesAVenir.campagne(a, horloge())
+        // Whole days announced: the same days on this PC's clock (the form shows them as they will be kept).
+        val (de, fin) = ActivitesAVenir.periodeCampagne(a, c0.debutMs, c0.finMs, zone())
+        val c = c0.copy(debutMs = de, finMs = fin)
         val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == a.catnum }
         val trouve = listOfNotNull(if (a.catnum > 0) "satellite " + (sat?.name ?: a.satNom) else null, if (c.freqHz > 0) "fréquence " + String.format(java.util.Locale.FRANCE, "%.3f", c.freqHz / 1e6) + " MHz" else null,
             if (c.modeSstv != fr.f4ioz.satcombo.domain.CampagneSstv.AUTO) "mode " + c.modeSstv else null, "période", if (c.horaire.isNotBlank()) "rythme" else null)
@@ -282,6 +287,11 @@ class ActivitesPc(
                     .put("autopilote", a.type == ActivitesAVenir.Type.SSTV && ap != null)
                     .put("satCatalogue", if (a.catnum > 0) cat.firstOrNull { it.second == a.catnum }?.first ?: JSONObject.NULL else JSONObject.NULL)
                     .put("lienAp", ap?.let { lien(a, it) } ?: JSONObject.NULL)
+                    // Its campaign deleted by the owner: said, never made again by itself (« Recréer la campagne »).
+                    .put("campagneSupprimee", ap?.supprimee(a) == true)
+                    // Whole days: the days themselves (they are written as UTC days), for the page to say them.
+                    .put("jours", if (a.precision == ActivitesAVenir.Precision.JOURS) ActivitesAVenir.periodeCampagne(a, a.debutMs, a.finMs, zone())
+                        .let { (d, f) -> JSONObject().put("de", d).put("a", f) } else JSONObject.NULL)
             }))
             .put("annonces", JSONArray(synchronized(this) { annonces.toList() }.map { JSONObject().put("n", it.n).put("quand", it.quandMs).put("sorte", it.sorte).put("texte", it.texte).put("id", it.id) }))
     }

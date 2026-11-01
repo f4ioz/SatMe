@@ -103,14 +103,24 @@ object CampagneSstv {
         val activite: String = "",
         /** Its period still follows the activity's (false once the owner changed it by hand). */
         val activiteSuit: Boolean = true,
+        /** The AOS of the passes the owner cancelled one by one (the campaign itself goes on). */
+        val annules: List<Long> = emptyList(),
     ) {
         val personnalisee: Boolean get() = freqHz > 0L
         /** The SSTV mode held, null: « Auto ». */
         val modeForce: SstvMode? get() = SstvMode.byName(modeSstv)
         val avantMs: Long get() = avantMin * 60_000L
+        /** Its period is over at [t]: shown « terminée », no pass planned any more. */
+        fun terminee(t: Long): Boolean = finMs <= t
+        /** Was the pass at [aosMs] cancelled by hand? */
+        fun annule(aosMs: Long): Boolean = annules.any { abs(it - aosMs) <= TOLERANCE_MS }
     }
 
-    enum class Statut { PREVU, CHEVAUCHE, EN_COURS, FAIT, ECARTE, ARRETE, INTERROMPU }
+    /** ANNULE: a single pass cancelled by hand, never kept in the history. */
+    enum class Statut { PREVU, CHEVAUCHE, EN_COURS, FAIT, ECARTE, ARRETE, INTERROMPU, ANNULE }
+
+    /** The cancelled passes kept per campaign (the oldest dropped first). */
+    const val MAX_ANNULES = 100
 
     /** One pass of a campaign as the plan sees it. */
     data class Prevu(val campagne: Campagne, val passage: SatPass, val statut: Statut, val raison: String = "")
@@ -146,7 +156,10 @@ object CampagneSstv {
     fun plan(campagnes: List<Campagne>, passagesDe: (Campagne) -> List<SatPass>, historique: List<Trace>,
              maintenant: Long, enCours: Pair<String, Long>? = null): List<Prevu> {
         val tous = campagnes.filter { it.active }.flatMap { c ->
-            passages(c, passagesDe(c)).filter { it.losEpochMs + APRES_LOS_MS > maintenant }.map { c to it }
+            passages(c, passagesDe(c)).filter { it.losEpochMs + APRES_LOS_MS > maintenant }
+                // A campaign whose period is over plans nothing more (the pass under way ends as it is).
+                .filter { !c.terminee(maintenant) || (enCours != null && enCours.first == c.id && abs(enCours.second - it.aosEpochMs) <= TOLERANCE_MS) }
+                .map { c to it }
         }.sortedBy { it.second.aosEpochMs }
         var fin = Long.MIN_VALUE
         var nom = ""
@@ -156,6 +169,7 @@ object CampagneSstv {
                 enCours != null && enCours.first == c.id && abs(enCours.second - p.aosEpochMs) <= TOLERANCE_MS -> {
                     fin = p.losEpochMs + APRES_LOS_MS; nom = c.nom; Prevu(c, p, Statut.EN_COURS)
                 }
+                c.annule(p.aosEpochMs) -> Prevu(c, p, Statut.ANNULE, "passage annulé à la main")
                 t != null -> {
                     if (t.statut == Statut.FAIT || t.statut == Statut.ARRETE || t.statut == Statut.INTERROMPU) { fin = maxOf(fin, p.losEpochMs + APRES_LOS_MS); nom = c.nom }
                     Prevu(c, p, t.statut, t.raison)
@@ -165,6 +179,27 @@ object CampagneSstv {
             }
         }
     }
+
+    // ------------------------------------------------------------- said
+
+    private val JOURS_COURTS = arrayOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.")
+
+    /** « heure de Paris », « UTC »: the clock [zone] times are said in. */
+    fun nomZone(zone: java.time.ZoneId): String {
+        val id = zone.normalized().id
+        return if (id == "Z" || id == "UTC" || id == "GMT" || zone.normalized() == java.time.ZoneOffset.UTC) "UTC"
+            else if (id.contains('/')) "heure de " + id.substringAfterLast('/').replace('_', ' ') else "heure $id"
+    }
+
+    /** « jeu. 29/10 00:00 » on [zone]'s clock. */
+    fun instantTexte(ms: Long, zone: java.time.ZoneId): String {
+        val z = java.time.Instant.ofEpochMilli(ms).atZone(zone)
+        return JOURS_COURTS[z.dayOfWeek.value - 1] + " " + String.format(java.util.Locale.ROOT, "%02d/%02d %02d:%02d", z.dayOfMonth, z.monthValue, z.hour, z.minute)
+    }
+
+    /** « du jeu. 29/10 00:00 au dim. 01/11 23:59 (heure de Paris) »: a period said in full, on [zone]'s clock. */
+    fun periodeTexte(debutMs: Long, finMs: Long, zone: java.time.ZoneId): String =
+        "du " + instantTexte(debutMs, zone) + " au " + instantTexte(finMs, zone) + " (" + nomZone(zone) + ")"
 
     // ------------------------------------------------------------- checking
 
@@ -201,6 +236,7 @@ object CampagneSstv {
             modeSstv = c.modeSstv.takeIf { it == AUTO || SstvMode.byName(it) != null } ?: AUTO,
             elMin = c.elMin.coerceIn(0.0, 90.0), horaire = propre(c.horaire, 80), avantMin = c.avantMin.coerceIn(0, 30),
             notes = propre(c.notes, 600), lien = lienPropre(c.lien), activite = propre(c.activite, 400),
+            annules = c.annules.filter { it > 0 }.distinct().sorted().takeLast(MAX_ANNULES),
             chaine = ch.copy(profil = ch.profil.takeIf { ID.matches(it) } ?: "", source = propre(ch.source, 120)),
         ))
     }
@@ -211,7 +247,7 @@ object CampagneSstv {
         .put("emetteur", c.emetteur).put("freqHz", c.freqHz).put("modulation", c.modulation).put("largeurHz", c.largeurHz)
         .put("mode", c.modeSstv).put("de", c.debutMs).put("a", c.finMs).put("aConfirmer", c.aConfirmer).put("elMin", c.elMin)
         .put("horaire", c.horaire).put("avantMin", c.avantMin).put("notes", c.notes).put("lien", c.lien).put("active", c.active).put("cree", c.creeMs)
-        .put("activite", c.activite).put("activiteSuit", c.activiteSuit)
+        .put("activite", c.activite).put("activiteSuit", c.activiteSuit).put("annules", JSONArray(c.annules))
         .put("chaine", c.chaine.let { h -> JSONObject().put("profil", h.profil).put("poste", h.poste).put("connecterPoste", h.connecterPoste)
             .put("source", h.source).put("rotor", h.rotor).put("connecterRotor", h.connecterRotor).put("enregistrer", h.enregistrer)
             .put("sstv", h.sstv).put("annonce", h.annonce).put("parquer", h.parquer).put("ssdv", h.ssdv) })
@@ -225,6 +261,7 @@ object CampagneSstv {
             aConfirmer = o.optBoolean("aConfirmer"), elMin = o.optDouble("elMin", 10.0), horaire = o.optString("horaire"),
             avantMin = o.optInt("avantMin", 2), notes = o.optString("notes"), lien = o.optString("lien"), active = o.optBoolean("active", true),
             creeMs = o.optLong("cree"), activite = o.optString("activite"), activiteSuit = o.optBoolean("activiteSuit", true),
+            annules = o.optJSONArray("annules")?.let { a -> (0 until a.length()).map { a.optLong(it) } }.orEmpty(),
             chaine = Chaine(profil = h.optString("profil"), poste = h.optBoolean("poste", d.poste), connecterPoste = h.optBoolean("connecterPoste", false),
                 source = h.optString("source", d.source), rotor = h.optBoolean("rotor", d.rotor), connecterRotor = h.optBoolean("connecterRotor", false),
                 enregistrer = h.optBoolean("enregistrer", d.enregistrer), sstv = h.optBoolean("sstv", d.sstv), annonce = h.optBoolean("annonce", d.annonce),
@@ -240,7 +277,12 @@ object CampagneSstv {
 
     /** The whole file: the master switch, the campaigns, the history, the pass under way (to put things back after a restart). */
     data class Fichier(val maitre: Boolean = false, val campagnes: List<Campagne> = emptyList(), val historique: List<Trace> = emptyList(),
-                       val enCours: EnCoursSauve? = null)
+                       val enCours: EnCoursSauve? = null,
+                       /** The activities whose campaign the owner deleted: never made again by themselves (« Recréer » only). */
+                       val supprimees: List<String> = emptyList())
+
+    /** The deleted activities' ids kept (the oldest dropped first). */
+    const val MAX_SUPPRIMEES = 200
 
     /** The pass under way, as kept on disk: which one, and the receive state to put back. */
     data class EnCoursSauve(val campagne: String, val aosMs: Long, val avant: Map<String, String>)
@@ -248,6 +290,7 @@ object CampagneSstv {
     fun ecrit(f: Fichier): JSONObject = JSONObject().put("v", 1).put("maitre", f.maitre)
         .put("campagnes", JSONArray(f.campagnes.map { json(it) }))
         .put("historique", JSONArray(f.historique.takeLast(MAX_HISTORIQUE).map { it.json() }))
+        .put("supprimees", JSONArray(f.supprimees.takeLast(MAX_SUPPRIMEES)))
         .put("enCours", f.enCours?.let { e -> JSONObject().put("campagne", e.campagne).put("aos", e.aosMs).put("avant", JSONObject(e.avant as Map<*, *>)) } ?: JSONObject.NULL)
 
     fun lit(texte: String?): Fichier = runCatching {
@@ -260,6 +303,7 @@ object CampagneSstv {
         }
         Fichier(o.optBoolean("maitre", false),
             (0 until minOf(a.length(), MAX)).mapNotNull { a.optJSONObject(it)?.let(::lisCampagne) }.distinctBy { it.id },
-            (0 until h.length()).mapNotNull { h.optJSONObject(it)?.let(::lisTrace) }.takeLast(MAX_HISTORIQUE), e)
+            (0 until h.length()).mapNotNull { h.optJSONObject(it)?.let(::lisTrace) }.takeLast(MAX_HISTORIQUE), e,
+            o.optJSONArray("supprimees")?.let { s -> (0 until s.length()).map { s.optString(it) }.filter { it.isNotBlank() } }.orEmpty().takeLast(MAX_SUPPRIMEES))
     }.getOrDefault(Fichier())
 }

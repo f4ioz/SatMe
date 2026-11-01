@@ -54,6 +54,8 @@ class AutoPiloteSstvPc(
     private val telecharge: (String) -> ByteArray = ::telechargeImage,
     /** The station's gestures (the tests' fake); null: this PC's. */
     stationPilote: PiloteSstv.Station? = null,
+    /** The clock the periods are said and whole days counted on (this PC's). */
+    val zone: () -> java.time.ZoneId = { java.time.ZoneId.systemDefault() },
 ) {
     private val fichier = File(dossier, "sstv-campagnes.json")
     @Volatile private var donnees: CampagneSstv.Fichier = runCatching { CampagneSstv.lit(fichier.readText()) }.getOrDefault(CampagneSstv.Fichier())
@@ -102,6 +104,20 @@ class AutoPiloteSstvPc(
         val d = donnees
         return CampagneSstv.plan(d.campagnes, ::passages, d.historique, horloge(), pilote.enCours?.let { it.campagne.id to it.passage.aosEpochMs })
     }
+
+    /**
+     * [c]'s passes as its editor and the calendar show them: the plan's when it is active, else what it
+     * would receive once switched on again (nothing for a campaign whose period is over).
+     */
+    fun passagesCampagne(c: Campagne, plan: List<CampagneSstv.Prevu> = plan()): List<CampagneSstv.Prevu> =
+        if (c.active) plan.filter { it.campagne.id == c.id }
+        else CampagneSstv.plan(listOf(c.copy(active = true)), ::passages, donnees.historique, horloge())
+
+    /** The activities whose campaign the owner deleted (never made again by themselves). */
+    val supprimees: List<String> get() = donnees.supprimees
+
+    /** Was [a]'s campaign deleted by the owner? (« Recréer la campagne » only makes it again.) */
+    fun supprimee(a: ActivitesAVenir.Activite): Boolean = a.id in donnees.supprimees && campagneDe(a) == null
 
     /** The active campaigns' satellites (the timeline shows them). */
     fun catnums(): Set<Int> = donnees.campagnes.filter { it.active && it.finMs > horloge() }.map { it.catnum }.toSet()
@@ -161,9 +177,32 @@ class AutoPiloteSstvPc(
         Result.success(k)
     }
 
+    /**
+     * A campaign deleted for good: made from an activity, that activity is remembered so that nothing
+     * makes it again by itself (only « Recréer la campagne », on purpose).
+     */
     fun retire(id: String) = synchronized(this) {
         if (pilote.enCours?.campagne?.id == id) pilote.stop("campagne retirée")
-        donnees = donnees.copy(campagnes = donnees.campagnes.filter { it.id != id }); ecrit()
+        val c = donnees.campagnes.firstOrNull { it.id == id }
+        val sup = if (c != null && c.activite.isNotBlank()) (donnees.supprimees - c.activite + c.activite).takeLast(CampagneSstv.MAX_SUPPRIMEES) else donnees.supprimees
+        donnees = donnees.copy(campagnes = donnees.campagnes.filter { it.id != id }, supprimees = sup); ecrit()
+    }
+
+    /**
+     * One pass of campaign [id] (its AOS [aosMs]) cancelled ([on]) or taken again: the campaign goes on
+     * with its other passes. The pass under way, cancelled: stopped now (the state put back).
+     */
+    fun annule(id: String, aosMs: Long, on: Boolean): Result<Campagne> = synchronized(this) {
+        val c = donnees.campagnes.firstOrNull { it.id == id } ?: return Result.failure(IllegalArgumentException("campagne introuvable"))
+        if (aosMs <= 0L) return Result.failure(IllegalArgumentException("passage inconnu"))
+        val l = if (on) (c.annules.filter { kotlin.math.abs(it - aosMs) > CampagneSstv.TOLERANCE_MS } + aosMs).sorted().takeLast(CampagneSstv.MAX_ANNULES)
+            else c.annules.filter { kotlin.math.abs(it - aosMs) > CampagneSstv.TOLERANCE_MS }
+        val k = c.copy(annules = l)
+        donnees = donnees.copy(campagnes = donnees.campagnes.map { if (it.id == id) k else it })
+        ecrit()
+        val ec = pilote.enCours
+        if (on && ec != null && ec.campagne.id == id && kotlin.math.abs(ec.passage.aosEpochMs - aosMs) <= CampagneSstv.TOLERANCE_MS) pilote.stop("passage annulé à la main")
+        Result.success(k)
     }
 
     fun active(id: String, on: Boolean) = synchronized(this) {
@@ -208,12 +247,8 @@ class AutoPiloteSstvPc(
         val t = horloge()
         val b = ActivitesAVenir.campagne(a.copy(catnum = catnum), t)
         val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == catnum }
-        var de = b.debutMs; var fin = b.finMs
-        if (b.aConfirmer) {
-            val z = java.time.ZoneId.systemDefault()
-            de = java.time.Instant.ofEpochMilli(de).atZone(z).toLocalDate().atStartOfDay(z).toInstant().toEpochMilli()
-            fin = java.time.Instant.ofEpochMilli(fin).atZone(z).toLocalDate().atTime(23, 59).atZone(z).toInstant().toEpochMilli()
-        }
+        // Days announced without a time are UTC days: the same days here (not the next one for the end).
+        var (de, fin) = ActivitesAVenir.periodeCampagne(a, b.debutMs, b.finMs, zone())
         if (fin <= t) return Result.failure(IllegalArgumentException("activité terminée"))
         if (fin - de > CampagneSstv.DUREE_MAX_MS) fin = de + CampagneSstv.DUREE_MAX_MS
         val emetteur = if (b.freqHz > 0) "" else {
@@ -234,6 +269,8 @@ class AutoPiloteSstvPc(
      * off. Receive only, as always.
      */
     fun activeActivite(a: ActivitesAVenir.Activite, catnum: Int, elMin: Double = CampagneSstv.EL_MIN_ACTIVITE): Result<Activation> = synchronized(this) {
+        // Asked on purpose: a campaign deleted before may be made again.
+        if (a.id in donnees.supprimees) donnees = donnees.copy(supprimees = donnees.supprimees - a.id)
         val deja = campagneDe(a.copy(catnum = catnum))
         val c = if (deja != null) {
             if (!deja.active) active(deja.id, true)
@@ -299,7 +336,7 @@ class AutoPiloteSstvPc(
 
     /**
      * `/api/autopilote`: GET the state; POST `/maitre?on=`, `/campagne`
-     * (the form), `/retire?id=`, `/active?id=&on=`, `/stop`, `/affiche`
+     * (the form), `/retire?id=`, `/annule?id=&aos=&on=` (one pass), `/active?id=&on=`, `/stop`, `/affiche`
      * (a picture in the body, or ?url=), `/texte` (a flyer's text in the
      * body); GET `/emetteurs?catnum=`.
      */
@@ -318,7 +355,12 @@ class AutoPiloteSstvPc(
                 if (ancien == null || ancien.activite.isBlank()) f
                 else f.copy(activite = ancien.activite, activiteSuit = ancien.activiteSuit && f.debutMs == ancien.debutMs && f.finMs == ancien.finMs)
             }).fold({ json(JSONObject().put("ok", true).put("campagne", CampagneSstv.json(it))) }, { refus(it.message ?: "refusé") })
-            "/retire" -> { retire(p("id")); json(JSONObject().put("ok", true)) }
+            "/retire" -> {
+                if (donnees.campagnes.none { it.id == p("id") }) refus("campagne introuvable")
+                else { retire(p("id")); json(JSONObject().put("ok", true).put("retiree", p("id"))) }
+            }
+            "/annule" -> annule(p("id"), p("aos").toLongOrNull() ?: 0L, p("on") != "0").fold(
+                { json(JSONObject().put("ok", true).put("campagne", CampagneSstv.json(it))) }, { refus(it.message ?: "refusé") })
             "/active" -> { active(p("id"), p("on") == "1"); json(JSONObject().put("ok", true)) }
             "/stop" -> { if (pilote.enCours == null) refus("aucun passage en cours") else { pilote.stop(); tic(); json(JSONObject().put("ok", true)) } }
             "/affiche" -> {
@@ -361,17 +403,18 @@ class AutoPiloteSstvPc(
         val plan = runCatching { plan() }.getOrDefault(emptyList())
         val s = son
         val cartes = s?.let { runCatching { val l = it.son.appareils(); val n = it.nomsCartes(l); l.map { a -> JSONObject().put("nom", a.nom).put("lib", n[a.nom]?.libelle ?: a.nom) } }.getOrNull() }.orEmpty()
-        return JSONObject().put("ok", true).put("maitre", donnees.maitre).put("maintenant", t)
+        val z = zone()
+        return JSONObject().put("ok", true).put("maitre", donnees.maitre).put("maintenant", t).put("zone", CampagneSstv.nomZone(z))
             .put("campagnes", JSONArray(donnees.campagnes.map { c ->
                 val l = plan.filter { it.campagne.id == c.id }
+                val ps = runCatching { passagesCampagne(c, plan) }.getOrDefault(emptyList())
                 CampagneSstv.json(c).put("prochain", l.firstOrNull { it.statut == CampagneSstv.Statut.PREVU }?.passage?.aosEpochMs ?: JSONObject.NULL)
                     .put("nb", l.count { it.statut == CampagneSstv.Statut.PREVU })
+                    .put("terminee", c.terminee(t)).put("periode", CampagneSstv.periodeTexte(c.debutMs, c.finMs, z))
+                    // Its passes to come, as the editor lists them (cancel one there).
+                    .put("passages", JSONArray(ps.take(40).map { pr -> passageJson(pr) }))
             }))
-            .put("prochains", JSONArray(plan.take(60).map { pr ->
-                JSONObject().put("campagne", pr.campagne.id).put("nom", pr.campagne.nom).put("sat", pr.campagne.satNom).put("catnum", pr.passage.catalogNumber)
-                    .put("aos", pr.passage.aosEpochMs).put("los", pr.passage.losEpochMs).put("el", Math.round(pr.passage.maxElevationDeg))
-                    .put("prep", pr.passage.aosEpochMs - pr.campagne.avantMs).put("statut", pr.statut.name).put("raison", pr.raison)
-            }))
+            .put("prochains", JSONArray(plan.take(60).map { pr -> passageJson(pr).put("nom", pr.campagne.nom).put("sat", pr.campagne.satNom) }))
             .put("enCours", ec?.let { e ->
                 JSONObject().put("campagne", e.campagne.id).put("nom", e.campagne.nom).put("sat", e.campagne.satNom).put("phase", e.phase.name)
                     .put("aos", e.passage.aosEpochMs).put("los", e.passage.losEpochMs).put("el", Math.round(e.passage.maxElevationDeg))
@@ -425,6 +468,12 @@ class AutoPiloteSstvPc(
         }
         return o
     }
+
+    /** A planned pass for the page. */
+    fun passageJson(pr: CampagneSstv.Prevu): JSONObject = JSONObject().put("campagne", pr.campagne.id).put("catnum", pr.passage.catalogNumber)
+        .put("aos", pr.passage.aosEpochMs).put("los", pr.passage.losEpochMs).put("el", Math.round(pr.passage.maxElevationDeg))
+        .put("prep", pr.passage.aosEpochMs - pr.campagne.avantMs).put("statut", pr.statut.name).put("raison", pr.raison)
+        .put("suspendue", !pr.campagne.active || !donnees.campagnes.any { it.id == pr.campagne.id && it.active })
 
     /** The frequency a campaign listens to (sky Hz): its own, else its transmitter's. */
     private fun frequence(c: Campagne): Long = if (c.personnalisee) c.freqHz

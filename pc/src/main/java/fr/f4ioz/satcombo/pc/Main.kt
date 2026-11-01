@@ -656,6 +656,8 @@ fun main(args: Array<String>) {
     // « Activer l'auto-pilote » on an SSTV activity: its campaign made, kept and switched on here.
     activites.autopilote = autopilote
     serveur.activites = activites
+    // « Agenda › Calendrier »: what is planned, month by month (read only).
+    serveur.calendrier = CalendrierPc(station, { autopilote }, { activites })
     // The SSTV gallery sorted by slide (marks, groups, the footer read) and the series' timetable.
     val classement = ClassementSstvPc(son.sstv, station, { activites }, { autopilote })
     serveur.classement = classement

@@ -884,6 +884,7 @@ ${STYLE_JETONS}
   .ap-camp .ap-camp-t { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .ap-camp .ap-camp-t b { font-size:var(--fs-l); }
   .ap-camp .ap-camp-t .act { margin-left:auto; display:flex; gap:4px; }
+  .ap-suppr.arme { border-color:var(--rose); color:var(--rose); background:rgba(229,72,77,.12); }
   .ap-camp .petit a { color:var(--rx); }
   .ap-tab { max-height:calc(50vh - 120px); overflow:auto; }
   #ap-liste { max-height:calc(100vh - 470px); min-height:60px; overflow:auto; }
@@ -928,7 +929,7 @@ ${STYLE_JETONS}
   .ac-pass span { font-family:var(--mono); }
   #ac-liste { max-height:calc(100vh - 200px); overflow:auto; }
   .st-nav button .ac-n { background:var(--ambre); color:#111; border-radius:9px; padding:0 6px; font-size:10px; display:inline !important; }
-${DiplomesJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
+${DiplomesJs.CSS}${CalendrierJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
   #ap-ocr { max-height:160px; overflow:auto; white-space:pre-wrap; font-size:11px; margin:4px 0 0; color:var(--texte-2); }
   #h-ap { align-items:center; } #h-ap.on { border-color:var(--rx); color:var(--rx); } #h-ap.encours { border-color:var(--ambre); color:var(--ambre); }
   .ap-bandeau { position:fixed; top:48px; left:calc(50% + var(--rail) / 2); transform:translateX(-50%); z-index:45; display:flex; align-items:center; gap:10px;
@@ -3047,7 +3048,7 @@ ${AprsCarteJs.HTML}
 </div>
 <div class="vue" id="v-agenda" hidden>
 <div class="st ag-st" data-st="agenda">
-  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button><button data-p="ag-p-dip" title="Les diplômes à obtenir : ceux des événements SSTV (images reçues) et du carnet (locators, entités, États) ; la demande préparée, rien n'est envoyé">${IconesPc.svg("medaille", "st-ico")}<span>Diplômes</span><span class="ac-n" id="dp-nb" hidden></span></button></div>
+  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-cal" title="Le calendrier : rendez-vous, campagnes, chaque passage prévu (campagnes et favoris), activités annoncées — par mois, semaine ou jour">${IconesPc.svg("grid_on", "st-ico")}<span>Calendrier</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button><button data-p="ag-p-dip" title="Les diplômes à obtenir : ceux des événements SSTV (images reçues) et du carnet (locators, entités, États) ; la demande préparée, rien n'est envoyé">${IconesPc.svg("medaille", "st-ico")}<span>Diplômes</span><span class="ac-n" id="dp-nb" hidden></span></button></div>
   <div class="st-pan" id="ag-p-rdv">
 <div class="grille2">
   <div>
@@ -3055,6 +3056,19 @@ ${AprsCarteJs.HTML}
       <div class="t">Agenda</div>
       <div class="ligne" style="margin-top:0"><label class="petit" title="Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)"><input type="checkbox" id="g-suivi" onchange="post('api/agenda/suivi?on=' + (this.checked ? 1 : 0))"> Suivre tout seul le satellite d'un rendez-vous <span class="plus" aria-hidden="true">…</span></label></div>
       <div class="petit aide" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
+    </div>
+    <div class="carte" id="rdv-form">
+      <div class="t">Rendez-vous <span class="petit" id="rdv-titre">nouveau</span></div>
+      <div class="ap-f">
+        <label for="rdv-nom">Titre</label><input id="rdv-nom" maxlength="80" placeholder="Sked F4XXX, SSTV ISS…">
+        <label for="rdv-sat">Satellite</label><input id="rdv-sat" list="tous" maxlength="40" placeholder="(facultatif)">
+        <label for="rdv-de">Début</label><input id="rdv-de" type="datetime-local" oninput="rdvPeriodeMaj()">
+        <label for="rdv-a">Fin</label><input id="rdv-a" type="datetime-local" oninput="rdvPeriodeMaj()" title="Vide : un instant">
+        <span></span><div class="petit" id="rdv-periode"></div>
+        <label for="rdv-type">Type</label><div class="ligne"><select id="rdv-type" style="max-width:120px"><option value="">—</option><option>SSTV</option><option>NOAA</option><option>SKED</option><option>BEACON</option><option>CONTEST</option></select><span class="petit">rappel</span><input id="rdv-avance" type="number" min="0" max="1440" value="60" style="max-width:64px"><span class="petit">min avant</span></div>
+        <label for="rdv-note">Note</label><input id="rdv-note" maxlength="300">
+      </div>
+      <div class="ligne"><button class="primaire" onclick="rdvGarde()">Enregistrer</button><button onclick="rdvNouveau()">Effacer</button><span class="petit" id="rdv-etat"></span></div>
     </div>
     <div class="carte va">
       <div class="t">Mode automatique : ne manquer aucun passage</div>
@@ -3090,8 +3104,9 @@ ${AprsCarteJs.HTML}
         <label for="ap-emetteur">Émetteur</label><select id="ap-emetteur" onchange="apEmetteurChange()"><option value="">Fréquence personnalisée…</option></select>
         <label for="ap-freq" class="ap-perso">Fréquence</label><div class="ligne ap-perso"><input id="ap-freq" placeholder="437,550" title="MHz (le Doppler est suivi)"><span class="petit">MHz</span><select id="ap-modulation" style="max-width:76px"><option>FM</option><option>NFM</option><option>USB</option><option>USB-D</option></select><input id="ap-largeur" type="number" min="3" max="250" value="15" style="max-width:62px" title="Largeur de bande (kHz)"><span class="petit">kHz</span></div>
         <label for="ap-mode">Mode SSTV</label><select id="ap-mode"></select>
-        <label for="ap-de">Début</label><div class="ligne"><input id="ap-de" type="datetime-local"><label class="petit" style="flex:none"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> horaire à confirmer</label></div>
-        <label for="ap-a">Fin</label><input id="ap-a" type="datetime-local">
+        <label for="ap-de">Début</label><div class="ligne"><input id="ap-de" type="datetime-local" oninput="apPeriodeMaj()"><label class="petit" style="flex:none" title="Coché : début mis à 00:00 et fin à 23:59 (modifiables ensuite) ; l'heure tapée est gardée telle quelle"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> journées entières (horaire à confirmer)</label></div>
+        <label for="ap-a">Fin</label><input id="ap-a" type="datetime-local" oninput="apPeriodeMaj()">
+        <span></span><div class="petit" id="ap-f-periode" aria-live="polite"></div>
         <label for="ap-el">Élévation</label><div class="ligne"><input id="ap-el" type="number" min="0" max="90" value="10" style="max-width:62px"><span class="petit">° au moins · préparer</span><input id="ap-avant" type="number" min="0" max="30" value="2" style="max-width:56px"><span class="petit">min avant l'AOS</span></div>
         <label for="ap-horaire">Rythme</label><input id="ap-horaire" maxlength="80" placeholder="36 s on / 2 min off (pour mémoire)">
         <label for="ap-lien">Lien</label><input id="ap-lien" maxlength="300" placeholder="https://… (galerie : un lien, rien n'est envoyé)">
@@ -3114,7 +3129,12 @@ ${AprsCarteJs.HTML}
         <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
       </div>
       <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
-      <div class="ligne"><button class="primaire" onclick="apGarde()">Enregistrer la campagne</button><button onclick="apNouvelle()">Effacer</button><span class="petit" id="ap-f-etat"></span></div>
+      <div id="ap-f-pass" hidden>
+        <div class="t" style="margin-top:10px">Passages de la campagne <button class="discret" onclick="apCalendrier()" title="Ouvrir le calendrier sur cette campagne">📅 Calendrier</button></div>
+        <div class="petit" id="ap-f-pass-etat"></div>
+        <div class="ap-tab" style="max-height:180px;overflow:auto"><table><tbody id="ap-f-pass-l"></tbody></table></div>
+      </div>
+      <div class="ligne"><button class="primaire" onclick="apGarde()">Enregistrer la campagne</button><button onclick="apNouvelle()">Effacer</button><button id="ap-f-suppr" class="ap-suppr" hidden onclick="apRetire(apEdit, this)" title="Supprimer la campagne (deux clics)">Supprimer la campagne</button><span class="petit" id="ap-f-etat"></span></div>
     </div>
   </div>
   <div>
@@ -3180,7 +3200,7 @@ ${AprsCarteJs.HTML}
   </div>
 </div>
   </div>
-${DiplomesJs.HTML}</div>
+${DiplomesJs.HTML}${CalendrierJs.HTML}</div>
 </div>
 <div class="vue" id="v-carres" hidden>
 <div class="grille2" style="grid-template-columns:minmax(300px,1fr) minmax(500px,2.2fr)">
@@ -5524,9 +5544,44 @@ function dessineAgenda() {
   g('g-liste').innerHTML = E.agenda.map(a => '<tr' + (a.enCours ? ' class="encours"' : '') + '><td>' + jourHeure(a.de) + (a.a > a.de ? ' → ' + hm(a.a) : '') + (a.sat ? apMarque(a.sat, a.de, a.a) : '') +
     '</td><td>' + esc(a.titre) + (a.type ? ' <span class="pastille off">' + esc(a.type) + '</span>' : '') + (a.note ? '<div class="petit">' + esc(a.note) + '</div>' : '') +
     '</td><td>' + esc(a.sat) + '</td><td class="act"><label class="petit"><input type="checkbox" ' + (a.actif ? 'checked' : '') +
-    ' onchange="post(\'api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
+    ' onchange="post(\'api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="rdvEdite(' + a.id + ')" title="Modifier">✎</button><button onclick="rdvRetire(' + a.id + ')" title="Supprimer">✕</button></td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
   if (typeof dessineAgendaAp === 'function') dessineAgendaAp();
+}
+/* An appointment typed or changed here: its times in this browser's clock (datetime-local), kept as instants. */
+let rdvEdit = 0;
+function rdvNouveau() {
+  rdvEdit = 0; txt('rdv-titre', 'nouveau'); txt('rdv-etat', ''); txt('rdv-periode', '');
+  ['rdv-nom', 'rdv-sat', 'rdv-de', 'rdv-a', 'rdv-note'].forEach(i => g(i).value = ''); g('rdv-type').value = ''; g('rdv-avance').value = 60;
+}
+function rdvPeriodeMaj() {
+  const de = v('rdv-de') ? new Date(v('rdv-de')).getTime() : 0, a = v('rdv-a') ? new Date(v('rdv-a')).getTime() : 0;
+  txt('rdv-periode', !de ? '' : a && a <= de ? '⚠ la fin doit venir après le début' : a ? calPeriode(de, a) : calQuand(de) + ' (' + calZone() + ')');
+}
+function rdvEdite(id) {
+  const r = E && E.agenda && E.agenda.find(x => x.id === id);
+  if (!r) { if (CLD.d) { const x = CLD.d.items.find(i => i.sorte === 'agenda' && i.id === id); if (x) return rdvRemplit(x); } return; }
+  rdvRemplit(r);
+}
+function rdvRemplit(r) {
+  vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-rdv"]'); if (b) b.click();
+  rdvEdit = r.id; txt('rdv-titre', 'modifier « ' + r.titre + ' »'); txt('rdv-etat', '');
+  g('rdv-nom').value = r.titre; g('rdv-sat').value = r.sat || ''; g('rdv-de').value = apLocal(r.de); g('rdv-a').value = r.a > r.de ? apLocal(r.a) : '';
+  g('rdv-type').value = r.type || ''; g('rdv-note').value = r.note || '';
+  rdvPeriodeMaj(); g('rdv-form').scrollIntoView({ block: 'nearest' });
+}
+async function rdvGarde() {
+  const de = v('rdv-de') ? new Date(v('rdv-de')).getTime() : 0, a = v('rdv-a') ? new Date(v('rdv-a')).getTime() : 0;
+  if (!de) { txt('rdv-etat', 'Donne le début.'); return; }
+  const q = { id: rdvEdit, titre: v('rdv-nom'), sat: v('rdv-sat'), de: de, a: a, type: g('rdv-type').value, note: v('rdv-note'), avance: v('rdv-avance') || 60 };
+  const j = await post('api/agenda/garde?' + Object.keys(q).map(k => k + '=' + enc(q[k])).join('&'));
+  if (j && j.ok) { rdvEdit = j.id; txt('rdv-titre', 'modifier « ' + (q.titre || 'Rendez-vous') + ' »'); txt('rdv-etat', 'Enregistré.'); agendaVu = ''; if (typeof calCharge === 'function') CLD.cle = ''; }
+  else txt('rdv-etat', (j && j.erreur) || 'Refusé.');
+}
+async function rdvRetire(id) {
+  await post('api/agenda/retire?id=' + id);
+  if (rdvEdit === id) rdvNouveau();
+  agendaVu = ''; CLD.cle = ''; if (g('ag-p-cal') && !g('ag-p-cal').hidden) calCharge(true);
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
 // The log's records: the farthest contacts, by satellite, mode, continent, country; the distances crossed.
@@ -7519,7 +7574,7 @@ function vue(n) {
   if (n === 'son' || n === 'sstv' || n === 'images') ticSon();
   if (n === 'sstv' || n === 'images' || n === 'tlm') galTic(true);
   if (n === 'sstv') { ticMire(true); xsCharge(); esRend(true); }
-  if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); acVu = ''; acCharge(); }
+  if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); acVu = ''; acCharge(); if (g('ag-p-cal') && !g('ag-p-cal').hidden) calCharge(true); }
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
   if (n === 'tlm' || n === 'qo100') tlmTic(true);
@@ -7569,6 +7624,7 @@ document.querySelectorAll('.st').forEach(st => {
     // « Activités à venir » opened: its count of new notices read.
     if (b.dataset.p === 'ag-p-act') acLues();
     if (b.dataset.p === 'ag-p-dip') { dpLues(); dpVu = ''; dpCharge(); }
+    if (b.dataset.p === 'ag-p-cal') calCharge(true);
     try { localStorage.setItem('st-' + st.dataset.st, b.dataset.p); } catch (x) {}
   });
 });
@@ -16225,7 +16281,7 @@ setInterval(() => { if (ouverte('agenda')) ticVeille(); }, 2000);
 
 // ------------------------------------------------------------------ Agenda › SSTV: campaigns and their auto-pilot (receive only)
 let AP = null, apVu = '', apEdit = '', apEmisSat = 0, apListesVu = '';
-const AP_STATUTS = { PREVU: 'prévu', CHEVAUCHE: 'perdu (autre passage)', EN_COURS: 'en cours', FAIT: 'reçu', ECARTE: 'écarté', ARRETE: 'arrêté', INTERROMPU: 'interrompu' };
+const AP_STATUTS = { PREVU: 'prévu', CHEVAUCHE: 'perdu (autre passage)', EN_COURS: 'en cours', FAIT: 'reçu', ECARTE: 'écarté', ARRETE: 'arrêté', INTERROMPU: 'interrompu', ANNULE: 'annulé' };
 /*
  * The auto-pilot's mark, the same 🤖 as the Frise, beside the passes and the satellites it will take, in every list
  * (Station, Suivi, the header, Orbites, the dashboard). From AP.prochains, read every 3 s anyway: nothing more asked.
@@ -16348,10 +16404,8 @@ async function apStop() {
   await post('api/autopilote/stop'); apCharge();
 }
 const apFreq = hz => (hz / 1e6).toFixed(3).replace('.', ',');
-function apQuand(c) {
-  const j = ms => { const d = new Date(ms); return utc() ? d.toISOString().slice(5, 10).split('-').reverse().join('/') : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }); };
-  return c.aConfirmer ? 'du ' + j(c.de) + ' au ' + j(c.a) + ' (horaire à confirmer)' : jourHeure(c.de) + ' → ' + jourHeure(c.a);
-}
+/** A campaign's period in full, its times as kept: « du jeu. 29/10 00:00 au dim. 01/11 23:59 (heure de Paris) ». */
+function apQuand(c) { return calPeriode(c.de, c.a) + (c.aConfirmer ? ' · horaire à confirmer' : ''); }
 function apChaineTexte(c) {
   const h = c.chaine, l = [];
   if (h.profil) l.push('profil ' + h.profil);
@@ -16384,9 +16438,12 @@ function apDessine() {
   const cle = JSON.stringify([AP.campagnes, AP.prochains, AP.historique, AP.maitre, e && e.campagne]);
   if (cle === apVu) return;
   apVu = cle;
-  g('ap-liste').innerHTML = AP.campagnes.map(c => '<div class="ap-camp' + (c.active ? '' : ' off') + '"><div class="ap-camp-t"><b>' + esc(c.nom) + '</b><span class="pastille">' + esc(c.sat) + '</span>' +
+  if (apEdit) apEditePassages();
+  g('ap-liste').innerHTML = AP.campagnes.map(c => '<div class="ap-camp' + (c.active && !c.terminee ? '' : ' off') + '"><div class="ap-camp-t"><b>' + esc(c.nom) + '</b><span class="pastille">' + esc(c.sat) + '</span>' +
+    (c.terminee ? '<span class="pastille off" title="Sa période est passée : aucun passage ne sera reçu">terminée</span>' : !c.active ? '<span class="pastille off">suspendue</span>' : '') +
     '<span class="act"><label class="petit"><input type="checkbox" ' + (c.active ? 'checked' : '') + ' onchange="apActive(\'' + c.id + '\', this.checked)"> active</label>' +
-    '<button onclick="apEdite(\'' + c.id + '\')" title="Modifier">✎</button><button onclick="apRetire(\'' + c.id + '\')" title="Retirer">✕</button></span></div>' +
+    '<button onclick="apEdite(\'' + c.id + '\')" title="Modifier">✎</button><button data-c="' + escA(c.id) + '" onclick="calendrierOuvre(' + (c.prochain || c.de) + ', \'campagne:' + escA(c.id) + '\')" title="Voir au calendrier">📅</button>' +
+    '<button class="ap-suppr" data-c="' + escA(c.id) + '" onclick="apRetire(this.dataset.c, this)" title="Supprimer la campagne (deux clics)">✕</button></span></div>' +
     '<div class="petit">' + (c.freqHz ? apFreq(c.freqHz) + ' MHz ' + esc(c.modulation) : esc(c.emetteur)) + ' · ' + (c.mode === 'Auto' ? 'mode auto' : esc(c.mode)) + ' · ' + apQuand(c) +
     ' · ≥ ' + Math.round(c.elMin) + '°' + (c.horaire ? ' · ' + esc(c.horaire) : '') + '</div>' +
     '<div class="petit">' + esc(apChaineTexte(c)) + '</div>' +
@@ -16394,7 +16451,8 @@ function apDessine() {
     (c.lien ? ' · <a href="' + esc(c.lien).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">lien ↗</a>' : '') + '</div>' +
     (c.notes ? '<div class="petit">' + esc(c.notes) + '</div>' : '') + '</div>').join('') || '<div class="petit">Aucune campagne.</div>';
   g('ap-prochains').innerHTML = AP.prochains.map(p => '<tr' + (p.statut === 'EN_COURS' ? ' class="encours"' : '') + (p.statut === 'PREVU' || p.statut === 'EN_COURS' ? '' : ' style="opacity:.6"') + '><td>' + jourHeure(p.aos) + ' → ' + hm(p.los) +
-    '</td><td><span class="ap-bot" title="Auto-pilote">🤖</span> ' + esc(p.nom) + '<div class="petit">' + esc(p.sat) + (p.raison ? ' · ' + esc(p.raison) : '') + '</div></td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + AP_STATUTS[p.statut] + '</span></td></tr>').join('') ||
+    '</td><td><span class="ap-bot" title="Auto-pilote">🤖</span> ' + esc(p.nom) + '<div class="petit">' + esc(p.sat) + (p.raison ? ' · ' + esc(p.raison) : '') + '</div></td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + AP_STATUTS[p.statut] + '</span>' +
+    apBoutonPassage(p) + '</td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">' + (AP.campagnes.length ? 'aucun passage dans les campagnes actives' : 'les passages des campagnes viendront ici') + '</td></tr>';
   g('ap-histo').innerHTML = AP.historique.map(t => '<tr><td>' + jourHeure(t.aos) + '<div class="petit">' + t.el.toFixed(0) + '°</div></td><td>' + esc(t.nom) +
     (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') +
@@ -16441,13 +16499,45 @@ async function apEmetteurs(choisi) {
 }
 function apEmetteurChange() { document.querySelectorAll('#ap-form .ap-perso').forEach(x => x.style.display = g('ap-emetteur').value ? 'none' : ''); }
 const apLocal = ms => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+/* « Journées entières » ticked: 00:00 → 23:59 put in the fields, where they stay editable; never again at saving (a time typed is kept). */
 function apAconf() {
   if (!g('ap-aconf').checked) return;
   if (v('ap-de')) g('ap-de').value = v('ap-de').slice(0, 10) + 'T00:00';
   if (v('ap-a')) g('ap-a').value = v('ap-a').slice(0, 10) + 'T23:59';
+  apPeriodeMaj();
+}
+/** The period typed, said in full under the fields (the very instants that will be kept). */
+function apPeriodeMaj() {
+  const de = v('ap-de') ? new Date(v('ap-de')).getTime() : 0, a = v('ap-a') ? new Date(v('ap-a')).getTime() : 0;
+  const t = !de || !a ? '' : a <= de ? '⚠ la fin doit venir après le début' : calPeriode(de, a) + (a <= Date.now() ? ' — terminée : aucun passage ne sera reçu' : '');
+  txt('ap-f-periode', t);
+}
+/** The campaign being edited: its passes to come, each one can be cancelled (the campaign goes on). */
+function apEditePassages() {
+  const c = AP && AP.campagnes && AP.campagnes.find(x => x.id === apEdit);
+  g('ap-f-pass').hidden = !c; g('ap-f-suppr').hidden = !c;
+  if (!c) return;
+  const l = c.passages || [];
+  txt('ap-f-pass-etat', c.terminee ? 'Campagne terminée (' + calPeriode(c.de, c.a) + ') : aucun passage ne sera reçu.' :
+    (!c.active ? 'Campagne suspendue : ces passages seraient reçus une fois réactivée. ' : !AP.maitre ? 'Auto-pilote coupé : rien ne démarrera tant qu’il est coupé. ' : '') +
+    (l.length ? l.filter(p => p.statut === 'PREVU').length + ' passage(s) à recevoir d’au moins ' + Math.round(c.elMin) + '° :' : 'Aucun passage d’au moins ' + Math.round(c.elMin) + '° dans la période.'));
+  const h = l.map(p => '<tr' + (p.statut === 'PREVU' || p.statut === 'EN_COURS' ? '' : ' style="opacity:.6"') + '><td>' + esc(calQuand(p.aos)) + ' → ' + hm(p.los) + '</td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + (AP_STATUTS[p.statut] || p.statut) + '</span>' +
+    (p.raison && p.statut !== 'ANNULE' ? '<div class="petit">' + esc(p.raison) + '</div>' : '') + '</td><td class="act">' + apBoutonPassage(p) + '</td></tr>').join('');
+  const b = g('ap-f-pass-l'); if (b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; }
+}
+/** « Annuler » (or « Reprendre ») one pass of a campaign, for the lists. */
+function apBoutonPassage(p) {
+  if (p.statut === 'ANNULE') return ' <button class="discret" data-c="' + escA(p.campagne) + '" data-a="' + p.aos + '" onclick="apAnnulePassage(this.dataset.c, +this.dataset.a, false)" title="Recevoir ce passage">Reprendre</button>';
+  if (p.statut === 'PREVU' || p.statut === 'CHEVAUCHE' || p.statut === 'EN_COURS')
+    return ' <button class="discret" data-c="' + escA(p.campagne) + '" data-a="' + p.aos + '" onclick="apAnnulePassage(this.dataset.c, +this.dataset.a, true)" title="Ne pas recevoir ce passage (la campagne continue)">Annuler</button>';
+  return '';
+}
+function apCalendrier() {
+  const c = AP && AP.campagnes && AP.campagnes.find(x => x.id === apEdit);
+  calendrierOuvre(c ? (c.prochain || (c.terminee ? c.a : Math.max(c.de, Date.now()))) : Date.now(), c ? 'campagne:' + c.id : null);
 }
 function apNouvelle() {
-  apEdit = ''; txt('ap-f-titre', 'nouvelle'); txt('ap-f-etat', '');
+  apEdit = ''; txt('ap-f-titre', 'nouvelle'); txt('ap-f-etat', ''); txt('ap-f-periode', ''); g('ap-f-pass').hidden = true; g('ap-f-suppr').hidden = true;
   ['ap-nom', 'ap-sat', 'ap-freq', 'ap-de', 'ap-a', 'ap-horaire', 'ap-lien', 'ap-notes'].forEach(i => g(i).value = '');
   g('ap-el').value = 10; g('ap-avant').value = 2; g('ap-largeur').value = 15; g('ap-mode').value = 'Auto'; g('ap-aconf').checked = false; g('ap-profil').value = '';
   g('ap-source').value = 'poste';
@@ -16466,13 +16556,14 @@ async function apEdite(id) {
   g('ap-profil').value = h.profil; g('ap-source').value = h.source;
   g('ap-poste').checked = h.poste; g('ap-cposte').checked = h.connecterPoste; g('ap-rotor').checked = h.rotor; g('ap-crotor').checked = h.connecterRotor;
   g('ap-enreg').checked = h.enregistrer; g('ap-sstv').checked = h.sstv; g('ap-annonce').checked = h.annonce; g('ap-parquer').checked = h.parquer; g('ap-ssdv').checked = !!h.ssdv;
+  apPeriodeMaj(); apEditePassages();
   await apEmetteurs(c.emetteur);
   g('ap-form').scrollIntoView({ block: 'nearest' });
 }
 async function apGarde() {
   if (!apEmisSat && v('ap-sat')) await apSatChange();
   if (!apEmisSat) { txt('ap-f-etat', 'Choisis le satellite.'); return; }
-  if (g('ap-aconf').checked) apAconf();
+  // The times as typed (« journées entières » only marks them « à confirmer »: no longer moved to 00:00 / 23:59 here).
   const de = v('ap-de') ? new Date(v('ap-de')).getTime() : 0, a = v('ap-a') ? new Date(v('ap-a')).getTime() : 0;
   if (!de || !a) { txt('ap-f-etat', 'Donne le début et la fin.'); return; }
   const em = g('ap-emetteur').value, b = id => g(id).checked ? 1 : 0;
@@ -16481,14 +16572,28 @@ async function apGarde() {
     lien: v('ap-lien'), notes: v('ap-notes'), profil: g('ap-profil').value, source: g('ap-source').value, poste: b('ap-poste'), cposte: b('ap-cposte'),
     rotor: b('ap-rotor'), crotor: b('ap-crotor'), enreg: b('ap-enreg'), sstv: b('ap-sstv'), annonce: b('ap-annonce'), parquer: b('ap-parquer'), ssdv: b('ap-ssdv') };
   const j = await post('api/autopilote/campagne?' + Object.keys(q).map(k => k + '=' + enc(q[k])).join('&'));
-  if (j && j.ok) { txt('ap-f-etat', 'Campagne enregistrée.'); apEdit = j.campagne.id; txt('ap-f-titre', 'modifier « ' + j.campagne.nom + ' »'); annonce('Campagne SSTV enregistrée'); apVu = ''; apCharge(); }
+  if (j && j.ok) { txt('ap-f-etat', 'Campagne enregistrée : ' + calPeriode(j.campagne.de, j.campagne.a) + '.'); apEdit = j.campagne.id; txt('ap-f-titre', 'modifier « ' + j.campagne.nom + ' »'); annonce('Campagne SSTV enregistrée'); apVu = ''; apCharge(); }
   else txt('ap-f-etat', (j && j.erreur) || 'Refusé.');
 }
 async function apActive(id, on) { await post('api/autopilote/active?id=' + enc(id) + '&on=' + (on ? 1 : 0)); apCharge(); }
-async function apRetire(id) {
+/*
+ * « Supprimer la campagne » in two clicks on the button itself (no browser dialog: one the browser was told to stop showing
+ * answered « no » at once, and nothing happened). Its history stays; one made from an activity is not made again by itself.
+ */
+let apSupprArme = '';
+async function apRetire(id, b) {
+  if (!id) return;
   const c = AP.campagnes.find(x => x.id === id);
-  if (!confirm('Retirer la campagne « ' + (c ? c.nom : id) + ' » ? Son historique reste.')) return;
-  await post('api/autopilote/retire?id=' + enc(id)); if (apEdit === id) apNouvelle(); apCharge();
+  if (b && apSupprArme !== id) {
+    apSupprArme = id; const t = b.textContent; b.classList.add('arme'); b.textContent = b.id === 'ap-f-suppr' ? 'Confirmer la suppression' : 'Supprimer ?';
+    setTimeout(() => { if (apSupprArme === id) apSupprArme = ''; b.classList.remove('arme'); b.textContent = t; }, 5000);
+    return;
+  }
+  apSupprArme = '';
+  const j = await post('api/autopilote/retire?id=' + enc(id));
+  if (j && j.ok) annonce('Campagne « ' + (c ? c.nom : id) + ' » supprimée' + (c && c.activite ? ' (l’activité ne la recrée pas)' : ''));
+  if (apEdit === id) apNouvelle();
+  apVu = ''; acVu = ''; await apCharge(); acCharge(); if (g('ag-p-cal') && !g('ag-p-cal').hidden) calCharge(true);
 }
 /** A flyer's proposal into the form, to check before saving. */
 async function apPropose(j) {
@@ -16549,7 +16654,8 @@ const acJourLoc = ms => new Date(ms).toLocaleDateString(undefined, { day: '2-dig
 function acPeriode(a) {
   if (a.type === 'LRPT') return 'vu le ' + acJourLoc(a.derniere) + ' ' + acHmLoc(a.derniere) + ' (' + acHmUtc(a.derniere) + ' UTC)';
   if (a.precision === 'INCONNUE') return 'annoncé le ' + acJourLoc(a.de) + ', sans horaire : voir le lien';
-  if (a.precision === 'JOURS') return 'du ' + acJourLoc(a.de) + ' au ' + acJourLoc(a.a) + ' (horaire à confirmer)';
+  // Whole days are written as UTC days: the days themselves (never the next one for the end, as 23:59 UTC is already tomorrow here).
+  if (a.precision === 'JOURS') { const j = a.jours || { de: a.de, a: a.a }; return 'du ' + acJourLoc(j.de) + ' au ' + acJourLoc(j.a) + ' (journées, horaire à confirmer)'; }
   const meme = acJourLoc(a.de) === acJourLoc(a.a);
   return acJourLoc(a.de) + ' ' + acHmLoc(a.de) + ' → ' + (meme ? '' : acJourLoc(a.a) + ' ') + acHmLoc(a.a) + ' <span class="petit">(' + acHmUtc(a.de) + ' → ' + acHmUtc(a.a) + ' UTC)</span>';
 }
@@ -16620,6 +16726,7 @@ async function acPrepare(id, catnum) {
 function acApBoutons(a) {
   if (!a.autopilote) return '';
   const l = a.lienAp, d = ' data-id="' + escA(a.id) + '"';
+  if (!l && a.campagneSupprimee) return '<span class="pastille off" title="Supprimée à la main : elle n’est pas recréée toute seule">campagne supprimée</span><button' + d + ' onclick="acAuto(this.dataset.id)" title="Refaire la campagne de cette activité, exprès">Recréer la campagne</button>';
   if (!l) return '<button class="primaire"' + d + ' onclick="acAuto(this.dataset.id)" title="Recevoir tout seul les passages de cette activité (réception seulement)">Activer l’auto-pilote</button>';
   const c = ' data-c="' + escA(l.id) + '"', voir = '<button' + c + ' onclick="acApVoir(this.dataset.c)" title="Agenda › SSTV">Voir la campagne</button>';
   if (l.active && l.maitre) return '<span class="pastille ap-st-FAIT">Auto-pilote actif ✓</span><button' + c + ' onclick="acApSuspend(this.dataset.c, false)">Suspendre</button>' + voir;
@@ -16712,6 +16819,7 @@ acCharge();
 setInterval(acCharge, 60000);
 
 ${DiplomesJs.JS}
+${CalendrierJs.JS}
 // ------------------------------------------------------------------ Montage: the station's chain, drawn and lit
 // Display and setup only: nothing here starts a transmission, opens a port or touches the LNB supply.
 var MT = { cat: null, d: null, cle: '', simple: false, edition: false, sel: null, essai: '', telephone: false, pop: null, popCle: '' };

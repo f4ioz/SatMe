@@ -545,6 +545,10 @@ class GenerateurDemo(private val maintenant: Long, private val graine: Long = GR
                     titre = "Série SSTV de démonstration (fictive)", details = "Activité inventée pour la démonstration.", sources = src),
                 ActivitesAVenir.Activite(id = "demo:sonate", type = ActivitesAVenir.Type.SSTV, satNom = "SONATE-2", catnum = 0, debutMs = jour, finMs = jour + 7 * JOUR_MS,
                     precision = ActivitesAVenir.Precision.INCONNUE, titre = "SONATE-2 : des images SSTV bientôt (nouvelle fictive)", sources = src),
+                // Announced by whole days, as a news post says it (« du 29 au 31 octobre »): UTC days, the campaign on the same days here.
+                ActivitesAVenir.Activite(id = "demo:jours", type = ActivitesAVenir.Type.SSTV, satNom = "SAKHACUBE-CHOLBON", catnum = 67290,
+                    debutMs = jour - JOUR_MS, finMs = jour + 2 * JOUR_MS - 60_000L, precision = ActivitesAVenir.Precision.JOURS, freqHz = 437_100_000L,
+                    titre = "Émission SSTV de démonstration par journées (fictive)", details = "Activité inventée pour la démonstration : des jours, sans horaire.", sources = src),
                 ActivitesAVenir.Activite(id = "demo:demosat", type = ActivitesAVenir.Type.SSTV, satNom = "DEMOSAT-2", catnum = 0, debutMs = jour + 2 * JOUR_MS + 8 * h,
                     finMs = jour + 2 * JOUR_MS + 20 * h, freqHz = 145_800_000L, mode = "Robot 36",
                     titre = "DEMOSAT-2 : SSTV d'un satellite fictif", sources = src),
