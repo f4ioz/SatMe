@@ -2718,6 +2718,8 @@ ${TraficLeoJs.HTML}
   <div class="ligne"><input id="e-md" placeholder="Mode" style="max-width:80px"><input id="e-rs" placeholder="RS ↑" style="max-width:70px"><input id="e-rr" placeholder="RS ↓" style="max-width:70px"></div>
   <div class="ligne"><input id="e-nm" placeholder="Nom"><input id="e-qth" placeholder="QTH"></div>
   <div class="ligne"><input id="e-n" placeholder="Note"></div>
+  <details id="e-cp" style="margin-top:6px"><summary class="petit">Concours / Portable <span class="petit" id="e-cp-n"></span></summary>
+    <div id="e-cp-champs" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:40vh;overflow:auto;margin-top:4px"></div></details>
   <div class="ligne"><button onclick="qrzEdit()">QRZ</button><span class="petit" id="e-qrz"></span></div>
   <div class="ligne"><button class="primaire" id="e-enregistre" onclick="enregistreEdit()">Enregistrer</button><button onclick="g('c-edit').close()">Annuler</button>
     <button class="rouge" onclick="supprimeEdit()" style="margin-left:auto">Supprimer</button></div>
@@ -8120,12 +8122,27 @@ async function enregistreContact() {
     txt('c-qui', ''); quiPour = ''; lieuSaisi(null, ''); stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
+// Contest and portable fields of a contact (ADIF tags), shown folded in the editor.
+const CHAMPS_CP = [['CONTEST_ID', 'Concours (CONTEST_ID)'], ['OPERATOR', 'Opérateur'], ['STX', 'N° envoyé'], ['SRX', 'N° reçu'],
+  ['STX_STRING', 'Échange envoyé'], ['SRX_STRING', 'Échange reçu'], ['MY_POTA_REF', 'Ma réf. POTA'], ['POTA_REF', 'Sa réf. POTA'],
+  ['MY_WWFF_REF', 'Ma réf. WWFF'], ['WWFF_REF', 'Sa réf. WWFF'], ['MY_SOTA_REF', 'Ma réf. SOTA'], ['SOTA_REF', 'Sa réf. SOTA'],
+  ['MY_IOTA', 'Mon IOTA'], ['IOTA', 'Son IOTA'], ['MY_SIG', 'Mon activité (MY_SIG)'], ['MY_SIG_INFO', 'Ma réf. d’activité'],
+  ['SIG', 'Son activité (SIG)'], ['SIG_INFO', 'Sa réf. d’activité'], ['STATION_CALLSIGN', 'Indicatif de station'], ['CQZ', 'Zone CQ'],
+  ['ITUZ', 'Zone UIT'], ['CLASS', 'Classe (CLASS)'], ['ARRL_SECT', 'Section ARRL'], ['STATE', 'État (STATE)'], ['CNTY', 'Comté (CNTY)'],
+  ['MY_STATE', 'Mon état (MY_STATE)'], ['PRECEDENCE', 'Précédence'], ['CHECK', 'Check']];
+g('e-cp-champs').innerHTML = CHAMPS_CP.map(([k, l]) => '<input id="ex-' + k + '" placeholder="' + l + '" title="' + k + '">').join('');
+function editCp(x) {
+  let n = 0;
+  CHAMPS_CP.forEach(([k]) => { const val = x && x[k] != null ? String(x[k]) : ''; if (val) n++; g('ex-' + k).value = val; });
+  txt('e-cp-n', n ? '(' + n + ')' : ''); g('e-cp').open = n > 0;
+}
+const editCpQuery = () => '&x=1' + CHAMPS_CP.map(([k]) => '&x_' + k + '=' + enc(v('ex-' + k))).join('');
 async function edite(t) {
   const e = C.find(x => x.t === t); if (!e) return;
   editT = t;
   txt('e-quand', new Date(t).toISOString().slice(0, 19).replace('T', ' ') + ' UTC · ' + e.sat);
   g('e-call').value = e.c; g('e-loc').value = e.l; g('e-md').value = e.md; g('e-rs').value = e.rs; g('e-rr').value = e.rr;
-  g('e-nm').value = e.nm; g('e-qth').value = e.qth; g('e-n').value = e.n; txt('e-qrz', '');
+  g('e-nm').value = e.nm; g('e-qth').value = e.qth; g('e-n').value = e.n; txt('e-qrz', ''); editCp(e.x);
   g('e-sat').value = e.sat; g('e-sat').dataset.avant = e.sat; g('e-envoye').hidden = !e.envoye;
   editPoseHeure(t); g('e-date').dataset.avant = v('e-date'); g('e-heure').dataset.avant = v('e-heure'); editHeure();
   g('c-edit').showModal();
@@ -8222,7 +8239,7 @@ async function enregistreEdit() {
   if (ms !== null) { const d = new Date(ms); quand = '&date=' + d.toISOString().slice(0, 10) + '&heure=' + d.toISOString().slice(11, 19); }
   const j = await post('api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
     '&rs=' + enc(v('e-rs')) + '&rr=' + enc(v('e-rr')) + '&nm=' + enc(v('e-nm')) + '&qth=' + enc(v('e-qth')) + '&n=' + enc(v('e-n')) +
-    (g('e-loc').dataset.qrz ? '&lo=QRZ' : '') + editSat() + quand);
+    (g('e-loc').dataset.qrz ? '&lo=QRZ' : '') + editSat() + quand + editCpQuery());
   delete g('e-loc').dataset.qrz;
   if (j && j.ok !== false) {
     if (j.t) editT = j.t;

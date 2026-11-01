@@ -33,7 +33,13 @@ data class Activation(
     val lonDeg: Double = 0.0,
     val callsign: String = "",
     val note: String = "",
-    val photoPath: String = ""       // optional QRV photo (absolute path)
+    val photoPath: String = "",      // optional QRV photo (absolute path)
+    /**
+     * The POTA park(s) activated ("FR-0012", or a list "FR-0012,FR-0345"):
+     * written as MY_POTA_REF / MY_SIG=POTA / MY_SIG_INFO on the session's
+     * contacts in its ADIF. Empty: not a POTA activation.
+     */
+    val potaRef: String = ""
 ) {
     val running: Boolean get() = endMs == null
     fun durationMs(nowMs: Long = System.currentTimeMillis()): Long =
@@ -60,7 +66,8 @@ class ActivationStore(context: Context) {
                     lonDeg = o.optDouble("lon", 0.0),
                     callsign = o.optString("cs"),
                     note = o.optString("note"),
-                    photoPath = o.optString("photo")
+                    photoPath = o.optString("photo"),
+                    potaRef = o.optString("pota")
                 )
             }.sortedByDescending { it.startMs }
         }.getOrDefault(emptyList())
@@ -75,6 +82,7 @@ class ActivationStore(context: Context) {
                 put("n", a.name); put("loc", a.locator); put("mg", a.grids)
                 put("lat", a.latDeg); put("lon", a.lonDeg)
                 put("cs", a.callsign); put("note", a.note); put("photo", a.photoPath)
+                if (a.potaRef.isNotBlank()) put("pota", a.potaRef)
             })
         }
         runCatching { file.writeText(arr.toString()) }
@@ -112,6 +120,13 @@ class ActivationStore(context: Context) {
             val end = a.endMs ?: Long.MAX_VALUE
             return log.filter { it.timeMs in a.startMs..end }.sortedBy { it.timeMs }
         }
+
+        /**
+         * ADIF of [a]'s contacts. A POTA activation's park goes on each of
+         * them (MY_POTA_REF, MY_SIG=POTA, MY_SIG_INFO), as the POTA upload wants.
+         */
+        fun adifOf(a: Activation, log: List<LogEntry>, station: String = ""): String =
+            LogStore.toAdif(ChampsAdif.enActivationPota(qsosOf(a, log), a.potaRef), station)
 
         /** Distinct satellites worked during [a], in first-worked order. */
         fun satsOf(a: Activation, log: List<LogEntry>): List<String> =

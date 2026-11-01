@@ -22,6 +22,9 @@ import java.util.TimeZone
  */
 object Adif {
 
+    /** [ChampsAdif] fields the record writes in their own place. */
+    private val DEJA_ECRITS = setOf("STATION_CALLSIGN", "OPERATOR", "CQZ", "ITUZ")
+
     /** The "satellite" of a terrestrial DATV contact: no satellite fields for it. */
     const val DATV_TERRESTRE = "DATV terrestre"
 
@@ -173,7 +176,9 @@ object Adif {
         // callers: one caller once lacked it and anonymous entries were
         // exported. A QSO without CALL is not a contact at all.
         entries.filter { it.callsign.isNotBlank() }.forEach { e ->
-            sb.append(enregistrement(e, station))
+            // A contact that says its own station callsign (an activation as
+            // F4XYZ/P) keeps it in a file; the station's is then the operator.
+            sb.append(enregistrement(e, e.stationCallsign.ifBlank { station }, station))
         }
         return sb.toString()
     }
@@ -205,22 +210,28 @@ object Adif {
                 sb.append(field("SAT_NAME", fr.f4ioz.satcombo.domain.NomSatellite.satNameAdif(e.satName)))
                 sb.append(field("PROP_MODE", "SAT"))
             }
-            if (station.isNotBlank()) {
-                sb.append(field("STATION_CALLSIGN", station.uppercase()))
-                sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))
-            }
+            // The caller's station wins (an online log skips a contact whose
+            // STATION_CALLSIGN is not its profile's); the contact's own fills in
+            // when the caller gives none. Its OPERATOR wins over the caller's.
+            val st = station.ifBlank { e.stationCallsign }
+            if (st.isNotBlank()) {
+                sb.append(field("STATION_CALLSIGN", st.uppercase()))
+                sb.append(field("OPERATOR", e.operateur.ifBlank { operateur.ifBlank { st } }.uppercase()))
+            } else if (e.operateur.isNotBlank()) sb.append(field("OPERATOR", e.operateur.uppercase()))
             sb.append(field("CALL", e.callsign.trim().uppercase()))
             // The other station's DXCC entity, from its prefix: number, name,
             // continent, and the zones only when the entity has a single one
             // (a US call does not tell CQ 3, 4 or 5). Unknown prefix: nothing,
             // rather than a wrong entity the online log would believe.
-            fr.f4ioz.satcombo.domain.Dxcc.entite(e.callsign)?.let { x ->
+            // Zones the contact gives (a contest exchange) beat the prefix's.
+            val x = fr.f4ioz.satcombo.domain.Dxcc.entite(e.callsign)
+            if (x != null) {
                 sb.append(field("DXCC", x.adif.toString()))
                 sb.append(field("COUNTRY", x.nomAdif))
                 sb.append(field("CONT", x.continent))
-                x.cq?.let { sb.append(field("CQZ", it.toString())) }
-                x.itu?.let { sb.append(field("ITUZ", it.toString())) }
             }
+            (e.cqz ?: x?.cq)?.let { sb.append(field("CQZ", it.toString())) }
+            (e.ituz ?: x?.itu)?.let { sb.append(field("ITUZ", it.toString())) }
             val (mode, sub) = modeOf(e.mode)
             sb.append(field("MODE", mode))
             sb.append(field("SUBMODE", sub))
@@ -272,6 +283,9 @@ object Adif {
             if (grids.size == 2 || grids.size == 4) {
                 sb.append(field("MY_VUCC_GRIDS", grids.joinToString(",")))
             }
+            // Contest and portable fields ([ChampsAdif]), those set only. The
+            // station callsign, operator and zones were written above.
+            ChampsAdif.valeurs(e).forEach { (tag, v) -> if (tag !in DEJA_ECRITS) sb.append(field(tag, v)) }
             val note = if (grids.size == 3) (e.note + " " + grids.joinToString("/")).trim() else e.note
             sb.append(field("COMMENT", note))
             sb.append("<EOR>\n")

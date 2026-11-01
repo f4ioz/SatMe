@@ -93,7 +93,7 @@ class ImportPc(private val station: StationPc, private val carnet: CarnetPc, pri
                 myLocator = q.monLocator, myGrids = q.monGrilles, callsign = q.indicatif, theirLocator = q.locator,
                 nom = q.nom, qth = q.qth, mode = q.mode, rstSent = q.rstEnvoye, rstRcvd = q.rstRecu,
                 downlinkMhz = q.freqRxMhz, uplinkMhz = q.freqMhz,
-                envoyeMs = if (dejaEnLigne) maintenant else 0L)
+                envoyeMs = if (dejaEnLigne) maintenant else 0L).let(q::complete)
             carnet.store.add(e); locaux += e; ajoutes++
         }
         val passages = journal.importe(journal.candidats(evts))

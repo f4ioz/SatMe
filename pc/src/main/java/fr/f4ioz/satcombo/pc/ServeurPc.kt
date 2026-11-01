@@ -2519,7 +2519,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 c.modifie(t, avant.copy(callsign = q["c"] ?: avant.callsign, theirLocator = q["l"] ?: avant.theirLocator,
                     rstSent = q["rs"] ?: avant.rstSent, rstRcvd = q["rr"] ?: avant.rstRcvd, note = q["n"] ?: avant.note,
                     mode = q["md"] ?: avant.mode, nom = q["nm"] ?: avant.nom, qth = q["qth"] ?: avant.qth,
-                    locatorOrigine = q["lo"] ?: avant.locatorOrigine))
+                    locatorOrigine = q["lo"] ?: avant.locatorOrigine)
+                    // Contest and portable fields the form sends (x_TAG=…), the others kept.
+                    .let { m -> fr.f4ioz.satcombo.data.ChampsAdif.avec(m, fr.f4ioz.satcombo.data.ChampsAdif.TAGS
+                        .mapNotNull { k -> q["x_$k"]?.let { k to it } }.toMap()) })
                 // The time last: it changes the key; az/el and the order follow.
                 val r = if (nouveau != null && nouveau != t) c.redate(t, nouveau) else null
                 val apres = r?.contact ?: c.contacts().firstOrNull { it.timeMs == t }
@@ -3220,6 +3223,7 @@ object JsonPc {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+                    .also { o -> fr.f4ioz.satcombo.data.ChampsAdif.json(e)?.let { o.put("x", it) } }
                     .also { o -> qsl[e.timeMs]?.let { o.put("qsl", fr.f4ioz.satcombo.data.StatutsQsl.json(it)) } }
                     // Changed since the upload: what, and whether APIv2 can carry it (else by hand in Wavelog).
                     .also { o -> fr.f4ioz.satcombo.domain.ModifEnvoi.ecartsMemo(e).takeIf { it.isNotEmpty() }?.let { m ->

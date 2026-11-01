@@ -43,6 +43,7 @@ object LotContacts {
                 put("md", e.mode); put("rs", e.rstSent); put("rr", e.rstRcvd)
                 put("dl", e.downlinkMhz); put("ul", e.uplinkMhz)
                 put("lo", e.locatorOrigine)
+                ChampsAdif.json(e)?.let { put("x", it) }
             })
         }
         racine.put("contacts", arr)
@@ -73,6 +74,7 @@ object LotContacts {
                 downlinkMhz = o.optDouble("dl", 0.0),
                 uplinkMhz = o.optDouble("ul", 0.0),
                 locatorOrigine = o.optString("lo"))
+                .let { e -> o.optJSONObject("x")?.let { ChampsAdif.deJson(e, it) } ?: e }
         }
     }.getOrNull()
 
