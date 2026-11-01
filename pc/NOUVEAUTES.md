@@ -16,6 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+
+### en
+
+## 2026.11.1
+
+### fr
 - **APRS : un décodeur plus tenace** — une trame que le bruit a abîmée d'un ou deux bits est **corrigée** (seulement là où le démodulateur hésitait, avec un FCS juste, de vrais indicatifs et une seule réponse possible : le bruit seul ne donne rien) ; le décodeur de la carte son entend aussi le **FX.25** et l'**IL2P** (trames protégées par un code de Reed-Solomon), sans réglage. `/api/aprs` compte les trames justes, corrigées, FX.25 et IL2P (`decodeur`) et liste les dernières marquées « corrigée 1 bit », « FX.25 », « IL2P ». Réception seulement.
 - **SDR : le Signal Hound BB60 (BB60C, BB60D) comme récepteur** — onglet SDR, *Récepteur* › **Signal Hound BB60** : 9 kHz – 6 GHz sur USB 3, par la bibliothèque du SDK de Signal Hound (à installer soi-même ; SatMe ne la fournit pas). Niveau de référence, gain et atténuation ; **Détecter** lit le modèle, le numéro, le micrologiciel, la température et l'alimentation USB ; en réception, débit, filtre, pertes et saturations en direct. Débranché, il se rouvre tout seul. Bibliothèque absente : la carte le dit, rien d'autre ne change. Réception seulement.
 - **Votre site : le montage utilisé pour ce qui est en direct.** Avec *Envoyer vers un site web › En direct › Station* et *Description du montage* cochées, la ligne « Station » dit aussi quels appareils du montage servent en ce moment (ceux qu'allume l'onglet **Montage** : parabole, LNB, MiniTiouner, poste…, par leurs identifiants seulement) et, pendant la DATV, la polarisation de la tête LNB (V 13 V, H 18 V) : votre site peut dessiner le montage utilisé, en direct, selon l'activité. Rien d'autre ne part, jamais un nom de port ni une adresse.
