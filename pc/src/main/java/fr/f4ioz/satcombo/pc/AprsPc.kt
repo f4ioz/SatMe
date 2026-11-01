@@ -39,6 +39,8 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     @Volatile var fenetre: List<Paquet> = emptyList()
         private set
     @Volatile private var demod: AfskDemodulateur? = null
+    /** The AFSK decoder's tap for the signal views (eye, tones, bits); null until the card's sound has come. */
+    val sonde: fr.f4ioz.satcombo.visu.SondeSignal? get() = demod?.sonde
     @Volatile private var rateDemod = 0
     /** Frames since the start: the page's "new" counter. */
     @Volatile var recues = 0

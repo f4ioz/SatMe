@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.aprs
 
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -196,6 +197,20 @@ class AfskDemodulateur(
         val il2p = if (reglages.il2p) Il2pDecodeur { o, info -> recu(o, OrigineTrame.IL2P, octetsRs = info.corriges, crc = info.crc) } else null
     }
     private val tranches = listOf(0.5f, 0.71f, 1f, 1.41f, 2f, 2.83f, 4f).map { Tranche(it) }
+    /** The slicer the views follow: mark and space weighed alike. */
+    private val centrale = tranches[2]
+
+    /**
+     * The views' tap: the tone difference's eye at the middle slicer's clock,
+     * the audio's spectrum (the two tones), its NRZI bits with the HDLC flags.
+     */
+    val sonde = SondeSignal("afsk", "AFSK " + reglages.baud + " bauds", setOf(SondeSignal.Vue.OEIL, SondeSignal.Vue.TONS, SondeSignal.Vue.BITS),
+        motifs = listOf(SondeSignal.DRAPEAU_HDLC), lsbDabord = true).also {
+        it.regle(frequence.toDouble(), reglages.baud.toDouble())
+        val bas = minOf(reglages.marque, reglages.espace); val haut = maxOf(reglages.marque, reglages.espace)
+        it.bandeTons = maxOf(100.0, bas - (haut - bas) * 0.6) to haut + (haut - bas) * 0.6
+        it.ecartAttenduHz = haut - bas
+    }
     private val pasPll = ((1L shl 32) * reglages.baud / frequence).toInt()
 
     // One frame heard by several slicers counts once.
@@ -242,11 +257,31 @@ class AfskDemodulateur(
         val marque = sqrt(sommeMI * sommeMI + sommeMQ * sommeMQ)
         val espace = sqrt(sommeSI * sommeSI + sommeSQ * sommeSQ)
 
+        val sd = sonde
+        val vu = sd.actif
+        if (vu) sd.audio(x, frequence.toDouble())
         for (t in tranches) {
             val pese = espace * t.poids
             val niveau = marque > pese
             val avant = t.pll
             t.pll += pasPll
+            if (vu && t === centrale) {
+                val v = (marque - espace) / (marque + espace + 1e-12f)
+                // The clock's wrap from positive to negative is the bit's middle: phase 0 there.
+                val ph = ((t.pll.toLong() and 0xFFFFFFFFL) / 4294967296.0 + 0.5) % 1.0
+                refAge++
+                if (avant > 0 && t.pll < 0) {
+                    sd.niveau(v); sd.symbole(echantillon.toDouble()); sd.bit(if (niveau == t.dernierBit) 1 else 0)
+                    // Only inside a run of one tone: across a change the detectors hold both.
+                    if (refPris && (marque > espace) == tonAvant) sd.frequence(tonMesure(marque > espace))
+                    tonAvant = marque > espace
+                    refPris = false
+                } else if (!refPris && ph >= 0.75) {
+                    refPris = true; refAge = 0
+                    refMI = sommeMI; refMQ = sommeMQ; refSI = sommeSI; refSQ = sommeSQ
+                }
+                sd.oeil(ph, v)
+            }
             if (avant > 0 && t.pll < 0) {
                 // Middle of a bit: NRZI, same tone as before = 1.
                 val bit = niveau == t.dernierBit
@@ -263,6 +298,23 @@ class AfskDemodulateur(
             }
         }
         if (echantillon >= echeance) traiteCandidats()
+    }
+
+    // The views' tone measure: the detectors' phasors a quarter of a bit before the decision.
+    private var refPris = false
+    private var tonAvant = false
+    private var refAge = 0
+    private var refMI = 0f; private var refMQ = 0f; private var refSI = 0f; private var refSQ = 0f
+
+    /**
+     * The tone heard over the last quarter bit: how far the winning
+     * detector's phasor turned (it stands still on its own tone).
+     */
+    private fun tonMesure(marque: Boolean): Float {
+        if (refAge <= 0) return Float.NaN
+        val (i, q, ri, rq) = if (marque) listOf(sommeMI, sommeMQ, refMI, refMQ) else listOf(sommeSI, sommeSQ, refSI, refSQ)
+        val dphi = kotlin.math.atan2((q * ri - i * rq).toDouble(), (i * ri + q * rq).toDouble())
+        return ((if (marque) reglages.marque else reglages.espace) - dphi * frequence / (2 * PI * refAge)).toFloat()
     }
 
     private fun candidat(s: SegmentHdlc) {
@@ -287,6 +339,7 @@ class AfskDemodulateur(
 
     private fun recu(octets: ByteArray, origine: OrigineTrame, bits: Int = 0, octetsRs: Int = 0, crc: Boolean = false) {
         derniereBonne = echantillon
+        if (sonde.actif) { if (origine == OrigineTrame.AX25 && bits == 0) sonde.trameEntreReperes("trame AX.25") else sonde.trame(origine.name, octets.size * 8 + 16) }
         val cle = octets.contentHashCode()
         val deja = recents[cle]
         // An FX.25 block ends long after the frame inside it (up to 255 bytes later: 1.7 s at 1200 baud).

@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.telemesure
 
 import fr.f4ioz.satcombo.meteor.Convolutif
+import fr.f4ioz.satcombo.visu.SondeSignal
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.abs
@@ -72,6 +73,15 @@ class DecodeurTelemesure(
     )
 
     private val demod = DemodBpsk(fs, profil.debit, centreHz, profil.rechercheHz) { d, c -> bit(d, c) }
+
+    /**
+     * The views' tap: the constellation after the Costas loop, the
+     * differential bits (the Phase 3 blocks' sync word marked in them), the
+     * last frame decoded.
+     */
+    val sonde = SondeSignal("bpsk-" + profil.cle, profil.nom, setOf(SondeSignal.Vue.CONSTELLATION, SondeSignal.Vue.BITS),
+        motifs = if (profil.blocsP3) listOf(SondeSignal.Motif("synchro P3", BlocP3.SYNC.toLong() and 0xFFFFFFFFL, 32, 2, true)) else emptyList(),
+        horloge = horloge).also { demod.sonde = it }
     private val viterbi = Convolutif.Decodeur()
     private val chercheurP3 = BlocP3.Chercheur { b, ok -> blocP3(b, ok) }
 
@@ -110,6 +120,7 @@ class DecodeurTelemesure(
         ringD[i] = d; ringD[i + nS] = d
         ringC[i] = c; ringC[i + nS] = c
         pos++
+        if (sonde.actif) sonde.bit(if (d > 0) 1 else 0)
         if (profil.blocsP3) chercheurP3.pousse(if (d > 0) 1 else 0)
         if (pos < nS || pos < muetJusqua || chercheurP3.enCours) return
         val debut = ((pos - nS) % nS).toInt()
@@ -128,6 +139,7 @@ class DecodeurTelemesure(
             val res = Ao40Fec.decode(tampon, 0, viterbi)
             if (res == null) { nEchecs++; continue }
             nTrames++
+            sonde.trame("trame codée", nS)
             derniere = horloge(); debutSilence = demod.bits
             ajoute(Trame(derniere, "fec", res.donnees, true, res.octetsCorriges, res.symbolesFaux, res.snrDb, abs(q), essai))
             muetJusqua = pos + nS - 200
@@ -136,7 +148,7 @@ class DecodeurTelemesure(
     }
 
     private fun blocP3(b: ByteArray, ok: Boolean) {
-        if (ok) { nP3++; derniere = horloge(); debutSilence = demod.bits } else nCrc++
+        if (ok) { nP3++; derniere = horloge(); debutSilence = demod.bits; sonde.trame("bloc P3", 32 + BlocP3.TOTAL * 8) } else nCrc++
         // A wrong CRC is kept too when the text is mostly readable (a few wrong bits); garbage is only counted.
         if (ok || lisible(b)) ajoute(Trame(horloge(), "p3", b, ok, essai = essai))
     }

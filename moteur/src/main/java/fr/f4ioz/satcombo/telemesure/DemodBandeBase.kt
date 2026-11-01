@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.telemesure
 
 import fr.f4ioz.satcombo.sdr.Dsp
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.log10
@@ -49,6 +50,10 @@ class TrancheurFsk(fs: Double, private val debit: Int, ampleur: Double, private 
     /** An outside sign of a signal (flags seen): the clock moves more gently. */
     @Volatile var verrouExterne = false
     var bits = 0L; private set
+    /** The views' tap (eye, levels, decision times): written only while someone looks. */
+    var sonde: SondeSignal? = null
+        set(v) { field = v; v?.regle(fs, debit.toDouble()) }
+    private val fs = fs
 
     /** Both levels moved by [d] (the AFC moved the mixer). */
     fun decale(d: Double) { haut -= d; bas -= d }
@@ -75,14 +80,18 @@ class TrancheurFsk(fs: Double, private val debit: Int, ampleur: Double, private 
             if (e > 0.5) e -= 1.0 else if (e < -0.5) e += 1.0
             phase -= e * (if (verrouExterne) gainVerrou else gainLibre)
         }
+        val s = sonde
+        val vu = s != null && s.actif
         if (phase >= 1.0) {
             phase -= 1.0
             // The decision instant fell between the two samples: interpolated.
             val f = 1.0 - phase * sps
             val d = avant + (v - avant) * f.coerceIn(0.0, 1.0)
+            if (vu) { s!!.niveau((d + dc).toFloat()); s.symbole(s.echantillons - 1 + f.coerceIn(0.0, 1.0)) }
             surBit(if (d >= 0) 1 else 0)
             bits++
         }
+        if (vu) s!!.oeil(phase, (v / maxOf(1e-12, (haut - bas) / 2)).toFloat())
         avant = v
     }
 }
@@ -126,6 +135,10 @@ class DemodBandeBase(val fs: Double, val debit: Int, private val surBit: (Int) -
         set(v) { trancheur.verrouExterne = v }
     /** The threshold now, full scale: the Doppler's rest after the CAT's step, the card's own DC. */
     val dc: Double get() = trancheur.dc
+    /** The views' tap: the discriminator's eye and levels (full scale). */
+    var sonde: SondeSignal?
+        get() = trancheur.sonde
+        set(v) { trancheur.sonde = v; v?.regle(fs2, debit.toDouble(), "FS") }
 
     private var blocN = 0
     private var blocP = 0.0

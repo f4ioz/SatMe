@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.telemesure
 import fr.f4ioz.satcombo.aprs.Ax25
 import fr.f4ioz.satcombo.aprs.Kiss
 import fr.f4ioz.satcombo.meteor.Decimateur
+import fr.f4ioz.satcombo.visu.SondeSignal
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -111,6 +112,15 @@ class RecepteurPaquets(
     /** The Geoscan satellites' pictures (JPEG chunks, not SSDV), kept in `telemesure/geoscan`. */
     val geoscan = Geoscan.Images(dossier, horloge)
 
+    /**
+     * The views' tap: the discriminator's eye and levels, the bits of the
+     * reading that last held a signal (descrambled + NRZI, NRZI alone, or
+     * the line itself for Geoscan), flags and sync words marked.
+     */
+    val sonde = SondeSignal("paquets", "Paquets FSK · GMSK", setOf(SondeSignal.Vue.OEIL, SondeSignal.Vue.TONS, SondeSignal.Vue.BITS),
+        motifs = listOf(SondeSignal.DRAPEAU_HDLC, SondeSignal.Motif("synchro Geoscan", Geoscan.SYNC, 32, Geoscan.TOLERANCE_SYNC, true)),
+        lsbDabord = true, horloge = horloge)
+
     // ---------------------------------------------------------------- the chain (one thread)
 
     /**
@@ -123,14 +133,26 @@ class RecepteurPaquets(
         val desembrouille = G3ruh.Desembrouilleur()
         val nrziG = G3ruh.Nrzi(); val nrziN = G3ruh.Nrzi()
         // The Geoscan satellites' frames (CC1125-like: sync word, PN9, CRC-16) in the same bits, NRZ.
-        val geo = Geoscan.Deframeur { o -> trameGeoscan(o) }
+        val geo = Geoscan.Deframeur { o -> trameGeoscan(o).also { geoSigne = g.compte } }
+        /** The bit count at the last Geoscan frame. */
+        var geoSigne = Long.MIN_VALUE / 2
+        /** Which reading the views show: 0 descrambled + NRZI, 1 NRZI alone, 2 the line (Geoscan). */
+        var vue = 0
         val bit: (Int) -> Unit = { b ->
-            g.bit(nrziG.bit(desembrouille.bit(b)))
-            n.bit(nrziN.bit(b))
+            val yg = nrziG.bit(desembrouille.bit(b))
+            val yn = nrziN.bit(b)
+            if (sonde.actif) {
+                val v = if (geoSigne > maxOf(g.signe, n.signe)) 2 else if (n.signe > g.signe) 1 else 0
+                if (v != vue) { vue = v; sonde.lecture = LECTURES[v] }
+                sonde.bit(if (v == 0) yg else if (v == 1) yn else b)
+            }
+            g.bit(yg)
+            n.bit(yn)
             geo.bit(b)
         }
-        val demod: DemodFsk? = if (son) null else DemodFsk(fs, debit, surBit = bit)
-        val demodSon: DemodBandeBase? = if (son) DemodBandeBase(fs, debit, bit) else null
+        val demod: DemodFsk? = if (son) null else DemodFsk(fs, debit, surBit = bit).also { it.sonde = sonde }
+        val demodSon: DemodBandeBase? = if (son) DemodBandeBase(fs, debit, bit).also { it.sonde = sonde } else null
+        init { sonde.lecture = LECTURES[0] }
         private fun verrou() = maxOf(g.signe, n.signe) > g.compte - 2L * debit
         fun traite(re: FloatArray, im: FloatArray, k: Int) {
             val dm = demod ?: return
@@ -303,6 +325,11 @@ class RecepteurPaquets(
         }
         val cx = runCatching { contexte() }.getOrDefault(Contexte())
         val c = chaine
+        if (sonde.actif) {
+            // Between its flags when the views show this reading; else its length, about.
+            if (c != null && c.vue == (if (g3ruh) 0 else 1)) sonde.trameEntreReperes(if (g3ruh) "trame G3RUH" else "trame HDLC")
+            else sonde.trame(if (g3ruh) "trame G3RUH" else "trame HDLC", avecFcs.size * 8 + 8)
+        }
         val afc = c?.afcHz ?: 0.0
         val ecart = Math.round(decalageHz + afc)
         val ax = Ax25.entete(o)
@@ -321,6 +348,7 @@ class RecepteurPaquets(
     /** A Geoscan frame (72 bytes, CRC right): kept as a frame, its picture chunk put in its picture. */
     private fun trameGeoscan(o: ByteArray) {
         val now = horloge()
+        sonde.trame("trame Geoscan", 32 + Geoscan.TAILLE * 8)
         val cx = runCatching { contexte() }.getOrDefault(Contexte())
         val c = chaine
         val afc = c?.afcHz ?: 0.0
@@ -381,6 +409,8 @@ class RecepteurPaquets(
         const val SOURCE_IQ = "iq"
         const val SOURCE_SON = "son"
         const val NOUVEAU_PASSAGE_MS = 20 * 60_000L
+        /** The readings the views may show. */
+        val LECTURES = listOf("G3RUH (désembrouillé, NRZI)", "NRZI", "NRZ (Geoscan)")
         val DEBITS = listOf(1200, 2400, 4800, 9600)
 
         private fun jour(ms: Long, f: String) = java.text.SimpleDateFormat(f, java.util.Locale.ROOT)

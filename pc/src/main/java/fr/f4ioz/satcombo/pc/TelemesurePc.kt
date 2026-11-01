@@ -19,6 +19,7 @@ import fr.f4ioz.satcombo.telemesure.RecepteurGenesis
 import fr.f4ioz.satcombo.telemesure.RecepteurPaquets
 import fr.f4ioz.satcombo.telemesure.Sids
 import fr.f4ioz.satcombo.telemesure.SignalEssai
+import fr.f4ioz.satcombo.visu.SondeSignal
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -243,7 +244,11 @@ class TelemesurePc(
                 val audio = fr.f4ioz.satcombo.telemesure.SignalFskAudio.audio(bits, Dsp.AUDIO_RATE, p.debit, p.ecartHz, 1_650.0, 12.0, 3.0, graine = horloge())
                 essaiGenesis.profil = p
                 var k = 0
-                while (k < audio.size) { val m = minOf(4096, audio.size - k); essaiGenesis.traite(audio.copyOfRange(k, k + m), m, Dsp.AUDIO_RATE); k += m }
+                val t0 = horloge()
+                while (k < audio.size) {
+                    val m = minOf(4096, audio.size - k); essaiGenesis.traite(audio.copyOfRange(k, k + m), m, Dsp.AUDIO_RATE); k += m
+                    rythme(essaiGenesis.sonde, t0, k.toLong(), Dsp.AUDIO_RATE.toDouble())
+                }
             } finally { essaiGenesisEnCours = false }
         }.apply { isDaemon = true; name = "essai-genesis" }.start()
         return true
@@ -366,14 +371,20 @@ class TelemesurePc(
                     // As a TS-2000's 9600 output on a 48 kHz card: its discriminator upside down, a DC offset, the card's clock off.
                     val son = fr.f4ioz.satcombo.telemesure.SignalPaquets.bandeBase(bits, 48_000, 9_600, 16.0, horloge(), inverse = true, dc = 0.05, horlogePpm = 120.0)
                     var k = 0
-                    while (k < son.size) { val m = minOf(4_096, son.size - k); essaiPaquets.traiteSon(son.copyOfRange(k, k + m), m, 48_000); k += m }
+                    val t0 = horloge()
+                    while (k < son.size) {
+                        val m = minOf(4_096, son.size - k); essaiPaquets.traiteSon(son.copyOfRange(k, k + m), m, 48_000); k += m
+                        rythme(essaiPaquets.sonde, t0, k.toLong(), 48_000.0)
+                    }
                     return@Thread
                 }
                 val (re, im) = fr.f4ioz.satcombo.telemesure.SignalPaquets.baseband(bits, fs, 9_600, 1_800.0, 16.0, horloge())
                 var k = 0
+                val t0 = horloge()
                 while (k < re.size) {
                     val m = minOf(8_192, re.size - k)
                     essaiPaquets.traiteBaseband(re.copyOfRange(k, k + m), im.copyOfRange(k, k + m), m, fs); k += m
+                    rythme(essaiPaquets.sonde, t0, k.toLong(), fs)
                 }
             } finally { essaiPaquetsEnCours = false }
         }.apply { isDaemon = true; name = "essai-paquets" }.start()
@@ -473,6 +484,8 @@ class TelemesurePc(
         if (essaiEnCours) return false
         essaiEnCours = true
         val d = DecodeurTelemesure(p, Dsp.AUDIO_RATE, horloge = horloge).also { it.essai = true }
+        // The views open: this test's tap from its first sample (it goes at the air's pace then).
+        if (horloge() - visuLuMs < SondeSignal.BAIL_MS) d.sonde.abonne()
         essai = d
         Thread {
             try {
@@ -492,9 +505,11 @@ class TelemesurePc(
                     }
                 }
                 var k = 0
+                val t0 = horloge()
                 while (k < audio.size) {
                     val n = minOf(4096, audio.size - k)
                     d.traite(audio.copyOfRange(k, k + n), n); k += n
+                    rythme(d.sonde, t0, k.toLong(), Dsp.AUDIO_RATE.toDouble())
                 }
             } finally { essaiEnCours = false }
         }.apply { isDaemon = true; name = "essai-telemesure" }.start()
@@ -557,6 +572,70 @@ class TelemesurePc(
 
     private fun erreur(m: String) = JSONObject().put("ok", false).put("erreur", m)
 
+    // ---------------------------------------------------------------- the signal views (« modem scope »)
+
+    /** The APRS decoder's tap (the Son tab's card), for the views. */
+    @Volatile var sondeAfsk: () -> SondeSignal? = { null }
+
+    /** The views' sources: each a key, a name, and its taps (the receiver's own, its test's: true). */
+    private fun sourcesVisu(): List<Triple<String, String, List<Pair<SondeSignal, Boolean>>>> {
+        val es = essai
+        return listOf(
+            Triple("paquets", "Paquets FSK · GMSK", listOf(paquets.sonde to false, essaiPaquets.sonde to true)),
+            Triple("genesis", "SSDV en BLU · GENESIS", listOf(genesis.sonde to false, essaiGenesis.sonde to true)),
+            Triple("funcube", "FUNcube · BPSK 1200", listOfNotNull(leo?.sonde?.let { it to false }, es?.takeIf { it.profil == Profil.FUNCUBE }?.sonde?.let { it to true })),
+            Triple("balise", "Balise QO-100 · BPSK 400", listOfNotNull(canaux?.balise()?.second?.sonde?.let { it to false }, es?.takeIf { it.profil == Profil.QO100 }?.sonde?.let { it to true })),
+            Triple("afsk", "APRS · AFSK 1200", listOfNotNull(runCatching { sondeAfsk() }.getOrNull()?.let { it to false })),
+        )
+    }
+    @Volatile private var visuLuMs = Long.MIN_VALUE / 2
+
+    @Volatile private var visuCache: Pair<Long, Pair<String, JSONObject>>? = null
+
+    /**
+     * The views' reading, `GET /api/telemesure/visu?src=` (« auto » or a
+     * source's key): the taps of what is looked at subscribed (« auto »: all
+     * of them, the one that moved last shown), the sources with how lately
+     * each moved. At most ~6 readings a second are worked out; between, the
+     * last one is served again. Receive only: nothing here touches a radio.
+     */
+    fun visu(q: Map<String, String>): JSONObject {
+        val voulu = q["src"].orEmpty().ifBlank { "auto" }
+        val now = horloge()
+        visuCache?.let { (t, c) -> if (c.first == voulu && now - t < VISU_MIN_MS) return c.second }
+        visuLuMs = now
+        val sources = sourcesVisu()
+        val vues = if (voulu == "auto") sources else sources.filter { it.first == voulu }
+        for (s in vues) for ((sd, _) in s.third) sd.abonne()
+        val liste = JSONArray()
+        var meilleur: Pair<String, Pair<SondeSignal, Boolean>>? = null
+        var meilleurMs = 0L
+        for ((cle, nom, l) in sources) {
+            val p = l.maxByOrNull { it.first.vivant() }
+            val v = p?.first?.vivant() ?: 0L
+            liste.put(JSONObject().put("cle", cle).put("nom", nom).put("depuis", if (v > 0) now - v else -1))
+            if (p != null && vues.any { it.first == cle } && (meilleur == null || v > meilleurMs)) { meilleur = cle to p; meilleurMs = v }
+        }
+        val o = JSONObject().put("ok", true).put("src", voulu).put("sources", liste)
+        meilleur?.let { (cle, p) ->
+            o.put("choisi", cle)
+            if (p.first.ecrits > 0) o.put("visu", p.first.cliche().json(now).put("essai", p.second))
+        }
+        visuCache = now to (voulu to o)
+        return o
+    }
+
+    /**
+     * A test's pace: while its views are looked at, the made-up signal goes
+     * at the speed of the air (the views move as they would), else as fast
+     * as it can (the tests, nobody looking).
+     */
+    private fun rythme(sd: SondeSignal, debutMs: Long, echantillons: Long, fs: Double) {
+        if (!sd.actif) return
+        val du = (echantillons * 1000 / fs).toLong() - (horloge() - debutMs)
+        if (du > 5) runCatching { Thread.sleep(minOf(du, 500L)) }
+    }
+
     fun json(): JSONObject {
         val o = JSONObject()
         val b = canaux?.balise()
@@ -598,6 +677,8 @@ class TelemesurePc(
         const val SOURCE_SON = "son"
         /** A recording read again: 400 MB (a pass at 48 kHz is some 60 MB). */
         const val MAX_RELECTURE = 400L * 1024 * 1024
+        /** The views' readings at most this often (~6 a second), whatever the page asks. */
+        const val VISU_MIN_MS = 160L
 
         /** Plausible real-time values for the test frames (raw counts, in the document's order). */
         val ESSAI_FUNCUBE: List<Pair<Int, Long>> = buildList {
