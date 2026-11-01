@@ -69,6 +69,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         }
     }
 
+    /** What each pass holds (the list's badges and filter), kept until its files change. */
+    private val contenu = ContenuPassagesPc(dossier)
+
     /** The pass report's routes (`/rapport…`), when SatMe-PC gives them. */
     @Volatile var rapport: RapportPc? = null
 
@@ -190,12 +193,14 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "/liste" -> {
                 val l = j.passages().sortedByDescending { it.debutMs }
                 val tous = j.liens(l)
+                val contenus = contenu.resumes(l, tous)
                 json("{\"utc\":${s.useUtc},\"indicatif\":\"${js(s.callsign)}\",\"passages\":" + l.joinToString(",", "[", "]") { e ->
                     val k = tous.getValue(e.id)
                     "{\"id\":\"${js(e.id)}\",\"sat\":\"${js(e.satName)}\",\"de\":${e.debutMs},\"a\":${e.finMs}," +
                         "\"el\":${Math.round(e.elMax)},\"son\":${e.enregistrements.isNotEmpty()}," +
                         "\"q\":${k.qsos.size},\"i\":${k.images.size},\"r\":${k.trames.size},\"s\":0,\"cat\":${e.avecCat},\"sm\":${e.signal.isNotEmpty()}," +
-                        "\"rec\":${e.reconstitue},\"auto\":\"${js(e.auto)}\"}"
+                        "\"rec\":${e.reconstitue},\"auto\":\"${js(e.auto)}\"," +
+                        "\"c\":${fr.f4ioz.satcombo.domain.ContenuPassage.json(contenus[e.id].orEmpty())}}"
                 } + "}")
             }
             "/passage" -> {

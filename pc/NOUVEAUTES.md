@@ -16,8 +16,12 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Journal : ce que contient chaque passage, d'un coup d'œil** — dans la liste des passages, une pastille colorée par type de contenu : **SSTV**, **SSDV** (images SSDV et Geoscan des trames), **FT8**, **FT4**, **Num.** (zones numériques violettes pas encore décodées, en creux), **APRS**, **TLM** (trames de télémesure), **Phonie** (contacts en FM/SSB au carnet, paroles transcrites), **CW** (contacts en CW), **DATV** (flux enregistrés pendant le passage). Le nombre suit le nom ; l'infobulle le détaille (« FT4 · 153 message(s) »). Une pastille n'apparaît que s'il y a vraiment quelque chose.
+- **Journal : filtrer par contenu** — au-dessus de la liste, des puces à cocher pour les types présents ; plusieurs cochées : l'un ou l'autre ; **Tout** pour tout revoir ; le nombre de passages montrés (« 12 / 340 passages »). Le choix est gardé dans le navigateur. Tout vient des fichiers déjà rangés à côté des passages (aucun enregistrement relu) et reste en mémoire jusqu'à ce qu'un de ces fichiers change.
 
 ### en
+- **Journal: what each pass holds, at a glance** — in the list of passes, a coloured badge per kind of content: **SSTV**, **SSDV** (SSDV and Geoscan pictures from the frames), **FT8**, **FT4**, **Dig.** (violet digital zones not decoded yet, hollow), **APRS**, **TLM** (telemetry frames), **Voice** (FM/SSB contacts in the log, overs written down), **CW** (CW contacts), **DATV** (streams recorded during the pass). The count follows the name; the tooltip spells it out (“FT4 · 153 message(s)”). A badge shows only when there really is something.
+- **Journal: filter by content** — above the list, chips to tick for the kinds present; several ticked: any of them; **All** to see everything again; how many passes are shown (“12 / 340 passes”). The choice is kept in the browser. Everything comes from the files already kept beside the passes (no recording read again) and stays in memory until one of those files changes.
 
 ## 2026.11.1
 

@@ -59,7 +59,8 @@ object PageJournal {
         "pj_ft_titre", "pj_ft_aide", "pj_ft_visibilite", "pj_ft_ordre", "pj_ft_bas", "pj_ft_haut", "pj_ft_aucun", "pj_ft_redecoder",
         "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher",
         "pj_ft_deux", "pj_num_titre", "pj_num_aide", "pj_num_chercher", "pj_num_chercher_aide", "pj_num_aucune", "pj_num_decoder",
-        "pj_num_salves", "pj_num_rien", "pj_num_trouves", "pj_num_publier", "pj_num_publier_aide")
+        "pj_num_salves", "pj_num_rien", "pj_num_trouves", "pj_num_publier", "pj_num_publier_aide",
+        "pj_cu_tout", "pj_cu_tout_aide", "pj_cu_aide", "pj_cu_n", "pj_cu_aucun", "pj_cu_num", "pj_cu_num_long", "pj_cu_tlm_long", "pj_cu_phonie", "pj_cu_u_images", "pj_cu_u_messages", "pj_cu_u_zones", "pj_cu_u_trames", "pj_cu_u_phonie", "pj_cu_u_cw", "pj_cu_u_datv")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -107,6 +108,18 @@ object PageJournal {
   .p .m { font-size:11px; margin-top:1px; display:flex; gap:7px; flex-wrap:wrap; }
   .p .m .note { font-size:18px; line-height:12px; color:var(--cyan); font-weight:700; }
   .pastille { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+  /* What a pass holds (SatMe-PC's « c »): a coloured badge per kind, its count in the tooltip and after its name. */
+  .colonne { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .filtres { background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:5px 6px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .filtres:empty { display:none; }
+  .filtres button { font-size:11px; padding:1px 7px; border-radius:10px; line-height:15px; }
+  .filtres .puce { border:1px solid var(--c); color:var(--c); background:transparent; }
+  .filtres .puce.on { background:var(--c); color:#06131A; }
+  .filtres .puce.vide { opacity:.45; }
+  .filtres .n { color:var(--gris); font-size:11px; margin-left:auto; white-space:nowrap; }
+  .cu { display:inline-block; font-size:10px; font-weight:700; line-height:14px; padding:0 5px; border-radius:7px; background:var(--c); color:#06131A; white-space:nowrap; }
+  .cu i { font-style:normal; font-weight:500; opacity:.75; margin-left:3px; }
+  .cu.creux, .filtres .puce.creux:not(.on) { background:transparent; color:var(--c); box-shadow:inset 0 0 0 1px var(--c); border-style:dashed; }
   .vue { background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:8px 10px; min-width:0; }
   .entete { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
   .entete .s { font-size:18px; font-weight:800; }
@@ -122,6 +135,7 @@ object PageJournal {
     #page > header { flex:none; }
     .corps { flex:1; min-height:0; }
     .liste { max-height:none; min-height:0; }
+    .colonne { min-height:0; } .colonne .liste { flex:1; }
     .vue { min-height:0; display:flex; flex-direction:column; overflow-y:auto; }
     #sZone { flex:1; min-height:0; display:flex; flex-direction:column; }
     .deux { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:10px; }
@@ -256,7 +270,7 @@ ${PageJournalFt.CSS}
   <span id="message" style="color:var(--ambre)"></span>
 </header>
 <div class="corps">
-  <div class="liste" id="liste"></div>
+  <div class="colonne"><div class="filtres" id="filtres"></div><div class="liste" id="liste"></div></div>
   <div class="vue" id="vue"><p class="aide" id="tChoisir"></p></div>
 </div>
 </div>
@@ -349,16 +363,53 @@ async function demarre() {
   f.value = filtre;
   dessineListe();
 }
+// ------------------------------------------------------------ what a pass holds: badges and the filter
+// The kinds (ContenuPassage on the station): colour, name on the badge, name in full, the count's words. The violet is
+// the timeline's digital zones'; « Num. » (digital not read) is drawn hollow, as a hint rather than a decode.
+const CONTENUS = {
+  SSTV: ['#FF8A1F', 'SSTV', 'SSTV', 'cu_u_images'], SSDV: ['#FFD166', 'SSDV', 'SSDV / Geoscan', 'cu_u_images'],
+  FT8: ['#8C6BFF', 'FT8', 'FT8', 'cu_u_messages'], FT4: ['#D58BFF', 'FT4', 'FT4', 'cu_u_messages'],
+  NUM: ['#9D6BFF', T.cu_num, T.cu_num_long, 'cu_u_zones', true], APRS: ['#4C8DFF', 'APRS', 'APRS', 'cu_u_trames'],
+  TLM: ['#2EC4B6', 'TLM', T.cu_tlm_long, 'cu_u_trames'], PHONIE: ['#7CE38B', T.cu_phonie, T.cu_phonie, 'cu_u_phonie'],
+  CW: ['#C9D4DE', 'CW', 'CW', 'cu_u_cw'], DATV: ['#E5484D', 'DATV', 'DATV', 'cu_u_datv'] };
+/** A pass's kinds and counts: the station's summary, else (the phone's list) what its counts say. */
+function contenu(p) { return p.c || { SSTV: p.i || 0, APRS: p.r || 0 }; }
+function cuTitre(k, n) { const c = CONTENUS[k]; return c[2] + ' · ' + tf(c[3], n); }
+// The kinds ticked, kept in this browser: none, every pass.
+let types = [];
+try { types = (JSON.parse(localStorage.getItem('satme-journal-types') || '[]') || []).filter(k => k in CONTENUS); } catch (e) { types = []; }
+function gardeTypes() { try { localStorage.setItem('satme-journal-types', JSON.stringify(types)); } catch (e) {} }
+function retenu(p) { if (!types.length) return true; const c = contenu(p); return types.some(k => (c[k] || 0) > 0); }
+function dessineFiltres(l, n) {
+  const f = g('filtres'); f.innerHTML = '';
+  const nb = {}; l.forEach(p => { const c = contenu(p); for (const k in c) if (c[k] > 0) nb[k] = (nb[k] || 0) + 1; });
+  // The kinds some pass holds, and those ticked (even when none of these passes holds them, to untick them).
+  const ks = Object.keys(CONTENUS).filter(k => nb[k] || types.includes(k));
+  if (!ks.length) return;
+  f.appendChild(el('button', { class: 'discret' + (types.length ? '' : ' actif'), text: T.cu_tout, title: T.cu_tout_aide,
+    onclick: () => { types = []; gardeTypes(); dessineListe(); } }));
+  ks.forEach(k => {
+    const c = CONTENUS[k], on = types.includes(k);
+    f.appendChild(el('button', { class: 'puce' + (on ? ' on' : '') + (c[4] ? ' creux' : '') + (nb[k] ? '' : ' vide'), style: '--c:' + c[0],
+      text: c[1], title: c[2] + ' — ' + tf('cu_n', nb[k] || 0, l.length) + '\n' + T.cu_aide, 'aria-pressed': on ? 'true' : 'false',
+      onclick: () => { types = on ? types.filter(x => x !== k) : types.concat([k]); gardeTypes(); dessineListe(); } }));
+  });
+  f.appendChild(el('span', { class: 'n', text: tf('cu_n', n, l.length) }));
+}
 function dessineListe() {
   const d = g('liste'); d.innerHTML = '';
-  const l = passages.filter(p => !filtre || p.sat === filtre);
-  if (!l.length) { d.appendChild(el('p', { class: 'aide', text: T.aucun })); return; }
+  const ls = passages.filter(p => !filtre || p.sat === filtre), l = ls.filter(retenu);
+  dessineFiltres(ls, l.length);
+  if (!l.length) { d.appendChild(el('p', { class: 'aide', text: ls.length ? T.cu_aucun : T.aucun })); return; }
   l.forEach(p => {
     const m = el('div', { class: 'm' });
     const tag = (k, n, lib) => { if (n) m.appendChild(el('span', {}, [el('span', { class: 'pastille', style: 'background:' + COUL[k] }), document.createTextNode(n + ' ' + lib)])); };
     // The sound: a note big enough to see at a glance in the list.
     if (p.son) m.appendChild(el('span', { class: 'note', text: '♪', title: T.sons }));
-    tag('QSO', p.q, T.qso); tag('SSTV', p.i, 'SSTV'); tag('APRS', p.r, T.aprs); tag('SIGNET', p.s, '⚑');
+    tag('QSO', p.q, T.qso); tag('SIGNET', p.s, '⚑');
+    const c = contenu(p);
+    Object.keys(CONTENUS).forEach(k => { const n = c[k] || 0; if (n > 0) m.appendChild(el('span', { class: 'cu' + (CONTENUS[k][4] ? ' creux' : ''),
+      style: '--c:' + CONTENUS[k][0], title: cuTitre(k, n) }, [document.createTextNode(CONTENUS[k][1]), el('i', { text: String(n) })])); });
     if (p.sm) m.appendChild(el('span', { text: T.smetre }));
     if (p.rec) m.appendChild(el('span', { style: 'color:var(--gris)', text: T.reconstitue }));
     d.appendChild(el('div', { class: 'p' + (P && P.id === p.id ? ' actif' : ''), onclick: () => ouvre(p.id) }, [
