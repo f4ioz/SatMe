@@ -942,7 +942,7 @@ ${DiplomesJs.CSS}  .st-nav button .ac-n[hidden] { display:none !important; }
   .tp-derniere img { display:block; width:100%; max-width:400px; margin-top:4px; border-radius:4px; background:#7f7f7f; cursor:pointer; }
   .tp-sids { margin-top:10px; padding-top:8px; border-top:1px solid var(--ligne); }
   #tp-trames { max-height:calc(100vh - 250px); }
-  .tlm-b.ax { background:rgba(63,224,200,.14); color:var(--cyan); } .tlm-b.ssdv { background:rgba(176,124,255,.18); color:#C9A8FF; }
+${VisuSignalJs.CSS}  .tlm-b.ax { background:rgba(63,224,200,.14); color:var(--cyan); } .tlm-b.ssdv { background:rgba(176,124,255,.18); color:#C9A8FF; }
   .ts-img { background:var(--s3); border-radius:var(--r2); padding:6px; font-size:var(--fs-s); }
   .ts-img img { display:block; width:100%; height:auto; border-radius:4px; background:#7f7f7f; }
   .ts-img .tlm-h { margin-top:4px; }
@@ -4612,7 +4612,7 @@ ${Ft8SiteJs.HTML}    </div>
 <dialog id="gal-dlg" class="gal-dlg" aria-label="Image reçue"><div class="ligne" style="margin-top:0"><b id="gal-dlg-t"></b><button class="discret" style="margin-left:auto" onclick="g('gal-dlg').close()" aria-label="Fermer">✕</button></div><div id="gal-dlg-c"></div></dialog>
 <div class="vue" id="v-tlm" hidden>
 <div class="st tl-st" data-st="tlm">
-  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-blu" title="SSDV et télémesure en FSK étroite reçue en BLU : SO-127 (HADES-SA), « GENESIS FSK » 800 / 200 bit/s">${IconesPc.svg("radio", "st-ico")}<span>SSDV en BLU</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames : comment, l’import de paquets ; les images elles-mêmes sont dans l’onglet Images">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
+  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-blu" title="SSDV et télémesure en FSK étroite reçue en BLU : SO-127 (HADES-SA), « GENESIS FSK » 800 / 200 bit/s">${IconesPc.svg("radio", "st-ico")}<span>SSDV en BLU</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames : comment, l’import de paquets ; les images elles-mêmes sont dans l’onglet Images">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button><button data-p="tl-p-sig" title="Le signal du décodeur numérique actif : constellation (BPSK), diagramme de l’œil et tons (FSK, AFSK, GMSK), train binaire avec ses mots de synchro">${IconesPc.svg("nuage", "st-ico")}<span>Signal</span></button></div>
   <div class="st-pan" id="tl-p-paq">
 <div class="grille2">
   <div class="carte">
@@ -4702,7 +4702,7 @@ ${Ft8SiteJs.HTML}    </div>
   </div>
 </div>
   </div>
-</div>
+${VisuSignalJs.HTML}</div>
 </div>
 <div class="vue" id="v-reglages" hidden>
 <div class="reg"><nav class="reg-nav" id="reg-nav"></nav><div class="reg-corps" id="reg-corps"></div></div>
@@ -13648,6 +13648,7 @@ function tsGeoscanHtml(i) {
     Math.round(i.octets / 1024 * 10) / 10 + ' ko' + (i.manquants > 0 ? ' · ' + i.manquants + ' octets manquants' : '') + ' · ' + jourHeure(i.t) + '</div>' +
     (i.debut ? '<div class="ts-act"><a class="bouton-lien" href="' + u + '&dl=1" download>⤓ JPEG</a></div>' : '') + '</div>';
 }
+${VisuSignalJs.CODE}${VisuSignalJs.PAGE}
 async function tsAbandonne(cle) {
   if (!confirm('Abandonner cette image en cours ? Ses paquets reçus sont effacés.')) return;
   await tlmPost('ssdv/abandon?cle=' + encodeURIComponent(cle));

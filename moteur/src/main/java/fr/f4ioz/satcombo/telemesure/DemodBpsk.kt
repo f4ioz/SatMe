@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.telemesure
 import fr.f4ioz.satcombo.sdr.ComplexDecimator
 import fr.f4ioz.satcombo.sdr.Dsp
 import fr.f4ioz.satcombo.sdr.Fft
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -113,6 +114,10 @@ class DemodBpsk(
     /** The carrier's prominence when it was found, dB above the squared spectrum's median. */
     @Volatile var presenceDb: Double = 0.0; private set
     val bits: Long get() = bitsSortis
+    /** The views' tap: each bit's I/Q after the Costas loop (the constellation), its time. */
+    var sonde: SondeSignal? = null
+        set(v) { field = v; v?.regle(fs2, debit) }
+    private var tStrobe = 0.0
 
     /** Looks for the carrier again (a new pass, a lost signal). */
     fun reacquiert() { enAcquisition = true; nAcqPris = 0 }
@@ -168,6 +173,7 @@ class DemodBpsk(
             // Gardner: (y[k] − y[k−1]) · y[k−½], phase-blind.
             val e = ((sI - prI) * mI + (sQ - prQ) * mQ) / (puissance + 1e-12)
             prI = sI; prQ = sQ
+            tStrobe = prochain
             prochain += sps - 0.04 * sps * e.coerceIn(-1.0, 1.0)
             demiBit(sI, sQ)
         }
@@ -212,6 +218,11 @@ class DemodBpsk(
             echelleD += 0.01 * (abs(d) - echelleD)
             echelleC += 0.01 * (abs(cI) - echelleC)
             bitsSortis++
+            val sd = sonde
+            if (sd != null && sd.actif && !enAcquisition) {
+                sd.point((cI / (echelleC + 1e-12)).toFloat(), (cQ / (echelleC + 1e-12)).toFloat())
+                sd.symbole(tStrobe)
+            }
             if (!enAcquisition) sortie((d / (echelleD + 1e-12)).toFloat(), (cI / (echelleC + 1e-12)).toFloat())
         }
         hI = i; hQ = q

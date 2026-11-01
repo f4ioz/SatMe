@@ -948,6 +948,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 r.methode == "POST" -> runCatching { k.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 // The common « Images » gallery: the SSDV and Geoscan pictures, in one list (read only).
                 chemin == "/api/telemesure/images" -> k.galerie()
+                // The signal views (eye, constellation, tones, bits): their taps subscribed while read.
+                chemin == "/api/telemesure/visu" -> k.visu(q)
                 else -> k.json()
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return

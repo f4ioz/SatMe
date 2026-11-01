@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.clavier
 
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -78,6 +79,14 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
     private var niveau = 0.0
     private var faibles = 0
 
+    /**
+     * The views' tap: the tone difference's eye inside each character, the
+     * audio's spectrum (mark and space), the five data bits of each
+     * character (LSB first), its decision times.
+     */
+    val sonde = SondeSignal("rtty", "RTTY", setOf(SondeSignal.Vue.OEIL, SondeSignal.Vue.TONS, SondeSignal.Vue.BITS), lsbDabord = true, groupe = 5)
+    private var nEch = 0L
+
     private val lecteur = Baudot.Lecteur(true) { ch ->
         when (ch) { '\r' -> {}; '\n' -> sortie("\n"); else -> sortie(ch.toString()) }
     }
@@ -99,6 +108,8 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
         ri = DoubleArray(n); rq = DoubleArray(n); rp = 0; rempli = 0; depuis = 0
         etat = ATTENTE; qualite = 0.0; ouvert = false; afc = 0.0; present = false
         lecteur.reinitialise()
+        sonde.regle(debit, r.baud)
+        sonde.ecartAttenduHz = r.shiftHz
     }
 
     fun reinitialise() { change = true }
@@ -108,6 +119,7 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
 
     private fun ecoute(x: Double) {
         if (change) prepare()
+        if (sonde.actif) sonde.audio(x.toFloat(), fs.toDouble())
         descente.frequenceHz = centreHz
         if (!descente.pousse(x)) return
         val bi = descente.sortieI; val bq = descente.sortieQ
@@ -130,6 +142,7 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
         }
         val am = sqrt(smI * smI + smQ * smQ); val asp = sqrt(ssI * ssI + ssQ * ssQ)
         val v = (am - asp) / (am + asp + 1e-12)
+        if (sonde.actif) refAge++
         bit(v, am + asp)
     }
 
@@ -141,6 +154,7 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
 
     /** The start-stop machine, one baseband sample at a time ([v] > 0: mark). */
     private fun bit(v: Double, a: Double) {
+        nEch++
         when (etat) {
             ATTENTE -> {
                 // Mark to space: the edge (as the bit filter sees it, half a bit late).
@@ -148,7 +162,20 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
             }
             else -> {
                 t += 1.0
+                val vu = sonde.actif
+                val ph = ((t - prochain) / parBit + 1.0).coerceIn(0.0, 0.999)
+                if (vu) {
+                    sonde.oeil(ph, v.toFloat())
+                    if (!refPris && ph >= 0.75) { refPris = true; refAge = 0; rmI = smI; rmQ = smQ; rsI = ssI; rsQ = ssQ }
+                }
                 if (t >= prochain) {
+                    if (vu) {
+                        sonde.niveau(v.toFloat()); sonde.symbole(nEch.toDouble())
+                        // Only inside a run of one tone: across a change the filters hold both.
+                        if (refPris && (v > 0) == tonAvant) sonde.frequence(tonMesure(v > 0))
+                        tonAvant = v > 0
+                        refPris = false
+                    }
                     qualite += 0.05 * (abs(v) - qualite)
                     // The tones gone (the end of an over): the squelch shuts at once.
                     if (ouvert && a < 0.25 * niveau) { if (++faibles >= 2) { qualite = 0.0; ouvert = false } } else faibles = 0
@@ -158,6 +185,7 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
                         DEPART -> if (v < 0) { etat = DONNEES; code = 0; nbits = 0; prochain += parBit } else etat = ATTENTE
                         DONNEES -> {
                             if (v > 0) code = code or (1 shl nbits)
+                            if (vu) sonde.bit(if (v > 0) 1 else 0)
                             nbits++
                             prochain += parBit
                             if (nbits == 5) etat = ARRET
@@ -171,6 +199,21 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
             }
         }
         dernier = v
+    }
+
+    // The views' tone measure: each tone's phasor a quarter of a bit before the decision.
+    private var refPris = false
+    private var tonAvant = false
+    private var refAge = 0
+    private var rmI = 0.0; private var rmQ = 0.0; private var rsI = 0.0; private var rsQ = 0.0
+
+    /** The tone heard over the last quarter bit (audio Hz): how far the winning tone's phasor turned. */
+    private fun tonMesure(marque: Boolean): Float {
+        if (refAge <= 0) return Float.NaN
+        val (i, q, ri, rq) = if (marque) listOf(smI, smQ, rmI, rmQ) else listOf(ssI, ssQ, rsI, rsQ)
+        val dphi = kotlin.math.atan2(q * ri - i * rq, i * ri + q * rq)
+        val demi = r.shiftHz / 2 * (if (r.inverse) -1 else 1)
+        return (centreHz + afc + (if (marque) demi else -demi) + dphi * debit / (2 * PI * refAge)).toFloat()
     }
 
     /** Every half second: the pair of tones searched ±[AFC_HZ] around the centre. */
@@ -201,6 +244,8 @@ class DecodeurRtty(private val fs: Int, private val sortie: (String) -> Unit, ce
         val median = g.sorted()[g.size / 2]
         present = meilleur > 4 * median
         if (present) afc = ou
+        val f = centreHz + afc
+        sonde.bandeTons = maxOf(50.0, f - r.shiftHz - 150) to f + r.shiftHz + 150
         // S/N: the two tones' bands against the spectrum's quiet half.
         val tri = spectre.sorted()
         val bruit = tri.subList(0, tri.size / 2).average()

@@ -250,4 +250,35 @@ class TelemesurePcTest {
         assertEquals("LAPAN-A2", ph.satellite)
         assertEquals("AFSK 1200", ph.passages.single().source)
     }
+
+    @Test fun `les vues du signal - rien sans regard, l'essai FSK vu en oeil, tons et bits`() {
+        val t = TelemesurePc(stockage(), Files.createTempDirectory("tlm").toFile(), CanauxPc(stockage()))
+        // Nobody looked yet: no tap writes.
+        assertFalse(t.paquets.sonde.actif)
+        val j0 = t.visu(mapOf("src" to "auto"))
+        assertTrue(j0.getBoolean("ok"))
+        assertEquals(listOf("paquets", "genesis", "funcube", "balise", "afsk"),
+            (0 until j0.getJSONArray("sources").length()).map { j0.getJSONArray("sources").getJSONObject(it).getString("cle") })
+        assertFalse(j0.has("visu"))
+        // Auto subscribes every source's taps.
+        assertTrue(t.paquets.sonde.actif && t.genesis.sonde.actif)
+        assertTrue(t.lanceEssaiPaquets())
+        var j = j0
+        val fin = System.currentTimeMillis() + 120_000
+        while (t.json().getJSONObject("paquets").getBoolean("essaiEnCours") && System.currentTimeMillis() < fin) {
+            Thread.sleep(300)
+            j = t.visu(mapOf("src" to "paquets"))
+            if (j.has("visu") && j.getJSONObject("visu").getJSONArray("reperes").length() > 3) break
+        }
+        assertEquals("paquets", j.getString("choisi"))
+        val v = j.getJSONObject("visu")
+        assertTrue(v.getBoolean("essai"))
+        assertEquals(listOf("OEIL", "TONS", "BITS"), (0 until v.getJSONArray("vues").length()).map { v.getJSONArray("vues").getString(it) })
+        assertTrue(v.getString("oeil").isNotEmpty())
+        assertTrue(v.getString("bits").length > 100)
+        assertTrue(v.getJSONObject("tons").has("ecart"))
+        assertFalse(v.has("points"))
+        // Readings come at most ~6 a second: the same one served again in between.
+        assertTrue(t.visu(mapOf("src" to "paquets")) === t.visu(mapOf("src" to "paquets")))
+    }
 }

@@ -254,6 +254,7 @@ fun main(args: Array<String>) {
     runCatching { telemesure.appliqueSonPaquets() }
     // SSDV through an FM repeater in AFSK 1200 (IO-86): the APRS decoder's frames searched.
     son.aprs.surOctets = { o -> runCatching { telemesure.trameAfsk(o) } }
+    telemesure.sondeAfsk = { son.aprs.sonde }
     telemesure.station = {
         val e = station.etat.value
         e.observateur?.let { Triple(e.indicatif, it.latDeg, it.lonDeg) }

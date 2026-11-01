@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.telemesure
 
 import fr.f4ioz.satcombo.sdr.Dsp
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -51,6 +52,10 @@ class DemodFsk(val fs: Double, val debit: Int, private val afcMaxHz: Double = 12
     /** The two levels (Hz from the AFC's frequency), for the display and tests. */
     val niveaux: Pair<Double, Double> get() = trancheur.niveaux
     private val dc: Double get() = trancheur.dc
+    /** The views' tap: the discriminator's eye, its levels (Hz from the AFC's frequency), the decision times. */
+    var sonde: SondeSignal?
+        get() = trancheur.sonde
+        set(v) { trancheur.sonde = v; v?.regle(fs2, debit.toDouble(), "Hz") }
     private var ncoPhase = 0.0
     private var prevI = 0f; private var prevQ = 0f
 

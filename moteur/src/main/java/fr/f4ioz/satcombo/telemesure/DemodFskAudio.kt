@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.telemesure
 
 import fr.f4ioz.satcombo.sdr.Fft
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -66,6 +67,9 @@ class DemodFskAudio(
     /** The audio's level, dB full scale. */
     @Volatile var niveauDb = -120.0; private set
     var bits = 0L; private set
+    /** The views' tap: the soft stream's eye, the tones' spectrum (each search's), the decision times. */
+    var sonde: SondeSignal? = null
+        set(v) { field = v; v?.regle(fs, debit); v?.ecartAttenduHz = ecartHz }
 
     // ------------------------------------------------------------ tone search
     private val nFft = Integer.highestOneBit((fs * 0.3).toInt().coerceAtLeast(1024))
@@ -146,6 +150,21 @@ class DemodFskAudio(
         horloge(doux)
     }
 
+    // The views' tone measure: the matched filters' phasors a quarter of a bit before the decision.
+    private var refPris = false
+    private var tonAvant = false
+    private var refAge = 0
+    private var rPR = 0.0; private var rPI = 0.0; private var rMR = 0.0; private var rMI = 0.0
+
+    /** The tone heard over the last quarter bit: how far the winning filter's phasor turned (still on its own tone). */
+    private fun tonMesure(): Float {
+        if (refAge <= 0) return Float.NaN
+        val haut = sPR * sPR + sPI * sPI > sMR * sMR + sMI * sMI
+        val (i, q, ri, rq) = if (haut) listOf(sPR, sPI, rPR, rPI) else listOf(sMR, sMI, rMR, rMI)
+        val dphi = kotlin.math.atan2(q * ri - i * rq, i * ri + q * rq)
+        return (centreHz + (if (haut) 1 else -1) * ecartHz / 2 + dphi * fs / (2 * PI * refAge)).toFloat()
+    }
+
     private fun horloge(s: Double) {
         val pas = 1.0 / sps
         val ancien = phase
@@ -155,9 +174,18 @@ class DemodFskAudio(
             milieu = avant + (s - avant) * f
             milieuPris = true
         }
+        val sd = sonde
+        val vu = sd != null && sd.actif
         if (phase >= 1.0) {
             val f = (1.0 - ancien) / pas
             val v = avant + (s - avant) * f
+            if (vu) {
+                sd!!.niveau(v.toFloat()); sd.symbole(sd.echantillons - 1 + f)
+                // Only inside a run of one tone: across a change the filters hold both.
+                if (refPris && (v > 0) == tonAvant) sd.frequence(tonMesure())
+                tonAvant = v > 0
+                refPris = false
+            }
             // Gardner: the middle between two decisions should sit on the crossing.
             val e = (v - precedent) * milieu
             phase -= 1.0
@@ -166,6 +194,11 @@ class DemodFskAudio(
             milieuPris = false
             bits++
             surBit(if (v > 0) 1 else 0, v.toFloat())
+        }
+        if (vu) {
+            refAge++
+            if (!refPris && phase >= 0.75) { refPris = true; refAge = 0; rPR = sPR; rPI = sPI; rMR = sMR; rMI = sMI }
+            sd!!.oeil(phase, s.toFloat())
         }
         avant = s
     }
@@ -188,6 +221,7 @@ class DemodFskAudio(
         val ib = (basHz / hzBin).toInt().coerceAtLeast(1); val ih2 = (hautHz / hzBin).toInt().coerceAtMost(nb - 1)
         val dEcart = ecartHz / hzBin
         val dm = (dEcart / 2)
+        sonde?.takeIf { it.actif }?.spectre(p, hzBin, ib, ih2 + 1)
         val bande = (ib..ih2).map { p[it] }.sorted()
         val bruit = bande.getOrElse(bande.size / 2) { 1e-18 }.coerceAtLeast(1e-18)
         var meilleur = -1.0; var ic = -1

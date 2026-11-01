@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.clavier
 
 import fr.f4ioz.satcombo.sdr.Dsp
+import fr.f4ioz.satcombo.visu.SondeSignal
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -86,6 +87,14 @@ class DecodeurPsk31(private val fs: Int, private val sortie: (String) -> Unit, c
 
     private val lecteur = Varicode.Lecteur { ch -> if (ouvert) emet(ch) }
 
+    /**
+     * The views' tap: each symbol's z·conj(z₋₁) (the differential
+     * constellation: two clouds at ±1 on the real axis), its bits, its time.
+     */
+    val sonde = SondeSignal("psk31", "BPSK31", setOf(SondeSignal.Vue.CONSTELLATION, SondeSignal.Vue.BITS)).also { it.regle(debit, BAUD) }
+    private var echelleD = 0.0
+    private var nEch = 0L
+
     private fun emet(ch: Char) {
         when {
             ch == '\r' -> {}
@@ -125,6 +134,7 @@ class DecodeurPsk31(private val fs: Int, private val sortie: (String) -> Unit, c
 
     /** The symbol clock: the envelope by phase within the symbol, its dip the edge. */
     private fun horloge(i: Double, q: Double) {
+        nEch++
         val m = sqrt(i * i + q * q)
         val c = ((pos / parSymbole) * CASES).toInt().coerceIn(0, CASES - 1)
         cases[c] += 0.04 * (m - cases[c])
@@ -163,6 +173,12 @@ class DecodeurPsk31(private val fs: Int, private val sortie: (String) -> Unit, c
             afc = (afc + 0.08 * erreurHz).coerceIn(-AFC_HZ, AFC_HZ)
         }
         val bit = di > 0
+        if (sonde.actif) {
+            // Scaled by the mean |z·z̄₋₁|: the clouds at ±1, their spread the noise.
+            echelleD = if (echelleD <= 0) sqrt(p) else echelleD + 0.05 * (sqrt(p) - echelleD)
+            val e = echelleD.coerceAtLeast(1e-30)
+            sonde.point((di / e).toFloat(), (dq / e).toFloat()); sonde.symbole(nEch.toDouble()); sonde.bit(if (bit) 1 else 0)
+        }
         bitsRecents = (bitsRecents shl 1) or (if (bit) 1L else 0L)
         zeros = 64 - java.lang.Long.bitCount(bitsRecents)
         lecteur.bit(bit)

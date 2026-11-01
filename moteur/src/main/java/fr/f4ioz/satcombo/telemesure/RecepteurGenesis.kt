@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.telemesure
 
+import fr.f4ioz.satcombo.visu.SondeSignal
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -91,6 +92,15 @@ class RecepteurGenesis(
     private val liste = java.util.ArrayDeque<TrameGenesis>()
     val trames: List<TrameGenesis> get() = synchronized(liste) { liste.toList() }
 
+    /**
+     * The views' tap: the soft stream's eye, the two tones' spectrum, the
+     * bits (MSB first) with the GENESIS sync word and SSDV's marked.
+     */
+    val sonde = SondeSignal("genesis", "GENESIS FSK (BLU)", setOf(SondeSignal.Vue.OEIL, SondeSignal.Vue.TONS, SondeSignal.Vue.BITS),
+        motifs = listOf(SondeSignal.Motif("synchro BF35", Genesis.SYNC.toLong(), 16, 1, true),
+            SondeSignal.Motif("SSDV 55 66", 0x5566, 16, 0, true), SondeSignal.Motif("SSDV 55 67", 0x5567, 16, 0, true)),
+        horloge = horloge)
+
     private var demod: DemodFskAudio? = null
     private var deframeur: Genesis.Deframeur? = null
     private var chercheur: ChercheurSsdv? = null
@@ -105,8 +115,10 @@ class RecepteurGenesis(
         val ch = ChercheurSsdv(lsbAussi = false, tolerance = 1) { pq, _ -> paquet(pq) }
         deframeur = df; chercheur = ch
         val d = DemodFskAudio(rate.toDouble(), p.debit, p.ecartHz) { b, _ ->
+            if (sonde.actif) sonde.bit(b)
             df.bit(b); ch.bit(b); if (captureOuverte) captureBit(b)
         }
+        d.sonde = sonde
         demod = d
         return d
     }
@@ -131,6 +143,8 @@ class RecepteurGenesis(
         val now = horloge()
         val cx = contexteCourant
         val tg = TrameGenesis(now, t, cx.satellite, cx.essai)
+        // The sync word, the size byte, the bytes and the CRC.
+        sonde.trame("trame " + t.nomType, 16 + 8 + (t.brut.size + 2) * 8)
         synchronized(liste) { liste.addFirst(tg); while (liste.size > MAX_TRAMES) liste.pollLast() }
         etat = etat.copy(trames = etat.trames + 1, derniereMs = now)
         if (captureOuverte) runCatching { ecritTrame(tg) }
@@ -145,6 +159,7 @@ class RecepteurGenesis(
         recents[cle] = now
         val cx = contexteCourant
         val a = assemblage.ajoute(p, now, cx.satellite, source, cx.essai)
+        sonde.trame("paquet SSDV", p.brut.size * 8)
         ssdvVus++
         etat = etat.copy(derniereMs = now)
         a.photo?.id?.let { id -> runCatching { surSsdv?.invoke(id) } }
