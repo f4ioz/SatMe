@@ -57,6 +57,8 @@ Install only what you use.
 | **RTL-SDR dongle** (SDR, radiosondes, METEOR, QO-100 panorama) | `sudo apt install rtl-sdr` (SatMe-PC starts `rtl_tcp` itself) |
 | **DATV with a MiniTiouner** plugged into this PC | [LongMynd](#datv-on-this-pc) and its udev rule, below — or a [SatMe-Node](installer-satme-node.md) by the antenna |
 | **The phone joined by QR code** | your firewall must let the page's port + 1 through: `sudo ufw allow from 192.168.0.0/16 to any port 8091 proto tcp` (only if `ufw` is active) |
+| **Signal Hound BB60C / BB60D** as the SDR receiver | the library of Signal Hound's SDK, installed by you (SatMe does not ship it): [how](station-pc.md#signal-hound-bb60-bb60c-bb60d) |
+| **Xastir, YAAC… on another machine** (APRS › Partage, *Ouvert au réseau local* ticked) | let KISS TCP and AGWPE through: `sudo ufw allow from 192.168.0.0/16 to any port 8000,8001 proto tcp` (only if `ufw` is active; on this PC alone, nothing to open) |
 
 Nothing opens by itself: a serial port opens only once chosen and "Connect" clicked, RTS/DTR stay low, and no transmit command is ever sent. Start with the simulated rig and rotator.
 

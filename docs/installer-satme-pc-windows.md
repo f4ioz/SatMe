@@ -29,7 +29,7 @@ Settings, log, journal and recordings are in `%APPDATA%\SatMe` (and what SatMe-P
 
 | For | Do |
 |---|---|
-| **Rig (CAT) or rotator** | plug the interface in: it shows as a `COM…` port in the Station tab. Sometimes its maker's driver is needed (FTDI, CP210x, CH340); Windows often finds it by itself. |
+| **Rig (CAT) or rotator** | plug the interface in: it shows as a `COM…` port in the Station tab. Sometimes its maker's driver is needed (FTDI, CP210x, CH340); Windows often finds it by itself. For an **IC-9700** (its CP2102N bridge) without a working driver, *Réglages › Poste et rotor* says so under the port choice and **Installer le pilote** installs the official Silicon Labs driver on a click (Windows asks for permission; nothing is installed without the click). |
 | **RTL-SDR dongle** (SDR, radiosondes, METEOR, QO-100 panorama) | once: install the **WinUSB** driver with [Zadig](https://zadig.akeo.ie/) — plug the dongle in, *Options → List All Devices*, choose *Bulk-In, Interface (Interface 0)* (or *RTL2838UHIDIR*), *WinUSB*, **Replace Driver**. |
 | **Sound card** (the rig's audio, SSTV, APRS, FT8) | nothing: it shows in the Sound tab. |
 | **DATV with a MiniTiouner** | LongMynd runs on Linux only: the MiniTiouner goes on a [SatMe-Node](installer-satme-node.md) (a Raspberry Pi by the antenna), driven by SatMe-PC over the network. VLC (optional) opens the stream in its own window. |

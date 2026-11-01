@@ -29,7 +29,7 @@ Réglages, carnet, journal et enregistrements sont dans `%APPDATA%\SatMe` (ce qu
 
 | Pour | À faire |
 |---|---|
-| **Poste (CAT) ou rotor** | brancher l'interface : elle apparaît comme un port `COM…` dans l'onglet Station. Il faut parfois le pilote de son fabricant (FTDI, CP210x, CH340) ; Windows le trouve souvent tout seul. |
+| **Poste (CAT) ou rotor** | brancher l'interface : elle apparaît comme un port `COM…` dans l'onglet Station. Il faut parfois le pilote de son fabricant (FTDI, CP210x, CH340) ; Windows le trouve souvent tout seul. Pour un **IC-9700** (son pont CP2102N) sans pilote qui marche, *Réglages › Poste et rotor* le dit sous le choix du port et **Installer le pilote** installe le pilote officiel de Silicon Labs en un clic (Windows demande l'autorisation ; rien n'est installé sans le clic). |
 | **Clé RTL-SDR** (SDR, radiosondes, METEOR, panorama QO-100) | une fois : installer le pilote **WinUSB** avec [Zadig](https://zadig.akeo.ie/) — brancher la clé, *Options → List All Devices*, choisir *Bulk-In, Interface (Interface 0)* (ou *RTL2838UHIDIR*), *WinUSB*, **Replace Driver**. |
 | **Carte son** (le son du poste, SSTV, APRS, FT8) | rien : elle apparaît dans l'onglet Son. |
 | **DATV avec un MiniTiouner** | LongMynd ne tourne que sous Linux : le MiniTiouner se branche sur un [SatMe-Node](installer-satme-node.fr.md) (un Raspberry Pi près de l'antenne), que SatMe-PC pilote par le réseau. VLC (facultatif) ouvre le flux dans sa propre fenêtre. |

@@ -15,6 +15,28 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 
 SatMe-PC a beaucoup grandi cet automne. L'essentiel, en images — chaque point est détaillé dans le [guide intégré](docs/station-pc.fr.md) (**F1** dans SatMe-PC) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
 
+**Prochaine version** (déjà dans les sources, pas encore publiée)
+
+- **Carnet** : la **liste DXCC entière** — 340 entités, chacune avec son numéro ADIF, son continent et ses zones CQ et UIT ; l'export ADIF ajoute `DXCC`, `COUNTRY`, `CONT` (et `CQZ`, `ITUZ` quand l'entité n'a qu'une zone), le **Contrôle ADIF** signale un indicatif dont le préfixe ne mène à aucune entité, un nouveau profil **Wavelog** prend ton entité et tes zones.
+- **APRS › Partage** (tout coupé d'origine) : un **iGate APRS-IS en réception seule** — les trames entendues sur l'air partent vers APRS-IS, rien ne revient jamais sur l'air — et des serveurs **KISS TCP** (port 8001) et **AGWPE** (port 8000) pour que Xastir, YAAC, APRSIS32 ou un client packet reçoivent les trames décodées par SatMe ; écoute seule, une trame qu'ils envoient pour émettre est refusée.
+- **Journal** : une **pastille par type de contenu** sur chaque passage (SSTV, SSDV, FT8, FT4, numérique, APRS, télémesure, phonie, CW, DATV) et un **filtre** par contenu ; les **voix entendues** dans un enregistrement dessinées en bande verte sur la frise — un QSO en BLU n'est plus pris pour du FT4.
+
+**Nouveau depuis la 2026.10.35**
+
+- **APRS** : une **carte** des stations entendues, leur liste et leur fiche, les **Messages** (réception seule), et un décodeur qui répare une trame abîmée d'un ou deux bits par le bruit.
+- **FT4 / FT8 sur les satellites** : le Doppler CAT par pas de 4 Hz pendant l'écoute, et les **zones numériques** du Journal (violettes : FT4, FT8, autre numérique) pour décoder après coup l'enregistrement d'un passage.
+- **Carnet** : le **Contrôle ADIF** avant l'export, un ADIF plus juste, les **QSL reçues** (LoTW, eQSL, papier) lues dans Wavelog, un contact modifié après son envoi signalé ; un onglet **Images** avec toutes les images SSTV, SSDV et Geoscan.
+- **SDR** : le **Signal Hound BB60C / BB60D** comme récepteur (son SDK installé par toi), les cascades qu'on **remonte** sur les 10 dernières minutes ; la sortie 9600 d'un TS-2000 lue sur une carte son pour la télémesure.
+- **Station** : le poste se reprend tout seul, le son perdu sur un PC surchargé est vu et comblé, **« Pourquoi rien ? »** nomme la panne probable quand rien n'est décodé ; le rotor sur le **Soleil ou la Lune** ; l'**éblouissement solaire de QO-100** annoncé ; l'**ISS visible à l'œil nu** ; les fréquences exportées et importées pour **SatPC32 et Gpredict**.
+
+**Nouveau depuis la 2026.10.34**
+
+- **SSTV** : les couleurs **analysées et corrigées**, et un **débruitage IA** facultatif (SCUNet, téléchargé à la demande, jamais d'origine ; une image passée par l'IA est toujours marquée « IA »).
+- **Assistant vocal et Home Assistant** (modules facultatifs, désactivés d'origine) : « SatMe, prochain passage de l'ISS » au micro du PC, reconnu sur le PC ; l'état de la station par MQTT vers Home Assistant ; des réponses pour une skill Alexa sur ton propre site. **Jamais d'émission par la voix ni à distance.** → [détails](docs/assistant-domotique.fr.md)
+- **DATV** : garde-fous et préréglages d'émission, la surveillance des balises QO-100, un balayage auto qui garde une image, la lecture fluide, une qualité d'image par navigateur ; la réception par un SatMe-Node reprend toute seule.
+- **Trafic satellite** (module facultatif, désactivé d'origine) : un préréglage par satellite, un assistant de QSO, des mémoires CW et phonie, l'APRS par le satellite — chaque émission part d'un clic, par le PTT de l'IC-9700 et ses garde-fous.
+- **Windows** : le pilote USB manquant de l'IC-9700 vu et installé en un clic. **Orbites** : une fiche pour chaque satellite d'images SSTV et SSDV, un septième rendu du globe (*Bleu nuit*), un curseur de transparence. **Phonie → texte** : 27 langues de plus à traduire. Une page restée ouverte **se recharge toute seule** après une mise à jour.
+
 **Nouveau depuis la 2026.10.33**
 
 - **Publication web** (module facultatif, désactivé d'origine) : SatMe-PC envoie vers **votre** site, quel qu'il soit, ou dans un dossier — images SSTV et SSDV, planches, rapports, contacts, vidéos du journal, passages FT8 / FT4, et en option un direct (auto-pilote, spectre QO-100, image DATV, station, FT8 / FT4, favoris, diplômes) ; une API documentée, des récepteurs prêts à l'emploi.
@@ -101,7 +123,7 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 
 ## SatMe-PC — toute la station dans un navigateur
 
-SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, polarisation d'antenne, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100** (bande étroite en réception et en émission), **Orbites** et son tableau plein écran, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (réception et émission), le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, chapitre par chapitre)
+SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, polarisation d'antenne, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100** (bande étroite en réception et en émission), **Orbites** et son tableau plein écran, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0, Signal Hound BB60), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (réception et émission), le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [Guide de SatMe-PC, chaque fonction et où cliquer](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr) (wiki, chapitre par chapitre)
 
 **Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-PC sous Windows](docs/installer-satme-pc-windows.fr.md) (tout en un) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -219,13 +241,15 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 <img src="docs/images/pc-sdr.png" width="49%" alt="Onglet SDR avec le générateur d'essai : spectre, loupe et cascade avec une CW, une BLU, une FM, un FT8 et une SSTV fabriqués">
 </p>
 
-**📻 Récepteur SDR** — mémoires en dossiers avec drapeaux sur le spectre, plans de bandes, pile de bandes, **balayage** en réception seulement (mémoires, plages, canal prioritaire), affichage réglable (moyenne, crêtes, sept palettes), **nettoyage du son** (antiparasite, notch automatique et manuel, réduction de bruit, CAG), lecture du **CTCSS** et silencieux sur sous-ton, **I/Q** « remonter le temps », enregistrement SigMF et relecture, un **générateur d'essai** sans matériel, des **mesures** (niveau dans le temps, bruit solaire, la balise QO-100 sur 24 h). Une **échelle des satellites** sur la cascade, une **table des convertisseurs et transverters**, la **calibration de la clé** en ppm. Récepteurs : RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — et la **FI de l'IC-9700** démodulée par SatMe.
+**📻 Récepteur SDR** — mémoires en dossiers avec drapeaux sur le spectre, plans de bandes, pile de bandes, **balayage** en réception seulement (mémoires, plages, canal prioritaire), affichage réglable (moyenne, crêtes, sept palettes), **nettoyage du son** (antiparasite, notch automatique et manuel, réduction de bruit, CAG), lecture du **CTCSS** et silencieux sur sous-ton, **I/Q** « remonter le temps », enregistrement SigMF et relecture, un **générateur d'essai** sans matériel, des **mesures** (niveau dans le temps, bruit solaire, la balise QO-100 sur 24 h). Une **échelle des satellites** sur la cascade, une **table des convertisseurs et transverters**, la **calibration de la clé** en ppm. Récepteurs : RTL-SDR, ADALM-PLUTO, bladeRF 2.0, Signal Hound BB60C / BB60D — et la **FI de l'IC-9700** démodulée par SatMe.
 
 **📡 L'IC-9700 par le réseau** — CAT et son reçu par le LAN du poste (Network Control sur ON), sans câble USB ; réception seulement, toute commande d'émission refusée ; sortie AF ou FI ; les identifiants codés appris d'une capture de sa propre connexion.
 
 **📡 Cockpit QO-100** — la cascade **nomme chaque signal**, un clic s'y accorde et ouvre le bon décodeur ; **jusqu'à quatre décodeurs à la fois** (FT8, FT4, CW, SSTV, phonie, PSK31, RTTY, balise) ; le plan de bande et une garde sur la **fréquence d'urgence**, le calage et le verrouillage sur la balise, **LEILA** signalée ; la **télémesure BPSK de la balise médiane** décodée.
 
 **📺 DATV** — MiniTiouner, SatMe-Node ou le **démodulateur DVB-S2** de SatMe (Pluto, bladeRF) ; la qualité en clair, la bande large d'un coup d'œil, un écran de **pointage**, l'historique, sous-titres et **traduction parlée**, indicatifs lus dans l'image, le résumé de la station reçue ; **émission en DVB-S2 ou DVB-S** (créneaux libres, test de l'encodeur, rampe) avec toutes les règles de sécurité dans le code, essais en intérieur et sur charge, **correction I/Q** par carte.
+
+**📍 APRS** — une carte des stations entendues (sans Internet, OpenStreetMap au choix), leur liste et leur fiche, messages et bulletins, trophées ; les trames du décodeur de la carte son ou d'un poste KISS. **Partage** (coupé d'origine) : un **iGate APRS-IS en réception seule**, et des serveurs **KISS TCP** (8001) et **AGWPE** (8000) pour Xastir, YAAC, APRSIS32 ou un client packet — écoute seule, rien de ce qu'ils envoient n'est émis.
 
 **🛰 Télémesure** — paquets FSK / GMSK de 1200 à 9600 bit/s (G3RUH, AX.25), **images SSDV** reconstituées, sur plusieurs passages s'il le faut, valeurs temps réel de **FUNcube** ; partage SatNOGS DB au choix (coupé d'origine).
 
@@ -236,7 +260,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **✈ Avions, navires, météo spatiale** — l'**ADS-B** à 1090 MHz avec les fenêtres de **diffusion par avions**, l'**AIS** à 162 MHz, sur une **carte commune sans Internet** avec l'aurore prévue ; la **météo spatiale** (Kp, flux, rayons X, vent solaire, aurore, alertes), téléchargée seulement si on le coche.
 
-**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le locator propre à l'indicatif tapé, la carte qui suit la saisie ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
+**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le locator propre à l'indicatif tapé, la carte qui suit la saisie ; la **liste DXCC entière** (340 entités, numéro ADIF, continent, zones CQ et UIT, écrits dans l'export ADIF) ; le **Contrôle ADIF** avant l'export et les **QSL reçues** lues dans Wavelog ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML. Dans la liste du journal, une **pastille par type de contenu** (SSTV, SSDV, FT8, FT4, numérique, APRS, télémesure, phonie, CW, DATV) et un filtre ; sur la frise d'un passage, les **zones numériques** (FT4, FT8) à décoder après coup et les **voix** entendues.
 
 **🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
@@ -330,7 +354,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 |---|---|
 | Postes | Icom IC-9700 (SatMe-PC : USB ou le réseau du poste) · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
-| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV ; le Pluto aussi sur la bande étroite de QO-100 (BLU, CW, FT8)² · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) · la FI de l'IC-9700 · ADS-B et AIS sur une RTL-SDR |
+| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV ; le Pluto aussi sur la bande étroite de QO-100 (BLU, CW, FT8)² · Signal Hound BB60C / BB60D (réception, son SDK installé par toi) · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) · la FI de l'IC-9700 · ADS-B et AIS sur une RTL-SDR |
 | DATV | MiniTiouner (par LongMynd, sur le PC ou un SatMe-Node) · ADALM-PLUTO ou bladeRF 2.0 avec le démodulateur DVB-S2 de SatMe |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
@@ -356,6 +380,7 @@ Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout
 - [Boîtier de polarisation](materiel/esp32-polarisation/README.fr.md) : le firmware de l'ESP32, son câblage et son dialogue USB
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients
 - [Publication web](docs/publication-web.fr.md) : ce que SatMe-PC envoie à votre site (API v1) et des récepteurs prêts à l'emploi
+- [Assistant vocal, Home Assistant et commandes à distance](docs/assistant-domotique.fr.md) : les modules facultatifs, ce qu'on peut demander, jamais d'émission
 - [Serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) : relais d'éléments orbitaux (OMM/GP) pour SatMe, à installer sur un Raspberry Pi, un serveur Linux ou Proxmox
 - [Composants tiers](THIRD-PARTY.fr.md)
 - [Politique de confidentialité](docs/privacy-policy.html)
@@ -389,6 +414,5 @@ La signature de publication lit `keystore.properties` à la racine (non versionn
 - AMSAT et SatNOGS — état des satellites ; SatNOGS DB — éléments orbitaux
 - Bob Bruninga WB4APR (SK) — APRS
 - Stephen Smith WA8LMF — CD de test des TNC (essais du décodeur APRS)
-- radio-club F6KMX
 
 73 de **F4IOZ**

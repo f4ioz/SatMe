@@ -228,29 +228,53 @@ les versions plus anciennes ignorent ces lignes.
 ### Journal des passages
 
 La page `<base>/journal` rejoue les passages gardés par le téléphone. Ses
-routes (en lecture seule, hormis ce que le téléphone fabrique) :
+routes (en lecture seule, hormis ce que le téléphone fabrique, les passages
+faits de rien, la place de l'image SSTV et le retrait d'un passage du journal) :
 
 ```
 GET <base>/journal/liste?cle=…          → {"utc","indicatif","passages":[{"id","sat","de","a","el","son","q","i","r","s","cat","sm","rec","auto"}…]}
 GET <base>/journal/passage?cle=…&id=…   → {"id","sat","de","a","loc","tp","el","pts":[[t,az,el]…],"prevue":[[az,el]…],
                                            "marques":[{"k","de","a","t","d","iss","f"}…],"sons":[{"n","nom","o","an","du"}…],
-                                           "sig":[[t,s]…],"freq":[[t,hz]…]}
+                                           "sig":[[t,s]…],"freq":[[t,hz]…],"sol":[[t,lat,lon,km]…],"solp":[…],"qth":[lat,lon],
+                                           "doppler":["<fichier>.csv"…],"utc","indicatif","avant"}
 GET <base>/journal/activite?cle=…&id=…  → [[de,a]…]   (activité entendue dans le son)
 GET <base>/journal/fiches?cle=…&id=…    → {"EA4XYZ":{"nom","qth","pays","loc"}…}   (qui sont les stations)
 GET <base>/journal/segments?cle=…&id=…[&avant&apres&rapide&surActivite=1]  → [[de,a,vitesse]…]   (lecture accélérée)
 GET <base>/journal/reglages?cle=…       → les réglages de rejeu et d'export du téléphone (lecture seule)
 GET <base>/journal/tuile?cle=…&z=…&x=…&y=…  → image/png, un fond OpenStreetMap chargé et gardé par le téléphone
 GET <base>/journal/son?cle=…&id=…&n=0   → audio/mpeg, servi par morceaux (Range)
-GET <base>/journal/image?cle=…&f=…      → image/png (une image de la galerie)
+GET <base>/journal/image?cle=…&f=…[&id=…]  → image/png (une image de la galerie ; avec id, la version que montre le passage)
+GET <base>/journal/vignette?cle=…&f=…[&id=…&w=…]  → sa vignette
+GET <base>/journal/doppler?cle=…&nom=…  → text/csv, un journal Doppler/CAT nommé dans "doppler"
+GET <base>/journal/cadreSstv?cle=…&v=x,y,l  → {"ok","cadreSstv"}   (l'image SSTV placée sur la page ; v vide : remise d'elle-même)
+GET <base>/journal/sstv?cle=…&id=…      → les versions SSTV du passage et les éléments du rapport (POST …/sstv/choix pour choisir)
 GET <base>/journal/fabrique?cle=…&id=…&quoi=son|image|video|gif|paquet[&de&a&titre&carte=1&t]  → {"ok":true,"travail":"…"}
     options, "1"/"0" (sinon les réglages du téléphone) : res=XS|M|HD, ouverture, recap, avecSon, accelere, sstv, fiches, smetre, freq, locator
 GET <base>/journal/travail?cle=…&n=…    → {"fini","progres","ok","nom","taille"}
 GET <base>/journal/fichier?cle=…&n=…    → le fichier fabriqué (pièce jointe)
+
+GET  <base>/journal/nouveau/satellites?cle=…              → [{"nom","catnum"}…]
+GET  <base>/journal/nouveau/passages?cle=…&catnum=…       → les passages passés du satellite
+GET  <base>/journal/nouveau/cree?cle=…&catnum=…&aos=…&los=…  → {"ok","id"}   (un passage fait de rien)
+POST <base>/journal/nouveau/son?cle=…&id=…&nom=…&t=…      → {"ok"}   (corps : un WAV ou un MP3)
+POST <base>/journal/nouveau/image?cle=…&id=…&t=…&mode=…   → {"ok"}   (corps : une image)
+GET  <base>/journal/nouveau/contact?cle=…&id=…&t=…&c=…&l=…&rs=…&rr=…&n=…  → {"ok"} ou {"ok":false,"erreur"}
+POST <base>/journal/supprime?cle=…&id=… → {"ok"}   (l'entrée du passage seulement : ses enregistrements, images et contacts restent)
 ```
 
 Les heures sont en millisecondes UTC. La position 0 d'un fichier son est à
 `o` ; son annonce parlée finit à `o + an`. Ce qui est fabriqué sort de
 l'onglet Partager du téléphone lui-même.
+
+**SatMe-PC** sert la même page sur `/journal` à son propre port (8090
+d'origine), sans `cle` (les règles d'accès de la page du PC s'appliquent), avec
+les mêmes routes. Sa `liste` ajoute `"c"` à chaque passage, ses nombres par type
+de contenu (`{"FT4":153,"PHONIE":2…}`), et il a ses routes à lui : `numerique`
+(les zones numériques et les voix des enregistrements :
+`[{"de","a","m","l","n","bas","haut"}…]`, `m` valant `FT4`, `FT8`, `NUM` ou
+`PHONIE`), `numerique/cherche`, `numerique/decode`, `ft/redecode`,
+`fabrique-session`, `chronologie`, `bilan`. Elles sont décrites dans le
+[guide de SatMe-PC](station-pc.fr.md#journal-des-passages).
 
 ---
 
@@ -263,15 +287,18 @@ engage la responsabilité de l'opérateur devant sa licence, et elle ne doit pas
 partir d'une requête HTTP sur un réseau local partagé.
 
 **Elle ne modifie pas les réglages** de l'application (seulement le nom écrit
-sur les planches SSTV), ni le carnet au-delà de l'ajout d'un contact. Rien ne s'efface depuis le réseau.
+sur les planches SSTV et la place de l'image SSTV du journal), ni le carnet
+au-delà de l'ajout d'un contact. Rien d'autre ne s'efface depuis le réseau que
+l'entrée d'un passage dans le journal (demandé d'abord sur la page), et cela
+n'efface jamais ses enregistrements, ses images ni ses contacts.
 
 **Elle n'expose pas le flux audio du poste de commande.** Le son passe par la
 page du public — `/d/<jeton>/son.pcm`, PCM 16 bits mono à 22 050 Hz — et
 seulement pendant un enregistrement de passage.
 
-La surface exposée tient dans trois fichiers, `demo/PontCommande.kt`, et pour
-les planches SSTV et le journal des passages, `demo/PlancheWeb.kt` et
-`demo/JournalWeb.kt` : relisibles d'un coup. Une surface qu'on peut lire est une surface
+La surface exposée tient dans quatre fichiers, `demo/PontCommande.kt`, et pour
+les planches SSTV et le journal des passages, `demo/PlancheWeb.kt`,
+`demo/JournalWeb.kt` et `demo/ApiJournalSstv.kt` : relisibles d'un coup. Une surface qu'on peut lire est une surface
 qu'on peut défendre.
 
 ---

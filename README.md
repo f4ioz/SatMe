@@ -15,6 +15,28 @@ Amateur radio satellite tracking for Android and the PC — passes, pointing, Do
 
 SatMe-PC has had a big autumn. The short version, with pictures — every point is detailed in the [built-in guide](docs/station-pc.md) (**F1** in SatMe-PC) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
 
+**Next version** (already in the source, not released yet)
+
+- **Log**: the **whole DXCC list** — 340 entities, each with its ADIF number, continent and CQ and ITU zones; the ADIF export adds `DXCC`, `COUNTRY`, `CONT` (and `CQZ`, `ITUZ` when the entity has a single zone), the **Contrôle ADIF** flags a callsign whose prefix leads to no entity, a new **Wavelog** profile takes your entity and zones.
+- **APRS › Partage** (all off by default): a **receive-only APRS-IS iGate** — the frames heard on the air go to APRS-IS, nothing ever comes back to the air — and **KISS TCP** (port 8001) and **AGWPE** (port 8000) servers so Xastir, YAAC, APRSIS32 or a packet client get the frames SatMe decodes; listening only, a frame they send to be transmitted is refused.
+- **Journal**: a coloured **badge per kind of content** on each pass (SSTV, SSDV, FT8, FT4, digital, APRS, telemetry, voice, CW, DATV) and a **filter** by content; the **voices heard** in a recording drawn as a green strip on the timeline — an SSB QSO is no longer taken for FT4.
+
+**New since 2026.10.35**
+
+- **APRS**: a **map** of the stations heard, their list and card, **Messages** (receive only), and a decoder that mends a frame noise spoiled by one or two bits.
+- **FT4 / FT8 on satellites**: CAT Doppler by 4 Hz steps while listening, and the Journal's **digital zones** (violet: FT4, FT8, other digital) to decode a pass's recording afterwards.
+- **Log**: the **Contrôle ADIF** before export, a more exact ADIF, the **QSLs received** (LoTW, eQSL, paper) read from Wavelog, a contact edited after its upload flagged; an **Images** tab with every SSTV, SSDV and Geoscan picture.
+- **SDR**: the **Signal Hound BB60C / BB60D** as a receiver (its SDK installed by you), the waterfalls **rewound** over the last 10 minutes; a TS-2000's 9600 output read on a sound card for telemetry.
+- **Station**: the rig recovers by itself, sound lost on an overloaded PC is seen and filled, **« Pourquoi rien ? »** names the likely fault when nothing is decoded; the rotator on the **Sun or the Moon**; **QO-100 Sun outages** announced; the **ISS visible to the naked eye**; frequencies exported and imported for **SatPC32 and Gpredict**.
+
+**New since 2026.10.34**
+
+- **SSTV**: colour **analysed and corrected**, and an optional **AI denoiser** (SCUNet, downloaded on request, never on out of the box; a picture through it is always marked « IA »).
+- **Voice assistant and Home Assistant** (optional modules, off by default): « SatMe, next ISS pass » to the PC's microphone, recognised on the PC; the station's state over MQTT to Home Assistant; answers for an Alexa skill on your own site. **Never any transmission by voice or remotely.** → [details](docs/assistant-domotique.md)
+- **DATV**: transmit safeguards and presets, the QO-100 beacons watched, an automatic scan that keeps a picture, smooth playback, a picture quality per browser; reception through a SatMe-Node resumes by itself.
+- **Satellite operating** (optional module, off by default): a preset per satellite, a QSO assistant, CW and voice memories, APRS through the satellite — every transmission from a click, through the IC-9700's PTT and its guards.
+- **Windows**: the IC-9700's missing USB driver noticed and installed on a click. **Orbites**: a card for every SSTV and SSDV picture satellite, a seventh globe look (*Bleu nuit*), a transparency slider. **Speech to text**: 27 more languages to translate. A page left open **reloads by itself** after an update.
+
 **New since 2026.10.33**
 
 - **Web publishing** (optional module, off by default): SatMe-PC pushes to **your** site, whatever it is, or into a folder — SSTV and SSDV pictures, planches, reports, contacts, the journal's videos, FT8 / FT4 passes, and as an option live data (auto-pilot, QO-100 spectrum, DATV picture, station, FT8 / FT4, favourites, awards); a documented API, ready-to-use receivers.
@@ -101,7 +123,7 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 
 ## SatMe-PC — the whole station in a browser
 
-SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, antenna polarisation, the log with the station live beside it, skeds, the **QO-100 cockpit** (narrow band received and transmitted), **Orbites** and its full-screen board, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (receive and transmit), the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC guide, every function and where to click](https://github.com/f4ioz/SatMe/wiki/SatMe-PC) (wiki, chapter by chapter)
+SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, antenna polarisation, the log with the station live beside it, skeds, the **QO-100 cockpit** (narrow band received and transmitted), **Orbites** and its full-screen board, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0, Signal Hound BB60), voice to text, radiosondes, METEOR, SSTV, APRS, FT8 / FT4 (receive and transmit), the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC guide, every function and where to click](https://github.com/f4ioz/SatMe/wiki/SatMe-PC) (wiki, chapter by chapter)
 
 **Install**, guided (it sees what is plugged in): `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC on Linux](docs/installer-satme-pc.md) · [SatMe-PC on Windows](docs/installer-satme-pc-windows.md) (all in one) · [SatMe-Node on a Raspberry Pi 3](docs/installer-satme-node.md) (the MiniTiouner next to the antenna) · [downloads](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -219,13 +241,15 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 <img src="docs/images/pc-sdr.png" width="49%" alt="SDR tab with the test generator: spectrum, magnifier and waterfall with made-up CW, SSB, FM, FT8 and SSTV signals">
 </p>
 
-**📻 SDR receiver** — memories in folders with flags on the spectrum, band plans, band stack, receive-only **scanning** (memories, ranges, priority channel), display options (averaging, peak hold, seven palettes), **sound cleaning** (noise blanker, automatic and manual notch, noise reduction, AGC), **CTCSS** reading and tone squelch, **I/Q** « back in time », SigMF recording and replay, a **test generator** with no hardware, **measurements** (level over time, Sun noise, the QO-100 beacon over 24 h). A **satellite scale** over the waterfall, a **converter and transverter table**, the **dongle's calibration** in ppm. Receivers: RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — and the **IC-9700's IF** demodulated by SatMe.
+**📻 SDR receiver** — memories in folders with flags on the spectrum, band plans, band stack, receive-only **scanning** (memories, ranges, priority channel), display options (averaging, peak hold, seven palettes), **sound cleaning** (noise blanker, automatic and manual notch, noise reduction, AGC), **CTCSS** reading and tone squelch, **I/Q** « back in time », SigMF recording and replay, a **test generator** with no hardware, **measurements** (level over time, Sun noise, the QO-100 beacon over 24 h). A **satellite scale** over the waterfall, a **converter and transverter table**, the **dongle's calibration** in ppm. Receivers: RTL-SDR, ADALM-PLUTO, bladeRF 2.0, Signal Hound BB60C / BB60D — and the **IC-9700's IF** demodulated by SatMe.
 
 **📡 IC-9700 over the network** — CAT and receive audio through the rig's LAN (Network Control ON), no USB cable; receive only, every transmit command refused; AF or IF output; the coded credentials learnt from a capture of your own login.
 
 **📡 QO-100 cockpit** — the waterfall **names each signal**, a click tunes it and opens the right decoder; **up to four decoders at once** (FT8, FT4, CW, SSTV, voice, PSK31, RTTY, beacon); the band plan and an **emergency frequency** guard, beacon calibration and beacon lock, **LEILA** flagged; the **middle beacon's BPSK telemetry** decoded.
 
 **📺 DATV** — MiniTiouner, SatMe-Node or SatMe's own **DVB-S2 demodulator** (Pluto, bladeRF); quality in plain words, the wide band at a glance, a **pointing** screen, the history, subtitles and **spoken translation**, callsigns read in the picture, the summary of the station received; **transmission in DVB-S2 or DVB-S** (free slots, encoder test, ramp) with every safety rule in the code, indoor and dummy-load tests, per-board **I/Q correction**.
+
+**📍 APRS** — a map of the stations heard (offline, OpenStreetMap if you choose), their list and card, messages and bulletins, trophies; frames from the sound card's decoder or a KISS radio. **Partage** (off by default): a **receive-only APRS-IS iGate**, and **KISS TCP** (8001) and **AGWPE** (8000) servers for Xastir, YAAC, APRSIS32 or a packet client — listening only, nothing they send is transmitted.
 
 **🛰 Telemetry** — 1200–9600 bit/s FSK / GMSK packets (G3RUH, AX.25), **SSDV pictures** rebuilt, over several passes when needed, **FUNcube** real-time values; optional sharing with SatNOGS DB (off by default).
 
@@ -236,7 +260,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **✈ Aircraft, ships, space weather** — **ADS-B** at 1090 MHz with **aircraft scatter** windows, **AIS** at 162 MHz, both on a shared **offline map** with the forecast aurora; **space weather** (Kp, flux, X-rays, solar wind, aurora, alerts), downloaded only when ticked.
 
-**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the locator of the callsign as typed, the map following the entry; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
+**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the locator of the callsign as typed, the map following the entry; the **whole DXCC list** (340 entities, ADIF number, continent, CQ and ITU zones, written in the ADIF export); the **Contrôle ADIF** before export and the **QSLs received** read from Wavelog; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file. In the journal's list, a **badge per kind of content** (SSTV, SSDV, FT8, FT4, digital, APRS, telemetry, voice, CW, DATV) and a filter; on a pass's timeline, the **digital zones** (FT4, FT8) to decode afterwards and the **voices** heard.
 
 **🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
@@ -330,7 +354,7 @@ French and English. Controls readable by screen readers.
 |---|---|
 | Radios | Icom IC-9700 (SatMe-PC: USB or the rig's network) · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
-| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) · SatMe-PC also: ADALM-PLUTO (network), Nuand bladeRF 2.0 micro (USB 3, Linux) — receive, and transmit DATV and SSTV; the Pluto also on QO-100's narrow band (SSB, CW, FT8)² · HackRF One (test transmitter, indoor or dummy load only) · the IC-9700's IF · ADS-B and AIS on an RTL-SDR |
+| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) · SatMe-PC also: ADALM-PLUTO (network), Nuand bladeRF 2.0 micro (USB 3, Linux) — receive, and transmit DATV and SSTV; the Pluto also on QO-100's narrow band (SSB, CW, FT8)² · Signal Hound BB60C / BB60D (receive, its SDK installed by you) · HackRF One (test transmitter, indoor or dummy load only) · the IC-9700's IF · ADS-B and AIS on an RTL-SDR |
 | DATV | MiniTiouner (through LongMynd, on the PC or a SatMe-Node) · ADALM-PLUTO or bladeRF 2.0 with SatMe's DVB-S2 demodulator |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotators | Yaesu GS-232 · Hamlib rotctld (network) |
@@ -356,6 +380,7 @@ The phone has a single USB-C port. A powered hub behind it carries everything: r
 - [Polarisation box](materiel/esp32-polarisation/README.md): the ESP32 firmware, its wiring and its USB dialogue
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients
 - [Web publishing](docs/publication-web.md): what SatMe-PC sends to your site (API v1) and ready-to-use receivers
+- [Voice assistant, Home Assistant and remote commands](docs/assistant-domotique.md): the optional modules, what can be asked, never any transmission
 - [SatMe GP server](https://github.com/f4ioz/SatMe-serveur): relays orbital elements (OMM/GP) to SatMe, to install on a Raspberry Pi, a Linux server or Proxmox
 - [Third-party components](THIRD-PARTY.md)
 - [Privacy policy](docs/privacy-policy.html)
@@ -389,6 +414,5 @@ Release signing reads `keystore.properties` at the root (not committed): `storeF
 - AMSAT and SatNOGS — satellite status; SatNOGS DB — orbital elements
 - Bob Bruninga WB4APR (SK) — APRS
 - Stephen Smith WA8LMF — TNC test CD (APRS decoder testing)
-- F6KMX radio club
 
 73 de **F4IOZ**

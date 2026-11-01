@@ -57,6 +57,8 @@ N'installer que ce qui sert.
 | **Clé RTL-SDR** (SDR, radiosondes, METEOR, panorama QO-100) | `sudo apt install rtl-sdr` (SatMe-PC lance `rtl_tcp` lui-même) |
 | **DATV avec un MiniTiouner** branché sur ce PC | [LongMynd](#datv-sur-ce-pc) et sa règle udev, plus bas — ou un [SatMe-Node](installer-satme-node.fr.md) près de l'antenne |
 | **Le téléphone rejoint par QR code** | le pare-feu doit laisser passer le port de la page + 1 : `sudo ufw allow from 192.168.0.0/16 to any port 8091 proto tcp` (seulement si `ufw` est actif) |
+| **Signal Hound BB60C / BB60D** comme récepteur SDR | la bibliothèque du SDK de Signal Hound, installée par vous (SatMe ne la fournit pas) : [comment](station-pc.fr.md#signal-hound-bb60-bb60c-bb60d) |
+| **Xastir, YAAC… sur une autre machine** (APRS › Partage, *Ouvert au réseau local* coché) | laisser passer KISS TCP et AGWPE : `sudo ufw allow from 192.168.0.0/16 to any port 8000,8001 proto tcp` (seulement si `ufw` est actif ; sur ce PC seul, rien à ouvrir) |
 
 Rien ne s'ouvre tout seul : un port série ne s'ouvre que choisi et « Connecter » cliqué, RTS/DTR restent bas, et aucun ordre d'émission n'est jamais envoyé. Commencer avec le poste et le rotor simulés.
 

@@ -230,28 +230,51 @@ files of the sheets folder; older versions ignore these lines.
 ### Pass journal
 
 The page `<base>/journal` replays the passes kept by the phone. Its routes
-(read only, apart from what the phone makes):
+(read only, apart from what the phone makes, the passes made from nothing,
+the SSTV picture's place and taking a pass out of the journal):
 
 ```
 GET <base>/journal/liste?cle=…          → {"utc","indicatif","passages":[{"id","sat","de","a","el","son","q","i","r","s","cat","sm","rec","auto"}…]}
 GET <base>/journal/passage?cle=…&id=…   → {"id","sat","de","a","loc","tp","el","pts":[[t,az,el]…],"prevue":[[az,el]…],
                                            "marques":[{"k","de","a","t","d","iss","f"}…],"sons":[{"n","nom","o","an","du"}…],
-                                           "sig":[[t,s]…],"freq":[[t,hz]…]}
+                                           "sig":[[t,s]…],"freq":[[t,hz]…],"sol":[[t,lat,lon,km]…],"solp":[…],"qth":[lat,lon],
+                                           "doppler":["<file>.csv"…],"utc","indicatif","avant"}
 GET <base>/journal/activite?cle=…&id=…  → [[de,a]…]   (activity heard in the sound)
 GET <base>/journal/fiches?cle=…&id=…    → {"EA4XYZ":{"nom","qth","pays","loc"}…}   (who the stations are)
 GET <base>/journal/segments?cle=…&id=…[&avant&apres&rapide&surActivite=1]  → [[de,a,speed]…]   (accelerated replay)
 GET <base>/journal/reglages?cle=…       → the phone's replay and export settings (read only)
 GET <base>/journal/tuile?cle=…&z=…&x=…&y=…  → image/png, an OpenStreetMap tile fetched and kept by the phone
 GET <base>/journal/son?cle=…&id=…&n=0   → audio/mpeg, served by parts (Range)
-GET <base>/journal/image?cle=…&f=…      → image/png (a picture of the gallery)
+GET <base>/journal/image?cle=…&f=…[&id=…]  → image/png (a picture of the gallery; with id, the version the pass shows)
+GET <base>/journal/vignette?cle=…&f=…[&id=…&w=…]  → a thumbnail of it
+GET <base>/journal/doppler?cle=…&nom=…  → text/csv, a Doppler/CAT log named in "doppler"
+GET <base>/journal/cadreSstv?cle=…&v=x,y,l  → {"ok","cadreSstv"}   (the SSTV picture placed on the page; v empty: back by itself)
+GET <base>/journal/sstv?cle=…&id=…      → the pass's SSTV versions and report panels (POST …/sstv/choix to choose)
 GET <base>/journal/fabrique?cle=…&id=…&quoi=son|image|video|gif|paquet[&de&a&titre&carte=1&t]  → {"ok":true,"travail":"…"}
     options, "1"/"0" (else the phone's settings): res=XS|M|HD, ouverture, recap, avecSon, accelere, sstv, fiches, smetre, freq, locator
 GET <base>/journal/travail?cle=…&n=…    → {"fini","progres","ok","nom","taille"}
 GET <base>/journal/fichier?cle=…&n=…    → the file made (attachment)
+
+GET  <base>/journal/nouveau/satellites?cle=…              → [{"nom","catnum"}…]
+GET  <base>/journal/nouveau/passages?cle=…&catnum=…       → the satellite's past passes
+GET  <base>/journal/nouveau/cree?cle=…&catnum=…&aos=…&los=…  → {"ok","id"}   (a pass made from nothing)
+POST <base>/journal/nouveau/son?cle=…&id=…&nom=…&t=…      → {"ok"}   (body: a WAV or MP3)
+POST <base>/journal/nouveau/image?cle=…&id=…&t=…&mode=…   → {"ok"}   (body: a picture)
+GET  <base>/journal/nouveau/contact?cle=…&id=…&t=…&c=…&l=…&rs=…&rr=…&n=…  → {"ok"} or {"ok":false,"erreur"}
+POST <base>/journal/supprime?cle=…&id=… → {"ok"}   (the pass's entry only: its recordings, pictures and contacts stay)
 ```
 
 Times are UTC milliseconds. A sound file's position 0 is at `o`; its spoken
 header ends at `o + an`. What is made comes from the phone's own Share tab.
+
+**SatMe-PC** serves the same page at `/journal` on its own port (8090 by
+default), without `cle` (the PC page's own access rules apply), with the same
+routes. Its `liste` adds `"c"` to each pass, its counts by kind of content
+(`{"FT4":153,"PHONIE":2…}`), and it has routes of its own: `numerique` (the
+recordings' digital zones and voices: `[{"de","a","m","l","n","bas","haut"}…]`,
+`m` being `FT4`, `FT8`, `NUM` or `PHONIE`), `numerique/cherche`,
+`numerique/decode`, `ft/redecode`, `fabrique-session`, `chronologie`, `bilan`.
+They are described in the [SatMe-PC guide](station-pc.md#pass-journal).
 
 ---
 
@@ -264,14 +287,17 @@ Transmitting puts the operator's license on the line, and it must not be
 triggered by an HTTP request on a shared local network.
 
 **It doesn't change the app's settings** (only the name written on SSTV
-sheets), nor the log beyond adding a contact. Nothing can be deleted over the network.
+sheets and where the journal's SSTV picture is placed), nor the log beyond
+adding a contact. Nothing else can be deleted over the network than a pass's
+entry in the journal (asked on the page first), and that never deletes its
+recordings, pictures or contacts.
 
 **It doesn't expose an audio stream on the control station.** Audio goes
 through the public page — `/d/<jeton>/son.pcm`, 16-bit mono PCM at
 22,050 Hz — and only while a pass is being recorded.
 
-The exposed surface fits in three files, `demo/PontCommande.kt`, and for the
-SSTV sheets and the pass journal, `demo/PlancheWeb.kt` and `demo/JournalWeb.kt`:
+The exposed surface fits in four files, `demo/PontCommande.kt`, and for the
+SSTV sheets and the pass journal, `demo/PlancheWeb.kt`, `demo/JournalWeb.kt` and `demo/ApiJournalSstv.kt`:
 readable in one sitting. A surface you can read is a surface you can
 defend.
 
