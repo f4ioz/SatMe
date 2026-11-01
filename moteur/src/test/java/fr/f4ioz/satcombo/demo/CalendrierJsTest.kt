@@ -21,7 +21,7 @@ class CalendrierJsTest {
 
     @Test fun `le calendrier est dans la page, sous l'agenda, et le formulaire garde l'heure tapee`() {
         val h = PagePc.HTML
-        listOf("data-p=\"ag-p-cal\"", "id=\"ag-p-cal\"", "id=\"cal-grille\"", "id=\"cal-cote\"", "api/calendrier?de=", "function calendrierOuvre(",
+        listOf("data-p=\"ag-p-cal\"", "id=\"ag-p-cal\"", "id=\"cld-grille\"", "id=\"cld-cote\"", "api/calendrier?de=", "function calendrierOuvre(",
             "Aujourd’hui", "Annuler ce passage", "Recréer la campagne", "campagne supprimée", "id=\"ap-f-pass\"", "id=\"ap-f-periode\"",
             "api/autopilote/annule?id=", "Supprimer la campagne", "id=\"rdv-form\"", "api/agenda/garde?", "function rdvEdite(").forEach {
             assertTrue(it, h.contains(it))

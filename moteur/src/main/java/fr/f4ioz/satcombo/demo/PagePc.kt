@@ -875,6 +875,7 @@ ${STYLE_JETONS}
   .ap-f .ligne { margin:0; flex-wrap:nowrap; }
   .ap-f input, .ap-f select, .ap-f textarea { width:100%; min-width:0; box-sizing:border-box; }
   .ap-f input[type=checkbox] { width:auto; }
+  .ap-f .ligne input[type=number] { flex:none; width:58px; }
   .ap-f textarea { resize:vertical; min-height:34px; font:inherit; }
   .ap-c2 { display:grid; grid-template-columns:1fr 1fr; gap:3px 12px; font-size:var(--fs-s); margin-top:6px; }
   .ap-c2 label { display:flex; gap:6px; align-items:center; }
@@ -3104,13 +3105,19 @@ ${AprsCarteJs.HTML}
         <label for="ap-emetteur">Émetteur</label><select id="ap-emetteur" onchange="apEmetteurChange()"><option value="">Fréquence personnalisée…</option></select>
         <label for="ap-freq" class="ap-perso">Fréquence</label><div class="ligne ap-perso"><input id="ap-freq" placeholder="437,550" title="MHz (le Doppler est suivi)"><span class="petit">MHz</span><select id="ap-modulation" style="max-width:76px"><option>FM</option><option>NFM</option><option>USB</option><option>USB-D</option></select><input id="ap-largeur" type="number" min="3" max="250" value="15" style="max-width:62px" title="Largeur de bande (kHz)"><span class="petit">kHz</span></div>
         <label for="ap-mode">Mode SSTV</label><select id="ap-mode"></select>
-        <label for="ap-de">Début</label><div class="ligne"><input id="ap-de" type="datetime-local" oninput="apPeriodeMaj()"><label class="petit" style="flex:none" title="Coché : début mis à 00:00 et fin à 23:59 (modifiables ensuite) ; l'heure tapée est gardée telle quelle"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> journées entières (horaire à confirmer)</label></div>
+        <label for="ap-de">Début</label><input id="ap-de" type="datetime-local" oninput="apPeriodeMaj()">
         <label for="ap-a">Fin</label><input id="ap-a" type="datetime-local" oninput="apPeriodeMaj()">
+        <span></span><label class="petit" title="Coché : début mis à 00:00 et fin à 23:59 (modifiables ensuite) ; l'heure tapée est gardée telle quelle"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> journées entières (horaire à confirmer)</label>
         <span></span><div class="petit" id="ap-f-periode" aria-live="polite"></div>
         <label for="ap-el">Élévation</label><div class="ligne"><input id="ap-el" type="number" min="0" max="90" value="10" style="max-width:62px"><span class="petit">° au moins · préparer</span><input id="ap-avant" type="number" min="0" max="30" value="2" style="max-width:56px"><span class="petit">min avant l'AOS</span></div>
         <label for="ap-horaire">Rythme</label><input id="ap-horaire" maxlength="80" placeholder="36 s on / 2 min off (pour mémoire)">
         <label for="ap-lien">Lien</label><input id="ap-lien" maxlength="300" placeholder="https://… (galerie : un lien, rien n'est envoyé)">
         <label for="ap-notes">Notes</label><textarea id="ap-notes" rows="2" maxlength="600"></textarea>
+      </div>
+      <div id="ap-f-pass" hidden>
+        <div class="t" style="margin-top:10px">Passages de la campagne <button class="discret" onclick="apCalendrier()" title="Ouvrir le calendrier sur cette campagne">📅 Calendrier</button></div>
+        <div class="petit" id="ap-f-pass-etat"></div>
+        <div class="ap-tab" style="max-height:180px;overflow:auto"><table><tbody id="ap-f-pass-l"></tbody></table></div>
       </div>
       <div class="t" style="margin-top:10px">Chaîne de réception</div>
       <div class="ap-f">
@@ -3130,11 +3137,6 @@ ${AprsCarteJs.HTML}
         <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
       </div>
       <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
-      <div id="ap-f-pass" hidden>
-        <div class="t" style="margin-top:10px">Passages de la campagne <button class="discret" onclick="apCalendrier()" title="Ouvrir le calendrier sur cette campagne">📅 Calendrier</button></div>
-        <div class="petit" id="ap-f-pass-etat"></div>
-        <div class="ap-tab" style="max-height:180px;overflow:auto"><table><tbody id="ap-f-pass-l"></tbody></table></div>
-      </div>
       <div class="ligne"><button class="primaire" onclick="apGarde()">Enregistrer la campagne</button><button onclick="apNouvelle()">Effacer</button><button id="ap-f-suppr" class="ap-suppr" hidden onclick="apRetire(apEdit, this)" title="Supprimer la campagne (deux clics)">Supprimer la campagne</button><span class="petit" id="ap-f-etat"></span></div>
     </div>
   </div>

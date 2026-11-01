@@ -22,93 +22,97 @@ object CalendrierJs {
     const val CSS = """
   /* ---------------------------------------------------------------- Agenda › Calendrier (CalendrierJs) */
   .cal { display:flex; flex-direction:column; gap:8px; min-height:0; }
-  .cal-barre { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; flex:none; }
-  .cal-barre .cal-titre { font-size:var(--fs-l); font-weight:700; min-width:170px; text-transform:capitalize; }
-  .cal-vues { display:inline-flex; gap:2px; }
-  .cal-vues button.actif { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
-  .cal-filtres { display:inline-flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-s); color:var(--texte-2); }
-  .cal-corps { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:10px; min-height:0; flex:1; }
-  .cal-grille { min-height:0; display:flex; flex-direction:column; border:1px solid var(--ligne); border-radius:var(--r2); background:var(--s1); overflow:hidden; }
-  .cal-cote { min-height:0; overflow:auto; margin:0; }
-  .cal-js { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); flex:none; border-bottom:1px solid var(--ligne); }
-  .cal-js div { padding:4px 6px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--texte-3); }
-  .cal-mois { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); grid-template-rows:repeat(6, minmax(0,1fr)); flex:1; min-height:0; }
-  .cal-j { border-right:1px solid var(--ligne); border-bottom:1px solid var(--ligne); padding:2px 3px 3px; min-height:0; overflow:auto; cursor:pointer; display:flex; flex-direction:column; gap:2px; }
-  .cal-j:nth-child(7n) { border-right:none; }
-  .cal-j.autre { background:var(--s0); }
-  .cal-j.autre .cal-n { color:var(--texte-3); }
-  .cal-j.passe { background:rgba(0,0,0,.12); }
-  .cal-j.choisi { box-shadow:inset 0 0 0 2px var(--info); }
-  .cal-n { font-size:var(--fs-s); font-weight:700; color:var(--texte-2); display:flex; justify-content:space-between; position:sticky; top:0; background:inherit; }
-  .cal-j.auj .cal-n b { background:var(--rx); color:#06231E; border-radius:9px; padding:0 6px; }
-  .cal-span { font-size:10.5px; line-height:15px; height:15px; padding:0 5px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  .cld-barre { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; flex:none; }
+  .cld-barre .cld-titre { font-size:var(--fs-l); font-weight:700; min-width:170px; text-transform:capitalize; }
+  .cld-vues { display:inline-flex; gap:2px; }
+  .cld-vues button.actif { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .cld-filtres { display:inline-flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-s); color:var(--texte-2); }
+  .cld-corps { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:10px; min-height:0; flex:1; }
+  .cld-grille { min-height:0; display:flex; flex-direction:column; border:1px solid var(--ligne); border-radius:var(--r2); background:var(--s1); overflow:hidden; }
+  .cld-cote { min-height:0; overflow:auto; margin:0; }
+  .cld-js { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); flex:none; border-bottom:1px solid var(--ligne); }
+  .cld-js div { padding:4px 6px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--texte-3); }
+  .cld-mois { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); grid-template-rows:repeat(6, minmax(0,1fr)); flex:1; min-height:0; }
+  .cld-j { border-right:1px solid var(--ligne); border-bottom:1px solid var(--ligne); padding:2px 3px 3px; min-height:0; overflow:auto; cursor:pointer; display:flex; flex-direction:column; gap:2px; }
+  .cld-j:nth-child(7n) { border-right:none; }
+  .cld-j.autre { background:var(--s0); }
+  .cld-j.autre .cld-n { color:var(--texte-3); }
+  .cld-j.passe { background:rgba(0,0,0,.12); }
+  .cld-j.choisi { box-shadow:inset 0 0 0 2px var(--info); }
+  .cld-n { font-size:var(--fs-s); font-weight:700; color:var(--texte-2); display:flex; justify-content:space-between; position:sticky; top:0; background:inherit; }
+  .cld-j.auj .cld-n b { background:var(--rx); color:#06231E; border-radius:9px; padding:0 6px; }
+  .cld-span { font-size:10.5px; line-height:15px; height:15px; padding:0 5px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     background:color-mix(in srgb, var(--c) 26%, transparent); border-left:3px solid var(--c); color:var(--texte); cursor:pointer; flex:none; }
-  .cal-span.act { background:transparent; border:1px dashed var(--c); border-left-width:3px; color:var(--texte-2); }
-  .cal-span.rdv { --c:var(--info); }
-  .cal-span.fini, .cal-span.off { opacity:.5; }
-  .cal-span.supp { text-decoration:line-through; }
-  .cal-p { font-size:10.5px; line-height:15px; padding:0 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; flex:none;
+  .cld-span.act { background:transparent; border:1px dashed var(--c); border-left-width:3px; color:var(--texte-2); }
+  .cld-span.rdv { --c:var(--info); }
+  .cld-span.fini, .cld-span.off { opacity:.5; }
+  .cld-span.supp { text-decoration:line-through; }
+  .cld-p { font-size:10.5px; line-height:15px; padding:0 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; flex:none;
     font-family:var(--mono); color:var(--texte); border:1px solid color-mix(in srgb, var(--c) 70%, transparent); background:color-mix(in srgb, var(--c) 16%, transparent); }
-  .cal-p.fav { background:transparent; border-style:dotted; color:var(--texte-2); }
-  .cal-p.passe { opacity:.5; }
-  .cal-p.st-ANNULE, .cal-p.st-CHEVAUCHE, .cal-p.st-ECARTE { text-decoration:line-through; opacity:.6; }
-  .cal-p.st-MANQUE { opacity:.45; border-style:dashed; }
-  .cal-p.st-EN_COURS { box-shadow:0 0 0 1px var(--ambre); }
-  .cal-p.susp { opacity:.55; border-style:dashed; }
-  .cal-p.choisi, .cal-span.choisi { outline:2px solid var(--info); outline-offset:0; }
-  .cal-p i { font-style:normal; }
+  .cld-p.fav { background:transparent; border-style:dotted; color:var(--texte-2); }
+  .cld-fav { font-size:10.5px; line-height:15px; color:var(--texte-2); padding:0 4px; flex:none; }
+  .cld-p.passe { opacity:.5; }
+  .cld-p.st-ANNULE, .cld-p.st-CHEVAUCHE, .cld-p.st-ECARTE { text-decoration:line-through; opacity:.6; }
+  .cld-p.st-MANQUE { opacity:.45; border-style:dashed; }
+  .cld-p.st-EN_COURS { box-shadow:0 0 0 1px var(--ambre); }
+  .cld-p.susp { opacity:.55; border-style:dashed; }
+  .cld-p.choisi, .cld-span.choisi { outline:2px solid var(--info); outline-offset:0; }
+  .cld-p i { font-style:normal; }
   /* The week: the days' spans above, the hours below (scrolling inside). */
-  .cal-sem { display:flex; flex-direction:column; flex:1; min-height:0; }
-  .cal-sem-t { display:grid; grid-template-columns:44px repeat(7, minmax(0,1fr)); flex:none; border-bottom:1px solid var(--ligne); }
-  .cal-sem-t > div { padding:3px 4px; min-width:0; display:flex; flex-direction:column; gap:2px; max-height:120px; overflow:auto; }
-  .cal-sem-t .cal-n { cursor:pointer; }
-  .cal-sem-c { flex:1; min-height:0; overflow:auto; }
-  .cal-sem-h { display:grid; grid-template-columns:44px repeat(7, minmax(0,1fr)); position:relative; height:calc(24 * var(--h-cal, 30px)); }
-  .cal-heures div { height:var(--h-cal, 30px); font-size:10px; color:var(--texte-3); text-align:right; padding-right:4px; box-sizing:border-box; border-top:1px solid var(--ligne); }
-  .cal-col { position:relative; border-left:1px solid var(--ligne);
+  .cld-sem { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .cld-sem-t { display:grid; grid-template-columns:44px repeat(7, minmax(0,1fr)); flex:none; border-bottom:1px solid var(--ligne); }
+  .cld-sem-t > div { padding:3px 4px; min-width:0; display:flex; flex-direction:column; gap:2px; max-height:120px; overflow:auto; }
+  .cld-sem-t .cld-n { cursor:pointer; }
+  .cld-sem-c { flex:1; min-height:0; overflow:auto; }
+  .cld-sem-h { display:grid; grid-template-columns:44px repeat(7, minmax(0,1fr)); position:relative; height:calc(24 * var(--h-cal, 30px)); }
+  .cld-heures div { height:var(--h-cal, 30px); font-size:10px; color:var(--texte-3); text-align:right; padding-right:4px; box-sizing:border-box; border-top:1px solid var(--ligne); }
+  .cld-col { position:relative; border-left:1px solid var(--ligne);
     background:repeating-linear-gradient(to bottom, var(--ligne) 0 1px, transparent 1px var(--h-cal, 30px)); }
-  .cal-col.auj { background-color:rgba(63,224,200,.04); }
-  .cal-col .cal-p { position:absolute; left:2px; right:2px; min-height:15px; white-space:normal; overflow:hidden; }
-  .cal-now { position:absolute; left:0; right:0; height:0; border-top:2px solid var(--tx); z-index:2; pointer-events:none; }
+  .cld-col.auj { background-color:rgba(63,224,200,.04); }
+  .cld-col .cld-p { position:absolute; left:2px; right:2px; min-height:15px; white-space:normal; overflow:hidden; }
+  .cld-now { position:absolute; left:0; right:0; height:0; border-top:2px solid var(--tx); z-index:2; pointer-events:none; }
   /* The day (and the phone): a list. */
-  .cal-liste { flex:1; min-height:0; overflow:auto; padding:6px 8px; display:flex; flex-direction:column; gap:4px; }
-  .cal-liste .cal-p, .cal-liste .cal-span { font-size:var(--fs-s); line-height:20px; height:auto; white-space:normal; }
-  .cal-liste h4 { margin:6px 0 2px; font-size:var(--fs-s); color:var(--texte-2); text-transform:capitalize; }
-  .cal-cote dl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:3px 10px; margin:6px 0; font-size:var(--fs-s); }
-  .cal-cote dt { color:var(--texte-2); }
-  .cal-cote dd { margin:0; }
-  .cal-cote .cal-act { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
-  .cal-cote .cal-pt { display:flex; align-items:center; gap:6px; }
-  .cal-cote .cal-pt i { width:10px; height:10px; border-radius:50%; background:var(--c); flex:none; }
-  .cal-leg { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-xs); color:var(--texte-2); margin-top:8px; }
-  .cal-leg span { display:inline-flex; align-items:center; gap:4px; }
-  .cal-leg i { width:9px; height:9px; border-radius:2px; background:var(--c); }
+  .cld-liste { flex:1; min-height:0; overflow:auto; padding:6px 8px; display:flex; flex-direction:column; gap:4px; }
+  .cld-liste .cld-p, .cld-liste .cld-span { font-size:var(--fs-s); line-height:20px; height:auto; white-space:normal; }
+  .cld-liste h4 { margin:6px 0 2px; font-size:var(--fs-s); color:var(--texte-2); text-transform:capitalize; }
+  .cld-cote dl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:3px 10px; margin:6px 0; font-size:var(--fs-s); }
+  .cld-cote dt { color:var(--texte-2); }
+  .cld-cote dd { margin:0; }
+  .cld-cote .cld-act { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+  .cld-cote .cld-pt { display:flex; align-items:center; gap:6px; }
+  .cld-cote .cld-pt i { width:10px; height:10px; border-radius:50%; background:var(--c); flex:none; }
+  .cld-jliste { display:flex; flex-direction:column; gap:3px; margin-top:6px; }
+  .cld-jl { display:grid; grid-template-columns:minmax(0,170px) minmax(0,1fr); gap:6px; align-items:center; }
+  .cld-jl .petit { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cld-leg { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-xs); color:var(--texte-2); margin-top:8px; }
+  .cld-leg span { display:inline-flex; align-items:center; gap:4px; }
+  .cld-leg i { width:9px; height:9px; border-radius:2px; background:var(--c); }
   @media (min-width:1101px) and (min-height:600px) {
     #ag-p-cal:not([hidden]) { display:flex; flex-direction:column; }
     #ag-p-cal .cal { flex:1; }
   }
-  @media (max-width:1100px) { .cal-corps { grid-template-columns:minmax(0,1fr); } .cal-grille { height:72vh; } }
-  @media (max-width:700px) { .cal-vues button[data-v="mois"], .cal-vues button[data-v="semaine"] { display:none; } .cal-grille { height:auto; max-height:70vh; } }
+  @media (max-width:1100px) { .cld-corps { grid-template-columns:minmax(0,1fr); } .cld-grille { height:72vh; } }
+  @media (max-width:700px) { .cld-vues button[data-v="mois"], .cld-vues button[data-v="semaine"] { display:none; } .cld-grille { height:auto; max-height:70vh; } }
 """
 
     const val HTML = """
   <div class="st-pan" id="ag-p-cal">
 <div class="cal" id="cal">
-  <div class="cal-barre">
+  <div class="cld-barre">
     <button onclick="calVa(-1)" title="Avant" aria-label="Avant">‹</button><button onclick="calAujourdhui()">Aujourd’hui</button><button onclick="calVa(1)" title="Après" aria-label="Après">›</button>
-    <span class="cal-titre" id="cal-titre"></span>
-    <span class="cal-vues" id="cal-vues"><button data-v="mois" onclick="calVue('mois')">Mois</button><button data-v="semaine" onclick="calVue('semaine')">Semaine</button><button data-v="jour" onclick="calVue('jour')">Jour</button></span>
-    <span class="cal-filtres">
-      <label><input type="checkbox" id="cal-f-rdv" checked onchange="calDessine()"> rendez-vous</label>
-      <label><input type="checkbox" id="cal-f-camp" checked onchange="calDessine()"> campagnes</label>
-      <label><input type="checkbox" id="cal-f-fav" checked onchange="calDessine()"> passages des favoris</label>
-      <label><input type="checkbox" id="cal-f-act" checked onchange="calDessine()"> activités annoncées</label>
+    <span class="cld-titre" id="cld-titre"></span>
+    <span class="cld-vues" id="cld-vues"><button data-v="mois" onclick="calVue('mois')">Mois</button><button data-v="semaine" onclick="calVue('semaine')">Semaine</button><button data-v="jour" onclick="calVue('jour')">Jour</button></span>
+    <span class="cld-filtres">
+      <label><input type="checkbox" id="cld-f-rdv" checked onchange="calDessine()"> rendez-vous</label>
+      <label><input type="checkbox" id="cld-f-camp" checked onchange="calDessine()"> campagnes</label>
+      <label><input type="checkbox" id="cld-f-fav" checked onchange="calDessine()"> passages des favoris</label>
+      <label><input type="checkbox" id="cld-f-act" checked onchange="calDessine()"> activités annoncées</label>
     </span>
-    <span class="petit" id="cal-etat"></span>
+    <span class="petit" id="cld-etat"></span>
   </div>
-  <div class="cal-corps">
-    <div class="cal-grille" id="cal-grille"></div>
-    <div class="carte cal-cote" id="cal-cote"><div class="t">Détails</div><div class="petit">Un jour ou un passage : ses détails ici.</div></div>
+  <div class="cld-corps">
+    <div class="cld-grille" id="cld-grille"></div>
+    <div class="carte cld-cote" id="cld-cote"><div class="t">Détails</div><div class="petit">Un jour ou un passage : ses détails ici.</div></div>
   </div>
 </div>
   </div>
@@ -117,7 +121,7 @@ object CalendrierJs {
     const val JS = """
 // ------------------------------------------------------------------ Agenda › Calendrier: month, week, day (read from api/calendrier)
 const CLD = { vue: 'mois', ref: null, d: null, sel: null, jour: null, cle: '', charge: 0 };
-try { const x = localStorage.getItem('cal-vue'); if (x === 'mois' || x === 'semaine' || x === 'jour') CLD.vue = x; } catch (e) {}
+try { const x = localStorage.getItem('cld-vue'); if (x === 'mois' || x === 'semaine' || x === 'jour') CLD.vue = x; } catch (e) {}
 const CAL_COUL = ['#3FE0C8', '#FFB454', '#B07CFF', '#6F8CFF', '#FF7AA8', '#5BD68A', '#FFD166', '#4FC3F7', '#FF8A65', '#C5E1A5', '#E57373', '#80CBC4'];
 const CAL_ST = { PREVU: 'prévu', EN_COURS: 'en cours', FAIT: 'reçu', ECARTE: 'écarté', ARRETE: 'arrêté', INTERROMPU: 'interrompu', CHEVAUCHE: 'perdu (autre passage)', ANNULE: 'annulé', MANQUE: 'manqué' };
 const CAL_ICO = { FAIT: '✓', MANQUE: '✗', ECARTE: '⊘', ARRETE: '■', INTERROMPU: '⚠', ANNULE: '⊘', CHEVAUCHE: '⊘', EN_COURS: '●' };
@@ -162,14 +166,14 @@ async function calCharge(force) {
   const p = calPortee(), cle = p.de + ':' + p.a;
   if (!force && cle === CLD.cle && Date.now() - CLD.charge < 60000) { calDessine(); return; }
   CLD.cle = cle; CLD.charge = Date.now();
-  txt('cal-etat', 'lecture…');
+  txt('cld-etat', 'lecture…');
   let j = null; try { j = await (await fetch('api/calendrier?de=' + p.de + '&a=' + p.a)).json(); } catch (e) {}
   if (CLD.cle !== cle) return;
-  if (!j || !j.ok) { txt('cal-etat', (j && j.erreur) || 'calendrier indisponible'); return; }
-  CLD.d = j; txt('cal-etat', '');
+  if (!j || !j.ok) { txt('cld-etat', (j && j.erreur) || 'calendrier indisponible'); return; }
+  CLD.d = j; txt('cld-etat', '');
   calDessine();
 }
-function calVue(v) { CLD.vue = v; try { localStorage.setItem('cal-vue', v); } catch (e) {} calCharge(); }
+function calVue(v) { CLD.vue = v; try { localStorage.setItem('cld-vue', v); } catch (e) {} calCharge(); }
 function calVa(s) {
   const r = calMinuit(CLD.ref || Date.now());
   CLD.ref = CLD.vue === 'mois' && !calTel() ? (utc() ? new Date(Date.UTC(r.getUTCFullYear(), r.getUTCMonth() + s, 1)) : new Date(r.getFullYear(), r.getMonth() + s, 1))
@@ -188,8 +192,8 @@ function calendrierOuvre(ms, sel) {
 function calItems() {
   if (!CLD.d) return [];
   const f = id => g(id).checked;
-  return CLD.d.items.filter(x => x.sorte === 'agenda' ? f('cal-f-rdv') : x.sorte === 'campagne' ? f('cal-f-camp') : x.sorte === 'activite' ? f('cal-f-act') :
-    x.source === 'campagne' ? f('cal-f-camp') : f('cal-f-fav'));
+  return CLD.d.items.filter(x => x.sorte === 'agenda' ? f('cld-f-rdv') : x.sorte === 'campagne' ? f('cld-f-camp') : x.sorte === 'activite' ? f('cld-f-act') :
+    x.source === 'campagne' ? f('cld-f-camp') : f('cld-f-fav'));
 }
 const calDe = x => x.sorte === 'passage' ? x.aos : x.de;
 const calA = x => x.sorte === 'passage' ? x.los : Math.max(x.a, x.de);
@@ -198,7 +202,7 @@ function calIdent(x) { return x.sorte + ':' + (x.sorte === 'passage' ? x.catnum 
 function calCoul(x) { return x.sorte === 'agenda' ? 'var(--info)' : calCouleur(x.catnum, x.sat); }
 /** A pass's chip: « 23:25 RS18S 28° ». */
 function calPuce(x, style) {
-  const cl = 'cal-p' + (x.source !== 'campagne' ? ' fav' : '') + (x.passe ? ' passe' : '') + (x.statut ? ' st-' + x.statut : '') + (x.suspendue ? ' susp' : '') +
+  const cl = 'cld-p' + (x.source !== 'campagne' ? ' fav' : '') + (x.passe ? ' passe' : '') + (x.statut ? ' st-' + x.statut : '') + (x.suspendue ? ' susp' : '') +
     (CLD.sel === calIdent(x) ? ' choisi' : '');
   const ico = x.statut && CAL_ICO[x.statut] ? '<i>' + CAL_ICO[x.statut] + '</i> ' : x.source === 'campagne' ? '<i>🤖</i> ' : '';
   const t = (x.nom ? x.nom + ' — ' : '') + x.sat + ' · ' + calQuand(x.aos) + ' → ' + hm(x.los) + ' · ' + x.el + '° max' + (x.statut ? ' · ' + (CAL_ST[x.statut] || x.statut) : '') +
@@ -210,7 +214,7 @@ function calPuce(x, style) {
 function calCourt(s) { const m = /\(([^)]{2,12})\)\s*(?![\s\S])/.exec(s || ''); return m ? m[1] : String(s || '').slice(0, 14); }
 /** A span (a campaign, an activity, an appointment): its words on its first day of the row only. */
 function calBarre(x, premier) {
-  const cl = 'cal-span' + (x.sorte === 'activite' ? ' act' : x.sorte === 'agenda' ? ' rdv' : '') + (x.terminee || x.passe ? ' fini' : '') + (x.sorte === 'campagne' && !x.active ? ' off' : '') +
+  const cl = 'cld-span' + (x.sorte === 'activite' ? ' act' : x.sorte === 'agenda' ? ' rdv' : '') + (x.terminee || x.passe ? ' fini' : '') + (x.sorte === 'campagne' && !x.active ? ' off' : '') +
     (x.campagneSupprimee ? ' supp' : '') + (CLD.sel === calIdent(x) ? ' choisi' : '');
   const ico = x.sorte === 'activite' ? '📡 ' : x.sorte === 'agenda' ? '📅 ' : '🤖 ';
   const t = (x.sorte === 'activite' ? 'Annoncé : ' : x.sorte === 'agenda' ? 'Rendez-vous : ' : 'Campagne : ') + x.titre + ' · ' + calPeriode(x.de, calA(x)) +
@@ -225,51 +229,60 @@ function calTitre(p) {
   return p.jours.length === 1 ? CAL_JOURS[calJs(a)] + ' ' + calJ(a) + ' ' + CAL_MOIS[calM(a)] : calJ(a) + ' ' + (calM(a) !== calM(b) ? CAL_MOIS[calM(a)] + ' ' : '') + '– ' + calJ(b) + ' ' + CAL_MOIS[calM(b)];
 }
 function calDessine() {
-  const grille = g('cal-grille'); if (!grille) return;
-  document.querySelectorAll('#cal-vues button').forEach(b => b.classList.toggle('actif', b.dataset.v === (calTel() ? 'jour' : CLD.vue)));
+  const grille = g('cld-grille'); if (!grille) return;
+  document.querySelectorAll('#cld-vues button').forEach(b => b.classList.toggle('actif', b.dataset.v === (calTel() ? 'jour' : CLD.vue)));
   const p = calPortee();
-  txt('cal-titre', calTitre(p));
+  txt('cld-titre', calTitre(p));
   if (!CLD.d) { grille.innerHTML = '<div class="petit" style="padding:10px">lecture…</div>'; return; }
   const l = calItems(), auj = calCle(Date.now()), now = Date.now();
   const spans = l.filter(x => x.sorte !== 'passage').sort((a, b) => a.de - b.de), pass = l.filter(x => x.sorte === 'passage').sort((a, b) => a.aos - b.aos);
   // Kept scrolled where it was (the week's hours).
-  const defile = grille.querySelector('.cal-sem-c, .cal-liste'), haut = defile ? defile.scrollTop : null;
+  const defile = grille.querySelector('.cld-sem-c, .cld-liste'), haut = defile ? defile.scrollTop : null;
   if (CLD.vue === 'mois' && !calTel()) {
-    let h = '<div class="cal-js">' + CAL_JOURS.map(j => '<div>' + j + '</div>').join('') + '</div><div class="cal-mois">';
+    let h = '<div class="cld-js">' + CAL_JOURS.map(j => '<div>' + j + '</div>').join('') + '</div><div class="cld-mois">';
     const mois = calM(calMinuit(CLD.ref || Date.now()));
     p.jours.forEach((d, i) => {
       const d0 = d.getTime(), d1 = calPlus(d, 1).getTime(), k = d0;
-      const cl = 'cal-j' + (calM(d) !== mois ? ' autre' : '') + (k === auj ? ' auj' : '') + (d1 <= now ? ' passe' : '') + (CLD.jour === k ? ' choisi' : '');
+      const cl = 'cld-j' + (calM(d) !== mois ? ' autre' : '') + (k === auj ? ' auj' : '') + (d1 <= now ? ' passe' : '') + (CLD.jour === k ? ' choisi' : '');
       const sp = spans.filter(x => calSur(x, d0, d1) && (x.sorte !== 'agenda' || x.a > x.de)), ps = pass.filter(x => x.aos >= d0 && x.aos < d1);
       const rdv = spans.filter(x => x.sorte === 'agenda' && x.a <= x.de && x.de >= d0 && x.de < d1);
-      h += '<div class="' + cl + '" data-j="' + k + '" onclick="calJour(+this.dataset.j)"><div class="cal-n"><b>' + calJ(d) + '</b>' + (ps.length ? '<span class="petit">' + ps.length + ' passage' + (ps.length > 1 ? 's' : '') + '</span>' : '') + '</div>' +
-        sp.map(x => calBarre(x, calDe(x) >= d0 || i % 7 === 0)).join('') + rdv.map(x => calBarre(x, true)).join('') + ps.map(x => calPuce(x)).join('') + '</div>';
+      const fv = ps.filter(x => x.source !== 'campagne'), nf = fv.length, hf = nf ? Math.max.apply(null, fv.map(x => x.el)) : 0;
+      h += '<div class="' + cl + '" data-j="' + k + '" onclick="calJour(+this.dataset.j)"><div class="cld-n"><b>' + calJ(d) + '</b>' + (ps.length - nf ? '<span class="petit" title="Passages des campagnes">🤖 ' + (ps.length - nf) + '</span>' : '') + '</div>' +
+        sp.map(x => calBarre(x, calDe(x) >= d0 || i % 7 === 0)).join('') + rdv.map(x => calBarre(x, true)).join('') + ps.filter(x => x.source === 'campagne').map(x => calPuce(x)).join('') +
+        // The followed satellites' passes, many a day: counted here, listed in the week, the day and the side panel.
+        (nf ? '<div class="cld-fav" title="Les passages des satellites suivis ce jour : cliquer le jour, ou la semaine">★ ' + nf + ' passage' + (nf > 1 ? 's' : '') + ' suivis' + (hf ? ' · ' + hf + '° max' : '') + '</div>' : '') + '</div>';
     });
     grille.innerHTML = h + '</div>';
   } else if (CLD.vue === 'semaine' && !calTel()) {
     const H = 30;
-    let t = '<div class="cal-sem"><div class="cal-sem-t"><div></div>' + p.jours.map(d => {
+    let t = '<div class="cld-sem"><div class="cld-sem-t"><div></div>' + p.jours.map(d => {
       const d0 = d.getTime(), d1 = calPlus(d, 1).getTime();
-      return '<div><div class="cal-n" data-j="' + d0 + '" onclick="calJour(+this.dataset.j)"><b>' + CAL_JOURS[calJs(d)] + ' ' + calJ(d) + '</b></div>' +
+      return '<div><div class="cld-n" data-j="' + d0 + '" onclick="calJour(+this.dataset.j)"><b>' + CAL_JOURS[calJs(d)] + ' ' + calJ(d) + '</b></div>' +
         spans.filter(x => calSur(x, d0, d1)).map(x => calBarre(x, true)).join('') + '</div>';
-    }).join('') + '</div><div class="cal-sem-c"><div class="cal-sem-h" style="--h-cal:' + H + 'px"><div class="cal-heures">' +
+    }).join('') + '</div><div class="cld-sem-c"><div class="cld-sem-h" style="--h-cal:' + H + 'px"><div class="cld-heures">' +
       Array.from({ length: 24 }, (_, i) => '<div>' + String(i).padStart(2, '0') + ':00</div>').join('') + '</div>';
     p.jours.forEach(d => {
       const d0 = d.getTime(), d1 = calPlus(d, 1).getTime(), lg = (d1 - d0) / 3600000;
       const ps = pass.filter(x => x.aos < d1 && x.los >= d0);
-      // Passes at the same time side by side.
-      const voies = []; const place = ps.map(x => { let v = voies.findIndex(f => f <= x.aos); if (v < 0) { v = voies.length; voies.push(0); } voies[v] = x.los + 60000; return v; });
-      const nv = Math.max(1, voies.length);
-      t += '<div class="cal-col' + (d0 === auj ? ' auj' : '') + '" data-j="' + d0 + '" onclick="if (event.target === this) calJour(+this.dataset.j)">' + ps.map((x, i) => {
+      // Passes at the same time side by side: lanes within each group of passes that overlap, the group's width shared.
+      const place = [], larg = []; let groupe = [], voies = [], finG = -Infinity;
+      const ferme = () => { groupe.forEach(i => larg[i] = Math.max(1, voies.length)); groupe = []; voies = []; };
+      ps.forEach((x, i) => {
+        if (x.aos >= finG) ferme();
+        let v = voies.findIndex(f => f <= x.aos); if (v < 0) { v = voies.length; voies.push(0); }
+        voies[v] = x.los + 60000; finG = Math.max(finG, x.los + 60000); place[i] = v; groupe.push(i);
+      });
+      ferme();
+      t += '<div class="cld-col' + (d0 === auj ? ' auj' : '') + '" data-j="' + d0 + '" onclick="if (event.target === this) calJour(+this.dataset.j)">' + ps.map((x, i) => {
         const y = Math.max(0, (x.aos - d0) / 3600000) * H * 24 / lg, hh = Math.max(15, (Math.min(x.los, d1) - Math.max(x.aos, d0)) / 3600000 * H * 24 / lg);
-        return calPuce(x, ';top:' + y.toFixed(1) + 'px;height:' + hh.toFixed(1) + 'px;left:calc(' + (place[i] * 100 / nv).toFixed(2) + '% + 2px);right:auto;width:calc(' + (100 / nv).toFixed(2) + '% - 4px)');
-      }).join('') + (now >= d0 && now < d1 ? '<div class="cal-now" style="top:' + ((now - d0) / 3600000 * H * 24 / lg).toFixed(1) + 'px"></div>' : '') + '</div>';
+        return calPuce(x, ';top:' + y.toFixed(1) + 'px;height:' + hh.toFixed(1) + 'px;left:calc(' + (place[i] * 100 / larg[i]).toFixed(2) + '% + 2px);right:auto;width:calc(' + (100 / larg[i]).toFixed(2) + '% - 4px)');
+      }).join('') + (now >= d0 && now < d1 ? '<div class="cld-now" style="top:' + ((now - d0) / 3600000 * H * 24 / lg).toFixed(1) + 'px"></div>' : '') + '</div>';
     });
     grille.innerHTML = t + '</div></div></div>';
-    const c = grille.querySelector('.cal-sem-c');
+    const c = grille.querySelector('.cld-sem-c');
     if (haut != null) c.scrollTop = haut; else { const k = pass.find(x => x.los > now) || pass[0]; c.scrollTop = k ? Math.max(0, (new Date(k.aos).getHours() - 2) * H) : 7 * H; }
   } else {
-    let h = '<div class="cal-liste">';
+    let h = '<div class="cld-liste">';
     p.jours.forEach(d => {
       const d0 = d.getTime(), d1 = calPlus(d, 1).getTime();
       const sp = spans.filter(x => calSur(x, d0, d1)), ps = pass.filter(x => x.aos >= d0 && x.aos < d1);
@@ -277,7 +290,7 @@ function calDessine() {
         (ps.map(x => calPuce(x)).join('') || (sp.length ? '' : '<div class="petit">rien de prévu</div>'));
     });
     grille.innerHTML = h + '</div>';
-    if (haut != null) grille.querySelector('.cal-liste').scrollTop = haut;
+    if (haut != null) grille.querySelector('.cld-liste').scrollTop = haut;
   }
   calCote();
 }
@@ -285,13 +298,13 @@ function calJour(k) { CLD.jour = k; CLD.sel = null; calDessine(); }
 function calChoisit(ev, k) { if (ev) ev.stopPropagation(); CLD.sel = k; calDessine(); }
 /** The side panel: the item chosen, else the day chosen (its passes), else the legend. */
 function calCote() {
-  const c = g('cal-cote'); if (!c || !CLD.d) return;
+  const c = g('cld-cote'); if (!c || !CLD.d) return;
   const x = CLD.sel ? CLD.d.items.find(i => calIdent(i) === CLD.sel) : null;
   let h = '';
   const dd = (t, v) => '<dt>' + t + '</dt><dd>' + v + '</dd>';
   if (x && x.sorte === 'passage') {
     const camp = x.campagne && AP && AP.campagnes ? AP.campagnes.find(k => k.id === x.campagne) : null;
-    h = '<div class="t cal-pt" style="--c:' + calCoul(x) + '"><i></i>' + esc(x.sat) + '</div><dl>' +
+    h = '<div class="t cld-pt" style="--c:' + calCoul(x) + '"><i></i>' + esc(x.sat) + '</div><dl>' +
       dd('Passage', esc(calQuand(x.aos)) + ' → ' + hm(x.los) + ' <span class="petit">(' + calZone() + ')</span>') + dd('Durée', duree(x.los - x.aos)) + dd('Élévation max', x.el + '°') +
       dd('Pour', x.source === 'campagne' ? '🤖 campagne « ' + esc(x.nom) + ' »' : x.source === 'veille' ? 'mode automatique' : 'satellite favori') +
       (x.statut ? dd('État', '<span class="pastille ap-st-' + esc(x.statut) + '">' + esc(CAL_ST[x.statut] || x.statut) + '</span>' + (x.suspendue ? ' <span class="petit">(campagne suspendue)</span>' : '') + (x.raison ? '<div class="petit">' + esc(x.raison) + '</div>' : '')) : '') +
@@ -303,31 +316,31 @@ function calCote() {
     if (x.source === 'campagne' && !x.passe && x.statut === 'ANNULE')
       a.push('<button data-c="' + escA(x.campagne) + '" data-a="' + x.aos + '" onclick="apAnnulePassage(this.dataset.c, +this.dataset.a, false)">Reprendre ce passage</button>');
     if (x.campagne) a.push('<button data-c="' + escA(x.campagne) + '" onclick="acApVoir(this.dataset.c)">Ouvrir la campagne</button>');
-    h += '<div class="cal-act">' + a.join('') + '</div>';
+    h += '<div class="cld-act">' + a.join('') + '</div>';
   } else if (x && x.sorte === 'campagne') {
-    h = '<div class="t cal-pt" style="--c:' + calCoul(x) + '"><i></i>🤖 ' + esc(x.titre) + '</div><dl>' + dd('Satellite', esc(x.sat)) + dd('Période', esc(x.periode || calPeriode(x.de, x.a))) +
+    h = '<div class="t cld-pt" style="--c:' + calCoul(x) + '"><i></i>🤖 ' + esc(x.titre) + '</div><dl>' + dd('Satellite', esc(x.sat)) + dd('Période', esc(x.periode || calPeriode(x.de, x.a))) +
       dd('État', x.terminee ? '<span class="pastille off">terminée</span>' : x.active ? (CLD.d.maitre ? '<span class="pastille ap-st-PREVU">active</span>' : '<span class="pastille off">active, auto-pilote coupé</span>') : '<span class="pastille off">suspendue</span>') +
       dd('Reçus', x.recus + ' passage' + (x.recus > 1 ? 's' : '') + ', ' + x.images + ' image' + (x.images > 1 ? 's' : '')) + '</dl>' +
-      '<div class="cal-act"><button data-c="' + escA(x.id) + '" onclick="acApVoir(this.dataset.c)">Ouvrir la campagne</button></div>';
+      '<div class="cld-act"><button data-c="' + escA(x.id) + '" onclick="acApVoir(this.dataset.c)">Ouvrir la campagne</button></div>';
   } else if (x && x.sorte === 'activite') {
-    h = '<div class="t cal-pt" style="--c:' + calCoul(x) + '"><i></i>📡 ' + esc(x.sat || '?') + ' · ' + esc(x.libelle) + '</div><div>' + esc(x.titre) + '</div><dl>' +
+    h = '<div class="t cld-pt" style="--c:' + calCoul(x) + '"><i></i>📡 ' + esc(x.sat || '?') + ' · ' + esc(x.libelle) + '</div><div>' + esc(x.titre) + '</div><dl>' +
       dd('Période', esc(calPeriode(x.de, x.a)) + (x.precision === 'JOURS' ? ' <span class="petit">(journées, horaire à confirmer)</span>' : x.precision === 'INCONNUE' ? ' <span class="petit">(dates non annoncées)</span>' : '')) +
-      dd('Campagne', x.campagne ? 'oui' : x.campagneSupprimee ? 'campagne supprimée' : 'aucune') + '</dl><div class="cal-act">' +
+      dd('Campagne', x.campagne ? 'oui' : x.campagneSupprimee ? 'campagne supprimée' : 'aucune') + '</dl><div class="cld-act">' +
       (x.campagne ? '<button data-c="' + escA(x.campagne) + '" onclick="acApVoir(this.dataset.c)">Ouvrir la campagne</button>' :
         (x.type === 'SSTV' || x.type === 'SSDV') && !x.passe ? '<button data-id="' + escA(x.id) + '" onclick="acAuto(this.dataset.id)">' + (x.campagneSupprimee ? 'Recréer la campagne' : 'Activer l’auto-pilote') + '</button>' : '') +
       (x.lien ? '<a href="' + escA(x.lien) + '" target="_blank" rel="noopener noreferrer">lien ↗</a>' : '') + '</div>';
   } else if (x && x.sorte === 'agenda') {
     h = '<div class="t">📅 ' + esc(x.titre) + '</div><dl>' + dd('Quand', x.a > x.de ? esc(calPeriode(x.de, x.a)) : esc(calQuand(x.de)) + ' <span class="petit">(' + calZone() + ')</span>') +
       (x.sat ? dd('Satellite', esc(x.sat)) : '') + (x.type ? dd('Type', esc(x.type)) : '') + (x.note ? dd('Note', esc(x.note)) : '') + dd('Rappel', x.actif ? 'actif' : 'coupé') + '</dl>' +
-      '<div class="cal-act"><button data-id="' + x.id + '" onclick="rdvEdite(+this.dataset.id)">Modifier</button><button data-id="' + x.id + '" onclick="rdvRetire(+this.dataset.id)">Supprimer</button></div>';
+      '<div class="cld-act"><button data-id="' + x.id + '" onclick="rdvEdite(+this.dataset.id)">Modifier</button><button data-id="' + x.id + '" onclick="rdvRetire(+this.dataset.id)">Supprimer</button></div>';
   } else {
     const k = CLD.jour != null ? CLD.jour : calCle(Date.now()), d1 = calPlus(new Date(k), 1).getTime(), l = calItems();
     const ps = l.filter(i => i.sorte === 'passage' && i.aos >= k && i.aos < d1).sort((a, b) => a.aos - b.aos), sp = l.filter(i => i.sorte !== 'passage' && calSur(i, k, d1));
     h = '<div class="t">' + esc(CAL_JOURS[calJs(new Date(k))] + ' ' + calJ(new Date(k)) + ' ' + CAL_MOIS[calM(new Date(k))]) + '</div>' +
       (sp.length ? sp.map(i => calBarre(i, true)).join('') : '') +
-      (ps.length ? '<table style="margin-top:6px"><tbody>' + ps.map(i => '<tr><td>' + calPuce(i) + '</td><td class="petit">' + esc(i.source === 'campagne' ? i.nom : i.source === 'veille' ? 'mode auto' : 'favori') +
-        (i.statut ? ' · ' + esc(CAL_ST[i.statut] || i.statut) : '') + '</td></tr>').join('') + '</tbody></table>' : '<div class="petit" style="margin-top:6px">Aucun passage ce jour-là.</div>') +
-      '<div class="cal-leg"><span><i style="--c:#3FE0C8"></i>une couleur par satellite</span><span>🤖 campagne</span><span>pointillés : favori</span><span>✓ reçu · ✗ manqué · ⊘ écarté/annulé</span><span>📡 annoncé en ligne</span><span>📅 rendez-vous</span></div>';
+      (ps.length ? '<div class="cld-jliste">' + ps.map(i => '<div class="cld-jl">' + calPuce(i) + '<span class="petit">' + esc(i.source === 'campagne' ? '🤖 ' + i.nom : i.source === 'veille' ? 'mode auto' : '★ favori') +
+        (i.statut ? ' · ' + esc(CAL_ST[i.statut] || i.statut) : '') + '</span></div>').join('') + '</div>' : '<div class="petit" style="margin-top:6px">Aucun passage ce jour-là.</div>') +
+      '<div class="cld-leg"><span><i style="--c:#3FE0C8"></i>une couleur par satellite</span><span>🤖 campagne</span><span>pointillés : favori</span><span>✓ reçu · ✗ manqué · ⊘ écarté/annulé</span><span>📡 annoncé en ligne</span><span>📅 rendez-vous</span></div>';
   }
   if (c.dataset.h !== h) { c.dataset.h = h; c.innerHTML = h; }
 }
