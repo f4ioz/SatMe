@@ -93,4 +93,11 @@ class ControleAdifTest {
         assertEquals(2, j.getInt("contacts"))
         assertEquals("bloquant", j.getJSONArray("anomalies").getJSONObject(0).getString("g"))
     }
+
+    @Test
+    fun `un prefixe sans entite DXCC est signale, pas un contact maritime`() {
+        assertEquals(listOf("entite-inconnue"), codes(bon(c = "QZ1ABC")))
+        assertEquals(emptyList<String>(), codes(bon(c = "FT5WQ")))
+        assertEquals(emptyList<String>(), codes(bon(c = "F5ZZZ/MM")))
+    }
 }

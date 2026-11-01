@@ -210,6 +210,17 @@ object Adif {
                 sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))
             }
             sb.append(field("CALL", e.callsign.trim().uppercase()))
+            // The other station's DXCC entity, from its prefix: number, name,
+            // continent, and the zones only when the entity has a single one
+            // (a US call does not tell CQ 3, 4 or 5). Unknown prefix: nothing,
+            // rather than a wrong entity the online log would believe.
+            fr.f4ioz.satcombo.domain.Dxcc.entite(e.callsign)?.let { x ->
+                sb.append(field("DXCC", x.adif.toString()))
+                sb.append(field("COUNTRY", x.nomAdif))
+                sb.append(field("CONT", x.continent))
+                x.cq?.let { sb.append(field("CQZ", it.toString())) }
+                x.itu?.let { sb.append(field("ITUZ", it.toString())) }
+            }
             val (mode, sub) = modeOf(e.mode)
             sb.append(field("MODE", mode))
             sb.append(field("SUBMODE", sub))

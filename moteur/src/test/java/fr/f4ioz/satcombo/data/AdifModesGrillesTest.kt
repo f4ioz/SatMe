@@ -105,4 +105,23 @@ class AdifModesGrillesTest {
         // Its own square wins.
         assertEquals("JN03AA", AdifImport.avecLieu(q.copy(monLocator = "JN03AA"), "JN06,JN16").monLocator)
     }
+
+    private fun contact(c: String) = LogEntry(1_790_000_000_000L, "SO-50", 27607, 100.0, 20.0, myLocator = "JN18FS", callsign = c,
+        mode = "FM", uplinkMhz = 145.850, downlinkMhz = 436.795)
+
+    /** The other station's DXCC entity, from its prefix; the zones only when the entity has one. */
+    @Test
+    fun `l'entite DXCC du correspondant part dans l'ADIF`() {
+        val crozet = Adif.enregistrement(contact("FT5WQ"))
+        assertTrue(crozet, crozet.contains("<DXCC:2>41"))
+        assertTrue(crozet, crozet.contains("<COUNTRY:9>CROZET I."))
+        assertTrue(crozet, crozet.contains("<CONT:2>AF"))
+        assertTrue(crozet, crozet.contains("<CQZ:2>39") && crozet.contains("<ITUZ:2>68"))
+        val us = Adif.enregistrement(contact("W1AW"))
+        assertTrue(us, us.contains("<DXCC:3>291"))
+        assertFalse("USA : trois zones CQ, aucune n'est écrite", us.contains("<CQZ:"))
+        val inconnu = Adif.enregistrement(contact("QZ1ABC"))
+        assertFalse(inconnu, inconnu.contains("<DXCC:") || inconnu.contains("<COUNTRY:"))
+        assertFalse(Adif.enregistrement(contact("F4ABC/MM")).contains("<DXCC:"))
+    }
 }

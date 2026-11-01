@@ -248,9 +248,11 @@ object ApiStation {
                 JSONObject().put("lieu", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(lieu)).put("n", n).put("profil", p ?: JSONObject.NULL)
                     .put("couvert", couvre(p, lieu))
             }))
-            // Wavelog needs these to create a profile: France's when the callsign is French.
-            .put("creation", if (indicatif.trim().uppercase().startsWith("F"))
-                JSONObject().put("dxcc", "227").put("pays", "FRANCE").put("cq", "14").put("itu", "27") else JSONObject())
+            // Wavelog needs these to create a profile: the entity of the callsign, its zones when it has one only.
+            .put("creation", fr.f4ioz.satcombo.domain.Dxcc.entite(indicatif)?.let { e ->
+                JSONObject().put("dxcc", e.adif.toString()).put("pays", e.nomAdif)
+                    .put("cq", e.cq?.toString().orEmpty()).put("itu", e.itu?.toString().orEmpty())
+            } ?: JSONObject())
 
     /**
      * The orbital elements' choice as the settings show it: the SatMe GP

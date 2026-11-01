@@ -69,18 +69,20 @@ object RecordsCarnet {
         fun meilleurs(cle: (LogEntry) -> String?): Map<String, Record> = records.mapNotNull { r -> cle(r.contact)?.let { it to r } }
             .groupBy({ it.first }, { it.second }).mapValues { (_, l) -> l.maxBy { it.km } }
         val entite = { c: LogEntry -> Dxcc.entite(c.callsign) }
+        // The six continents of WAC: Antarctica (AN in the DXCC list) is not one of them.
+        val continent = { c: LogEntry -> entite(c)?.continent?.takeIf { it in CONTINENTS } }
         val paliers = PALIERS.mapNotNull { km -> records.filter { it.km >= km }.minByOrNull { it.contact.timeMs }?.let { km to it.contact } }
         return Bilan(
             total = records.maxByOrNull { it.km },
             parSatellite = meilleurs { it.satName.ifBlank { null } },
             parMode = meilleurs { mode(it.mode) },
-            parContinent = meilleurs { entite(it)?.continent?.ifBlank { null } },
+            parContinent = meilleurs { continent(it) },
             parPays = meilleurs { entite(it)?.nom },
             contacts = avecIndicatif.size,
             avecDistance = records.size,
             carres = avecIndicatif.mapNotNull { it.theirLocator.trim().uppercase().take(4).takeIf { c -> c.length == 4 } }.toSet(),
             pays = avecIndicatif.mapNotNull { entite(it)?.nom }.toSet(),
-            continents = avecIndicatif.mapNotNull { entite(it)?.continent?.ifBlank { null } }.toSet(),
+            continents = avecIndicatif.mapNotNull { continent(it) }.toSet(),
             satellites = avecIndicatif.mapNotNull { it.satName.ifBlank { null } }.toSet(),
             paliers = paliers,
         )

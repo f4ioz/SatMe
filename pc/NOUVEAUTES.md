@@ -16,8 +16,10 @@ Markdown simple (gras, italique, `code`, listes, liens https).
 ## Prochaine version
 
 ### fr
+- **Carnet : toutes les entités DXCC** — la table des pays passe d'environ 160 à **340 entités** (la liste actuelle de l'ARRL), chacune avec son numéro ADIF, son continent et ses zones CQ et UIT ; les rares aussi : Crozet (FT/W), Kerguelen (FT/X), Amsterdam et Saint-Paul (FT/Z), Bouvet et Pierre-Ier, KH0 à KH9, KP1 à KP5, VP2E/M/V, CE0X/Y/Z, Guantánamo, Kaliningrad… L'export **ADIF** ajoute `DXCC`, `COUNTRY`, `CONT` (et `CQZ`, `ITUZ` quand l'entité n'a qu'une zone) ; le **Contrôle ADIF** signale un indicatif dont le préfixe ne mène à aucune entité ; la création d'un profil **Wavelog** prend l'entité et les zones de votre indicatif. Un préfixe partagé que rien ne départage (FT5 seul, VK9 seul) ne donne aucun pays plutôt qu'un faux.
 
 ### en
+- **Log: every DXCC entity** — the country table grows from about 160 to **340 entities** (the current ARRL list), each with its ADIF number, continent and CQ and ITU zones; the rare ones too: Crozet (FT/W), Kerguelen (FT/X), Amsterdam & St Paul (FT/Z), Bouvet and Peter I, KH0 to KH9, KP1 to KP5, VP2E/M/V, CE0X/Y/Z, Guantanamo, Kaliningrad… The **ADIF** export adds `DXCC`, `COUNTRY`, `CONT` (and `CQZ`, `ITUZ` when the entity has a single zone); the **ADIF check** flags a callsign whose prefix leads to no entity; creating a **Wavelog** profile takes your callsign's entity and zones. A shared prefix that nothing settles (FT5 alone, VK9 alone) gives no country rather than a wrong one.
 
 ## 2026.11.1
 

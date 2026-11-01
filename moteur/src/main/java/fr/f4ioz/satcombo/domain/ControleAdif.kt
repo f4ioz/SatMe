@@ -77,6 +77,13 @@ object ControleAdif {
                 a(Gravite.BLOQUANT, "indicatif-caracteres", "Indicatif « $call » : seuls lettres, chiffres et « / » sont acceptés.")
             else if (!INDICATIF.matches(call))
                 a(Gravite.AVERTISSEMENT, "indicatif-douteux", "Indicatif « $call » : format inhabituel, à vérifier.")
+            else {
+                // A well-formed callsign whose prefix leads to no DXCC entity: DXCC field left out at export.
+                val d = IndicatifCompose.decoupe(call)
+                if (!d.maritime && !d.aeronautique && Dxcc.entite(call) == null)
+                    a(Gravite.AVERTISSEMENT, "entite-inconnue",
+                        "Indicatif « $call » : aucune entité DXCC trouvée pour ce préfixe (champ DXCC omis à l'export), à vérifier.")
+            }
 
             // Locators: a grid line goes to the VUCC fields by itself; a malformed one is left out.
             locator(e.myLocator, "MY_GRIDSQUARE", "MY_VUCC_GRIDS", "Votre locator", ::a)
