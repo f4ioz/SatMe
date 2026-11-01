@@ -2119,6 +2119,7 @@ ${rail()}
     </div>
   </span>
   <button id="h-mol" class="h-puce" hidden onclick="molPop(this)" title="La molette USB : son pas et ce qu'elle accorde">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
+  <button id="h-rc28" class="h-puce" hidden onclick="rcPop(this)" title="Le RC-28 : son pas, ce qu'il accorde, F-1 et F-2">${IconesPc.svg("tune")}<span class="h-m" id="h-rc28-t"></span></button>
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
   <button id="h-ap" class="h-puce" hidden onclick="apMaitreBascule()" aria-pressed="false" title="Auto-pilote SSTV (Agenda › SSTV) : clic pour l'activer ou le couper. Réception seulement">🤖<span class="h-m" id="h-ap-t">Auto-pilote</span></button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
@@ -4916,6 +4917,17 @@ ${DemarragePagePc.CARTES}
         <div class="petit aide">Réception seulement : la molette ne passe jamais en émission (PTT) et ne lance rien. Capturer : SatMe seul lit la molette, le volume du bureau ne bouge plus tant que SatMe-PC tourne ; jamais un clavier complet (lecture seule alors).</div>
       </div>
     </div>
+    <div class="carte" id="rc-carte">
+      <div class="t">Icom RC-28 (dans le navigateur)</div>
+      <div class="ligne"><button id="rc-connecte" onclick="rcConnecte()">Connecter le RC-28…</button><button class="discret" id="rc-oublie" hidden onclick="rcOublie()" title="Fermer le RC-28 et retirer la permission de cette page">Oublier</button><span class="petit" id="rc-etat"></span></div>
+      <div class="ligne"><span class="petit">F-1</span><select id="rc-f1" style="flex:none" onchange="rcRegle('f1', this.value)"></select>
+        <span class="petit">F-2</span><select id="rc-f2" style="flex:none" onchange="rcRegle('f2', this.value)"></select></div>
+      <div class="ligne"><span class="petit">TRANSMIT</span><select id="rc-tx" style="flex:none" onchange="rcRegle('tx', this.value)"></select>
+        <label class="petit"><input type="checkbox" id="rc-accel" onchange="rcRegle('accel', this.checked)"> accélération</label>
+        <label class="petit"><input type="checkbox" id="rc-inverse" onchange="rcRegle('inverse', this.checked)"> sens inversé</label></div>
+      <div class="petit aide">La molette Icom RC-28 branchée sur la machine de ce navigateur (Chrome ou Edge) : elle accorde comme la molette USB ci-dessus — la même cible (Auto : l'onglet SDR, le cockpit QO-100, sinon le poste : le repos dans le transpondeur, la montée suit), le même pas ; un tour rapide prend de plus grands pas. F-1 et F-2 font l'action choisie (gardée dans ce navigateur) ; « recentre » ramène le poste sur le Doppler calculé (la référence mémorisée du satellite, sinon calage RX et décalage TX à zéro) ou le SDR au centre. La LED LINK s'allume quand la page tient le RC-28, s'éteint molette verrouillée. Une fois la permission donnée, il se reconnecte seul aux visites suivantes ; un seul onglet le tient à la fois.</div>
+      <div class="petit aide">Jamais d'émission : la touche TRANSMIT ne met jamais le poste en émission — elle ne fait rien, ou verrouille la molette si tu le choisis — et sa LED rouge reste éteinte. WebHID demande une page sûre : SatMe-PC ouvert sur ce PC (http://localhost) ou en https (Réglages › Accès à distance › HTTPS).</div>
+    </div>
     <div class="carte" id="ann-carte" hidden>
       <div class="t">Annonces vocales</div>
       <label class="petit" style="display:block"><input type="checkbox" id="ann-on" onchange="regleAnn('on=' + (this.checked ? 1 : 0))"> Annoncer à voix haute ce qui arrive (en français)</label>
@@ -6044,7 +6056,7 @@ const CATS_REG = [
   { id: 'modules', nom: 'Modules', ico: 'view_quilt', desc: 'Ce qui t’intéresse : QO-100, DATV, SSTV, SDR, avions, navires… et les profils', cartes: ['Modules'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, polarisation d’antenne, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Polarisation', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage, fréquences SatPC32 / Gpredict', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100', 'Fréquences : SatPC32 et Gpredict'] },
-  { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
+  { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB, Icom RC-28', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB', 'Icom RC-28'] },
   { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at, envoi vers votre site web (module)', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds', 'Envoyer vers un site web'] },
   { id: 'commandes', nom: 'Assistant et domotique', ico: 'mic', desc: 'Assistant vocal, Home Assistant, commandes à distance par votre site — jamais d’émission', cartes: ['Assistant vocal', 'Home Assistant', 'Commandes à distance'] },
@@ -8397,6 +8409,117 @@ async function relaisMol() {
 async function coupeRelais() { await post('api/molette/relais/coupe'); chargeMol(); }
 async function regleMol(q) { const j = await post('api/molette?' + q); if (j && j.dispo !== undefined) rendMol(j); else chargeMol(); HX.t.mol = 0; }
 setInterval(() => { if (ouverte('reglages') && !g('mol-carte').hidden && g('mol-carte').offsetParent) chargeMol(); }, 1000);
+// ------------------------------------------------------------------ the Icom RC-28, through WebHID (Rc28Js)
+// Its knob turns as the USB knob does (api/molette/tourne: the same target, the same step), F-1 / F-2 as chosen.
+// TRANSMIT never transmits: nothing, or the knob locked.
+${Rc28Js.CODE}
+const RC_ACTIONS = { '': 'rien', pas: 'change le pas', cible: 'cible suivante (VFO, RX, TX)', recentre: 'recentre sur le Doppler', verrou: 'verrouille la molette' };
+const RC_ETATS = { absent: 'non connecté', attente: 'tenu par un autre onglet SatMe', ouvert: 'connecté', erreur: 'erreur' };
+var RCR = { f1: 'pas', f2: 'recentre', tx: '', accel: true, inverse: false }, rcVerrou = false, rcMsg = '', rcTicT = null, RCP = null;
+try { Object.assign(RCR, JSON.parse(localStorage.getItem('rc28') || '{}')); } catch (x) {}
+// TRANSMIT: nothing, or the lock — never anything else, whatever was stored.
+if (RCR.tx !== 'verrou') RCR.tx = '';
+for (const k of ['f1', 'f2']) if (!(RCR[k] in RC_ACTIONS)) RCR[k] = '';
+const rcDispo = window.SATME_TELEPHONE ? 'navigateur' : rc28Dispo(window);
+/** A setting changed (the card or the chip's menu): kept in this browser. */
+function rcRegle(k, val) {
+  if (k === 'tx' && val !== 'verrou') val = '';
+  RCR[k] = val; try { localStorage.setItem('rc28', JSON.stringify(RCR)); } catch (x) {}
+  if (RCP) RCP.leds();
+  rcRend();
+}
+/** POST without an alert (a key of the knob is no time for a dialog box); the answer, or null. */
+async function rcPost(u) {
+  try { const r = await fetch(u, { method: 'POST' }); const j = await r.json(); if (j && j.ok === false) rcMsg = j.erreur || 'refusé'; return j; } catch (x) { return null; }
+}
+/** The page read again soon after a turn (once for a whole spin). */
+function rcTic() { if (!rcTicT) rcTicT = setTimeout(() => { rcTicT = null; tic(); }, 150); }
+const rcLisse = rc28Lisseur(n => {
+  if (rcVerrou) return null;
+  const k = (RCR.inverse ? -1 : 1) * (RCR.accel ? rc28Accel(n) : Math.max(-50, Math.min(50, n)));
+  return rcPost('api/molette/tourne?n=' + k + '&ctx=' + enc(molVue())).then(j => { if (j && j.geste) rcMsg = j.geste; rcTic(); rcRend(); });
+}, 50);
+/** The knob's settings (step, target) through the USB knob's own: what it says back is the state. */
+async function rcMol(q) { const j = await rcPost('api/molette?' + q); if (j && j.pas !== undefined) { HX.mol = j; HX.t.mol = Date.now(); } }
+async function rcAction(a) {
+  const m = HX.mol || {};
+  if (a === 'pas') { const l = [10, 100, 1000]; await rcMol('pas=' + l[(l.indexOf(+m.pas) + 1) % l.length]); rcMsg = 'pas ' + rcPas(); }
+  else if (a === 'cible') { const l = ['VFO', 'SHIFT_RX', 'SHIFT_TX']; await rcMol('cible=' + l[(l.indexOf(m.cible) + 1) % l.length]); rcMsg = 'cible ' + (MOL_CIBLES[(HX.mol || {}).cible] || '—'); }
+  else if (a === 'recentre') {
+    if (m.accord_effectif === 'SDR') { await rcPost('api/sdr/decalage?hz=0'); rcMsg = 'SDR recentré'; }
+    else if (m.accord_effectif === 'QO100') rcMsg = 'QO-100 : rien à recentrer';
+    else {
+      // The rig back on the computed Doppler: the satellite's memorised reference, else no RX nor TX shift.
+      const rs = E && E.reglageSat;
+      if (!rs) rcMsg = 'aucun satellite suivi';
+      else if (rs.refCalib != null) { await rcPost('api/sat/reglage?retour=1'); rcMsg = 'Doppler : la référence'; }
+      else { await rcPost('api/sat/reglage?calib=' + (-rs.calib) + '&tx=' + (-rs.tx)); rcMsg = 'Doppler recentré'; }
+      rcTic();
+    }
+  }
+  else if (a === 'verrou') { rcVerrou = !rcVerrou; rcLisse.vide(); rcMsg = rcVerrou ? 'molette verrouillée' : 'molette libre'; if (RCP) RCP.leds(); }
+  rcRend();
+}
+function rcPas() { const p = +(HX.mol || {}).pas; return p ? (p >= 1000 ? p / 1000 + ' kHz' : p + ' Hz') : '—'; }
+function rcCible() {
+  const m = HX.mol || {};
+  return ({ SDR: 'SDR', QO100: 'QO-100' })[m.accord_effectif] || ({ SHIFT_RX: 'RX', SHIFT_TX: 'TX' })[m.cible] || 'VFO';
+}
+/** The chip in the header, the card in Réglages › Interfaces. */
+function rcRend() {
+  if (typeof RCR === 'undefined' || !g('rc-carte')) return;
+  const ouvert = !!(RCP && RCP.etat === 'ouvert');
+  g('h-rc28').hidden = !ouvert;
+  if (ouvert) {
+    txt('h-rc28-t', 'RC-28 · ' + rcPas() + ' · ' + rcCible() + (rcVerrou ? ' · 🔒' : ''));
+    g('h-rc28').title = 'Le RC-28 accorde ' + rcCible() + ' par ' + rcPas() + (rcVerrou ? ', molette verrouillée' : '') + (rcMsg ? ' — ' + rcMsg : '') + '. Clic : F-1, F-2, verrou';
+  }
+  g('rc-carte').hidden = !!window.SATME_TELEPHONE;
+  const raison = rcDispo === 'securite' ? 'Indisponible ici : WebHID demande une page sûre. Ouvre SatMe-PC sur ce PC (http://localhost), ou en https.'
+    : rcDispo === 'navigateur' ? 'Indisponible : ce navigateur n\'a pas WebHID (Chrome ou Edge sur ordinateur).' : '';
+  g('rc-connecte').disabled = !!raison || ouvert;
+  g('rc-oublie').hidden = !(RCP && (RCP.app || RCP.connu));
+  txt('rc-etat', raison || (RCP ? (RC_ETATS[RCP.etat] || RCP.etat) + (RCP.message ? ' (' + RCP.message + ')' : '') +
+    (ouvert ? ' · ' + rcPas() + ' · ' + rcCible() + (rcVerrou ? ' · verrouillée' : '') + (rcMsg ? ' · ' + rcMsg : '') : '') : ''));
+  for (const k of ['f1', 'f2', 'tx']) {
+    const e = g('rc-' + k), l = k === 'tx' ? ['', 'verrou'] : Object.keys(RC_ACTIONS);
+    const h = l.map(a => '<option value="' + a + '">' + RC_ACTIONS[a] + '</option>').join('');
+    if (e.dataset.h !== h) { e.innerHTML = h; e.dataset.h = h; }
+    if (document.activeElement !== e) e.value = RCR[k];
+  }
+  g('rc-accel').checked = !!RCR.accel; g('rc-inverse').checked = !!RCR.inverse;
+}
+/** The chip's menu: F-1, F-2, TRANSMIT, the lock. */
+function rcPop(b) {
+  const sel = k => '<select onchange="rcRegle(\'' + k + '\', this.value); rcPop(g(\'h-rc28\'))">' + (k === 'tx' ? ['', 'verrou'] : Object.keys(RC_ACTIONS)).map(a =>
+    '<option value="' + a + '"' + (a === RCR[k] ? ' selected' : '') + '>' + RC_ACTIONS[a] + '</option>').join('') + '</select>';
+  popMontre(b, '<div class="aide-p"><b>RC-28</b> ' + esc(rcPas() + ' · ' + rcCible()) + '</div>' +
+    '<div class="aide-p petit">F-1 ' + sel('f1') + '</div><div class="aide-p petit">F-2 ' + sel('f2') + '</div>' +
+    '<div class="aide-p petit">TRANSMIT ' + sel('tx') + '<br>jamais d\'émission par le RC-28</div>' +
+    '<div class="sb-pop-l"><button onclick="rcAction(\'verrou\'); rcPop(g(\'h-rc28\'))">' + (rcVerrou ? '🔓 Libérer la molette' : '🔒 Verrouiller la molette') + '</button>' +
+    '<button onclick="popCache(); molPop(g(\'h-rc28\'))">Pas et cible…</button>' +
+    '<button onclick="popCache(); vue(\'reglages\'); montreReglages(\'interfaces\')">Réglages…</button></div>', true);
+}
+async function rcConnecte() {
+  if (!RCP) return;
+  try { await RCP.connecte(); } catch (x) { rcMsg = ''; }
+  RCP.connu = !!RCP.app; rcRend();
+}
+async function rcOublie() { if (RCP) { rcVerrou = false; await RCP.ferme(true); RCP.connu = false; rcMsg = ''; rcRend(); } }
+if (!rcDispo) {
+  RCP = rc28Pilote(navigator.hid, {
+    tourne: n => { if (!rcVerrou) rcLisse.pousse(n); },
+    appui: k => { const a = RCR[k]; if (k === 'tx' && a !== 'verrou') return; if (a) rcAction(a); },
+    etat: p => { if (p.app) p.connu = true; if (p.etat !== 'ouvert') rcLisse.vide(); rcRend(); },
+    // LINK: held by this page, the knob free; the key that locks lit while locked. TRANSMIT's LED: never (Rc28Js).
+    leds: () => ({ link: !rcVerrou, f1: rcVerrou && RCR.f1 === 'verrou', f2: rcVerrou && RCR.f2 === 'verrou' }),
+  }, { verrous: navigator.locks, nom: 'satme-rc28' });
+  RCP.demarre();
+  // Leaving: LEDs off, closed; back from the browser's cache: reopened without a prompt.
+  window.addEventListener('pagehide', () => { if (RCP && RCP.app) RCP.ferme(false); });
+  window.addEventListener('pageshow', ev => { if (ev.persisted && RCP.maitre) RCP.reprend(); });
+}
+rcRend();
 // ------------------------------------------------------------------ antenna polarisation (module « Polarisation »)
 let POL = null, POL_ERR = '', POL_N = 0;
 const POL_NOMS = { V: 'verticale', H: 'horizontale', D: 'circulaire droite', G: 'circulaire gauche' };
@@ -19337,6 +19460,7 @@ function rendTete() {
   // The USB knob, while it is read: its step and what it tunes.
   const mo = HX.mol, moVu = !!(mo && mo.puce);
   g('h-mol').hidden = !moVu; if (moVu) txt('h-mol-t', mo.puce);
+  rcRend();
   // Spoken announcements, while on: muted or not in one click.
   const an = HX.ann, anVu = !!(an && an.on);
   g('h-ann').hidden = !anVu;

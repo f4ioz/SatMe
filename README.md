@@ -262,7 +262,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the locator of the callsign as typed, the map following the entry; the **whole DXCC list** (340 entities, ADIF number, continent, CQ and ITU zones, written in the ADIF export); the **Contrôle ADIF** before export and the **QSLs received** read from Wavelog; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file. In the journal's list, a **badge per kind of content** (SSTV, SSDV, FT8, FT4, digital, APRS, telemetry, voice, CW, DATV) and a filter; on a pass's timeline, the **digital zones** (FT4, FT8) to decode afterwards and the **voices** heard.
 
-**🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
+**🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), the **Icom RC-28** knob through the browser (WebHID; its TRANSMIT key never transmits), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
 **🌐 Web publishing** (optional module, off by default) — SatMe-PC sends over HTTPS what you choose — SSTV and SSDV pictures, planches, reports, contacts, the journal's videos, FT8 / FT4 passes, and as an option live data — to an address of **your** site, which receives them as it likes (PHP, WordPress, a small Python server…), or writes them into a folder (static site, Nextcloud, Syncthing). Each kind **at a click** (the default), **automatic** or **never**; a queue on disk, tried again; nothing opened on the station. The format is a [documented API](docs/publication-web.md), with ready-to-use receivers in PHP and Python.
 
@@ -360,7 +360,7 @@ French and English. Controls readable by screen readers.
 | Rotators | Yaesu GS-232 · Hamlib rotctld (network) |
 | Polarisation | WiMo remote switches (UHF 18082 / 18083, VHF 18080 / 18081) or an H/V relay, through an ESP32 box on USB (SatMe-PC; [firmware](materiel/esp32-polarisation/README.md))² |
 | USB serial | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
-| Other | USB sound cards · USB knob/keypad (keys learned by pressing; SatMe-PC too, Linux) |
+| Other | USB sound cards · USB knob/keypad (keys learned by pressing; SatMe-PC too, Linux) · Icom RC-28 remote encoder (SatMe-PC, in Chrome or Edge)¹ |
 
 ¹ Built and bench-tested, not yet tried on the real hardware.
 ² New: written and tried against simulators (virtual ESP32, dummy-load stage), not yet tried with the real hardware on the air.

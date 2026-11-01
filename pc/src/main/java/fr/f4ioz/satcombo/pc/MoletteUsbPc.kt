@@ -495,6 +495,8 @@ class MoletteUsbPc(
     fun json(): JSONObject {
         val o = JSONObject().put("dispo", dispo)
         relais?.let { o.put("relais", it.json()) }
+        // The step and the target hold without the knob too: the page's wheel and the browser's RC-28 use them.
+        o.put("pas", settings.molettePasHz).put("cible", settings.moletteCible).put("accord", accord).put("accord_effectif", accordEffectif().name)
         if (!dispo) return o.put("message", "non disponible : Linux ou Windows seulement")
         val liste = appareils()
         val a = lu ?: EntreesLinux.choisit(liste, appareilChoisi)

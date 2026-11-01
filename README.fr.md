@@ -262,7 +262,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le locator propre à l'indicatif tapé, la carte qui suit la saisie ; la **liste DXCC entière** (340 entités, numéro ADIF, continent, zones CQ et UIT, écrits dans l'export ADIF) ; le **Contrôle ADIF** avant l'export et les **QSL reçues** lues dans Wavelog ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML. Dans la liste du journal, une **pastille par type de contenu** (SSTV, SSDV, FT8, FT4, numérique, APRS, télémesure, phonie, CW, DATV) et un filtre ; sur la frise d'un passage, les **zones numériques** (FT4, FT8) à décoder après coup et les **voix** entendues.
 
-**🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
+**🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), la molette **Icom RC-28** par le navigateur (WebHID ; sa touche TRANSMIT ne fait jamais émettre), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
 **🌐 Publication web** (module facultatif, désactivé d'origine) — SatMe-PC envoie, par HTTPS, ce que vous choisissez — images SSTV et SSDV, planches, rapports, contacts, vidéos du journal, passages FT8 / FT4, et en option des données en direct — à une adresse de **votre** site, qui les reçoit comme il veut (PHP, WordPress, un petit serveur Python…), ou les écrit dans un dossier (site statique, Nextcloud, Syncthing). Chaque genre **Sur clic** (d'origine), **Automatique** ou **Jamais** ; une file sur le disque, réessayée ; rien d'ouvert sur la station. Le format est une [API documentée](docs/publication-web.fr.md), avec des récepteurs prêts à l'emploi en PHP et en Python.
 
@@ -360,7 +360,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
 | Polarisation | Commutateurs WiMo (UHF 18082 / 18083, VHF 18080 / 18081) ou un relais H/V, par un boîtier ESP32 en USB (SatMe-PC ; [firmware](materiel/esp32-polarisation/README.fr.md))² |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
-| Divers | Cartes son USB · molette/clavier USB (touches apprises par appui ; aussi SatMe-PC, Linux) |
+| Divers | Cartes son USB · molette/clavier USB (touches apprises par appui ; aussi SatMe-PC, Linux) · molette Icom RC-28 (SatMe-PC, dans Chrome ou Edge)¹ |
 
 ¹ Écrit et testé au banc, pas encore essayé sur le matériel réel.
 ² Nouveau : écrit et essayé sur simulateurs (ESP32 virtuel, essai sur charge), pas encore essayé sur l'air avec le vrai matériel.
