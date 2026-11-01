@@ -91,13 +91,14 @@ class CalendrierPc(
                 items.put(JSONObject().put("sorte", "campagne").put("id", c.id).put("titre", c.nom).put("sat", c.satNom).put("catnum", c.catnum)
                     .put("de", c.debutMs).put("a", c.finMs).put("active", c.active).put("terminee", c.terminee(t)).put("ssdv", c.chaine.ssdv && !c.chaine.sstv)
                     .put("periode", CampagneSstv.periodeTexte(c.debutMs, c.finMs, z)).put("activite", c.activite)
-                    .put("recus", h.count { it.statut == CampagneSstv.Statut.FAIT }).put("images", h.sumOf { it.images.size }))
+                    .put("recus", h.count { it.statut == CampagneSstv.Statut.FAIT }).put("images", h.sumOf { it.nbImages }))
                 // Gone: what became of each pass (the history), and those of the period nobody received.
                 val vus = ArrayList<Long>()
                 for (tr in h) if (tr.losMs >= de && tr.aosMs <= a) {
                     vus += tr.aosMs
                     items.put(passage("campagne", tr.catnum, c.satNom, tr.aosMs, tr.losMs, tr.elMax).put("campagne", c.id).put("nom", c.nom)
-                        .put("statut", tr.statut.name).put("raison", tr.raison).put("images", tr.images.size).put("enregistrement", tr.enregistrement)
+                        .put("statut", tr.statut.name).put("raison", tr.raison).put("images", tr.nbImages).put("enregistrement", tr.enregistrement)
+                        .put("ssdvImages", tr.ssdvImages).put("ssdvPaquets", tr.ssdvPaquets)
                         .put("passe", true))
                 }
                 // To come: the plan's (a campaign switched off: what it would receive, said « suspendue »).

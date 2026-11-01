@@ -251,15 +251,19 @@ class AutoPiloteSstvPc(
         var (de, fin) = ActivitesAVenir.periodeCampagne(a, b.debutMs, b.finMs, zone())
         if (fin <= t) return Result.failure(IllegalArgumentException("activité terminée"))
         if (fin - de > CampagneSstv.DUREE_MAX_MS) fin = de + CampagneSstv.DUREE_MAX_MS
+        val tous = station.emetteursDe(catnum)
+        // An SSDV activity, or a satellite that sends SSDV only: its SSDV decoder ticked, SSTV's not.
+        val ssdv = a.type == ActivitesAVenir.Type.SSDV || imagesDe(catnum, tous) == "SSDV"
         val emetteur = if (b.freqHz > 0) "" else {
-            val l = station.emetteursDe(catnum).filter { it.alive && it.downlinkLowHz != null }
-            (l.firstOrNull { (it.description + " " + it.mode.orEmpty()).contains("SSTV", true) }
+            val l = tous.filter { it.alive && it.downlinkLowHz != null }
+            (l.firstOrNull { ssdv && emetSsdv(it) } ?: l.firstOrNull { (it.description + " " + it.mode.orEmpty()).contains("SSTV", true) }
                 ?: l.firstOrNull { it.mode.orEmpty().uppercase() in CampagneSstv.MODULATIONS })?.description
                 ?: return Result.failure(IllegalArgumentException("fréquence non annoncée et aucun émetteur SSTV ou FM connu pour " +
                     (sat?.name ?: a.satNom.ifBlank { "ce satellite" }) + " : « Modifier avant… » pour la donner"))
         }
         return CampagneSstv.valide(b.copy(satNom = sat?.name ?: a.satNom.ifBlank { "#$catnum" }, emetteur = emetteur,
-            debutMs = de, finMs = fin, elMin = elMin, activite = a.id, activiteSuit = true, chaine = CampagneSstv.Chaine())).map { it.copy(id = "") }
+            debutMs = de, finMs = fin, elMin = elMin, activite = a.id, activiteSuit = true,
+            chaine = if (ssdv) CampagneSstv.Chaine(sstv = false, ssdv = true) else CampagneSstv.Chaine())).map { it.copy(id = "") }
     }
 
     /**
@@ -293,7 +297,7 @@ class AutoPiloteSstvPc(
         val nouvelles = donnees.campagnes.map { c ->
             if (c.activite.isBlank() || !c.activiteSuit) return@map c
             val a = l.firstOrNull { it.id == c.activite } ?: l.firstOrNull { it.catnum == c.catnum && campagneDe(it)?.id == c.id } ?: return@map c
-            if (a.precision == ActivitesAVenir.Precision.INCONNUE || a.type != ActivitesAVenir.Type.SSTV) return@map c
+            if (a.precision == ActivitesAVenir.Precision.INCONNUE || (a.type != ActivitesAVenir.Type.SSTV && a.type != ActivitesAVenir.Type.SSDV)) return@map c
             val n = depuisActivite(a, c.catnum).getOrNull() ?: return@map c
             if (n.debutMs == c.debutMs && n.finMs == c.finMs && n.aConfirmer == c.aConfirmer && a.id == c.activite) return@map c
             change = true
@@ -392,10 +396,15 @@ class AutoPiloteSstvPc(
                 sstv = b("sstv", true), annonce = b("annonce", true), parquer = b("parquer", false), ssdv = b("ssdv", false)))
     }
 
-    private fun emetteurs(catnum: Int): JSONObject = JSONObject().put("ok", true).put("emetteurs", JSONArray(
-        station.emetteursDe(catnum).filter { it.alive && it.downlinkLowHz != null }.map { t ->
-            JSONObject().put("description", t.description).put("mode", t.mode.orEmpty()).put("bas", t.downlinkLowHz).put("haut", t.downlinkHighHz ?: t.downlinkLowHz)
-        }))
+    /** A satellite's transmitters for the form, each said SSDV or not, and what the satellite sends (its boxes ticked by it). */
+    private fun emetteurs(catnum: Int): JSONObject {
+        val l = station.emetteursDe(catnum)
+        return JSONObject().put("ok", true).put("images", imagesDe(catnum, l)).put("emetteurs", JSONArray(
+            l.filter { it.alive && it.downlinkLowHz != null }.map { t ->
+                JSONObject().put("description", t.description).put("mode", t.mode.orEmpty()).put("bas", t.downlinkLowHz).put("haut", t.downlinkHighHz ?: t.downlinkLowHz)
+                    .put("ssdv", emetSsdv(t)).put("baud", t.baud ?: JSONObject.NULL)
+            }))
+    }
 
     fun json(): JSONObject {
         val t = horloge()
@@ -562,11 +571,22 @@ class AutoPiloteSstvPc(
                 s.sstv.force = c.modeForce
                 faits += "SSTV prêt (" + (c.modeForce?.name ?: "mode auto") + ")"
             }
-            // 7. SSDV in USB (SO-127's GENESIS FSK), from the same sound — receive only.
+            // 7. SSDV — receive only: the decoder of the satellite's transmitter. Narrow FSK heard in USB (SO-127's GENESIS:
+            //    the rig in USB-D, the transmitter's data mode) from the same sound; FSK/GMSK at 1200–9600 bit/s (Geoscan…)
+            //    by the packet decoder on the SDR's I/Q.
             if (c.chaine.ssdv) telemesure?.let { t ->
-                t.genesisSource = if (c.chaine.source == CampagneSstv.SDR) TelemesurePc.SOURCE_SDR else TelemesurePc.SOURCE_CARTE
-                t.genesisPourPassage = true
-                faits += "SSDV en BLU prêt (" + t.genesisProfil().nom + ", son " + (if (t.genesisSource == TelemesurePc.SOURCE_SDR) "du récepteur SDR" else "de la carte") + ")"
+                val tx = if (c.personnalisee) null else station.emetteursDe(c.catnum).firstOrNull { it.description == c.emetteur }
+                when (voieSsdv(c, tx)) {
+                    VoieSsdv.GENESIS -> {
+                        t.genesisSource = if (c.chaine.source == CampagneSstv.SDR) TelemesurePc.SOURCE_SDR else TelemesurePc.SOURCE_CARTE
+                        t.genesisPourPassage = true
+                        faits += "SSDV en BLU prêt (" + t.genesisProfil().nom + ", son " + (if (t.genesisSource == TelemesurePc.SOURCE_SDR) "du récepteur SDR" else "de la carte, poste en USB-D") + ")"
+                    }
+                    VoieSsdv.PAQUETS -> if (sdr == null) faits += "SSDV en FSK : pas de récepteur SDR ici, non décodé" else {
+                        t.paquetsPourPassage = true
+                        faits += "SSDV en FSK prêt (" + (tx?.let { fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud) }?.let { "$it bit/s" } ?: "débit de l'émetteur") + ", récepteur SDR)"
+                    }
+                }
             }
             return PiloteSstv.Preparation(faits)
         }
@@ -631,6 +651,8 @@ class AutoPiloteSstvPc(
 
         override fun reunitPartielles(deMs: Long, aMs: Long): List<String> = son?.sstv?.reunitPartielles(deMs, aMs).orEmpty()
 
+        override fun ssdv(deMs: Long, aMs: Long): Pair<Int, Int> = telemesure?.bilanSsdv(deMs, aMs) ?: (0 to 0)
+
         override fun parque(): String? {
             val r = station.stationRotor
             if (!r.etat.value.rotorConnected) return "rotor non connecté"
@@ -672,6 +694,7 @@ class AutoPiloteSstvPc(
                 }
                 t.genesisPourPassage = false
                 avant["genesisSource"]?.let { t.genesisSource = it }
+                t.paquetsPourPassage = false
             }
             return faits
         }
@@ -681,6 +704,34 @@ class AutoPiloteSstvPc(
 
     companion object {
         const val MAX_IMAGE = 10L * 1024 * 1024
+
+        /** How an SSDV campaign's pass is decoded. */
+        enum class VoieSsdv { GENESIS, PAQUETS }
+
+        /**
+         * [c]'s SSDV decoder from its transmitter [tx] (null: its own frequency): narrow FSK heard in USB
+         * (GENESIS, an SSDV transmitter of unknown or slow rate, a frequency of its own in USB/USB-D) by the
+         * GENESIS receiver; FSK/GMSK at 1200 bit/s and more by the packet decoder.
+         */
+        fun voieSsdv(c: Campagne, tx: Transmitter?): VoieSsdv = when {
+            tx == null -> if (c.modulation == "USB" || c.modulation == "USB-D") VoieSsdv.GENESIS else VoieSsdv.PAQUETS
+            fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(tx.mode, tx.baud) != null || fr.f4ioz.satcombo.domain.ModeRadio.donnees(tx.mode, tx.baud) -> VoieSsdv.GENESIS
+            else -> VoieSsdv.PAQUETS
+        }
+
+        /** A transmitter that sends SSDV pictures (GENESIS FSK, « SSDV », Geoscan's). */
+        fun emetSsdv(t: Transmitter): Boolean {
+            val m = (t.mode.orEmpty() + " " + t.description).uppercase()
+            return m.contains("SSDV") || m.contains("GENESIS") || m.contains("GEOSCAN")
+        }
+
+        /**
+         * What [catnum] sends as pictures: « SSDV » or « SSTV » (the picture satellites' list), else « SSDV »
+         * when one of its transmitters says so, else "" (unknown: the form leaves its boxes as they are).
+         */
+        fun imagesDe(catnum: Int, emetteurs: List<Transmitter>): String =
+            fr.f4ioz.satcombo.data.SatellitesImages.de(catnum)?.images
+                ?: if (emetteurs.any { it.alive && emetSsdv(it) }) "SSDV" else if (emetteurs.any { it.alive && (it.description + " " + it.mode.orEmpty()).contains("SSTV", true) }) "SSTV" else ""
 
         fun mhz(hz: Long): String = String.format(Locale.FRANCE, "%.3f", hz / 1e6)
 

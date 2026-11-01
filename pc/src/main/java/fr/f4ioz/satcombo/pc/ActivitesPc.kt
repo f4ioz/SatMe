@@ -216,6 +216,9 @@ class ActivitesPc(
             .put("notes", c.notes).put("trouve", JSONArray(trouve))))
     }
 
+    /** SSTV and SSDV activities have an auto-pilot (receive only): the SSTV decoder, or the SSDV one of the satellite. */
+    private fun avecAutopilote(a: Activite) = a.type == ActivitesAVenir.Type.SSTV || a.type == ActivitesAVenir.Type.SSDV
+
     /** The satellite to use for [a]: the one chosen ([catnum] > 0), else the one found. */
     private fun satDe(a: Activite, catnum: Int) = if (catnum > 0) catnum else a.catnum
 
@@ -230,7 +233,7 @@ class ActivitesPc(
     private fun apercu(id: String, catnum: Int, el: Double): ReponseWeb {
         val ap = autopilote ?: return refus("auto-pilote absent")
         val a0 = liste().firstOrNull { it.id == id } ?: return refus("activité introuvable")
-        if (a0.type != ActivitesAVenir.Type.SSTV) return refus("seules les activités SSTV ont un auto-pilote")
+        if (!avecAutopilote(a0)) return refus("seules les activités SSTV et SSDV ont un auto-pilote")
         val n = satDe(a0, catnum)
         val a = a0.copy(catnum = n)
         val cat = catalogue()
@@ -256,7 +259,7 @@ class ActivitesPc(
     private fun activeAutopilote(id: String, catnum: Int, el: Double): ReponseWeb {
         val ap = autopilote ?: return refus("auto-pilote absent")
         val a0 = liste().firstOrNull { it.id == id } ?: return refus("activité introuvable")
-        if (a0.type != ActivitesAVenir.Type.SSTV) return refus("seules les activités SSTV ont un auto-pilote")
+        if (!avecAutopilote(a0)) return refus("seules les activités SSTV et SSDV ont un auto-pilote")
         val n = satDe(a0, catnum)
         if (n <= 0 || catalogue().none { it.second == n }) return refus("choisir le satellite")
         val r = ap.activeActivite(a0.copy(catnum = n), n, el).getOrElse { return refus(it.message ?: "refusé") }
@@ -282,9 +285,9 @@ class ActivitesPc(
             .put("activites", JSONArray(l.map { a ->
                 ActivitesAVenir.json(a).put("libelle", a.type.libelle).put("confianceLibelle", a.confiance.libelle)
                     .put("passages", JSONArray(passages(a).take(12).map { p -> JSONObject().put("aos", p.aosEpochMs).put("los", p.losEpochMs).put("el", Math.round(p.maxElevationDeg)) }))
-                    .put("campagne", a.type == ActivitesAVenir.Type.SSTV && a.catnum > 0)
+                    .put("campagne", avecAutopilote(a) && a.catnum > 0)
                     // « Activer l'auto-pilote »: every SSTV activity (its satellite picked when not found), and its campaign once made.
-                    .put("autopilote", a.type == ActivitesAVenir.Type.SSTV && ap != null)
+                    .put("autopilote", avecAutopilote(a) && ap != null)
                     .put("satCatalogue", if (a.catnum > 0) cat.firstOrNull { it.second == a.catnum }?.first ?: JSONObject.NULL else JSONObject.NULL)
                     .put("lienAp", ap?.let { lien(a, it) } ?: JSONObject.NULL)
                     // Its campaign deleted by the owner: said, never made again by itself (« Recréer la campagne »).

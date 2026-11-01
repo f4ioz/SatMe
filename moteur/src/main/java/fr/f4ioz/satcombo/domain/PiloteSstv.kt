@@ -49,6 +49,8 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
          * picture cut in two, put together (« Réunir »): the names made.
          */
         fun reunitPartielles(deMs: Long, aMs: Long): List<String> = emptyList()
+        /** The SSDV received between [deMs] and [aMs]: packets placed, pictures they went into (an SSDV campaign). */
+        fun ssdv(deMs: Long, aMs: Long): Pair<Int, Int> = 0 to 0
         /** The mast parked; null when done, else why not. */
         fun parque(): String?
         /** The receive state [avant] put back: what was done. */
@@ -144,13 +146,19 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
         val reunies = runCatching { station.reunitPartielles(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(emptyList())
         if (reunies.isNotEmpty()) faits += reunies.size.toString() + " image" + (if (reunies.size > 1) "s" else "") + " réunie" + (if (reunies.size > 1) "s" else "") + " de deux partielles"
         val images = runCatching { station.images(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(emptyList())
+        // An SSDV campaign: its packets and pictures of the pass (both decoders), counted with the history.
+        val (ssdvPaquets, ssdvImages) = if (c.chaine.ssdv) runCatching { station.ssdv(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(0 to 0) else 0 to 0
+        if (c.chaine.ssdv) faits += "SSDV : " + (if (ssdvPaquets > 0) ssdvPaquets.toString() + " paquet" + (if (ssdvPaquets > 1) "s" else "") + ", " +
+            ssdvImages + " image" + (if (ssdvImages > 1) "s" else "") else "aucun paquet")
+        val nb = images.size + ssdvImages
         val tx = station.emission()
         if (tx != null) faits += "état laissé tel quel : émission en cours"
         else {
             if (c.chaine.parquer && c.chaine.rotor) faits += (station.parque()?.let { "rotor non parqué : $it" } ?: "rotor parqué")
             faits += runCatching { station.restaure(ec.avant) }.getOrDefault(emptyList())
         }
-        if (c.chaine.annonce && statut == Statut.FAIT) station.annonce("Auto-pilote : ${c.nom}, fin du passage" + if (images.isNotEmpty()) ", ${images.size} image" + (if (images.size > 1) "s." else ".") else ".")
-        consigne(Trace(c.id, c.nom, p.catalogNumber, c.satNom, p.aosEpochMs, p.losEpochMs, p.maxElevationDeg, statut, raison, horloge(), fichier, images, faits))
+        if (c.chaine.annonce && statut == Statut.FAIT) station.annonce("Auto-pilote : ${c.nom}, fin du passage" + if (nb > 0) ", $nb image" + (if (nb > 1) "s." else ".") else ".")
+        consigne(Trace(c.id, c.nom, p.catalogNumber, c.satNom, p.aosEpochMs, p.losEpochMs, p.maxElevationDeg, statut, raison, horloge(), fichier, images, faits,
+            ssdvPaquets, ssdvImages))
     }
 }

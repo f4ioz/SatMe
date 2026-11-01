@@ -295,7 +295,7 @@ function calCote() {
       dd('Passage', esc(calQuand(x.aos)) + ' → ' + hm(x.los) + ' <span class="petit">(' + calZone() + ')</span>') + dd('Durée', duree(x.los - x.aos)) + dd('Élévation max', x.el + '°') +
       dd('Pour', x.source === 'campagne' ? '🤖 campagne « ' + esc(x.nom) + ' »' : x.source === 'veille' ? 'mode automatique' : 'satellite favori') +
       (x.statut ? dd('État', '<span class="pastille ap-st-' + esc(x.statut) + '">' + esc(CAL_ST[x.statut] || x.statut) + '</span>' + (x.suspendue ? ' <span class="petit">(campagne suspendue)</span>' : '') + (x.raison ? '<div class="petit">' + esc(x.raison) + '</div>' : '')) : '') +
-      (x.images ? dd('Images', x.images) : '') + (x.enregistrement ? dd('Enregistrement', '<span class="petit">' + esc(x.enregistrement) + '</span>') : '') +
+      (x.images ? dd('Images', x.images + (x.ssdvImages ? ' <span class="petit">(dont ' + x.ssdvImages + ' SSDV, ' + x.ssdvPaquets + ' paquets)</span>' : '')) : '') + (x.enregistrement ? dd('Enregistrement', '<span class="petit">' + esc(x.enregistrement) + '</span>') : '') +
       (x.prep && !x.passe ? dd('Chaîne prête', hm(x.prep)) : '') + (camp ? dd('Chaîne', esc(apChaineTexte(camp))) : '') + '</dl>';
     const a = [];
     if (x.source === 'campagne' && !x.passe && (x.statut === 'PREVU' || x.statut === 'CHEVAUCHE' || x.statut === 'EN_COURS'))
@@ -314,7 +314,7 @@ function calCote() {
       dd('Période', esc(calPeriode(x.de, x.a)) + (x.precision === 'JOURS' ? ' <span class="petit">(journées, horaire à confirmer)</span>' : x.precision === 'INCONNUE' ? ' <span class="petit">(dates non annoncées)</span>' : '')) +
       dd('Campagne', x.campagne ? 'oui' : x.campagneSupprimee ? 'campagne supprimée' : 'aucune') + '</dl><div class="cal-act">' +
       (x.campagne ? '<button data-c="' + escA(x.campagne) + '" onclick="acApVoir(this.dataset.c)">Ouvrir la campagne</button>' :
-        x.type === 'SSTV' && !x.passe ? '<button data-id="' + escA(x.id) + '" onclick="acAuto(this.dataset.id)">' + (x.campagneSupprimee ? 'Recréer la campagne' : 'Activer l’auto-pilote') + '</button>' : '') +
+        (x.type === 'SSTV' || x.type === 'SSDV') && !x.passe ? '<button data-id="' + escA(x.id) + '" onclick="acAuto(this.dataset.id)">' + (x.campagneSupprimee ? 'Recréer la campagne' : 'Activer l’auto-pilote') + '</button>' : '') +
       (x.lien ? '<a href="' + escA(x.lien) + '" target="_blank" rel="noopener noreferrer">lien ↗</a>' : '') + '</div>';
   } else if (x && x.sorte === 'agenda') {
     h = '<div class="t">📅 ' + esc(x.titre) + '</div><dl>' + dd('Quand', x.a > x.de ? esc(calPeriode(x.de, x.a)) : esc(calQuand(x.de)) + ' <span class="petit">(' + calZone() + ')</span>') +

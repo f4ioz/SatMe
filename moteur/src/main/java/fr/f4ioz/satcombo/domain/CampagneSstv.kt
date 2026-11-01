@@ -131,10 +131,15 @@ object CampagneSstv {
         val aosMs: Long, val losMs: Long, val elMax: Double,
         val statut: Statut, val raison: String = "", val quandMs: Long = 0L,
         val enregistrement: String = "", val images: List<String> = emptyList(), val faits: List<String> = emptyList(),
+        /** SSDV received during the pass (an SSDV campaign): the packets placed, the pictures they went into. */
+        val ssdvPaquets: Int = 0, val ssdvImages: Int = 0,
     ) {
+        /** The pictures of the pass, SSTV and SSDV. */
+        val nbImages: Int get() = images.size + ssdvImages
         fun json(): JSONObject = JSONObject().put("campagne", campagne).put("nom", nom).put("catnum", catnum).put("sat", satNom)
             .put("aos", aosMs).put("los", losMs).put("el", elMax).put("statut", statut.name).put("raison", raison).put("quand", quandMs)
             .put("enregistrement", enregistrement).put("images", JSONArray(images)).put("faits", JSONArray(faits))
+            .put("ssdvPaquets", ssdvPaquets).put("ssdvImages", ssdvImages)
     }
 
     // --------------------------------------------------------------- the passes
@@ -272,7 +277,8 @@ object CampagneSstv {
         val im = o.optJSONArray("images") ?: JSONArray(); val fa = o.optJSONArray("faits") ?: JSONArray()
         Trace(o.getString("campagne"), o.optString("nom"), o.optInt("catnum"), o.optString("sat"), o.optLong("aos"), o.optLong("los"),
             o.optDouble("el", 0.0), Statut.valueOf(o.optString("statut", "FAIT")), o.optString("raison"), o.optLong("quand"),
-            o.optString("enregistrement"), (0 until im.length()).map { im.optString(it) }, (0 until fa.length()).map { fa.optString(it) })
+            o.optString("enregistrement"), (0 until im.length()).map { im.optString(it) }, (0 until fa.length()).map { fa.optString(it) },
+            o.optInt("ssdvPaquets", 0), o.optInt("ssdvImages", 0))
     }.getOrNull()
 
     /** The whole file: the master switch, the campaigns, the history, the pass under way (to put things back after a restart). */

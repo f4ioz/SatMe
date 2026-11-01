@@ -186,6 +186,27 @@ class TelemesurePc(
     /** Turned on for a pass by the auto-pilot (an SSDV campaign), whatever the option. */
     @Volatile var genesisPourPassage = false
 
+    /**
+     * Turned on for a pass by the auto-pilot (an SSDV campaign sent in FSK/GMSK at 1200–9600 bit/s, Geoscan…):
+     * the packet decoder on the main SDR's I/Q, whatever the option; off again, it stops unless the option holds it.
+     */
+    @Volatile var paquetsPourPassage = false
+        set(v) { field = v; if (!v && !(paquetsActif && paquetsSource == SOURCE_SDR) && paquets.sourceEnMarche == RecepteurPaquets.SOURCE_IQ) paquets.arrete() }
+
+    /**
+     * The SSDV received between [deMs] and [aMs] (both decoders, the test's left out): the packets placed,
+     * and the pictures they went into — a pass's share, for the auto-pilot's history.
+     */
+    fun bilanSsdv(deMs: Long, aMs: Long): Pair<Int, Int> = runCatching {
+        var n = 0; var im = 0
+        for (ph in paquets.assemblage.photos()) {
+            if (ph.essai) continue
+            val k = ph.passages.toList().filter { it.fin >= deMs && it.debut <= aMs }.sumOf { it.paquets }
+            if (k > 0) { n += k; im++ }
+        }
+        n to im
+    }.getOrDefault(0 to 0)
+
     /** The profile decoded: the operator's, or the transmitter's, 800 bit/s otherwise. */
     fun genesisProfil(): RecepteurGenesis.Profil = RecepteurGenesis.Profil.de(genesisProfilChoisi) ?: emetteurGenesis()?.first ?: RecepteurGenesis.Profil.G800
 
@@ -310,7 +331,9 @@ class TelemesurePc(
 
     /** The main SDR's raw I/Q off QO-100 (from [SdrPc]). */
     fun iqSdr(iq: ByteArray?, iq16: ShortArray?, n: Int, decalageHz: Double, essai: Boolean) {
-        if (!paquetsActif || paquetsSource != SOURCE_SDR) { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_IQ) paquets.arrete(); return }
+        // The option on the SDR, or a campaign's SSDV pass (unless the rig's 9600 output already feeds the decoder).
+        val viaIq = (paquetsActif && paquetsSource == SOURCE_SDR) || (paquetsPourPassage && paquets.sourceEnMarche != RecepteurPaquets.SOURCE_SON)
+        if (!viaIq) { if (paquets.sourceEnMarche == RecepteurPaquets.SOURCE_IQ) paquets.arrete(); return }
         if (!paquets.actif) paquets.demarre(fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble())
         fictif = essai
         paquets.debit = debitVoulu()

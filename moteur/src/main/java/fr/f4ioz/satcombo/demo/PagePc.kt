@@ -3096,7 +3096,7 @@ ${AprsCarteJs.HTML}
 <div class="ap-grille" id="ap-zone" hidden>
   <div>
     <div class="carte" id="ap-form">
-      <div class="t">Campagne SSTV <span class="petit" id="ap-f-titre">nouvelle</span></div>
+      <div class="t">Campagne SSTV / SSDV <span class="petit" id="ap-f-titre">nouvelle</span></div>
       <div class="aide">Un événement SSTV entré comme un rendez-vous : le satellite, son émetteur (ou une fréquence à part), le mode SSTV, la période. L'auto-pilote reçoit ensuite chacun de ses passages assez hauts. « Horaire à confirmer » : les journées entières.</div>
       <div class="ap-f">
         <label for="ap-nom">Nom</label><input id="ap-nom" maxlength="60" placeholder="ARISS SSTV Series 34">
@@ -3125,7 +3125,8 @@ ${AprsCarteJs.HTML}
         <label><input type="checkbox" id="ap-enreg" checked> Enregistrer le son</label>
         <label><input type="checkbox" id="ap-parquer"> Parquer le rotor après</label>
         <label><input type="checkbox" id="ap-sstv" checked> Décodeur SSTV prêt</label>
-        <label title="SO-127 (HADES-SA) et la FSK étroite reçue en BLU : les paquets SSDV du passage décodés depuis le même son (le poste en USB-D, ou le SDR), les images avec les autres (onglet Images). Réception seulement"><input type="checkbox" id="ap-ssdv"> Décodeur SSDV en BLU (SO-127)</label>
+        <label title="Les images SSDV du passage, réception seulement : la FSK étroite GENESIS reçue en BLU (SO-127 HADES-SA : le poste en USB-D sur son émetteur, ou le SDR) ou la FSK/GMSK 1200–9600 bit/s (Geoscan…) par le décodeur de paquets sur le SDR ; les images avec les autres (onglet Images), comptées dans l'historique. Coché tout seul pour un satellite qui envoie du SSDV"><input type="checkbox" id="ap-ssdv"> Décodeur SSDV (GENESIS en BLU, FSK)</label>
+        <span class="petit" id="ap-dec-note" style="grid-column:1 / -1"></span>
         <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
       </div>
       <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
@@ -16456,6 +16457,7 @@ function apDessine() {
     '<tr><td colspan="4" class="petit">' + (AP.campagnes.length ? 'aucun passage dans les campagnes actives' : 'les passages des campagnes viendront ici') + '</td></tr>';
   g('ap-histo').innerHTML = AP.historique.map(t => '<tr><td>' + jourHeure(t.aos) + '<div class="petit">' + t.el.toFixed(0) + '°</div></td><td>' + esc(t.nom) +
     (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') +
+    (t.ssdvPaquets ? '<div class="petit">SSDV : ' + t.ssdvPaquets + ' paquet' + (t.ssdvPaquets > 1 ? 's' : '') + ', ' + t.ssdvImages + ' image' + (t.ssdvImages > 1 ? 's' : '') + '</div>' : '') +
     (t.reunir || []).map(n => '<button class="petit" onclick="apReunit(\'' + escA(n) + '\', this)" title="Deux images partielles de ce passage sont une seule image coupée en deux (synchro perdue au milieu) : les remettre ensemble depuis leur son, à la bonne ligne. Les partielles restent gardées.">⧉ Réunir ' + esc(n.replace(/^SatMe_SSTV_/, '').replace(/\.png$/, '')) + '</button>').join('') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
     '</td><td><span class="pastille ap-st-' + t.statut + '">' + AP_STATUTS[t.statut] + '</span>' + (t.raison ? '<div class="petit">' + esc(t.raison) + '</div>' : '') +
     (t.faits.length ? '<div class="petit" title="' + esc(t.faits.join('\n')).replace(/"/g, '&quot;') + '">' + t.faits.length + ' étape' + (t.faits.length > 1 ? 's' : '') + '</div>' : '') + '</td></tr>').join('') ||
@@ -16488,14 +16490,22 @@ async function apSatChange() {
   await apEmetteurs('');
 }
 async function apEmetteurs(choisi) {
-  let l = [];
-  if (apEmisSat) try { l = (await (await fetch('api/autopilote/emetteurs?catnum=' + apEmisSat)).json()).emetteurs || []; } catch (x) {}
-  g('ap-emetteur').innerHTML = l.map(t => '<option value="' + esc(t.description).replace(/"/g, '&quot;') + '">' + esc(t.description) + ' — ' + apFreq(t.bas) + ' MHz ' + esc(t.mode) + '</option>').join('') +
+  let l = [], images = '';
+  if (apEmisSat) try { const j = await (await fetch('api/autopilote/emetteurs?catnum=' + apEmisSat)).json(); l = j.emetteurs || []; images = j.images || ''; } catch (x) {}
+  g('ap-emetteur').innerHTML = l.map(t => '<option value="' + esc(t.description).replace(/"/g, '&quot;') + '">' + esc(t.description) + ' — ' + apFreq(t.bas) + ' MHz ' + esc(t.mode) + (t.ssdv ? ' · SSDV' : '') + '</option>').join('') +
     '<option value="">Fréquence personnalisée…</option>';
-  g('ap-emetteur').value = choisi && l.some(t => t.description === choisi) ? choisi : (v('ap-freq') || !l.length ? '' : l[0].description);
-  // A new campaign on an SSDV-in-USB satellite (SO-127): its decoder ticked, SSTV's not.
-  if (!apEdit && !choisi && l.some(t => /GENESIS|^SSDV$/i.test(t.mode))) { g('ap-ssdv').checked = true; g('ap-sstv').checked = false; }
+  // A satellite that sends SSDV (HADES-SA, Geoscan…): its SSDV transmitter first.
+  const parDefaut = images === 'SSDV' ? (l.find(t => t.ssdv) || l[0]) : l[0];
+  g('ap-emetteur').value = choisi && l.some(t => t.description === choisi) ? choisi : (v('ap-freq') || !l.length ? '' : parDefaut.description);
+  // A new campaign: the decoders ticked by what the satellite sends (SSDV only: SSDV ticked, SSTV not; SSTV: the other way), still free to change.
+  if (!apEdit && !choisi) apDecodeursPour(images);
   apEmetteurChange();
+}
+/** The SSTV and SSDV boxes as the satellite's pictures say ([images]: « SSDV », « SSTV », "" unknown: left as they are). */
+function apDecodeursPour(images) {
+  if (images === 'SSDV') { g('ap-ssdv').checked = true; g('ap-sstv').checked = false; }
+  else if (images === 'SSTV') { g('ap-sstv').checked = true; g('ap-ssdv').checked = false; }
+  txt('ap-dec-note', images === 'SSDV' ? 'Ce satellite envoie des images SSDV : décodeur SSDV coché.' : images === 'SSTV' ? '' : '');
 }
 function apEmetteurChange() { document.querySelectorAll('#ap-form .ap-perso').forEach(x => x.style.display = g('ap-emetteur').value ? 'none' : ''); }
 const apLocal = ms => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
