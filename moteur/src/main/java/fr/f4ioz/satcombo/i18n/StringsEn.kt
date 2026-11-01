@@ -1142,6 +1142,8 @@ val EN: Map<String, String> = mapOf(
     "rotor_manual_go" to "Send the command",
     "rotor_manual_sent" to "Command sent: {0}° / {1}°",
     "rotor_manual_refused" to "That angle is outside the antennas' travel.",
+    "rotor_pause_manuelle" to "Pointed by hand, satellite tracking kept armed: it takes over before the next pass.",
+    "rotor_pause_fin" to "Tracking takes the mast back for the pass.",
     "rotor_jog" to "Step by step, from the position read back",
     "rotor_frames" to "Frames",
     "rotor_read_now" to "Ask for the position",

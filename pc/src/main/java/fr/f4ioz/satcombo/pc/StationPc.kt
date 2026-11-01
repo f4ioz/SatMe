@@ -1661,7 +1661,81 @@ class StationPc(
     /** The IC-9700 on CI-V (USB, network or simulated): what the TX panel drives. */
     fun posteIc9700(): Boolean = _etat.value.let { it.catConnecte && it.catModele == "IC9700" }
 
+    /** A receive tuning waiting for the CAT loop, and who waits for its answer (null: done, else why not). */
+    private class AccordAttente(val d: AccordPostePc.Demande, val fait: kotlinx.coroutines.CompletableDeferred<Result<org.json.JSONObject>>)
+    private val accordsPoste = java.util.concurrent.ConcurrentLinkedQueue<AccordAttente>()
+
+    /**
+     * A receive tuning of the IC-9700 asked by another program on this PC
+     * (`POST /api/cat/accord`): applied by the CAT loop between two Doppler
+     * rounds (never in the middle of one), the rig read back; the answer
+     * (what the rig shows now), or why not. Refused while the Doppler loop
+     * drives the rig, while it transmits, and on SUB in satellite mode (SUB
+     * is the uplink there). Keys nothing, never turns satellite mode on.
+     * Whoever calls it checks first that no pass is near (SatMe-PC's route does).
+     */
+    suspend fun accordePoste(d: AccordPostePc.Demande): Result<org.json.JSONObject> {
+        refusAccord()?.let { return Result.failure(IllegalStateException(it)) }
+        val a = AccordAttente(d, kotlinx.coroutines.CompletableDeferred())
+        accordsPoste += a
+        return kotlinx.coroutines.withTimeoutOrNull(5_000L) { a.fait.await() }
+            ?: run { accordsPoste.remove(a); Result.failure(IllegalStateException("le poste n'a pas répondu à temps : rien d'accordé")) }
+    }
+
+    /** Why the rig may not be tuned for another program now, null when it may. */
+    private fun refusAccord(): String? = when {
+        !posteIc9700() -> "l'IC-9700 n'est pas connecté en CAT dans SatMe-PC"
+        _etat.value.catMuet -> "l'IC-9700 ne répond plus à SatMe-PC"
+        pilotageDoppler() -> "SatMe-PC pilote le poste (Doppler de ${_etat.value.suivi?.name ?: "satellite"})"
+        qo100.etat.value.auPoste -> "QO-100 tient le poste dans SatMe-PC"
+        runCatching { posteEmet() }.getOrDefault(true) -> "SatMe-PC émet avec le poste"
+        else -> null
+    }
+
+    /** The tunings waiting, applied one after the other (CAT loop only). */
+    private suspend fun accordsEnAttente() {
+        while (true) {
+            val a = accordsPoste.poll() ?: return
+            a.fait.complete(runCatching { appliqueAccord(a.d) })
+        }
+    }
+
+    private suspend fun appliqueAccord(d: AccordPostePc.Demande): org.json.JSONObject {
+        refusAccord()?.let { error(it) }
+        // Keyed (by hand, VOX, another program): a frequency or mode written now would move the transmission.
+        when (civ.isTransmitting()) {
+            null -> error("l'IC-9700 ne dit pas s'il émet : rien d'accordé")
+            true -> error("l'IC-9700 émet : rien d'accordé")
+            false -> {}
+        }
+        val sat = civ.readSatelliteMode() ?: error("l'IC-9700 ne dit pas s'il est en mode satellite : rien d'accordé")
+        if (sat && d.sub) error("l'IC-9700 est en mode satellite : SUB y est la montée (l'émission) ; seule MAIN (réception) s'accorde")
+        // From here the rig is touched: SatMe sets it up again for its next pass (satellite mode, bands, modes).
+        stationCat.oublieArmement()
+        civ.forgetBands()
+        modeLu = null
+        try {
+            if (!civ.selectMainSub(d.sub)) error("l'IC-9700 refuse de passer sur ${if (d.sub) "SUB" else "MAIN"}")
+            d.hz?.let { if (!civ.setFrequency(it)) error("l'IC-9700 refuse ${it} Hz sur ${if (d.sub) "SUB" else "MAIN"} (bande déjà prise par l'autre côté ?)") }
+            d.mode?.let { m ->
+                if (!civ.setMode(m.civ)) error("l'IC-9700 refuse le mode ${m.nom}")
+                if (civ.modele.donnees && (m.donnees || m.civ in fr.f4ioz.satcombo.cat.CivController.MODES_DONNEES))
+                    if (!civ.setDataMode(m.donnees)) error("l'IC-9700 refuse le mode données de ${m.nom}")
+            }
+            val f = civ.readFrequency()
+            val mo = civ.readMode()
+            val dd = if (civ.modele.donnees) civ.readDataMode() else null
+            return org.json.JSONObject().put("ok", true).put("bande", if (d.sub) "SUB" else "MAIN").put("satellite", sat)
+                .put("hz", f ?: org.json.JSONObject.NULL)
+                .put("mode", mo?.let { fr.f4ioz.satcombo.cat.CatDecode.civModeName(it) + (if (dd == true) "-D" else "") } ?: org.json.JSONObject.NULL)
+        } finally {
+            // The operator's dial (and SatMe's reads) back on MAIN.
+            if (d.sub) runCatching { civ.selectMainSub(false) }
+        }
+    }
+
     private suspend fun tourPoste() {
+        accordsEnAttente()
         val poste: PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
         if (accordDirect.attente != 0L) {
             if (pilotageDoppler()) accordDirect.applique({ null }, {})

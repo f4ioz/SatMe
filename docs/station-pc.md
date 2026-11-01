@@ -31,7 +31,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 19. [Ships (AIS)](#ships-ais)
 20. [Space weather](#space-weather)
 21. [Montage: the station chain](#montage-the-station-chain) — diagram, editing, catalogue, functions, profiles
-22. [Réglages (settings)](#réglages-settings) — rig and rotator, the rotator on the Sun or the Moon, SatPC32 / Gpredict frequency files, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, web publishing to your site, USB knob (Windows, relay to another station), Icom RC-28 in the browser, announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
+22. [Réglages (settings)](#réglages-settings) — rig and rotator, the rotator on the Sun or the Moon, SatPC32 / Gpredict frequency files, IC-9700 on Windows (USB driver), IC-9700 over the network, the IC-9700 transmitting (PTT, microphone, power), satellite operating (presets, SO-50, CW and voice memories, APRS through the ISS), antenna polarisation (ESP32 box, H/V probe), converter and transverter table, SDR calibration, aligning a transponder, orbital elements, Doppler log, satellite link, rigctld, sharing the rig and the rotor with another program on this PC, web publishing to your site, USB knob (Windows, relay to another station), Icom RC-28 in the browser, announcements, I/Q correction, remote access and HTTPS, start-up (quick setup, what's new, updates, startup options, deployment)
 23. [More of the PC](#more-of-the-pc)
 24. [Hardware safety](#hardware-safety)
 25. [Before the first try](#before-the-first-try)
@@ -1314,6 +1314,29 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - `\dump_state`, `\chk_vfo`, `\get_powerstat`, `\dump_caps`, the long forms, and the extended answers (`+`, `;`).
 
 `T` (PTT) and every transmit setting are always refused (`RPRT -11`). `F` and `M` are refused too unless « Autoriser le changement de fréquence » is ticked, and then retune the SDR receiver only — never the rig, nor while QO-100 is on the rig.
+
+### Sharing the rig and the rotor with another program on this PC
+
+Two programs cannot open the same serial port: another program on this PC that wants the IC-9700 or the rotor goes **through SatMe-PC**, with these routes. SatMe-PC keeps the priority during its passes and nothing changes in its own behaviour. They are behind the same guard as everything else (this PC, or a session opened with the remote-access password) and only take a request from the page itself or with no `Origin` header (a program): from another site's page, `403` and `"refus":"origine"`. **Nothing here transmits**: no PTT, no transmit frequency or power, no tone, no satellite mode. A refusal due to the station's state answers `200` with `"ok":false`, `"erreur"` (the reason, in words) and `"refus"` (`occupe`, `poste`, `rotor`, `parametre`).
+
+**The pass under way, said outright** — `GET /api/etat` gives `passageEnCours` (true from the rotor's « avant AOS » plus a minute before AOS to a minute after LOS; in automatic mode at least 5 minutes before) and an `occupation` object:
+
+```
+"occupation": {"passageEnCours": true, "debut": 1792089000000, "fin": 1792089780000,
+  "satellite": {"nom": "ISS", "catnum": 25544, "aos": 1792089240000, "los": 1792089720000},
+  "occupe": true, "raison": "SatMe-PC se prépare au passage de ISS (AOS 18:34 UTC)",
+  "rotor": {"occupe": true, "raison": "…"}, "poste": {"occupe": true, "raison": "…"}}
+```
+
+`debut` / `fin` / `satellite` describe the window under way or the next one (`null` with no pass known). The rotor is also taken while it waits for AOS, or while the followed satellite is above the horizon; the rig while the Doppler loop writes it (satellite up, or « CAT sous l'horizon »), while QO-100 is on the rig or SatMe transmits; both during an agenda entry under way or an SSTV autopilot campaign. `rotor.pauseManuelle` says a manual pointing holds the mast (below). `sonCarte` (`actif`, `rate`, `carte`, `flux`) says whether the sound card runs.
+
+**Tuning the IC-9700 for receive** — `POST /api/cat/accord?hz=&mode=&bande=`: `hz` (on 144, 430 or 1200 MHz), `mode` among `LSB`, `USB`, `AM`, `CW`, `CW-R`, `FM` and the data modes `LSB-D`, `USB-D`, `FM-D` (also `PKTLSB`, `PKTUSB`, `PKTFM`), set as SatMe does (06 then 1A 06); `bande` `main` (default) or `sub`. At least one of `hz` / `mode`. Applied by the CAT loop between two rounds, then read back: `{"ok":true,"bande":"MAIN","satellite":false,"hz":145825000,"mode":"USB-D"}`. Refused during a pass window and while the rig is taken (see above), while the IC-9700 transmits (or does not say), on `sub` in satellite mode (SUB is the uplink there), and for any transmit parameter (`ptt`, `tx`, `tone`, `split`, `satellite`, `puissance`…), refused by name. Satellite mode is never changed; after SUB the selection goes back to MAIN; SatMe sets the rig up again for its next pass.
+
+**Pointing the rotor without unticking « Suivre »** — `POST /api/rotor/pointer?az=&el=` with the header **`X-SatMe-Geste: clic`** (required: without it `403` and `"refus":"geste"`; another site's page cannot send it without asking first, and a client must send it only on the operator's click). `az` and `el` in whole degrees, within the rotor's travel (outside: refused, never clamped). « Suivre » stays as it was: ticked, the mast stays where it is sent (`pauseManuelle`) until the next pass's pre-positioning (« avant AOS ») — or the satellite up — when tracking takes it back by itself, as from the park; unticking or ticking « Suivre » ends the pause. Answer `{"ok":true,"az":90,"el":10,"suit":true,"pauseManuelle":true}`. Refused during a pass window and while the rotor is taken, the rotor not connected or being calibrated. `/api/rotor/aller`, `/api/rotor/stop` and `/api/rotor/parquer` still untick « Suivre ».
+
+**STOP** — `POST /api/rotor/pointer/stop`, always taken, no gesture: outside a pass the mast stops and « Suivre » stays as it was; during a pass window it is a real stop, « Suivre » unticked (`"suiviCoupe":true`). No GET moves the rotor or tunes the rig, and nothing moves on a reconnection.
+
+**The IC-9700's sound** — while SatMe-PC holds the sound card (the IC-9700's when it is the one chosen, to record the passes), another program listens without opening it: `GET /api/son/flux?source=carte` sends 4 bytes (the rate, 32-bit little-endian), then 16-bit mono little-endian PCM at half the card's rate (24 000 Hz for a 48 kHz card), continuously, a short silence when the card is quiet; or the WebSocket `/api/son/ws?source=carte&rate=12000&codec=pcm` (20 ms frames at 8, 12 or 16 kHz, see [Remote mode](#remote-mode)). Receive only: nothing goes up it. The stream flows only while the card runs (`sonCarte.actif`).
 
 ### Web publishing: sending to your site (optional module)
 

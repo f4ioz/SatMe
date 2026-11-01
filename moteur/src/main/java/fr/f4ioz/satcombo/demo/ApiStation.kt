@@ -123,7 +123,7 @@ object ApiStation {
         .put("az", r.rotorActualAz ?: JSONObject.NULL).put("el", r.rotorActualEl ?: JSONObject.NULL)
         .put("azCible", r.rotorTargetAz ?: JSONObject.NULL).put("elCible", r.rotorTargetEl ?: JSONObject.NULL)
         .put("port", r.rotorUsbIndex).put("baud", r.rotorBaud).put("hote", r.rotorHost).put("tcp", r.rotorPort)
-        .put("attente", r.rotorPrePositioning)
+        .put("attente", r.rotorPrePositioning).put("pauseManuelle", r.rotorPauseManuelle)
         .put("plan", r.rotorPlan?.texte ?: "").put("deroule", r.rotorDeroule)
         .put("reglages", JSONObject().put("maxAz", r.rotorMaxAz).put("maxEl", r.rotorMaxEl).put("butee", r.rotorAzStop)
             .put("depuisButee", r.rotorAzFromStop).put("flip", r.rotorFlip).put("azSeul", r.rotorAzOnly)

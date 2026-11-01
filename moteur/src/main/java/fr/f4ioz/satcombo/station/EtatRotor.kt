@@ -36,6 +36,12 @@ data class EtatRotor(
     val rotorPreAos: Int = 3,
     /** True while the mast waits for the satellite at its rise point. */
     val rotorPrePositioning: Boolean = false,
+    /**
+     * A manual direction asked outside passes with tracking left armed: the
+     * loop leaves the mast where it was sent until the next pass's
+     * pre-positioning (or the satellite above its minimum elevation).
+     */
+    val rotorPauseManuelle: Boolean = false,
     val rotorPark: Boolean = true,
     val rotorParkAz: Int = 0,
     val rotorParkEl: Int = 0,
