@@ -310,8 +310,10 @@ object PlancheWeb {
                     val l = galerie(ctx).filter { it.second.fileName in noms }
                     // The gallery sorted: one copy of each slide, the best marked.
                     val sig = fr.f4ioz.satcombo.sstv.ClassementTelephone.signatures(ctx, PlancheRendu.signatures(l.map { it.first }))
-                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
-                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
+                    // « Note minimale »: judged on the mark a box shows (its slide's processed versions when the sheet takes them).
+                    val auto = ApiPlancheEvenement.noteAuto(m.takeIf { it.noteMin > 0 }, src)
+                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig, auto)
+                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig, auto)
                     synchronized(this) { r.enregistre(n) }
                     json("{\"ok\":true,\"cases\":${n.cases.size}}")
                 }

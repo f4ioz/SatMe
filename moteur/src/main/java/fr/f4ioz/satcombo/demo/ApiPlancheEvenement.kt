@@ -161,13 +161,29 @@ object ApiPlancheEvenement {
         .also { if (n >= 0) it.put("images", n) }
 
     /**
+     * What an Auto box of [m] may show above its picture's mark: the best of
+     * its group's processed versions (by group id, [ApiCorrectionSstv.noteVersions]),
+     * only when the sheet takes them ([Planche.Modele.corrigees]); -1 none.
+     */
+    fun noteAuto(m: Planche.Modele?, src: Source, groupes: List<ClassementSstv.Groupe>? = null): (String) -> Int {
+        if (m == null || !m.corrigees) return { -1 }
+        val c = runCatching { src.corrections() }.getOrNull() ?: return { -1 }
+        val parId by lazy { (groupes ?: runCatching { src.classement.etat(src.dossier, src.images()).groupes }.getOrDefault(emptyList())).associateBy { it.id } }
+        val vues = HashMap<String, Int>()
+        return { id -> vues.getOrPut(id) { parId[id]?.let { g -> runCatching { c.noteVersions(g) }.getOrDefault(-1) } ?: -1 } }
+    }
+
+    /**
      * The gallery for the sheet's picker: each picture with its mark, its
      * slide (the event's estimates included), the number's origin, its
-     * group and whether it is the group's best, in the sheet's event or not.
+     * group and whether it is the group's best, in the sheet's event or not;
+     * the mark it shows on the sheet ([Planche.noteVue]: `ne`) and whether
+     * [m]'s « Note minimale » leaves it out of the fills (`sous`).
      */
     fun galerie(m: Planche.Modele?, src: Source, live: (SstvMeta.SstvShot) -> Boolean = { it.source == "live" }): JSONArray {
         val shots = src.images()
         val e = src.classement.etat(src.dossier, shots)
+        val auto = noteAuto(m, src, e.groupes)
         val ev = m?.evenement
         val estimes = ev?.let { prevision(it, src, e).groupes.associateBy { g -> g.id } }.orEmpty()
         val groupeDe = HashMap<String, ClassementSstv.Groupe>()
@@ -180,8 +196,9 @@ object ApiPlancheEvenement {
         return JSONArray(shots.sortedByDescending { it.timeMs }.map { s ->
             val g = groupeDe[s.fileName]
             val note = g?.notes?.get(s.fileName) ?: e.analyses[s.fileName]?.note ?: -1
+            val vue = Planche.noteVue(note, g?.let { auto(it.id) } ?: -1)
             JSONObject().put("f", s.fileName).put("s", s.satName).put("m", s.mode).put("t", s.timeMs).put("c", s.complete).put("d", live(s))
-                .put("n", note).put("g", g?.id ?: s.fileName).put("di", g?.diapo ?: 0).put("tot", g?.total ?: 12)
+                .put("n", note).put("ne", vue).put("sous", !Planche.retenue(vue, m?.noteMin ?: 0)).put("g", g?.id ?: s.fileName).put("di", g?.diapo ?: 0).put("tot", g?.total ?: 12)
                 .put("o", g?.let { ClassementSstv.code(it.origine) } ?: "")
                 .put("b", g?.let { ClassementSstv.badge(it.diapo, it.total, it.origine) } ?: "")
                 .put("best", g == null || g.meilleure.fileName == s.fileName).put("copies", g?.images?.size ?: 1)
@@ -225,10 +242,12 @@ object ApiPlancheEvenement {
     fun remplitParDiapo(m: Planche.Modele, src: Source, tous: Boolean, reinitialise: Boolean = false, sat: String = ""): Planche.ParDiapo {
         val e = src.classement.etat(src.dossier, src.images(), attendre = true)
         val ev = m.evenement
+        // « Note minimale » judged on the mark a box shows (its slide's processed versions when the sheet takes them).
+        val auto: (String) -> Int = if (m.noteMin > 0) noteAuto(m, src, e.groupes) else ({ _ -> -1 })
         return when {
-            sat.isNotBlank() -> groupesDe(e.groupes, sat).let { g -> Planche.remplitParDiapo(m, g, totalDe(g), reinitialise) }
-            ev != null && !tous -> Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, reinitialise)
-            else -> Planche.remplitParDiapo(m, e.groupes, 12, reinitialise)
+            sat.isNotBlank() -> groupesDe(e.groupes, sat).let { g -> Planche.remplitParDiapo(m, g, totalDe(g), reinitialise, auto) }
+            ev != null && !tous -> Planche.remplitParDiapo(m, prevision(ev, src, e).groupes, ev.nb, reinitialise, auto)
+            else -> Planche.remplitParDiapo(m, e.groupes, 12, reinitialise, auto)
         }
     }
 
@@ -317,7 +336,8 @@ object ApiPlancheEvenement {
                 val r = remplitParDiapo(m, src, p("tous") == "1", p("reinit") == "1", p("sat"))
                 synchronized(verrou) { rangement.enregistre(r.modele) }
                 json(JSONObject().put("ok", true).put("cases", r.modele.cases.size).put("manquantes", JSONArray(r.manquantes))
-                    .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases).put("gardes", r.gardes))
+                    .put("sansNumero", r.sansNumero).put("horsCases", r.horsCases).put("gardes", r.gardes)
+                    .put("ecartees", JSONArray(r.ecartees)).put("noteMin", r.modele.noteMin))
             }
         }
         // « Relancer l'analyse »: every picture, or only the sheet's event's (?ev=1&id=).

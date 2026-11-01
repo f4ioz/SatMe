@@ -100,6 +100,17 @@ class ApiCorrectionSstv(
         return f to p.second.copy(traitement = etiquette(fiche))
     }
 
+    /**
+     * The best mark of group [g]'s processed versions (each copy corrected,
+     * its fusion): what an Auto box of a sheet taking them may show above its
+     * picture's own ([CorrectionsGalerie.pourPlanche]); -1 none.
+     */
+    fun noteVersions(g: ClassementSstv.Groupe): Int {
+        val d = dossier()
+        return (g.images.mapNotNull { corrections.corrigee(d, it.fileName)?.noteApres } +
+            listOfNotNull(g.takeIf { it.images.size > 1 }?.let { corrections.fusion(d, it.id) }?.noteApres)).maxOrNull() ?: -1
+    }
+
     /** The boxes of a sheet as drawn ([places]), and those whose chosen version is gone, shown as Auto ([replis]). */
     class Cases(val places: Map<Int, Pair<File, SstvMeta.SstvShot>>, val replis: List<Int>)
 

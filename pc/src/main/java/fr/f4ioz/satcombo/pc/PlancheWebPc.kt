@@ -270,8 +270,10 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     val l = galerie().filter { it.second.fileName in noms }
                     val sig = PlancheRenduPc.signatures(l.map { it.first }).let { b ->
                         classement?.let { c -> runCatching { c.galerie.signatures(b, c.etat(attendre = true)) }.getOrNull() } ?: b }
-                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
-                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
+                    // « Note minimale »: judged on the mark a box shows (its slide's processed versions when the sheet takes them).
+                    val auto = ApiPlancheEvenement.noteAuto(m.takeIf { it.noteMin > 0 }, source)
+                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig, auto)
+                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig, auto)
                     synchronized(this) { r.enregistre(n) }
                     json("{\"ok\":true,\"cases\":${n.cases.size}}")
                 }

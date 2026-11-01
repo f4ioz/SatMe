@@ -127,7 +127,13 @@ object Planche {
         /** The frame round each picture ([PlancheStyle.Cadre]); none: the thin white line of old. */
         val cadre: PlancheStyle.Cadre = PlancheStyle.Cadre.AUCUN,
         /** The glow's colour of a neon frame. */
-        val cadreCouleur: Int = CYAN
+        val cadreCouleur: Int = CYAN,
+        /**
+         * « Note minimale »: the fills ([remplit], [remplitParDiapo], [avecNombre])
+         * leave out the pictures marked below it ([retenue]); 0 = none, as
+         * every older sheet. A picture put in by hand stays.
+         */
+        val noteMin: Int = 0
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
@@ -359,6 +365,33 @@ object Planche {
                 Texte(Champ.NOM_LOCATOR, nl?.first ?: Zone(0.08f, 0.775f, 0.20f, 0.06f), MARINE, nl?.second ?: 0)))
     }
 
+    // ------------------------------------------------------- the mark kept
+
+    /** The steps of « Note minimale » (0..100). */
+    const val NOTE_MIN_PAS = 5
+
+    /**
+     * A picture the fills may take under [seuil]: no threshold, a picture
+     * not marked yet (-1: not measured, so nothing says it is poor), or
+     * marked at least [seuil].
+     */
+    fun retenue(note: Int, seuil: Int): Boolean = seuil <= 0 || note < 0 || note >= seuil
+
+    /**
+     * The mark a picture shows on the sheet: its own ([note]), or better the
+     * best of its slide's processed versions when an Auto box takes them
+     * ([noteAuto] of its group, -1 none: [CorrectionsGalerie.pourPlanche]).
+     */
+    fun noteVue(note: Int, noteAuto: Int): Int = maxOf(note, noteAuto)
+
+    /** [images] less those [m]'s threshold leaves out, their marks in [signatures] ([noteAuto] by group id). */
+    private fun auDessus(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature>,
+                         noteAuto: (String) -> Int): List<SstvMeta.SstvShot> =
+        if (m.noteMin <= 0) images else images.filter { s ->
+            val sig = signatures[s.fileName]
+            retenue(noteVue(sig?.note ?: -1, sig?.groupe?.takeIf { it.isNotEmpty() }?.let(noteAuto) ?: -1), m.noteMin)
+        }
+
     // ------------------------------------------------------- fitting
 
     /** The pictures on the sheet, in the order of their boxes. */
@@ -478,19 +511,27 @@ object Planche {
      * order, the others taken from [images] as [remplitParReception] would,
      * a copy of one already there never. 0 = the template's own layout.
      */
-    fun avecNombre(m: Modele, n: Int, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele {
+    fun avecNombre(m: Modele, n: Int, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap(),
+                   noteAuto: (String) -> Int = { -1 }): Modele {
         if (n <= 0) return duModele(m)
         val deja = choisies(m).take(n)
         if (deja.size >= n) return ajuste(m, deja)
-        val plus = distinctes(images.filter { it.fileName !in deja }, signatures, deja.mapNotNull { signatures[it] })
+        // Those already on it stay (put there, by hand or not); the others taken at or above the threshold.
+        val plus = distinctes(auDessus(m, images, signatures, noteAuto).filter { it.fileName !in deja }, signatures, deja.mapNotNull { signatures[it] })
             .take(n - deja.size).sortedBy { it.timeMs }.map { it.fileName }
         return ajuste(m, deja + plus)
     }
 
-    /** "Fill": the template's boxes, or as many pictures as the fitted sheet holds, the best of [images]. */
-    fun remplit(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap()): Modele {
-        val n = if (m.ajustee) avecNombre(m.copy(images = emptyMap()), m.cases.size, images, signatures)
-            else m.copy(images = remplitParReception(m.cases.size, images, signatures))
+    /**
+     * "Fill": the template's boxes, or as many pictures as the fitted sheet
+     * holds, the best of [images] — none marked below [Modele.noteMin]
+     * ([noteAuto]: the best mark of a group's processed versions, by its id,
+     * when the sheet takes them).
+     */
+    fun remplit(m: Modele, images: List<SstvMeta.SstvShot>, signatures: Map<String, Signature> = emptyMap(),
+                noteAuto: (String) -> Int = { -1 }): Modele {
+        val n = if (m.ajustee) avecNombre(m.copy(images = emptyMap()), m.cases.size, images, signatures, noteAuto)
+            else m.copy(images = remplitParReception(m.cases.size, auDessus(m, images, signatures, noteAuto), signatures))
         // The versions chosen by hand follow their slide (the group the gallery sorted it in).
         return reporteChoix(m, n) { f -> signatures[f]?.groupe?.takeIf { it.isNotEmpty() } }
     }
@@ -630,9 +671,23 @@ object Planche {
     /**
      * What « Fill by slide » did: the sheet, the slides missing, the pictures
      * with no number, those left out (no box), the boxes whose choice by hand
-     * (a version, a copy) was kept.
+     * (a version, a copy) was kept, the slides received but none of their
+     * pictures at [Modele.noteMin] ([ecartees], among [manquantes]).
      */
-    data class ParDiapo(val modele: Modele, val manquantes: List<Int>, val sansNumero: Int, val horsCases: Int, val gardes: Int = 0)
+    data class ParDiapo(val modele: Modele, val manquantes: List<Int>, val sansNumero: Int, val horsCases: Int, val gardes: Int = 0,
+                        val ecartees: List<Int> = emptyList())
+
+    /**
+     * [groupes] with only their pictures at or above [seuil] ([retenue]; a
+     * group's mark as Auto shows it, [noteAuto] by its id); a group with none
+     * left is gone — its slide missing, as one not received.
+     */
+    fun groupesAuDessus(groupes: List<ClassementSstv.Groupe>, seuil: Int, noteAuto: (String) -> Int = { -1 }): List<ClassementSstv.Groupe> =
+        if (seuil <= 0) groupes else groupes.mapNotNull { g ->
+            val a = noteAuto(g.id)
+            val l = g.images.filter { retenue(noteVue(g.notes[it.fileName] ?: -1, a), seuil) }
+            when { l.isEmpty() -> null; l.size == g.images.size -> g; else -> g.copy(images = l, notes = g.notes.filterKeys { k -> l.any { it.fileName == k } }) }
+        }
 
     /**
      * The best picture of each slide in slide order (1/12, 2/12…): of the
@@ -685,8 +740,12 @@ object Planche {
      * picture keeps its version; a slide no longer on the sheet takes its
      * choice with it. So filling again never undoes a choice silently.
      */
-    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12, reinitialise: Boolean = false): ParDiapo {
-        val parN = ordreParDiapo(groupes, total, vides = true).filterNotNull().filter { it.diapo in 1..total }.associateBy { it.diapo }
+    fun remplitParDiapo(m: Modele, groupes: List<ClassementSstv.Groupe>, total: Int = 12, reinitialise: Boolean = false,
+                        noteAuto: (String) -> Int = { -1 }): ParDiapo {
+        fun parDiapo(l: List<ClassementSstv.Groupe>) = ordreParDiapo(l, total, vides = true).filterNotNull().filter { it.diapo in 1..total }.associateBy { it.diapo }
+        // « Note minimale »: within each slide the best at or above it; a slide with none left is missing.
+        val tous = parDiapo(groupes)
+        val parN = if (m.noteMin <= 0) tous else parDiapo(groupesAuDessus(groupes, m.noteMin, noteAuto))
         val place = if (m.ajustee) nombreMax(m) else m.cases.size
         val k = minOf(place, total)
         // The slide each picture is now (its group's number), else the one it went in for.
@@ -696,7 +755,8 @@ object Planche {
         val choix = if (reinitialise) emptyMap() else m.versions.filterValues { !it.auto }
         // A copy chosen by hand, still of its slide: it stays rather than the best marked.
         val main = choix.filter { it.value.copieMain }.mapNotNull { (i, _) -> m.images[i]?.let { f -> numeroDe[f]?.takeIf { it in 1..k }?.let { it to f } } }.toMap()
-        val pris = (1..k).map { n -> parN[n]?.let { d -> main[n]?.let { d.copy(fichier = it) } ?: d } }
+        // A copy chosen by hand stays even below the threshold: the hand's choice wins.
+        val pris = (1..k).map { n -> (parN[n] ?: tous[n]?.takeIf { n in main })?.let { d -> main[n]?.let { d.copy(fichier = it) } ?: d } }
         val etiquettes = pris.filterNotNull().associate { it.fichier to numeroDiapo(it.diapo, it.total, it.origine) }
         val base = m.copy(diapos = etiquettes, vides = true, versions = emptyMap())
         val n = if (m.ajustee) ajusteA(base, pris.map { it?.fichier })
@@ -711,7 +771,9 @@ object Planche {
         choix.forEach { (i, c) -> if (m.images[i] == null && i in n.cases.indices && i !in versions) versions[i] = c.copy(copieMain = false) }
         val gardees = versions.filterValues { !it.auto }
         val sansNumero = groupes.count { it.images.isNotEmpty() && (it.diapo <= 0 || it.origine == ClassementSstv.Origine.AUCUNE) }
-        return ParDiapo(n.copy(versions = gardees), (1..total).filter { it !in parN }, sansNumero, parN.keys.count { it > k }, gardees.size)
+        val manquantes = (1..total).filter { it !in parN && pris.getOrNull(it - 1) == null }
+        return ParDiapo(n.copy(versions = gardees), manquantes, sansNumero, parN.keys.count { it > k }, gardees.size,
+            manquantes.filter { it in tous })
     }
 
     /** The slide number of a box's label (« 2/12 », « ≈5/12 »), 0 none. */
@@ -895,6 +957,8 @@ object Planche {
         if (m.dates.isNotBlank()) append("dates=").append(esc(m.dates)).append('\n')
         // The pictures' frame (read by older versions as nothing: the white line).
         if (m.cadre != PlancheStyle.Cadre.AUCUN) append("cadre=").append(m.cadre.code).append(';').append(m.cadreCouleur).append('\n')
+        // « Note minimale » (read by older versions as nothing: no threshold).
+        if (m.noteMin > 0) append("notemin=").append(m.noteMin).append('\n')
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
@@ -940,6 +1004,7 @@ object Planche {
                 "dates" -> m = m.copy(dates = unesc(v).take(SAISIE_MAX))
                 "cadre" -> m = m.copy(cadre = PlancheStyle.Cadre.de(v.substringBefore(';')),
                     cadreCouleur = v.substringAfter(';', "").toIntOrNull() ?: CYAN)
+                "notemin" -> m = m.copy(noteMin = v.toIntOrNull()?.coerceIn(0, 100) ?: 0)
                 "versioncase" -> runCatching { val p = v.split(';')
                     val c = ChoixCase(Version.de(p[1]) ?: Version.AUTO, p.getOrNull(2) == "1")
                     if (!c.auto && versions.size < 200) versions[p[0].toInt()] = c }

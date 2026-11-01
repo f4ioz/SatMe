@@ -49,7 +49,8 @@ object PagePlanche {
         "version_copies", "version_main", "version_vide", "version_sans", "version_note", "tout_reinitialiser", "tout_reinitialiser_aide",
         "gardes", "version_indic", "refus_depot", "supprimer", "supprimer_q", "supprimee", "cases_max",
         "rapport_vue", "rapport_dessin", "rapport_simple", "affiche", "titres", "titres_aide", "titre_aucun", "style", "police",
-        "police_defaut", "italique", "filets", "espacement", "couleur2", "cadre", "cadre_couleur")
+        "police_defaut", "italique", "filets", "espacement", "couleur2", "cadre", "cadre_couleur",
+        "note_min", "note_min_aide", "note_min_off", "ecartees", "sous_seuil", "sous_seuil_titre", "ecartees_diapos")
 
     /** The keys whose words depend on who serves the page: SatMe-PC has its own (`pw_…_pc`), the phone the plain ones. */
     private val CLES_HOTE = setOf("sous", "code", "import_en_cours", "fabrication", "enregistre", "hors_ligne", "aucune_image")
@@ -188,6 +189,12 @@ object PagePlanche {
   .zone .vers { position:absolute; right:2px; bottom:2px; font-size:10px; font-weight:700; padding:0 4px; border-radius:4px;
                 background:rgba(0,0,0,.6); color:var(--cyan); pointer-events:none; }
   .zone .vers.repli { color:var(--ambre); }
+  /* « Note minimale »: a box whose picture is below it (put in by hand), a picture the fills leave out. */
+  .zone .seuil { position:absolute; left:2px; bottom:2px; font-size:10px; font-weight:700; padding:0 4px; border-radius:4px;
+                 background:rgba(0,0,0,.7); color:var(--rose); pointer-events:none; white-space:nowrap; }
+  .img.sous img { opacity:.35; } .img.sous .l1, .img.sous .l2 { opacity:.55; }
+  .img.sous .note { color:var(--rose); box-shadow:inset 0 0 0 1px var(--rose); }
+  .noteMin input[type=range] { flex:1; min-width:120px; } .noteMin b { min-width:28px; text-align:right; }
   /* A text's dress: fonts and effects shown as they look, the styled titles. */
   .choix { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:6px; margin:4px 0 8px; }
   .choix button { font-weight:400; padding:6px 4px; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -306,7 +313,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { cadre: '', cadreCouleur: 0xFF00E5FF | 0, nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {}, indicatif: '', locator: '', dates: '' };
+  const m = { cadre: '', cadreCouleur: 0xFF00E5FF | 0, nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], decor: '', ecussons: [], autres: [], vides: false, diapos: {}, versions: {}, indicatif: '', locator: '', dates: '', noteMin: 0 };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -327,6 +334,7 @@ function litModele(txt) {
     else if (k === 'diapo') { const j = v.indexOf(';'); if (j > 0) m.diapos[v.slice(0, j)] = v.slice(j + 1); }
     else if (k === 'corrigees') m.corrigees = v === '1';
     else if (k === 'marquetraitees') m.marqueTraitees = v === '1';
+    else if (k === 'notemin') m.noteMin = Math.max(0, Math.min(100, parseInt(v) || 0));
     // The callsign, locator and dates typed in « Textes »: kept with the sheet.
     else if (k === 'indicatif') m.indicatif = unesc(v); else if (k === 'locator') m.locator = unesc(v); else if (k === 'dates') m.dates = unesc(v);
     else if (k === 'versioncase') { const p = v.split(';'); if (['auto', 'recue', 'corrigee', 'fusion'].includes(p[1])) m.versions[+p[0]] = { v: p[1], main: p[2] === '1' }; }
@@ -357,6 +365,7 @@ function ecrit(m) {
   Object.keys(m.versions).forEach(i => { const c = m.versions[i]; if (c && (c.v !== 'auto' || c.main) && +i < m.cases.length) s += 'versioncase=' + i + ';' + c.v + ';' + (c.main ? 1 : 0) + '\n'; });
   ['indicatif', 'locator', 'dates'].forEach(k => { if ((m[k] || '').trim()) s += k + '=' + esc(m[k]) + '\n'; });
   if (m.cadre) s += 'cadre=' + m.cadre + ';' + (m.cadreCouleur | 0) + '\n';
+  if (m.noteMin > 0) s += 'notemin=' + (m.noteMin | 0) + '\n';
   m.autres.forEach(l => s += l + '\n');
   return s;
 }
@@ -441,6 +450,9 @@ function dessineCalque() {
     if (REPLIS.includes(i)) d.appendChild(el('span', { class: 'vers repli', text: '⚠ ' + T.version_auto, title: T.version_repli }));
     else if (v && v.v !== 'auto') d.appendChild(el('span', { class: 'vers', text: T['version_' + v.v], title: T.version_indic }));
     else if (v && v.main) d.appendChild(el('span', { class: 'vers', text: '✋', title: T.version_main }));
+    // Below « Note minimale »: put in by hand, it stays — said in the editor only.
+    const nv = noteCase(i);
+    if (nv != null) d.appendChild(el('span', { class: 'seuil', text: '⚠ ' + T.sous_seuil, title: tf('sous_seuil_titre', nv, M.noteMin) }));
     c.appendChild(d);
   });
   M.textes.forEach((z, i) => c.appendChild(zoneEl(z, 't', i, T['champ_' + z.champ.toLowerCase()] || z.champ)));
@@ -531,6 +543,18 @@ function evNom(e) { return e ? e.nom + ' · ' + ({ campagne: T.ev_campagne, acti
 // What « Fill » takes: the event's pictures, all of them, or one satellite's.
 function filtreParams() { return filtre === '@ev' ? { sat: '', tous: 0 } : filtre === '' ? { sat: '', tous: 1 } : { sat: filtre, tous: 0 }; }
 function classeNote(n) { return n < 40 ? ' mal' : n < 70 ? ' bof' : ''; }
+// « Note minimale »: the mark a picture shows on the sheet (ne: its slide's processed versions when the sheet takes them),
+// below the threshold or not; a picture not marked yet (-1) is never left out.
+function noteVue(x) { return x.ne != null ? x.ne : x.n; }
+function sousSeuil(x, recue) { const n = recue ? x.n : noteVue(x); return M.noteMin > 0 && n >= 0 && n < M.noteMin; }
+// Box i's mark when it is below the threshold (as received when that version was chosen), else null.
+function noteCase(i) {
+  const f = M.images[i]; if (f === undefined || !(M.noteMin > 0)) return null;
+  const x = galerie.find(y => y.f === f); if (!x) return null;
+  const recue = !M.corrigees || (M.versions[i] || {}).v === 'recue';
+  return sousSeuil(x, recue) ? (recue ? x.n : noteVue(x)) : null;
+}
+function listeFiltre() { return galerie.filter(x => filtre === '@ev' ? x.ev : !filtre || x.s === filtre); }
 function titreDiapo(x) { return x.o === 'lu' ? T.origine_lu : x.o === 'main' ? T.origine_main : x.o === 'estime' ? T.origine_estime : ''; }
 function panneauImages() {
   const p = g('pImages'); p.innerHTML = '';
@@ -562,7 +586,7 @@ function panneauImages() {
       await charge(id);
       if (j && j.ok) g('message').textContent = (j.manquantes.length ? tf('rempli_diapos', j.manquantes.join(', ')) : T.rempli_toutes) +
         (j.sansNumero ? ' ' + tf('sans_numero', j.sansNumero) : '') + (j.horsCases ? ' ' + tf('hors_cases', j.horsCases) : '') +
-        (j.gardes ? ' ' + tf('gardes', j.gardes) : '');
+        (j.gardes ? ' ' + tf('gardes', j.gardes) : '') + (j.ecartees && j.ecartees.length ? ' ' + tf('ecartees_diapos', j.ecartees.join(', ')) : '');
     } }),
     el('span', { class: 'aide', text: T.garder_vides })]));
   p.appendChild(el('label', { class: 'rangee', title: T.tout_reinitialiser_aide }, [reinit, el('span', { class: 'aide', text: T.tout_reinitialiser })]));
@@ -611,7 +635,7 @@ function panneauImages() {
   gr.addEventListener('change', () => { grouper = gr.checked; try { localStorage.setItem('satme-planche-grouper', grouper ? '1' : '0'); } catch (e) {} panneau(); });
   p.appendChild(el('label', { class: 'rangee', style: 'margin:6px 0' }, [gr, el('span', { text: T.grouper })]));
   p.appendChild(el('p', { class: 'aide', text: M.origine.length ? T.aide_ajustee : choix && choix.k === 'c' ? tf('choisir_case', choix.i + 1) : T.aide_images }));
-  let liste = galerie.filter(x => filtre === '@ev' ? x.ev : !filtre || x.s === filtre);
+  let liste = listeFiltre();
   if (!liste.length) { p.appendChild(el('p', { class: 'aide', text: T.aucune_image })); return; }
   // Copies grouped: each slide's best, by slide number; its copies when its group is opened.
   if (grouper) {
@@ -627,12 +651,13 @@ function panneauImages() {
   const grille = el('div', { class: 'galerie' });
   liste.forEach(x => {
     const placee = ou[x.f] !== undefined;
-    const d = el('div', { class: 'img' + (placee ? ' placee' : '') + (x.copie ? ' copie' : ''), draggable: 'true' }, [
+    const sous = sousSeuil(x);
+    const d = el('div', { class: 'img' + (placee ? ' placee' : '') + (x.copie ? ' copie' : '') + (sous ? ' sous' : ''), draggable: 'true' }, [
       el('img', { src: url('/vignette', { f: x.f, w: 320 }), loading: 'lazy' }),
       el('div', { class: 'l1', text: (x.s || 'SSTV') + ' · ' + x.m }),
       el('div', { class: 'l2', text: heure(x.t) + ' · ' + (x.d ? T.direct : T.redecodee) + (x.c ? '' : ' · ' + T.partielle) })]);
     if (x.b) d.appendChild(el('span', { class: 'diapo o-' + x.o, text: x.b, title: titreDiapo(x) }));
-    if (x.n >= 0) d.appendChild(el('span', { class: 'note' + classeNote(x.n), text: String(x.n), title: tf('note', x.n) }));
+    if (x.n >= 0) d.appendChild(el('span', { class: 'note' + classeNote(x.n), text: String(x.n), title: tf('note', x.n) + (sous ? ' · ' + T.sous_seuil : '') }));
     if (placee) d.appendChild(el('span', { class: 'num', text: (ou[x.f] + 1) + '/' + M.cases.length }));
     if (grouper && !x.copie && x.copies > 1) {
       const c = el('div', { class: 'copies', text: (ouverts.has(x.g) ? '▾ ' : '▸ ') + tf('copies', x.copies - 1) });
@@ -784,8 +809,10 @@ function panneauDispo() {
   }));
   p.appendChild(caseACocher(T.numeros, M.numeros, v => { M.numeros = v; change(); }));
   // The best of each slide's versions (as received, corrected, fused); said on the sheet only when asked.
-  p.appendChild(caseACocher(T.corrigees, !!M.corrigees, v => { M.corrigees = v; change(); panneauDispo(); }));
+  // The mark a box shows changes with the processed versions: the gallery's marks asked again.
+  p.appendChild(caseACocher(T.corrigees, !!M.corrigees, async v => { M.corrigees = v; change(); panneauDispo(); await sauveMaintenant(); await chargeGalerie(); dessineCalque(); panneauDispo(); }));
   if (M.corrigees) p.appendChild(caseACocher(T.marque_traitees, !!M.marqueTraitees, v => { M.marqueTraitees = v; change(); }));
+  noteMinimale(p);
   const r = el('div', { class: 'rangee' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_case, onclick: () => {
     // The station keeps CASES_MAX boxes of a sheet (Planche.CASES_MAX): said here, never one silently lost.
@@ -801,6 +828,19 @@ function panneauDispo() {
   p.appendChild(r);
   p.appendChild(el('p', { class: 'aide', text: T.aide_dispo }));
   if (choix) positionChoisie(p);
+}
+// « Note minimale »: the fills leave out the pictures marked below it (0: none); how many that is among those « Fill » takes.
+function noteMinimale(p) {
+  const n = el('b', {}), compte = el('span', { class: 'aide' });
+  const dit = () => { n.textContent = M.noteMin > 0 ? String(M.noteMin) : '0'; const k = listeFiltre().filter(x => sousSeuil(x)).length;
+    compte.textContent = M.noteMin > 0 ? tf('ecartees', k) : T.note_min_off; };
+  const r = el('input', { type: 'range', min: '0', max: '100', step: '5', value: String(M.noteMin || 0), title: T.note_min_aide });
+  r.addEventListener('input', () => { M.noteMin = +r.value; dit(); dessineCalque(); });
+  r.addEventListener('change', () => change());
+  p.appendChild(el('div', { class: 'champ' }, [el('label', { text: T.note_min, title: T.note_min_aide }),
+    el('div', { class: 'rangee noteMin' }, [r, n, compte])]));
+  p.appendChild(el('p', { class: 'aide', text: T.note_min_aide }));
+  dit();
 }
 function panneauTextes() {
   const p = g('pTextes'); p.innerHTML = '';

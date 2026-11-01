@@ -714,8 +714,10 @@ private fun OngletImages(
                         onChange(Planche.avecCopie(m, c, f.name, memeDiapo = false))
                         onChoix((c + 1).takeIf { it < m.cases.size } ?: c)
                     }) {
+                    // Below « Note minimale »: dimmed, still to be put in by hand.
+                    val sous = !Planche.retenue(infos[f.name]?.note ?: -1, m.noteMin)
                     Box {
-                        b?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop,
+                        b?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, alpha = if (sous) 0.35f else 1f,
                             modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f)) }
                             ?: Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f))
                         if (place != null) Text("${place + 1}/${m.cases.size}", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
@@ -782,6 +784,11 @@ private fun OngletDisposition(
     Interrupteur(t("planche_numeros"), t("planche_numeros_desc"), m.numeros) { onChange(m.copy(numeros = it)) }
     Interrupteur(t("planche_corrigees"), t("planche_corrigees_desc"), m.corrigees) { onChange(m.copy(corrigees = it)) }
     if (m.corrigees) Interrupteur(t("planche_marque_traitees"), t("planche_marque_traitees_desc"), m.marqueTraitees) { onChange(m.copy(marqueTraitees = it)) }
+    // « Note minimale »: the fills leave out the pictures marked below it (0: none), by steps of 5.
+    Text(tf("planche_note_min", m.noteMin), color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+    Text(t("planche_note_min_desc"), color = TextLo, fontSize = 10.sp)
+    androidx.compose.material3.Slider(value = m.noteMin.toFloat(), valueRange = 0f..100f, steps = 100 / Planche.NOTE_MIN_PAS - 1,
+        onValueChange = { v -> val k = (v / Planche.NOTE_MIN_PAS).roundToInt() * Planche.NOTE_MIN_PAS; if (k != m.noteMin) onChange(m.copy(noteMin = k)) })
 }
 
 @Composable
