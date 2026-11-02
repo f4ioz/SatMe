@@ -109,6 +109,17 @@ hors ligne ; elle est remplacée par un bulletin frais dès que le réseau répo
 **Les statuts de satellites** viennent de l'AMSAT Live OSCAR Status et de
 SatNOGS.
 
+**Les satellites GENESIS d'AMSAT-EA** (HADES-SA / SO-127…) : le tramage,
+l'embrouilleur et le CRC sont écrits d'après la description des émissions
+publiée par AMSAT-EA. Le format de la **voix Codec2** (type 11 : numéro de
+paquet, 35 octets xorés par une clé fixe, dix trames 700C) et cette clé de
+35 octets viennent du décodeur publié par AMSAT-EA, *HADES-SA_SpinnyONE*
+(github.com/AMSAT-EA, **CC BY 4.0**, © AMSAT EA) : la clé est reprise telle
+qu'elle est publiée, aucun code n'est copié. La voix est rendue en son par la
+**libcodec2** du système (LGPL-2.1, David Rowe et contributeurs), chargée à
+l'exécution par `satme_codec2.py` quand elle est installée ; elle n'est pas
+livrée avec SatMe.
+
 **Les parcs POTA** proviennent de `pota.app` (liste des parcs) et de
 `pota-map.fr` (contours des zones). Ce sont des points d'accès publics, sans
 clé ni authentification. SatMe les interroge, ne les redistribue pas, et ne

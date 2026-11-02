@@ -124,6 +124,16 @@ class SondeSignal(
         actif = true
     }
 
+    /**
+     * Another demodulator feeds the tap now (a receiver running several rates
+     * at once): what the old one measured — points, eye, levels, tones,
+     * decision times — is dropped; the bits and their marks stay.
+     */
+    @Synchronized
+    fun oublie() {
+        nP = 0; nO = 0; nN = 0; nT = 0; nF = 0; tons = null
+    }
+
     /** Now and then, from the writer: nobody read for a while, the taps go quiet. */
     private fun echeance() {
         if (++verif and 4095 != 0) return

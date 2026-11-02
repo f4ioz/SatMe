@@ -946,6 +946,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
+        // A GENESIS voice message (HADES-SA's Codec2): the WAV made from it, or its .c2 (receive only).
+        if (chemin == "/api/telemesure/genesis/voix" && r.methode == "GET") {
+            val nom = q["nom"].orEmpty()
+            val f = if (q["format"] == "c2") telemesure?.voixC2(nom) else telemesure?.voixWav(nom)
+            if (f == null) { envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "message introuvable ou libcodec2 absente".toByteArray()); return }
+            if (q["format"] == "c2") envoieFichier(sortie, r, f, "application/octet-stream", "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
+            else envoieFichier(sortie, r, f, "audio/wav")
+            return
+        }
         if (chemin == "/api/telemesure" || chemin.startsWith("/api/telemesure/")) {
             val k = telemesure
             val o = when {

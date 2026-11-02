@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.domain.DecodeursMultiples
 import fr.f4ioz.satcombo.telemesure.DecodeurTelemesure
+import fr.f4ioz.satcombo.telemesure.RecepteurGenesis
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -216,6 +217,45 @@ class TelemesurePcTest {
         t.ecouteCarte(pcm, pcm.size, rate)
         assertEquals(5, t.paquets.assemblage.photos().single().recus)
         assertTrue(t.json().getJSONObject("genesis").getInt("ssdv") >= 5)
+    }
+
+    @Test fun `SSDV en BLU - les enregistrements du satellite relus, a 200 bit-s, avec la voix`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        val son = File(dir, "enregistrements").apply { mkdirs() }
+        val t = TelemesurePc(stockage(), dir, null)
+        assertEquals(RecepteurGenesis.Profil.AUTO, t.genesisProfil())
+        // HADES-SA at 200 bit/s: 3 SSDV packets, then 3 voice packets (Codec2, no CRC).
+        val fs = 24_000
+        val paquets = fr.f4ioz.satcombo.telemesure.Ssdv.codeImage(fr.f4ioz.satcombo.telemesure.SignalPaquets.mire(), 320, 240, "Q0SAT", 144).take(3)
+            .map { fr.f4ioz.satcombo.telemesure.Ssdv.recachete(it, fr.f4ioz.satcombo.telemesure.Genesis.INDICATIF_SSDV) }
+        val voix = (0 until 3).flatMap { n ->
+            fr.f4ioz.satcombo.telemesure.Genesis.codeVoix(3, n, fr.f4ioz.satcombo.telemesure.VoixGenesis.envoye(ByteArray(40) { i -> if (i % 4 == 3) 0 else (n + i).toByte() })).toList()
+        }.toByteArray()
+        val o = paquets.flatMap { fr.f4ioz.satcombo.telemesure.Genesis.codeSsdv(it).toList() }.toByteArray()
+        val pcm = fr.f4ioz.satcombo.telemesure.SignalFskAudio.audio(fr.f4ioz.satcombo.telemesure.Genesis.bits(o) + fr.f4ioz.satcombo.telemesure.Genesis.bits(voix) +
+            IntArray(64) { it and 1 }, fs, 200.0, 1_125.0, 900.0, 14.0, 1.0)
+        fr.f4ioz.satcombo.sstv.SstvSon.ecritWav(File(son, "SatMe_HADES-SA--SpinnyONE_20261102_024212Z.wav"), pcm, fs)
+        fr.f4ioz.satcombo.sstv.SstvSon.ecritWav(File(son, "SatMe_RS-44_20261102_030000Z.wav"), ShortArray(fs), fs)
+        t.enregistrements = { son.list()!!.sortedDescending() }
+        t.enregistrement = { n -> File(son, File(n).name).takeIf { it.isFile } }
+        assertEquals(listOf("SatMe_HADES-SA--SpinnyONE_20261102_024212Z.wav"), t.enregistrementsDe("HADES-SA (SpinnyONE)"))
+        assertTrue(t.action("/api/telemesure/genesis/relire-sat", mapOf("sat" to "HADES-SA (SpinnyONE)", "norad" to "68446")).getBoolean("ok"))
+        val fin = System.currentTimeMillis() + 120_000
+        while (t.json().getJSONObject("genesis").getJSONObject("relecture").optBoolean("enCours") && System.currentTimeMillis() < fin) Thread.sleep(100)
+        val g = t.json().getJSONObject("genesis")
+        assertEquals(1, g.getJSONObject("relecture").getInt("faits"))
+        val ph = t.paquets.assemblage.photos().single()
+        assertEquals(3, ph.recus)
+        assertEquals("HADES-SA (SpinnyONE)", ph.satellite)
+        val mv = g.getJSONArray("messagesVoix")
+        assertEquals(1, mv.length())
+        assertEquals(3, mv.getJSONObject(0).getJSONArray("recus").length())
+        val nom = mv.getJSONObject(0).getString("nom")
+        assertTrue(nom.startsWith("20261102-0242"))
+        assertEquals(120L, t.voixC2(nom)!!.length())
+        // Made into sound when python3 and libcodec2 are on this machine (silence for none of these frames).
+        t.voixWav(nom)?.let { w -> assertEquals("RIFF", String(w.readBytes().copyOf(4))) }
+        assertFalse(t.action("/api/telemesure/genesis/relire-sat", mapOf("sat" to "AO-7")).getBoolean("ok"))
     }
 
     @Test fun `SSDV en BLU - l'essai ne garde rien`() {

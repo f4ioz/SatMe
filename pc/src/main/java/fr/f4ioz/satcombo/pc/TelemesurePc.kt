@@ -175,7 +175,7 @@ class TelemesurePc(
     var genesisSource: String
         get() = stockage.getString(CLE_GENESIS_SOURCE, SOURCE_CARTE)?.takeIf { it == SOURCE_SDR } ?: SOURCE_CARTE
         set(v) { stockage.edit().putString(CLE_GENESIS_SOURCE, if (v == SOURCE_SDR) SOURCE_SDR else SOURCE_CARTE).apply() }
-    /** "" from the transmitter, else a profile's key (800, 200). */
+    /** "" from the transmitter (both rates for AMSAT-EA's), else a profile's key (auto, 800, 200). */
     var genesisProfilChoisi: String
         get() = stockage.getString(CLE_GENESIS_PROFIL, "") ?: ""
         set(v) { stockage.edit().putString(CLE_GENESIS_PROFIL, if (RecepteurGenesis.Profil.de(v) != null) v else "").apply() }
@@ -207,8 +207,8 @@ class TelemesurePc(
         n to im
     }.getOrDefault(0 to 0)
 
-    /** The profile decoded: the operator's, or the transmitter's, 800 bit/s otherwise. */
-    fun genesisProfil(): RecepteurGenesis.Profil = RecepteurGenesis.Profil.de(genesisProfilChoisi) ?: emetteurGenesis()?.first ?: RecepteurGenesis.Profil.G800
+    /** The profile decoded: the operator's, or the transmitter's, both rates at once otherwise. */
+    fun genesisProfil(): RecepteurGenesis.Profil = RecepteurGenesis.Profil.de(genesisProfilChoisi) ?: emetteurGenesis()?.first ?: RecepteurGenesis.Profil.AUTO
 
     private fun genesisEnMarche() = genesisActif || genesisPourPassage
 
@@ -254,7 +254,9 @@ class TelemesurePc(
         essaiGenesisEnCours = true
         Thread {
             try {
-                val p = genesisProfil()
+                val choisi = genesisProfil()
+                // Both rates heard at once: the test sends at 800 bit/s.
+                val p = if (choisi == RecepteurGenesis.Profil.AUTO) RecepteurGenesis.Profil.G800 else choisi
                 val n = (horloge() / 1000 % 200).toInt()
                 // At 200 bit/s a whole picture is 2 min of sound: the first packets only.
                 val paquets = fr.f4ioz.satcombo.telemesure.SignalPaquets.paquetsMire(n).let { if (p == RecepteurGenesis.Profil.G200) it.take(8) else it }
@@ -263,7 +265,7 @@ class TelemesurePc(
                 val bits = fr.f4ioz.satcombo.telemesure.Genesis.bits(fr.f4ioz.satcombo.telemesure.Genesis.code(2, 3, ByteArray(15))) +
                     fr.f4ioz.satcombo.telemesure.Genesis.bits(o, preambule = 0)
                 val audio = fr.f4ioz.satcombo.telemesure.SignalFskAudio.audio(bits, Dsp.AUDIO_RATE, p.debit, p.ecartHz, 1_650.0, 12.0, 3.0, graine = horloge())
-                essaiGenesis.profil = p
+                essaiGenesis.profil = choisi
                 var k = 0
                 val t0 = horloge()
                 while (k < audio.size) {
@@ -280,15 +282,15 @@ class TelemesurePc(
      * or another program's, USB audio) or a capture of bits (`.bits`). Its
      * SSDV packets join the pictures (the pass labelled with the file).
      */
-    fun relitGenesis(octets: ByteArray, nom: String): JSONObject {
-        val sat = suiviGenesis()
+    fun relitGenesis(octets: ByteArray, nom: String, sat: Pair<String, Int>? = suiviGenesis()): JSONObject {
         val source = "enregistrement " + nom.substringAfterLast('/').take(60)
         val avant = paquets.assemblage.photos().sumOf { it.recus }
         var trames = 0
+        var voix = 0
         if (nom.endsWith(".bits")) {
-            fr.f4ioz.satcombo.telemesure.RecepteurGenesis.relit(octets, { trames++ }) { p ->
+            fr.f4ioz.satcombo.telemesure.RecepteurGenesis.relit(octets, { trames++ }, { p ->
                 paquets.assemblage.ajoute(p, horloge(), sat?.first.orEmpty(), source)
-            }
+            }) { n, o -> if (genesis.voix.ajoute(n, o, horloge(), sat?.first.orEmpty())) voix++ }
         } else {
             val (pcm, rate) = fr.f4ioz.satcombo.telemesure.LectureWav.lis(octets) ?: return erreur("pas un WAV lisible (PCM 8/16/24/32 bits ou flottant)")
             // The recording's own time when its name tells it (SatMe_<sat>_yyyyMMdd_HHmmssZ.wav), now otherwise.
@@ -296,7 +298,8 @@ class TelemesurePc(
                 runCatching { java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(d)?.time }.getOrNull()
             } ?: horloge()
             var lus = 0L
-            val r = RecepteurGenesis(null, paquets.assemblage) { debut + lus * 1000 / rate }
+            // Its own receiver (the voice messages written beside the live ones', never a capture of bits).
+            val r = RecepteurGenesis(dossier, paquets.assemblage) { debut + lus * 1000 / rate }
             r.source = source
             r.profil = genesisProfil()
             r.contexte = { RecepteurGenesis.Contexte(sat?.first.orEmpty(), sat?.second ?: 0) }
@@ -305,10 +308,70 @@ class TelemesurePc(
             trames = r.etat.trames
             val apres = paquets.assemblage.photos().sumOf { it.recus }
             return JSONObject().put("ok", true).put("trames", trames).put("ssdv", r.etat.ssdv).put("nouveaux", apres - avant)
-                .put("secondes", pcm.size / rate).put("profil", r.profil.nom).put("syncs", r.etat.syncs)
+                .put("secondes", pcm.size / rate).put("profil", r.profil.nom).put("syncs", r.etat.syncs).put("voix", r.etat.voix)
+                .put("recoit", r.etat.recoit)
         }
         val apres = paquets.assemblage.photos().sumOf { it.recus }
-        return JSONObject().put("ok", true).put("trames", trames).put("nouveaux", apres - avant)
+        return JSONObject().put("ok", true).put("trames", trames).put("nouveaux", apres - avant).put("voix", voix)
+    }
+
+    /** « Relire les enregistrements du satellite »: its WAVs of the Son tab, oldest first, in the background. */
+    @Volatile private var relecture = JSONObject()
+
+    /** The recordings of [satellite] (the Son tab's names: SatMe_<name>_<yyyyMMdd>_<HHmmss>Z.wav). */
+    fun enregistrementsDe(satellite: String): List<String> {
+        val cle = satellite.replace(Regex("[^A-Za-z0-9-]"), "-").trim('-')
+        if (cle.isEmpty()) return emptyList()
+        return enregistrements().filter { n ->
+            n.removePrefix("SatMe_").substringBeforeLast('_').substringBeforeLast('_').trim('-') == cle
+        }.sorted()
+    }
+
+    fun relitEnregistrements(satellite: String, norad: Int): Boolean {
+        if (relecture.optBoolean("enCours")) return false
+        val noms = enregistrementsDe(satellite)
+        relecture = JSONObject().put("enCours", true).put("sat", satellite).put("fichiers", noms.size).put("faits", 0)
+            .put("nouveaux", 0).put("voix", 0).put("trames", 0)
+        Thread {
+            var nouveaux = 0; var voix = 0; var trames = 0; var faits = 0
+            try {
+                for (n in noms) {
+                    val f = enregistrement(n) ?: continue
+                    if (f.length() > MAX_RELECTURE) continue
+                    val r = runCatching { relitGenesis(f.readBytes(), f.name, satellite to norad) }.getOrNull()
+                    faits++
+                    if (r != null && r.optBoolean("ok")) { nouveaux += r.optInt("nouveaux"); voix += r.optInt("voix"); trames += r.optInt("trames") }
+                    relecture = JSONObject(relecture.toString()).put("faits", faits).put("nouveaux", nouveaux).put("voix", voix).put("trames", trames)
+                }
+            } finally {
+                relecture = JSONObject(relecture.toString()).put("enCours", false).put("fin", horloge())
+            }
+        }.apply { isDaemon = true; name = "relecture-genesis"; priority = Thread.MIN_PRIORITY }.start()
+        return true
+    }
+
+    // ---------------------------------------------------------------- the voice messages (Codec2)
+
+    /** A voice message's `.c2` (playable with `c2dec 700C`). */
+    fun voixC2(nom: String): File? = fr.f4ioz.satcombo.telemesure.AssemblageVoix.fichier(dossier, nom)
+
+    /** A voice message made into a WAV (8 kHz) by `satme_codec2.py` and libcodec2, kept beside its `.c2`; null when it cannot be. */
+    fun voixWav(nom: String): File? {
+        val c2 = fr.f4ioz.satcombo.telemesure.AssemblageVoix.fichier(dossier, nom) ?: return null
+        val wav = File(c2.parentFile, "$nom.wav")
+        if (wav.isFile && wav.lastModified() >= c2.lastModified()) return wav
+        val script = File(c2.parentFile, "satme_codec2.py")
+        val contenu = TelemesurePc::class.java.getResourceAsStream("/genesis/satme_codec2.py")?.use { it.readBytes() } ?: return null
+        if (!script.isFile || !script.readBytes().contentEquals(contenu)) script.writeBytes(contenu)
+        for (py in if (OutilsPc.windows) listOf("python", "py") else listOf("python3", "python")) {
+            val ok = runCatching {
+                val pr = ProcessBuilder(py, script.absolutePath, c2.absolutePath, wav.absolutePath).redirectErrorStream(true).start()
+                pr.inputStream.readBytes()
+                pr.waitFor(60, java.util.concurrent.TimeUnit.SECONDS) && pr.exitValue() == 0
+            }.getOrDefault(false)
+            if (ok && wav.isFile) return wav
+        }
+        return null
     }
 
     private fun jsonGenesis(): JSONObject {
@@ -316,6 +379,8 @@ class TelemesurePc(
         val o = genesis.json().put("option", genesisActif).put("pourPassage", genesisPourPassage).put("source", genesisSource)
             .put("choisi", genesisProfilChoisi).put("profilNom", genesisProfil().nom).put("captureOption", genesisCapture)
             .put("essaiEnCours", essaiGenesisEnCours).put("ssdvAfsk", ssdvAfsk)
+            .put("messagesVoix", JSONArray(fr.f4ioz.satcombo.telemesure.AssemblageVoix.liste(dossier, 12)))
+            .put("relecture", relecture)
         if (em != null) o.put("emetteur", JSONObject().put("description", em.second).put("profil", em.first.cle))
         val es = essaiGenesis.json()
         if (es.optLong("bits") > 0) o.put("essai", es)
@@ -573,6 +638,13 @@ class TelemesurePc(
             "genesis/profil" -> genesisProfilChoisi = q["v"].orEmpty()
             "genesis/capture" -> genesisCapture = q["on"] == "1"
             "genesis/essai" -> if (!lanceEssaiGenesis()) return erreur("un essai est déjà en cours")
+            // The satellite's recordings read again (receive only): the pictures and voice they hold.
+            "genesis/relire-sat" -> {
+                val s = q["sat"]?.takeIf { it.isNotBlank() }?.let { it to (q["norad"]?.toIntOrNull() ?: 0) } ?: suiviGenesis()
+                    ?: return erreur("aucun satellite suivi")
+                if (enregistrementsDe(s.first).isEmpty()) return erreur("aucun enregistrement de " + s.first)
+                if (!relitEnregistrements(s.first, s.second)) return erreur("une relecture est déjà en cours")
+            }
             "genesis/vide" -> { genesis.vide(); essaiGenesis.vide(); essaiPaquets.assemblage.videEssais() }
             // A recording of the Son tab, or a capture kept, read again by name.
             "genesis/relit" -> {

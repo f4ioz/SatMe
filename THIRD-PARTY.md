@@ -113,6 +113,16 @@ offline; it is replaced by a fresh one as soon as the network answers.
 NOAA Technical Memorandum NESDIS NGDC-24, 2009), taken at a 0.25° step from NOAA's ERDDAP server: NOAA
 says it may be used and redistributed for free, without any warranty.
 
+**AMSAT-EA's GENESIS satellites** (HADES-SA / SO-127…): the framing, the
+scrambler and the CRC are written from AMSAT-EA's published transmission
+description. The **Codec2 voice** format (type 11: packet number, 35 bytes
+xored with a fixed key, ten 700C frames) and that 35-byte key come from
+AMSAT-EA's published decoder *HADES-SA_SpinnyONE* (github.com/AMSAT-EA,
+**CC BY 4.0**, © AMSAT EA): the key is used as published, no code is copied.
+The voice is made into sound by the system's **libcodec2** (LGPL-2.1, David
+Rowe and contributors), loaded at run time by `satme_codec2.py` when it is
+installed; it is not shipped with SatMe.
+
 **POTA parks** come from `pota.app` (park list) and `pota-map.fr` (area
 boundaries). These are public endpoints, with no key or authentication. SatMe
 queries them, doesn't redistribute them, and controls neither their

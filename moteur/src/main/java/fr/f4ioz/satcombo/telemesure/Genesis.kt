@@ -121,6 +121,10 @@ object Genesis {
             byteArrayOf((crc ushr 8).toByte(), crc.toByte())
     }
 
+    /** A voice frame's bytes on the air (the tests, the generator): sync, size 37, type 11 / [adresse], [numero], the 35 bytes. */
+    fun codeVoix(adresse: Int, numero: Int, octets: ByteArray): ByteArray =
+        byteArrayOf((SYNC ushr 8).toByte(), SYNC.toByte(), VoixGenesis.TAILLE.toByte(), ((TYPE_CODEC2 shl 4) or (adresse and 0x0F)).toByte(), numero.toByte()) + octets
+
     /** An SSDV packet as HADES-SA sends it: 16 bytes of 0x55, then the packet after its own 0x55. */
     fun codeSsdv(paquet: ByteArray): ByteArray = ByteArray(16) { 0x55 } + paquet.copyOfRange(1, paquet.size)
 
@@ -135,13 +139,16 @@ object Genesis {
      * either polarity (which tone is 1 is settled by the first frame with a
      * right CRC, then kept), the size, the bytes. SSDV frames (type 10, or a
      * size of 251 whose CRC is not right) go to [surSsdv] as a 256-byte packet;
-     * the others to [surTrame] with their CRC checked.
+     * voice frames (type 11, size 37, no CRC, a known sender) to [surVoix]
+     * (the type/address byte, the number, the 35 bytes as received); the
+     * others to [surTrame] with their CRC checked.
      */
     class Deframeur(
         private val surTrame: (Trame) -> Unit,
         private val surSsdv: (ByteArray) -> Unit = {},
         /** Bits allowed wrong in the sync word (the CRC, or the SSDV packet's own checks, judge after). */
         private val toleranceSync: Int = 0,
+        private val surVoix: (adresse: Int, numero: Int, octets: ByteArray) -> Unit = { _, _, _ -> },
     ) {
         private class Lecture(val inverse: Boolean) {
             var reg = 0
@@ -156,6 +163,7 @@ object Genesis {
         var syncs = 0L; private set
         var crcFaux = 0; private set
         var trames = 0; private set
+        var voix = 0; private set
 
         fun bit(b: Int) {
             for (l in lectures) lis(l, if (l.inverse) b xor 1 else b)
@@ -191,6 +199,12 @@ object Genesis {
             if (!juste && taille == TAILLE_SSDV) {
                 // The SSDV packet seen through its callsign bytes: rebuilt whole, its own checks say.
                 surSsdv(byteArrayOf(0x55, 0x66, (SYNC ushr 8).toByte(), SYNC.toByte(), taille.toByte()) + o)
+                return
+            }
+            if (!juste && taille == VoixGenesis.TAILLE && type == TYPE_CODEC2 && adresse in ADRESSES) {
+                // Voice carries no CRC: the exact size, type and a known sender guard it (≈ 2⁻³² for noise past the sync).
+                voix++
+                surVoix(adresse, o[1].toInt() and 0xFF, o.copyOfRange(2, 2 + VoixGenesis.OCTETS))
                 return
             }
             if (!juste) { crcFaux++; return }

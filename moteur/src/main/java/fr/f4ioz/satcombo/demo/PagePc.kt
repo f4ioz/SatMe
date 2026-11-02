@@ -4677,22 +4677,23 @@ ${Ft8SiteJs.HTML}    </div>
 <div class="grille2">
   <div class="carte">
     <div class="t">SSDV en BLU · GENESIS FSK <span id="bl-pastille" class="pastille coupe">coupé</span></div>
-    <div class="petit aide">SO-127 (HADES-SA) et les satellites GENESIS d’AMSAT-EA émettent en FSK directe sur la porteuse : 800 bit/s avec 1600 Hz entre les deux tons (ou 200 bit/s, 1125 Hz). Un récepteur FM les perd ; en BLU (USB) ce sont deux tons dans le son. SatMe les cherche dans toute la bande audio (le reste du Doppler suivi), les démodule (deux filtres adaptés, horloge), lit les trames GENESIS (synchro 0xBF35, CRC-16, désembrouilleur x¹⁷ + x¹² + 1) et cherche les paquets SSDV dans les bits, quel que soit leur emballage. Les images rejoignent celles du décodeur de paquets (onglet Images), passage après passage.</div>
+    <div class="petit aide">SO-127 (HADES-SA) et les satellites GENESIS d’AMSAT-EA émettent en FSK directe sur la porteuse : 800 bit/s avec 1600 Hz entre les deux tons, ou 200 bit/s avec 1125 Hz (HADES-SA change de débit chaque mois : SatMe écoute les deux à la fois). Un récepteur FM les perd ; en BLU (USB) ce sont deux tons dans le son. SatMe les cherche dans toute la bande audio, de 30 Hz à 3,4 kHz (le reste du Doppler suivi), les démodule (deux filtres adaptés, horloge), lit les trames GENESIS (synchro 0xBF35, CRC-16, désembrouilleur x¹⁷ + x¹² + 1) et cherche les paquets SSDV dans les bits, quel que soit leur emballage. Les images rejoignent celles du décodeur de paquets (onglet Images), passage après passage. Les messages de voix Codec2 (700C) de la messagerie du satellite sont rassemblés et écoutables ici.</div>
     <div class="petit aide">Le poste : IC-9700 en USB-D sur la descente (SatMe le règle ainsi pour un émetteur GENESIS, SSDV ou FSK lente), le son par sa carte USB (onglet Son). Ou le récepteur SDR en USB. Réception seulement : SatMe n’émet jamais vers le satellite.</div>
     <label style="display:block"><input type="checkbox" id="bl-on" onchange="tlmPost('genesis?on=' + (this.checked ? 1 : 0))"> <b>Décoder la FSK étroite en BLU</b></label>
     <div class="ligne"><span class="petit">Son</span><select id="bl-source" style="flex:none" onchange="tlmPost('genesis/source?v=' + this.value)"><option value="carte">carte son (onglet Son : le poste en USB-D)</option><option value="sdr">récepteur SDR (en USB)</option></select></div>
-    <div class="ligne"><span class="petit">Débit</span><select id="bl-profil" style="flex:none" onchange="tlmPost('genesis/profil?v=' + this.value)"><option value="">selon l’émetteur</option><option value="800">800 bit/s · 1600 Hz</option><option value="200">200 bit/s · 1125 Hz</option></select>
+    <div class="ligne"><span class="petit">Débit</span><select id="bl-profil" style="flex:none" onchange="tlmPost('genesis/profil?v=' + this.value)"><option value="">selon l’émetteur</option><option value="auto">200 et 800 bit/s à la fois</option><option value="800">800 bit/s · 1600 Hz</option><option value="200">200 bit/s · 1125 Hz</option></select>
       <label class="petit" title="Les bits démodulés de chaque passage gardés dans telemesure/genesis (.bits, et les trames en .jsonl) : pour relire plus tard, ou étudier un format"><input type="checkbox" id="bl-capture" onchange="tlmPost('genesis/capture?on=' + (this.checked ? 1 : 0))"> capturer les bits</label></div>
     <div class="petit" id="bl-em"></div>
     <div class="paire" id="bl-etat" style="margin-top:6px"></div>
     <div class="ligne"><button id="bl-essai" onclick="tlmPost('genesis/essai')" title="Un signal fabriqué (une mire en paquets SSDV, bruit, dérive de fréquence) passé dans un décodeur à part ; rien n’est gardé">Essai</button><button class="discret" onclick="tlmPost('genesis/vide')">Effacer</button></div>
-    <div class="ligne"><span class="petit">Relire</span><select id="bl-relire" style="flex:1;min-width:160px" title="Un enregistrement de l’onglet Son (le son du poste en USB pendant un passage) ou une capture de bits"></select><button onclick="blRelit()">Relire</button>
+    <div class="ligne"><span class="petit">Relire</span><select id="bl-relire" style="flex:1;min-width:160px" title="Un enregistrement de l’onglet Son (le son du poste en USB pendant un passage) ou une capture de bits"></select><button onclick="blRelit()">Relire</button><button class="discret" id="bl-relire-sat" onclick="blRelitSat()" title="Tous les enregistrements du satellite suivi (onglet Son), du plus ancien au plus récent, repassés dans le décodeur : les images et la voix qu’ils contiennent. Réception seulement">Tous ceux du satellite</button>
       <input type="file" id="bl-fichier" hidden accept=".wav,.bits" onchange="blFichier(this)"><button class="discret" onclick="g('bl-fichier').click()" title="Un WAV du son en USB (d’un autre logiciel aussi : PCM ou flottant, mono ou stéréo), ou un fichier .bits">⤒ Fichier…</button></div>
     <div class="petit" id="bl-relu"></div>
     <div id="bl-derniere" class="tp-derniere"></div>
   </div>
   <div class="carte">
     <div class="t">Trames GENESIS <label class="petit" style="margin-left:auto;font-weight:400"><input type="checkbox" id="bl-brut" onchange="tlmBrutRegle(this.checked)"> octets bruts</label></div>
+    <div id="bl-voix"></div>
     <div id="bl-trames" class="tlm-trames"></div>
   </div>
 </div>
@@ -13713,7 +13714,8 @@ function tpTrameHtml(t) {
 }
 // ---- SSDV in USB: GENESIS FSK (SO-127), from the card's or the SDR's audio (receive only)
 function blTrameHtml(t) {
-  const b = (t.essai ? '<span class="tlm-b essai">essai</span>' : '') + '<span class="tlm-b ok">CRC juste</span>';
+  const b = (t.essai ? '<span class="tlm-b essai">essai</span>' : '') + (t.crc === false ? '<span class="tlm-b ssdv">voix · sans CRC</span>' : '<span class="tlm-b ok">CRC juste</span>') +
+    (t.debit ? '<span class="petit">' + esc(t.debit) + ' bit/s</span>' : '');
   return '<div class="tlm-t"><div class="tlm-h"><b>' + hm(t.t, true) + '</b>' + b + '<b>' + esc(t.nom) + '</b><span>' + esc(t.de) + '</span>' +
     (t.sat ? '<span>' + esc(t.sat) + '</span>' : '') + '<span style="margin-left:auto">' + t.n + ' octets</span></div>' +
     '<pre class="tlm-pre">' + esc(tlmBrut ? String(t.hex || '').replace(/(..)/g, m => m + ' ').replace(/((?:.. ){32})/g, m => m + '\n') : t.texte) + '</pre></div>';
@@ -13735,7 +13737,13 @@ function blRend(b, p) {
   const es = b.essai;
   const v = marche && e.bits ? e : es;
   tlmPose('bl-etat', v ? it(v.centreHz + ' Hz', 'milieu des tons', v.presence ? 'cyan' : '') + it(v.snrDb + ' dB', 'au-dessus du bruit') + it(v.syncs, 'synchros') +
-    it(v.trames, 'trames') + it(v.crcFaux, 'CRC faux') + it(v.ssdv, 'paquets SSDV', v.ssdv ? 'cyan' : '') : '');
+    it(v.trames, 'trames') + it(v.crcFaux, 'CRC faux') + it(v.ssdv, 'paquets SSDV', v.ssdv ? 'cyan' : '') + it(v.voix || 0, 'paquets de voix', v.voix ? 'cyan' : '') +
+    (v.recoit ? it(v.recoit + ' bit/s', 'débit reçu', 'cyan') : '') : '');
+  blVoixRend(b.messagesVoix || []);
+  const rl = b.relecture || {};
+  g('bl-relire-sat').disabled = !!rl.enCours;
+  if (rl.sat && (rl.enCours || rl.fin)) txt('bl-relu', (rl.enCours ? 'Relecture des enregistrements de ' + rl.sat + ' : ' + rl.faits + '/' + rl.fichiers + '…' : 'Enregistrements de ' + rl.sat + ' relus (' + rl.fichiers + ')') +
+    ' · ' + rl.trames + ' trames · ' + rl.nouveaux + ' paquets SSDV nouveaux · ' + rl.voix + ' paquets de voix');
   const l = (b.liste || []).concat(es && es.liste ? es.liste : []).sort((x, y) => y.t - x.t);
   tlmPose('bl-trames', l.slice(0, 30).map(blTrameHtml).join('') ||
     '<div class="petit">Aucune trame. Suis SO-127 (HADES-SA, 436,875 MHz) : SatMe met le poste en USB-D sur sa descente, Doppler corrigé. Démarre la carte son du poste (onglet Son), coche la case. Sans satellite : « Essai ».</div>');
@@ -13753,6 +13761,23 @@ function blRend(b, p) {
     if (avant) sel.value = avant;
   }
 }
+let blVoixVu = '';
+function blVoixRend(l) {
+  const cle = JSON.stringify(l.map(m => [m.nom, m.miseAJour]));
+  if (cle === blVoixVu) return;
+  blVoixVu = cle;
+  const u = (m, f) => 'api/telemesure/genesis/voix?nom=' + encodeURIComponent(m.nom) + (f ? '&format=' + f : '');
+  g('bl-voix').innerHTML = !l.length ? '' : '<div class="petit" style="margin:4px 0"><b>Voix Codec2</b> · messages de la messagerie du satellite (700C, 0,4 s par paquet)</div>' +
+    l.slice(0, 4).map(m => '<div class="tlm-t"><div class="tlm-h"><b>' + hm(m.debut, true) + '</b><span>' + esc(m.sat || '') + '</span><span style="margin-left:auto">' +
+      String(m.duree).replace('.', ',') + ' s · ' + m.recus.length + ' paquet' + (m.recus.length > 1 ? 's' : '') + (m.manquants.length ? ' · ' + m.manquants.length + ' manquant' + (m.manquants.length > 1 ? 's' : '') : '') +
+      '</span><a class="petit" href="' + u(m, 'c2') + '" title="Le fichier Codec2 (c2dec 700C)">.c2</a></div>' +
+      '<audio controls preload="none" style="width:100%;height:30px" src="' + u(m) + '" title="Converti en son par libcodec2 (s’il manque : le fichier .c2)"></audio></div>').join('');
+}
+async function blRelitSat() {
+  const j = await tlmPost('genesis/relire-sat');
+  if (j && j.ok === false) txt('bl-relu', 'Échec : ' + (j.erreur || ''));
+  tlmTic(true);
+}
 async function blRelit() {
   const f = g('bl-relire').value; if (!f) return;
   txt('bl-relu', 'Lecture de ' + f + '…');
@@ -13761,7 +13786,8 @@ async function blRelit() {
 }
 function blRelu(j) {
   if (!j || j.ok === false) return 'Échec' + (j && j.erreur ? ' : ' + j.erreur : '');
-  return (j.secondes != null ? j.secondes + ' s lues (' + j.profil + ') · ' + j.syncs + ' synchros · ' : '') + j.trames + ' trame' + (j.trames > 1 ? 's' : '') + ' · ' + j.nouveaux + ' paquet' + (j.nouveaux > 1 ? 's' : '') + ' SSDV nouveaux';
+  return (j.secondes != null ? j.secondes + ' s lues (' + j.profil + (j.recoit ? ', reçu à ' + j.recoit + ' bit/s' : '') + ') · ' + j.syncs + ' synchros · ' : '') + j.trames + ' trame' + (j.trames > 1 ? 's' : '') + ' · ' + j.nouveaux + ' paquet' + (j.nouveaux > 1 ? 's' : '') + ' SSDV nouveaux' +
+    (j.voix ? ' · ' + j.voix + ' paquets de voix' : '');
 }
 async function blFichier(inp) {
   const f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;

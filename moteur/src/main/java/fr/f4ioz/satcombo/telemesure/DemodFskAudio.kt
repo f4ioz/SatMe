@@ -16,6 +16,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.log10
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Two-tone FSK from a **USB receiver's audio** (the IC-9700 in USB-D, or
@@ -39,6 +40,16 @@ import kotlin.math.sin
  * 3. **clock**: a Gardner loop on that soft stream, interpolated between
  *    samples, a decision a bit.
  *
+ * The search goes down to [BAS_HZ] (30 Hz): a USB receiver tuned a little
+ * high leaves the lower tone near 40 Hz (HADES-SA heard so), still there in
+ * an IC-9700's USB-D audio. The continuous part is taken out first (a
+ * first-order DC blocker, about 8 Hz), so an offset never looks like a tone.
+ * A tone that low is less than a cycle over a bit: its matched filter is
+ * blurred by the tone's own image (−f). Below half the bit rate the lower
+ * tone is not used: the decision is the upper tone's energy against a
+ * threshold half-way between its « on » and « off » levels, followed as
+ * they come (on-off keying of the upper tone — 3 dB lost, the bits right).
+ *
  * Each block is searched before it is demodulated (a third of a second
  * late): the tones of a frame's first bits are known when they are read.
  *
@@ -50,7 +61,7 @@ class DemodFskAudio(
     val fs: Double,
     val debit: Double,
     val ecartHz: Double,
-    private val basHz: Double = 250.0,
+    private val basHz: Double = BAS_HZ,
     private val hautHz: Double = 3_400.0,
     private val seuilDb: Double = 6.0,
     private val surBit: (Int, Float) -> Unit,
@@ -120,7 +131,14 @@ class DemodFskAudio(
         for (k in 0 until n) echantillon(x[k].toDouble())
     }
 
-    private fun echantillon(x: Double) {
+    // The DC blocker: y = x − x₋₁ + r·y₋₁.
+    private val rDc = 1 - 2 * PI * 8.0 / fs
+    private var xDc = 0.0
+    private var yDc = 0.0
+
+    private fun echantillon(brut: Double) {
+        val x = brut - xDc + rDc * yDc
+        xDc = brut; yDc = x
         energie += x * x; nEnergie++
         if (nEnergie >= 4096) { niveauDb = 10 * log10(energie / nEnergie + 1e-12); energie = 0.0; nEnergie = 0 }
         tampon[nTampon++] = x
@@ -146,8 +164,20 @@ class DemodFskAudio(
         }
         val ep = sPR * sPR + sPI * sPI
         val em = sMR * sMR + sMI * sMI
-        val doux = (ep - em) / (ep + em + 1e-18)
+        val doux = if (centreHz - ecartHz / 2 < debit / 2) toutOuRien(sqrt(ep)) else (ep - em) / (ep + em + 1e-18)
         horloge(doux)
+    }
+
+    // The upper tone alone (the lower one too low): its « on » and « off » amplitudes, followed decision by decision.
+    private var haut1 = 0.0
+    private var haut0 = 0.0
+    private val suiviOok = 1.0 / (sps * 24)
+
+    private fun toutOuRien(a: Double): Double {
+        if (haut1 <= haut0) { haut1 = a * 1.5 + 1e-12; haut0 = a * 0.5 }
+        val seuil = (haut1 + haut0) / 2
+        if (a > seuil) haut1 += suiviOok * (a - haut1) else haut0 += suiviOok * (a - haut0)
+        return ((a - seuil) / (haut1 - haut0 + 1e-18)).coerceIn(-1.0, 1.0)
     }
 
     // The views' tone measure: the matched filters' phasors a quarter of a bit before the decision.
@@ -214,9 +244,10 @@ class DemodFskAudio(
         val demi = (debit / 2 / hzBin).toInt().coerceAtLeast(1)
         val cumul = DoubleArray(nb + 1)
         for (i in 0 until nb) cumul[i + 1] = cumul[i] + p[i]
+        // Over the whole window even at the band's edge (nothing beyond): a truncated one is not favoured.
         fun lisse(i: Int): Double {
             val a = (i - demi).coerceAtLeast(0); val b = (i + demi + 1).coerceAtMost(nb)
-            return (cumul[b] - cumul[a]) / (b - a)
+            return (cumul[b] - cumul[a]) / (2 * demi + 1)
         }
         val ib = (basHz / hzBin).toInt().coerceAtLeast(1); val ih2 = (hautHz / hzBin).toInt().coerceAtMost(nb - 1)
         val dEcart = ecartHz / hzBin
@@ -236,7 +267,18 @@ class DemodFskAudio(
         val y0 = score(ic - 1); val y1 = meilleur; val y2 = score(ic + 1)
         val den = y0 - 2 * y1 + y2
         val dec = if (den < 0) (0.5 * (y0 - y2) / den).coerceIn(-0.5, 0.5) else 0.0
-        val f = (ic + dec) * hzBin
+        var f = (ic + dec) * hzBin
+        // The lower tone at the band's foot (its window folds over 0 Hz): the centre from the upper tone's own peak.
+        if (f - ecartHz / 2 < debit) {
+            val de2 = (ic + dm - demi).toInt().coerceIn(1, nb - 2); val a2 = (ic + dm + demi).toInt().coerceIn(de2, nb - 2)
+            fun etroit(i: Int) = p[i - 1] + p[i] + p[i + 1]
+            var im = de2
+            for (i in de2..a2) if (etroit(i) > etroit(im)) im = i
+            val z0 = etroit(im - 1); val z1 = etroit(im); val z2 = etroit(im + 1)
+            val dz = z0 - 2 * z1 + z2
+            val fin = if (dz < 0) (0.5 * (z0 - z2) / dz).coerceIn(-0.5, 0.5) else 0.0
+            f = (im + fin) * hzBin - ecartHz / 2
+        }
         snrDb = 10 * log10(meilleur / 2 / bruit)
         presence = snrDb >= seuilDb
         if (!presence) { candidatHz = Double.NaN; return }
@@ -255,4 +297,9 @@ class DemodFskAudio(
     fun centre(hz: Double) { centreHz = hz; verrou = true; regleOscillateurs() }
 
     fun remetAZero() { verrou = false; presence = false; candidatHz = Double.NaN }
+
+    companion object {
+        /** The search's lowest tone, Hz. */
+        const val BAS_HZ = 30.0
+    }
 }

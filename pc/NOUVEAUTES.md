@@ -8,8 +8,16 @@ et la publication GitHub prend la section de sa version.
 Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
-Une section par version, la plus récente en haut, une partie « ### fr » et une
-partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.
+Une section par version, la plus récente en haut, une partie « ### fr
+- **SSDV en BLU (GENESIS) : 200 et 800 bit/s à la fois** — HADES-SA (SO-127) change de débit chaque mois ; SatMe écoutait à 800 bit/s alors qu’il émet en ce moment à 200 : rien n’était décodé. Les deux démodulateurs tournent maintenant ensemble sur le même son (choix **Débit › 200 et 800 bit/s à la fois**, d’origine ; 800 ou 200 seuls restent possibles), l’état dit le **débit reçu**, une trame entendue par les deux n’est comptée qu’une fois. Les tons sont cherchés **dès 30 Hz** : un poste accordé un peu haut laissait le ton bas vers 40 Hz, ignoré jusqu’ici.
+- **SSDV en BLU : la voix Codec2 de HADES-SA** — les messages parlés de la messagerie du satellite (Codec2 700C, trames de type 11 sans CRC) sont rassemblés paquet par paquet (un trou devient un silence) et s’écoutent dans la carte **Trames GENESIS** ; le fichier `.c2` se télécharge (lisible par `c2dec 700C`). Le son est fait par la libcodec2 du système (Linux : paquet `libcodec2-1.2`), via `python3`. Format d’après le décodeur publié par AMSAT-EA (CC BY 4.0).
+- **SSDV en BLU : relire tous les enregistrements d’un satellite** — bouton **Tous ceux du satellite** à côté de **Relire** : les enregistrements de l’onglet Son du satellite suivi repassent dans le décodeur, du plus ancien au plus récent, leurs images et leur voix avec les autres. Réception seulement.
+» et une
+partie « ### en
+- **SSB SSDV (GENESIS): 200 and 800 bit/s at once** — HADES-SA (SO-127) changes rate every month; SatMe listened at 800 bit/s while it currently sends at 200: nothing was decoded. Both demodulators now run together on the same sound (**Rate › 200 and 800 bit/s at once**, the default; 800 or 200 alone are still there), the state shows the **rate heard**, a frame heard by both is counted once. Tones are looked for **from 30 Hz**: a receiver tuned a little high left the lower tone near 40 Hz, ignored until now.
+- **SSB SSDV: HADES-SA's Codec2 voice** — the spoken messages of the satellite's BBS (Codec2 700C, type 11 frames without a CRC) are put together packet by packet (a gap becomes silence) and can be played in the **GENESIS frames** card; the `.c2` file can be downloaded (`c2dec 700C`). The sound is made by the system's libcodec2 (Linux: package `libcodec2-1.2`), through `python3`. Format from AMSAT-EA's published decoder (CC BY 4.0).
+- **SSB SSDV: read all of a satellite's recordings again** — **All of the satellite's** button next to **Read again**: the followed satellite's recordings from the Sound tab go through the decoder again, oldest first, their pictures and voice joining the others. Receive only.
+». Des listes courtes : ce que l'utilisateur voit, où cliquer.
 Markdown simple (gras, italique, `code`, listes, liens https).
 -->
 

@@ -10,7 +10,9 @@ package fr.f4ioz.satcombo.telemesure
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -129,10 +131,13 @@ class GenesisTest {
     }
 
     @Test fun profil_selon_l_emetteur() {
-        assertEquals(RecepteurGenesis.Profil.G800, RecepteurGenesis.Profil.pour("GENESIS FSK", 800.0))
-        assertEquals(RecepteurGenesis.Profil.G200, RecepteurGenesis.Profil.pour("GENESIS FSK", 200.0))
-        assertEquals(RecepteurGenesis.Profil.G800, RecepteurGenesis.Profil.pour("SSDV", 800.0))
-        assertEquals(RecepteurGenesis.Profil.G800, RecepteurGenesis.Profil.pour("FSK", 800.0))
+        // AMSAT-EA's satellites alternate 200 / 800 bit/s: both are listened to, whatever SatNOGS DB says this month.
+        assertEquals(RecepteurGenesis.Profil.AUTO, RecepteurGenesis.Profil.pour("GENESIS FSK", 800.0))
+        assertEquals(RecepteurGenesis.Profil.AUTO, RecepteurGenesis.Profil.pour("GENESIS FSK", 200.0))
+        assertEquals(RecepteurGenesis.Profil.AUTO, RecepteurGenesis.Profil.pour("SSDV", 800.0))
+        assertEquals(RecepteurGenesis.Profil.AUTO, RecepteurGenesis.Profil.pour("FSK", 800.0))
+        assertEquals(listOf(RecepteurGenesis.Profil.G200, RecepteurGenesis.Profil.G800), RecepteurGenesis.Profil.AUTO.voies)
+        assertEquals(RecepteurGenesis.Profil.AUTO, RecepteurGenesis.Profil.de("auto"))
         assertEquals(null, RecepteurGenesis.Profil.pour("FSK", 9600.0))
         assertEquals(null, RecepteurGenesis.Profil.pour("AFSK", 1200.0))
     }
@@ -167,5 +172,117 @@ class GenesisTest {
         val pcm = audio(paquets, 48_000, 800.0, 1_600.0, 1_500.0, 11.0, 0.0, graine = 7)
         val (_, a) = recoit(pcm, 48_000, RecepteurGenesis.Profil.G800)
         assertEquals(8, a.photos().single().recus)
+    }
+
+    // ---------------------------------------------------------------- both rates at once, the low tone
+
+    @Test fun auto_les_deux_debits_dans_le_meme_son() {
+        val fs = 24_000
+        val a200 = Ssdv.codeImage(SignalPaquets.mire(), 320, 240, "Q0SAT", 21).take(3)
+        val a800 = Ssdv.codeImage(SignalPaquets.mire(), 320, 240, "Q0SAT", 22).take(5)
+        val pcm = audio(a200, fs, 200.0, 1_125.0, 1_400.0, 13.0, 1.0, graine = 11) + audio(a800, fs, 800.0, 1_600.0, 1_700.0, 13.0, -1.0, graine = 12)
+        val (r, a) = recoit(pcm, fs, RecepteurGenesis.Profil.AUTO)
+        assertEquals(3, a.photos().first { it.numero == 21 }.recus)
+        assertEquals(5, a.photos().first { it.numero == 22 }.recus)
+        // The same telemetry frame in both parts, less than a minute apart: kept once (the two chains, the two polarities too).
+        assertEquals(1, r.etat.trames)
+        assertEquals("800", r.etat.recoit)
+        assertEquals("auto", r.etat.profil)
+    }
+
+    @Test fun ton_bas_a_40_hz() {
+        // HADES-SA heard with the receiver tuned high: its lower tone near 40 Hz, the upper one at 1165 Hz.
+        val fs = 24_000
+        val paquets = Ssdv.codeImage(SignalPaquets.mire(), 320, 240, "Q0SAT", 5).take(4)
+        // The lower tone too low for its matched filter: the upper one alone (on-off), 3 dB lost — 16 dB here, HADES-SA was heard at 25.
+        val pcm = audio(paquets, fs, 200.0, 1_125.0, 40.0 + 562.5, 16.0, 0.0, graine = 9)
+        val (r, a) = recoit(pcm, fs, RecepteurGenesis.Profil.AUTO)
+        assertEquals(4, a.photos().single().recus)
+        assertEquals("200", r.etat.recoit)
+    }
+
+    @Test fun continu_et_ronflement_seuls_rien() {
+        // An offset and 50 Hz hum over noise: no pair of tones taken, nothing decoded.
+        val fs = 24_000
+        val rnd = java.util.Random(4)
+        val pcm = ShortArray(fs * 15) { i -> (2500 + 2000 * kotlin.math.sin(2 * Math.PI * 50 * i / fs) + rnd.nextGaussian() * 2000).toInt().toShort() }
+        val (r, a) = recoit(pcm, fs, RecepteurGenesis.Profil.AUTO)
+        assertTrue(a.photos().isEmpty())
+        assertEquals(0, r.etat.trames)
+        assertEquals(0, r.etat.voix)
+    }
+
+    // ---------------------------------------------------------------- Codec2 voice (type 11)
+
+    private fun c2Essai(k: Int) = ByteArray(VoixGenesis.TRAMES_PAR_PAQUET * VoixGenesis.OCTETS_C2) { i ->
+        // Each 4-byte frame: 28 bits of something, the 4 last bits zero (the .c2 layout).
+        if (i % 4 == 3) ((k * 31 + i * 7) and 0xF0).toByte() else (k * 13 + i * 5 + 1).toByte()
+    }
+
+    @Test fun voix_cle_et_bourrage() {
+        for (k in 0 until 5) {
+            val c2 = c2Essai(k)
+            assertArrayEquals(c2, VoixGenesis.c2(VoixGenesis.envoye(c2)))
+        }
+    }
+
+    @Test fun voix_vue_par_le_deframeur_sans_crc() {
+        val l = ArrayList<Triple<Int, Int, ByteArray>>()
+        val d = Genesis.Deframeur({ fail("pas une trame de télémesure") }, surVoix = { a, n, o -> l += Triple(a, n, o) })
+        val o1 = VoixGenesis.envoye(c2Essai(1))
+        for (b in Genesis.bits(Genesis.codeVoix(Genesis.ADRESSE_HADES_SA, 7, o1)) + IntArray(16)) d.bit(b)
+        // An unknown sender (address 0): not taken, there is no CRC to vouch for it.
+        for (b in Genesis.bits(Genesis.codeVoix(0, 8, o1)) + IntArray(16)) d.bit(b xor 1)
+        assertEquals(1, l.size)
+        assertEquals(3, l[0].first); assertEquals(7, l[0].second)
+        assertArrayEquals(o1, l[0].third)
+    }
+
+    @Test fun voix_de_hades_sa_reelle() {
+        // Four voice frames as SatMe's demodulator gave them off HADES-SA (2 Nov 2026, 200 bit/s): numbers 2 to 5.
+        val bits = GenesisTest::class.java.getResourceAsStream("/genesis/hades-sa-voix-4-trames.bits")!!.use { it.readBytes() }
+        val l = ArrayList<Pair<Int, ByteArray>>()
+        RecepteurGenesis.relit(bits, {}, {}) { n, o -> l += n to o }
+        assertEquals(listOf(2, 3, 4, 5), l.map { it.first })
+        // The first 700C frame of packet 2: 28 bits CEFF804, then 4 zero bits.
+        assertArrayEquals(hex("CE FF 80 40"), VoixGenesis.c2(l[0].second).copyOf(4))
+    }
+
+    @Test fun message_de_voix_rassemble_et_ecrit() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            val m = AssemblageVoix(dir)
+            val t0 = 1_793_588_000_000L
+            for (n in listOf(0, 1, 3, 1)) m.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 1_600L, "HADES-SA (SpinnyONE)")
+            // A number far ahead (a bit wrong in it, there is no CRC): dropped.
+            assertFalse(m.ajoute(65, VoixGenesis.envoye(c2Essai(5)), t0 + 8_000L, "HADES-SA (SpinnyONE)"))
+            val msg = m.courant!!
+            assertEquals(listOf(0, 1, 3), msg.paquets.keys.toList())
+            assertEquals(listOf(2), msg.manquants())
+            assertEquals(1.6, msg.dureeS(), 1e-9)
+            val c2 = msg.c2()
+            assertEquals(4 * 40, c2.size)
+            assertTrue(c2.copyOfRange(80, 120).all { it == 0.toByte() })
+            assertArrayEquals(c2Essai(3), c2.copyOfRange(120, 160))
+            val l = AssemblageVoix.liste(dir)
+            assertEquals(1, l.size)
+            assertEquals(3, l[0].getJSONArray("recus").length())
+            assertTrue(AssemblageVoix.fichier(dir, l[0].getString("nom"))!!.length() == 160L)
+            assertEquals(null, AssemblageVoix.fichier(dir, "../x"))
+            // The number back to 0: a new message.
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(9)), t0 + 20_000L, "HADES-SA (SpinnyONE)")
+            assertEquals(2, AssemblageVoix.liste(dir).size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun voix_par_le_recepteur() {
+        val fs = 24_000
+        val o = (0 until 4).flatMap { n -> (Genesis.codeVoix(3, n, VoixGenesis.envoye(c2Essai(n))) + ByteArray(2) { 0xAA.toByte() }).toList() }.toByteArray()
+        val pcm = SignalFskAudio.audio(Genesis.bits(o) + IntArray(64) { it and 1 }, fs, 200.0, 1_125.0, 1_300.0, 14.0, 0.5, graine = 3)
+        val (r, _) = recoit(pcm, fs, RecepteurGenesis.Profil.AUTO)
+        assertEquals(4, r.etat.voix)
+        assertEquals(listOf(0, 1, 2, 3), r.voix.courant!!.paquets.keys.toList())
+        assertArrayEquals(c2Essai(2), r.voix.courant!!.paquets[2])
+        assertTrue(r.trames.any { it.trame.type == Genesis.TYPE_CODEC2 && !it.trame.crcJuste })
     }
 }
