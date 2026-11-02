@@ -188,6 +188,64 @@ class PhoniePcTest {
         p.efface(); assertTrue(p.bulles().isEmpty()); assertEquals(2, File(dossier, "phonie/$j.jsonl").readLines().size)
     }
 
+    /** [Faux], keeping what Whisper was told before each over. */
+    private class Souffle(texte: String) : MoteurPhonie {
+        val faux = Faux(texte)
+        @Volatile var prompt = ""; @Volatile var mots = ""
+        override fun demarre() = faux.demarre()
+        override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean) = faux.transcrit(id, pcm, langue, traduire)
+        override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean, cible: String, prompt: String, mots: String): Message {
+            this.prompt = prompt; this.mots = mots
+            return faux.transcrit(id, pcm, langue, traduire)
+        }
+        override fun arrete() {}
+    }
+
+    @Test fun `le langage radioamateur - epellations, reports, code Q et vocabulaire`() {
+        val s = Souffle("CQ de Fox-trot quatre India Oscar Zoulou, report cinq neuf, cul est elle ? Aude cent")
+        val p = PhoniePc(StockageMemoire(), InstallPhoniePc(dossier), File(dossier, "phonie"), { horloge }, fabrique = { s }).also { ouverts += it }
+        p.moi = { "F4IOZ" }
+        p.langue = "fr"
+        // Written by SatMe itself at the first over: comments only. The user adds a correction.
+        assertFalse(p.fichierVocabulaire.exists())
+        p.actif = true
+        parle(p, 1)
+        assertTrue(attend(5000) { p.bulles().size == 1 })
+        assertTrue(p.fichierVocabulaire.readText().startsWith("# Vocabulaire personnel"))
+        assertTrue(s.prompt, s.prompt.contains("QSO radioamateur") && s.prompt.contains("F4IOZ, Foxtrot quatre India Oscar Zulu"))
+        assertTrue(s.mots, s.mots.contains("QSL") && s.mots.contains("F4IOZ"))
+        val b = p.bulles().single()
+        assertEquals("CQ de F4IOZ, report 59, QSL ? Aude cent", b.texte)
+        assertEquals("CQ de Fox-trot quatre India Oscar Zoulou, report cinq neuf, cul est elle ? Aude cent", b.brut)
+        assertEquals(listOf("F4IOZ"), b.indicatifs)
+        assertTrue(b.elements.any { it.genre.name == "REPORT" && it.valeur == "59" })
+        val j = p.json(0).getJSONArray("bulles").getJSONObject(0)
+        assertEquals("F4IOZ", j.getJSONArray("indicatifs").getString(0))
+        assertEquals(b.brut, j.getString("brut"))
+        // The day's file keeps both; the day's text shows what was heard.
+        val l = JSONObject(File(dossier, "phonie/${p.jours().single()}.jsonl").readLines().single())
+        assertEquals(b.brut, fr.f4ioz.satcombo.phonie.BullePhonie.depuis(l).brut)
+        assertTrue(p.texteJour(p.jours().single())!!.contains("(entendu) CQ de Fox-trot"))
+        // The user's correction, read at the next over without a restart.
+        p.fichierVocabulaire.appendText("Aude cent => QO-100\n")
+        p.fichierVocabulaire.setLastModified(System.currentTimeMillis() + 5_000)
+        parle(p, 1)
+        assertTrue(attend(5000) { p.bulles().size == 2 })
+        assertEquals("CQ de F4IOZ, report 59, QSL ? QO-100", p.bulles().last().texte)
+    }
+
+    @Test fun `le prompt redit sur un silence ne fait pas de bulle`() {
+        val s = Souffle("")
+        val p = PhoniePc(StockageMemoire(), InstallPhoniePc(dossier), File(dossier, "phonie"), { horloge }, fabrique = { s }).also { ouverts += it }
+        p.langue = "fr"
+        s.faux.texte = fr.f4ioz.satcombo.phonie.LangageOm.prompt("fr").substringAfter(". ").substringBefore(" Report")
+        p.actif = true
+        parle(p, 1)
+        assertTrue(attend(3000) { s.faux.recus == 1 })
+        Thread.sleep(100)
+        assertTrue(s.faux.texte, p.bulles().isEmpty())
+    }
+
     @Test fun `les phrases inventees ne font pas de bulle`() {
         val f = Faux("Sous-titres réalisés par la communauté d'Amara.org")
         val p = phonie(f)

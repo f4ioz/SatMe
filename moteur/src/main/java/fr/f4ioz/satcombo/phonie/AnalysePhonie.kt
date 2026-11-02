@@ -89,8 +89,8 @@ object AnalysePhonie {
         var k = 0
         while (k < mots.size) {
             val m = mots[k]
-            // Two words for one letter: "x ray", "x-ray".
-            val deux = mots.getOrNull(k + 1)?.let { s -> lettre(m.n + s.n, langue)?.takeIf { lettre(m.n, langue) == null } }
+            // Two words for one letter: "x ray", "x-ray", "fox trot" (fox alone is F, trot nothing).
+            val deux = mots.getOrNull(k + 1)?.let { s -> lettre(m.n + s.n, langue)?.takeIf { lettre(m.n, langue) == null || piece(s, k + 1, langue) == null } }
             if (deux != null) { l += Piece(deux.toString(), k, k + 1, false, false); k += 2; continue }
             l += piece(m, k, langue)
             k++
@@ -126,7 +126,7 @@ object AnalysePhonie {
 
     // ------------------------------------------------------------------ pieces read together
 
-    private val CARRE = Regex("^[A-R]{2}[0-9]{2}(?:[A-X]{2})?$")
+    internal val CARRE = Regex("^[A-R]{2}[0-9]{2}(?:[A-X]{2})?$")
     private val CORPS = Regex("^[A-Z0-9]{1,3}[0-9][A-Z]{1,4}$")
 
     private fun lisSuite(p: List<Piece>, mots: List<Mot>, texte: String): List<Element> {
@@ -156,14 +156,17 @@ object AnalysePhonie {
     }
 
     /** Looks like a callsign, with a country; a 4-letter suffix only written whole. */
-    private fun indicatifPlausible(s: String, derniere: Piece): Boolean {
+    private fun indicatifPlausible(s: String, derniere: Piece): Boolean = plausible(s) { suffixe -> derniere.ecrit && derniere.texte.endsWith(suffixe) }
+
+    /** [s] looks like a callsign and has a country's prefix; [long]: whether a 4-letter suffix is admitted. */
+    internal fun plausible(s: String, long: (String) -> Boolean = { false }): Boolean {
         if (s.length < 3 || s.length > 14 || s.startsWith("/") || s.endsWith("/")) return false
         val morceaux = s.split('/')
         if (morceaux.size > 3) return false
         val corps = morceaux.maxBy { it.length }
         if (!CORPS.matches(corps)) return false
         val suffixe = corps.takeLastWhile { it.isLetter() }
-        if (suffixe.length == 4 && !(derniere.ecrit && derniere.texte.endsWith(suffixe))) return false
+        if (suffixe.length == 4 && !long(suffixe)) return false
         val prefixe = corps.dropLast(suffixe.length + 1)
         if (prefixe.none { it.isLetter() } && !(prefixe.length == 1 && prefixe[0].isDigit() && corps.length >= 4 && corps[1].isLetter())) return false
         return Dxcc.entite(s) != null
@@ -174,10 +177,13 @@ object AnalysePhonie {
 
     // ------------------------------------------------------------------ the alphabets
 
-    private fun lettre(n: String, langue: String): Char? =
+    internal fun lettre(n: String, langue: String): Char? =
         OTAN[n] ?: NATIONAUX[langue]?.get(n) ?: (if (langue.isEmpty() || langue !in NATIONAUX) NATIONAUX.values.firstNotNullOfOrNull { it[n] } else null) ?: RADIO[n]
 
-    private fun chiffre(n: String, langue: String): Char? =
+    /** A letter of the ITU / NATO alphabet itself (not a national one, nor a country). */
+    internal fun otan(n: String): Char? = OTAN[n]
+
+    internal fun chiffre(n: String, langue: String): Char? =
         CHIFFRES[langue]?.get(n) ?: CHIFFRES["en"]!![n] ?: ITU[n]
             ?: (if (langue.isEmpty() || langue !in CHIFFRES) CHIFFRES.values.firstNotNullOfOrNull { it[n] } else null)
 
@@ -185,11 +191,11 @@ object AnalysePhonie {
         l.flatMap { (lettres, mots) -> mots.split(' ').map { it to lettres[0] } }.toMap()
 
     /** The ITU / NATO alphabet, with the spellings heard in French. */
-    private val OTAN = table("a" to "alfa alpha", "b" to "bravo", "c" to "charlie charly", "d" to "delta", "e" to "echo",
-        "f" to "foxtrot fox foxtrott", "g" to "golf", "h" to "hotel", "i" to "india", "j" to "juliett juliet juliette", "k" to "kilo",
-        "l" to "lima", "m" to "mike maik", "n" to "november novembre", "o" to "oscar", "p" to "papa", "q" to "quebec",
-        "r" to "romeo", "s" to "sierra", "t" to "tango", "u" to "uniform uniforme", "v" to "victor", "w" to "whiskey whisky",
-        "x" to "xray", "y" to "yankee yanki", "z" to "zulu zoulou").mapValues { it.value.uppercaseChar() }
+    private val OTAN = table("a" to "alfa alpha", "b" to "bravo", "c" to "charlie charly charli", "d" to "delta", "e" to "echo eco",
+        "f" to "foxtrot fox foxtrott foxtoro", "g" to "golf", "h" to "hotel", "i" to "india", "j" to "juliett juliet juliette julieta", "k" to "kilo",
+        "l" to "lima", "m" to "mike maik mic", "n" to "november novembre noviembre", "o" to "oscar", "p" to "papa", "q" to "quebec kebec",
+        "r" to "romeo", "s" to "sierra", "t" to "tango", "u" to "uniform uniforme", "v" to "victor", "w" to "whiskey whisky wiski",
+        "x" to "xray", "y" to "yankee yanki yanqui", "z" to "zulu zoulou").mapValues { it.value.uppercaseChar() }
 
     /** Countries and words heard on the air instead of the alphabet's. */
     private val RADIO = table("a" to "america amerique amsterdam", "b" to "boston baltimore", "c" to "canada", "d" to "denmark danemark",
@@ -223,8 +229,8 @@ object AnalysePhonie {
     ).mapValues { (_, t) -> t.mapValues { it.value.uppercaseChar() } }
 
     private val CHIFFRES: Map<String, Map<String, Char>> = mapOf(
-        "en" to table("0" to "zero oh", "1" to "one", "2" to "two", "3" to "three tree", "4" to "four", "5" to "five fife",
-            "6" to "six", "7" to "seven", "8" to "eight", "9" to "nine niner"),
+        "en" to table("0" to "zero oh", "1" to "one wun", "2" to "two", "3" to "three tree", "4" to "four fower", "5" to "five fife",
+            "6" to "six", "7" to "seven", "8" to "eight ait", "9" to "nine niner"),
         "fr" to table("0" to "zero", "1" to "un une", "2" to "deux", "3" to "trois", "4" to "quatre", "5" to "cinq",
             "6" to "six", "7" to "sept", "8" to "huit", "9" to "neuf"),
         "de" to table("0" to "null", "1" to "eins", "2" to "zwei zwo", "3" to "drei", "4" to "vier", "5" to "funf fuenf",
@@ -242,11 +248,11 @@ object AnalysePhonie {
         "5" to "pantafive", "6" to "soxisix", "7" to "setteseven", "8" to "oktoeight", "9" to "novenine")
 
     /** Words that are no piece of a callsign, even in capitals. */
-    private val ARRET = setOf("cq", "de", "qrz", "qsl", "qso", "qsy", "qth", "qrm", "qrn", "qsb", "ok", "tnx", "rst", "ssb", "fm", "usb",
+    internal val ARRET = setOf("cq", "de", "qrz", "qsl", "qso", "qsy", "qth", "qrm", "qrn", "qsb", "ok", "tnx", "rst", "ssb", "fm", "usb",
         "lsb", "cw", "am", "pm", "utc", "qo", "lnb", "sdr", "dx", "hf", "vhf", "uhf", "ft8", "ft4", "73", "88", "nr", "op")
-    private val LIENS = setOf("and", "by", "et", "und", "y", "e", "i", "na", "par")
-    private val BARRE = setOf("stroke", "slash", "barre", "strich", "barra", "ukosnik")
+    internal val LIENS = setOf("and", "by", "et", "und", "y", "e", "i", "na", "par")
+    internal val BARRE = setOf("stroke", "slash", "barre", "strich", "barra", "ukosnik")
     private val AVANT = setOf("de", "ici", "hier", "aqui", "qui", "tutaj", "cq", "from", "von", "da", "od", "this", "is", "calling", "appelle", "indicatif")
-    private val RAPPORT = setOf("report", "rapport", "raport", "rapporto", "reporte", "signal", "signaux", "segnale", "senal", "rst", "rs", "bericht", "sygnal")
-    private val HABITUELS = setOf("59", "57", "55", "599", "579", "559")
+    internal val RAPPORT = setOf("report", "rapport", "raport", "rapporto", "reporte", "signal", "signaux", "segnale", "senal", "rst", "rs", "bericht", "sygnal")
+    internal val HABITUELS = setOf("59", "57", "55", "599", "579", "559")
 }

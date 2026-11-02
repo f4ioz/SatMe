@@ -14,6 +14,11 @@ stdout (see fr.f4ioz.satcombo.phonie.ProtocolePhonie):
   in : [u32 BE header length][header JSON][u32 BE PCM length][PCM s16le 16 kHz mono]
   out: {"pret":true,...} once the model is loaded, then {"id":..,"segments":[..]} per frame.
 
+Ham radio's words: the header's "prompt" goes to Whisper as its initial_prompt
+and "mots" as its hotwords (faster-whisper 1.0 and later; left out on an older
+one), both written by SatMe (fr.f4ioz.satcombo.phonie.LangageOm), which also
+rewrites the text afterwards. Nothing heard is ever an order: text only.
+
 Translation: the header's "cible" (a language code) translates the text
 heard into it, offline, with Argos Translate's language packages (OPUS-MT
 models run by CTranslate2, read with sentencepiece), through English when
@@ -151,6 +156,11 @@ def verifie(a):
         r["cuda"] = 0
         r["cuda_erreur"] = str(e)
     r["nvidia"] = len(bibliotheques_nvidia()) > 0
+    try:
+        from faster_whisper import WhisperModel
+        r["mots_cles"] = a_mots_cles(WhisperModel)
+    except Exception:
+        r["mots_cles"] = False
     r["modeles"] = [m for m in MODELES if present(m, a["modeles"])]
     r["traduction"] = verifie_traduction(a)
     r["ok"] = True
@@ -449,6 +459,27 @@ def charge(a):
     raise RuntimeError("chargement impossible (" + repli + ")")
 
 
+def options_vocabulaire(entete, mots_cles):
+    """The header's "prompt" and "mots" as transcribe()'s arguments (hotwords only when this faster-whisper has them)."""
+    o = {}
+    prompt = str(entete.get("prompt") or "").strip()
+    if prompt:
+        o["initial_prompt"] = prompt[:600]
+    mots = str(entete.get("mots") or "").strip()
+    if mots and mots_cles:
+        o["hotwords"] = mots[:300]
+    return o
+
+
+def a_mots_cles(modele):
+    """Whether transcribe() takes hotwords (faster-whisper 1.0 and later)."""
+    try:
+        import inspect
+        return "hotwords" in inspect.signature(modele.transcribe).parameters
+    except Exception:
+        return False
+
+
 def lit_exact(f, n):
     b = bytearray()
     while len(b) < n:
@@ -467,6 +498,7 @@ def boucle(a):
         dit({"erreur": str(e), "fatal": True})
         sys.exit(2)
     traducteur = Traducteur(a["traduction"], calcul)
+    mots_cles = a_mots_cles(modele)
     dit({"pret": True, "modele": a["modele"], "calcul": calcul, "type": type_, "charge_s": round(duree, 1), "repli": repli,
          "paires": sorted(paires_installees(a["traduction"]))})
     entree = sys.stdin.buffer
@@ -487,7 +519,7 @@ def boucle(a):
             langue = entete.get("langue") or None
             segs, info = modele.transcribe(audio, language=langue, task="transcribe", beam_size=5,
                                            vad_filter=True, vad_parameters={"min_silence_duration_ms": 500},
-                                           condition_on_previous_text=False)
+                                           condition_on_previous_text=False, **options_vocabulaire(entete, mots_cles))
             morceaux = [{"debut": round(s.start, 2), "fin": round(s.end, 2), "texte": s.text.strip(),
                          "avg_logprob": round(s.avg_logprob, 3), "no_speech_prob": round(s.no_speech_prob, 3),
                          "compression": round(s.compression_ratio, 2)} for s in segs]

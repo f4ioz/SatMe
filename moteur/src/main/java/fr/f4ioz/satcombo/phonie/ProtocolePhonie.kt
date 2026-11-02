@@ -21,7 +21,9 @@ import java.io.DataOutputStream
  * `[u32 BE: header length][header, JSON UTF-8][u32 BE: PCM length][PCM s16le, 16 kHz mono]`,
  * the header `{"id":7,"langue":"fr","tache":"transcribe","traduire":false,"rate":16000,"format":"s16le"}`
  * (an empty language: found by the engine), with `"cible":"fr"` when the text is
- * to be translated into that language (absent: Whisper's own English translation).
+ * to be translated into that language (absent: Whisper's own English translation),
+ * `"prompt":"…"` (Whisper's « initial_prompt », [LangageOm.prompt]) and `"mots":"…"`
+ * (its « hotwords », [LangageOm.motsCles]) when given.
  *
  * From it, one JSON object per line on its standard output: first
  * `{"pret":true,"modele":"large-v3","calcul":"cuda","type":"float16","charge_s":3.2}`
@@ -36,10 +38,13 @@ object ProtocolePhonie {
     const val RATE = 16_000
 
     /** The frame for one piece: [pcm] at 16 kHz, −1…1. */
-    fun trame(id: Long, pcm: FloatArray, langue: String = "", traduire: Boolean = false, cible: String = ""): ByteArray {
+    fun trame(id: Long, pcm: FloatArray, langue: String = "", traduire: Boolean = false, cible: String = "",
+              prompt: String = "", mots: String = ""): ByteArray {
         val entete = JSONObject().put("id", id).put("langue", langue).put("tache", "transcribe")
             .put("traduire", traduire).put("rate", RATE).put("format", "s16le")
-            .apply { if (cible.isNotBlank()) put("cible", cible) }.toString().toByteArray(Charsets.UTF_8)
+            .apply { if (cible.isNotBlank()) put("cible", cible) }
+            .apply { if (prompt.isNotBlank()) put("prompt", prompt) }
+            .apply { if (mots.isNotBlank()) put("mots", mots) }.toString().toByteArray(Charsets.UTF_8)
         val o = ByteArrayOutputStream(entete.size + pcm.size * 2 + 8)
         val d = DataOutputStream(o)
         d.writeInt(entete.size); d.write(entete)
@@ -127,6 +132,7 @@ data class BullePhonie(
     val satellite: String,
     val langue: String,
     val probaLangue: Double,
+    /** What was said, in ham radio's writing ([LangageOm.corrige]). */
     val texte: String,
     val traduction: String,
     /** 0…1, from the engine's mean log-probability. */
@@ -135,12 +141,18 @@ data class BullePhonie(
     val elements: List<AnalysePhonie.Element>,
     /** The language [traduction] is in ("" when none). */
     val langueCible: String = "",
+    /** The text as the engine wrote it, when [texte] differs ("" otherwise). */
+    val brut: String = "",
 ) {
+    /** The callsigns found, each once, surest first. */
+    val indicatifs: List<String> get() = AnalysePhonie.indicatifs(elements).map { it.valeur }
+
     fun json(): JSONObject = JSONObject().put("id", id).put("t", t).put("duree", Math.round(dureeS * 10) / 10.0)
         .put("src", source).put("freq", freqHz ?: JSONObject.NULL).put("sat", satellite).put("langue", langue)
         .put("proba", Math.round(probaLangue * 100) / 100.0).put("texte", texte).put("traduction", traduction)
         .put("conf", Math.round(confiance * 100) / 100.0).put("calcul", Math.round(calculS * 100) / 100.0)
         .put("elements", JSONArray(elements.map { it.json() })).put("langueCible", langueCible)
+        .put("indicatifs", JSONArray(indicatifs)).apply { if (brut.isNotBlank() && brut != texte) put("brut", brut) }
 
     companion object {
         fun depuis(j: JSONObject): BullePhonie = BullePhonie(j.optLong("id"), j.optLong("t"), j.optDouble("duree", 0.0),
@@ -149,7 +161,7 @@ data class BullePhonie(
             j.optDouble("conf", 0.0), j.optDouble("calcul", 0.0),
             (j.optJSONArray("elements") ?: JSONArray()).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { AnalysePhonie.Element.depuis(it) } },
             // Kept before the language was noted: English, the only one then.
-            j.optString("langueCible").ifBlank { if (j.optString("traduction").isNotBlank()) "en" else "" })
+            j.optString("langueCible").ifBlank { if (j.optString("traduction").isNotBlank()) "en" else "" }, j.optString("brut"))
 
         /** The engine's mean log-probability as 0…1 (exp, weighted by each segment's length). */
         fun confiance(m: List<ProtocolePhonie.Morceau>): Double {
