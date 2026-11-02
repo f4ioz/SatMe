@@ -2092,6 +2092,7 @@ ${ConversionPagePc.CSS}
   .vue { animation:vue-in 160ms ease-out; }
   @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
 ${DemarragePagePc.CSS}
+${GuidePagePc.CSS}
 ${IssDirectJs.CSS}
 ${IssOeilNuJs.CSS}
 ${RembobinageJs.STYLE}
@@ -2153,6 +2154,7 @@ ${rail()}
     </div>
   </span>
   ${DemarragePagePc.ENTETE}
+  ${GuidePagePc.ENTETE}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
@@ -2161,7 +2163,7 @@ ${rail()}
 <div id="mu-pop" class="sp-pop" hidden role="dialog" aria-label="Décodeurs multiples">
   <div class="t sp-pop-t">Décodeurs multiples<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-pop').hidden = true" aria-label="Fermer">✕</button></div>
   <label style="display:block"><input type="checkbox" id="mu-on" onchange="muPost('option?on=' + (this.checked ? 1 : 0))"> <b>Plusieurs décodeurs à la fois</b></label>
-  <div class="petit" style="margin:2px 0 8px">Jusqu’à 4 canaux pris dans ce que voit le récepteur, chacun avec son décodeur. Le son reste celui de l’accord principal, sauf le canal coché 🔈.</div>
+  <div class="petit aide-texte" style="margin:2px 0 8px">Jusqu’à 4 canaux pris dans ce que voit le récepteur, chacun avec son décodeur. Le son reste celui de l’accord principal, sauf le canal coché 🔈.</div>
   <div class="petit">Préréglages</div>
   <div class="mu-pre" id="mu-pre"></div>
   <div class="petit">Sur la fréquence écoutée</div>
@@ -2428,10 +2430,10 @@ ${rail()}
       </div>
     </div>
 
-    <div class="carte materiel" onclick="vue('reglages')" title="Poste et rotor : leurs réglages sont dans l'onglet Réglages">
+    <div class="carte materiel" id="st-materiel" onclick="vue('reglages')" title="Poste et rotor : leurs réglages sont dans l'onglet Réglages">
       <div class="paire" style="margin:0">
         <span onclick="if (!window.SATME_TELEPHONE) { event.stopPropagation(); catPop(this); }" title="Connecter ou déconnecter le poste (le modèle et le port de Réglages › Poste)"><span class="petit">Poste</span> <b id="st-poste">—</b> <span id="st-poste-ok" class="coche"></span></span>
-        <span><span class="petit">Rotor</span> <b id="st-rotor">—</b> <span id="st-rotor-ok" class="coche"></span></span>
+        <span id="st-rotor-b" onclick="if (!window.SATME_TELEPHONE) { event.stopPropagation(); rotPop(this); }" title="Connecter ou déconnecter le rotor (le lien et le port de Réglages › Rotor) : la connexion ne le fait pas tourner"><span class="petit">Rotor</span> <b id="st-rotor">—</b> <span id="st-rotor-ok" class="coche"></span></span>
       </div>
     </div>
 
@@ -2537,7 +2539,7 @@ ${TraficLeoJs.HTML}
       <div id="cw-corps" hidden>
         <div id="cw-texte" style="margin-top:8px;height:96px;overflow-y:auto;padding:6px 8px;border-radius:8px;background:#0E1720;font-family:ui-monospace,Consolas,monospace;font-size:15px;line-height:1.45;letter-spacing:1px;word-break:break-word"></div>
         <div class="ligne"><span class="petit">Note</span><select id="cw-ton" style="flex:none" onchange="post('api/cw?ton=' + this.value).then(ticCw)"><option value="0">trouvée seule</option><option>500</option><option>600</option><option>650</option><option>700</option><option>750</option><option>800</option><option>900</option></select>
-          <span class="petit">Un indicatif décodé : un clic le met dans la saisie.</span></div>
+          <span class="petit aide-texte">Un indicatif décodé : un clic le met dans la saisie.</span></div>
       </div>
     </div></div>
     <div id="ph-slot-carnet"><div class="carte" id="ph-carte" hidden>
@@ -2684,13 +2686,13 @@ ${TraficLeoJs.HTML}
     <div id="t-qr" style="width:190px;height:190px;flex:none;background:#fff;border-radius:8px;padding:0"></div>
     <div style="flex:1">
       <div><b>Scannez ce QR code avec SatMe</b> sur le téléphone : Réglages → Partage et écoute → Partage → <b>Scanner le QR code du PC</b>.</div>
-      <div class="petit" style="margin-top:6px">Le téléphone et ce PC doivent être sur le même réseau (Wi-Fi). Le téléphone ouvre son poste de commande et le PC s'y connecte tout seul.</div>
+      <div class="petit aide-texte" style="margin-top:6px">Le téléphone et ce PC doivent être sur le même réseau (Wi-Fi). Le téléphone ouvre son poste de commande et le PC s'y connecte tout seul.</div>
       <div class="ligne"><span class="petit">adresse de ce PC</span><select id="t-ip" onchange="montreQr(this.value)" style="max-width:180px"></select></div>
       <div class="petit" id="t-qr-etat"></div>
     </div>
   </div>
   <details id="t-main" style="margin-top:8px"><summary class="petit">ou à la main : l'adresse et le code affichés par le téléphone</summary>
-  <div class="petit">Sur le téléphone (le même Wi-Fi que ce PC) : Réglages → Partage et écoute → Partage → « Poste de commande sur PC ». Recopiez l'adresse qu'il affiche (http://…/c/…/) et le « code à saisir sur le PC ».</div>
+  <div class="petit aide-texte">Sur le téléphone (le même Wi-Fi que ce PC) : Réglages → Partage et écoute → Partage → « Poste de commande sur PC ». Recopiez l'adresse qu'il affiche (http://…/c/…/) et le « code à saisir sur le PC ».</div>
   <div class="ligne"><input id="t-adresse" placeholder="Adresse affichée (http://192.168.1.23:8080/c/…/)" style="flex:3;min-width:300px"><input id="t-code" placeholder="Code" style="max-width:110px">
     <button class="primaire" onclick="connecteTelephone()">Connecter</button></div>
   </details>
@@ -2905,7 +2907,7 @@ ${EncartSstvJs.HTML}  <div class="st" data-st="sstv">
       <div class="t">Décodage</div>
       <label class="petit" style="display:block;margin-top:0" title="Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
-      <label class="petit" style="display:block;margin-top:4px" title="À la fin de chaque image, son propre son est décodé à nouveau en entier, en arrière-plan, puis corrigé ; la version corrigée est gardée à côté (corrigees/) seulement si sa note est meilleure, l’image reçue n’est jamais modifiée"><input type="checkbox" id="so-redecode" onchange="soReglage('redecode', this.checked ? 1 : 0)"> Re-décoder chaque image à la fin <span class="petit">(version corrigée gardée si meilleure)</span></label>
+      <label class="petit" style="display:block;margin-top:4px" title="À la fin de chaque image, son propre son est décodé à nouveau en entier, en arrière-plan, puis corrigé ; la version corrigée est gardée à côté (corrigees/) seulement si sa note est meilleure, l’image reçue n’est jamais modifiée"><input type="checkbox" id="so-redecode" onchange="soReglage('redecode', this.checked ? 1 : 0)"> Re-décoder chaque image à la fin <span class="petit aide-texte">(version corrigée gardée si meilleure)</span></label>
     </div>
 ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <div class="t">Options SSTV</div>
@@ -2927,7 +2929,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
     </div>
     <div class="carte" id="so-couleur-carte" hidden>
       <div class="t">Couleurs et IA</div>
-      <label class="petit" style="display:block;margin-top:0" title="Chaque image sans réglage à elle : sa version aux couleurs corrigées est montrée dans la visionneuse et utilisée par les planches et le site web. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-couleur" onchange="soReglage('couleur', this.checked ? 1 : 0)"> Corriger les couleurs de chaque image <span class="petit">(par défaut ; chaque image a aussi son réglage dans la visionneuse)</span></label>
+      <label class="petit" style="display:block;margin-top:0" title="Chaque image sans réglage à elle : sa version aux couleurs corrigées est montrée dans la visionneuse et utilisée par les planches et le site web. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-couleur" onchange="soReglage('couleur', this.checked ? 1 : 0)"> Corriger les couleurs de chaque image <span class="petit aide-texte">(par défaut ; chaque image a aussi son réglage dans la visionneuse)</span></label>
       <div class="ligne" style="margin-top:2px"><span class="petit">Étapes :</span>
         <label class="petit" title="La couleur que partagent les zones neutres claires et sombres (un écart d’accord la donne à toute l’image)"><input type="checkbox" id="so-c_dominante" onchange="soReglage('c_dominante', this.checked ? 1 : 0)"> dominante</label>
         <label class="petit" title="La couleur recalée sur les bords de l’image (Robot 36, PD)"><input type="checkbox" id="so-c_chroma" onchange="soReglage('c_chroma', this.checked ? 1 : 0)"> couleur décalée</label>
@@ -2939,7 +2941,7 @@ ${EncartSstvJs.REGLAGE}    <div class="carte" id="so-carte">
       <div id="so-ia-barre-f" style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden" hidden><div id="so-ia-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
       <div class="ligne"><button class="primaire" id="so-ia-installer" onclick="soIaInstalle()">Installer</button><button id="so-ia-supprimer" onclick="soIaSupprime()" hidden>Supprimer</button></div>
       <div id="so-ia-reglages" hidden>
-      <label class="petit" style="display:block;margin-top:8px" title="Chaque image reçue en direct passe par l’IA toute seule, en arrière-plan, une à la fois, sur un fil de basse priorité : le décodage et l’auto-pilote n’attendent jamais. Elle est alors marquée « IA » partout, comme cochée à la main ; une image décochée dans la visionneuse reste sans. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-ia_auto" onchange="soReglage('ia_auto', this.checked ? 1 : 0)"> <b>Débruitage IA automatique</b> <span class="petit">(décoché d’origine ; les images reçues à partir de maintenant)</span></label>
+      <label class="petit" style="display:block;margin-top:8px" title="Chaque image reçue en direct passe par l’IA toute seule, en arrière-plan, une à la fois, sur un fil de basse priorité : le décodage et l’auto-pilote n’attendent jamais. Elle est alors marquée « IA » partout, comme cochée à la main ; une image décochée dans la visionneuse reste sans. L’image reçue n’est jamais modifiée."><input type="checkbox" id="so-ia_auto" onchange="soReglage('ia_auto', this.checked ? 1 : 0)"> <b>Débruitage IA automatique</b> <span class="petit aide-texte">(décoché d’origine ; les images reçues à partir de maintenant)</span></label>
       <div class="ligne" style="margin-top:2px"><label class="petit" title="Une image propre n’est pas touchée. Le bruit est celui de 📊 Analyse (visionneuse) : l’écart type de la luminance, en niveaux. Sur 215 images de l’ISS : médiane 4 ; sous 5 la note moyenne est de 80 à 85, à partir de 5 de 65."><input type="checkbox" id="so-ia_seuil_on" onchange="soReglage('ia_seuil_on', this.checked ? 1 : 0)"> seulement si le bruit atteint</label>
         <input id="so-ia_seuil" type="number" min="0" max="30" step="0.5" style="max-width:64px" onchange="soReglage('ia_seuil', this.value)"> <span class="petit">niveaux (σ de la luminance, comme 📊 Analyse › Bruit)</span></div>
       <div class="petit" id="so-ia-auto-etat"></div>
@@ -3143,7 +3145,7 @@ ${AprsCarteJs.HTML}
   <div>
     <div class="carte">
       <div class="t">Auto-pilote</div>
-      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitreCase(this)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitreCase(this)"> <b>Actif</b> <span class="petit aide-texte">(interrupteur général, aussi dans l'en-tête)</span></label></div>
       <div class="petit" id="ap-etat" style="margin-top:4px"></div>
       <div class="pi-compte" id="ap-prochaine" hidden role="timer" aria-live="off"></div>
     </div>
@@ -3234,7 +3236,7 @@ ${DiplomesJs.HTML}${CalendrierJs.HTML}</div>
 <div style="padding:12px 16px">
   <div class="carte">
     <div class="ligne" style="margin-top:0"><span class="t" style="margin:0">Frise des passages</span>
-      <span class="petit">les ★ favoris, le satellite suivi et ceux de l'agenda · 🤖 passage de l'auto-pilote SSTV · clic : le suivre</span>
+      <span class="petit aide-texte">les ★ favoris, le satellite suivi et ceux de l'agenda · 🤖 passage de l'auto-pilote SSTV · clic : le suivre</span>
       <select id="f-h" style="margin-left:auto;max-width:120px" onchange="chargeFrise()"><option value="6">6 h</option><option value="12" selected>12 h</option><option value="24">24 h</option><option value="48">48 h</option></select></div>
     <canvas id="f-canvas" style="width:100%;display:block;margin-top:8px;cursor:pointer"></canvas>
   </div>
@@ -3556,7 +3558,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
           <span class="petit" id="e-retour-info"></span></div>
       </details>
       <div id="e-adapt" style="margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px">
-        <label class="petit" style="display:block"><input type="checkbox" id="e-adapt-on" onchange="eRegleAdapt()"> <b>Adapter le MODCOD à la réception</b> — boucle fermée : le MiniTiouner reçoit notre propre signal, SatMe choisit le MODCOD (jamais la fréquence, le débit de symboles ni la puissance)</label>
+        <label class="petit" style="display:block"><input type="checkbox" id="e-adapt-on" onchange="eRegleAdapt()"> <b>Adapter le MODCOD à la réception</b><span class="aide-texte"> — boucle fermée : le MiniTiouner reçoit notre propre signal, SatMe choisit le MODCOD</span> (jamais la fréquence, le débit de symboles ni la puissance)</label>
         <div class="ligne"><span class="petit" style="min-width:86px">Plage</span><select id="e-adapt-min" onchange="eRegleAdapt()" style="max-width:110px" title="Le plus robuste autorisé"></select>
           <span class="petit">à</span><select id="e-adapt-max" onchange="eRegleAdapt()" style="max-width:110px" title="Le plus efficace autorisé"></select>
           <span class="petit">marge</span><input id="e-adapt-marge" type="number" step="0.5" min="0.5" max="10" style="max-width:70px" onchange="eRegleAdapt()"><span class="petit">dB</span></div>
@@ -3649,7 +3651,7 @@ ${BalisesQo100Js.HTML}    <div class="carte" id="d-chat-carte">
   <div class="tq-bandeau" id="tq-reprise" hidden>
     <span>📡 <b>Tu recevais QO-100</b> quand SatMe s'est arrêté.</span>
     <button class="primaire" onclick="tqReprise(1)">Reprendre QO-100</button><button onclick="tqReprise(0)">Non merci</button>
-    <span class="petit">Pour la reprendre toute seule : Réglages › Satellites. Rien n'est jamais émis.</span>
+    <span class="petit aide-texte">Pour la reprendre toute seule : Réglages › Satellites. Rien n'est jamais émis.</span>
   </div>
   <div class="tq-grille">
     <div class="tq-main">
@@ -3705,7 +3707,7 @@ ${SoleilQo100Js.LIGNE}        <div class="ligne" id="tq-datv-l" hidden style="ma
           <span class="petit" id="tq-d-info" style="margin-left:auto"></span>
           <button class="sp-b" id="tq-mu-b" hidden onclick="muOuvre(this)" aria-pressed="false" title="Décodeurs multiples : plusieurs signaux décodés à la fois, chacun sur son canal">${IconesPc.svg("view_quilt")}<span>Multiples</span></button></div>
         <div id="tq-mu" class="tq-mu" hidden></div>
-        <div id="tq-d-rien" class="petit">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, PSK31, RTTY, image SSTV).</div>
+        <div id="tq-d-rien" class="petit aide-texte">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, PSK31, RTTY, image SSTV).</div>
         <div id="tq-d-phonie" hidden><div id="ph-slot-qo100"></div><div class="petit" id="tq-ph-absent" hidden>« Phonie → texte » n'est pas installé : Réglages › Phonie → texte.</div></div>
         <div id="tq-d-cw" hidden><div id="cw-slot-qo100"></div><div class="petit" id="tq-cw-absent" hidden>Le décodeur CW n'est pas disponible ici.</div></div>
         <div id="tq-d-ft8" hidden>
@@ -3763,7 +3765,7 @@ ${SoleilQo100Js.LIGNE}        <div class="ligne" id="tq-datv-l" hidden style="ma
     </div>
     <div class="tq-cote">
       <div class="carte tq-aide" id="tq-aide" hidden>
-        <div class="ligne" style="margin:0"><b class="cyan">Comment ça marche</b><span class="petit">le trafic sur QO-100, d'un seul écran</span>
+        <div class="ligne" style="margin:0"><b class="cyan">Comment ça marche</b><span class="petit aide-texte">le trafic sur QO-100, d'un seul écran</span>
           <button style="margin-left:auto;padding:3px 10px" onclick="tqAideFerme()">Compris ✕</button></div>
         <ol class="tq-etapes">
           <li><b>Démarrer la réception QO-100</b> : un clic démarre le récepteur, le met sur QO-100 et donne son son aux décodeurs.</li>
@@ -3824,9 +3826,9 @@ ${SoleilQo100Js.LIGNE}        <div class="ligne" id="tq-datv-l" hidden style="ma
         <div id="o-balise" class="o-balise">—</div>
         <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
         <label style="display:block;margin-top:6px" id="oq-auto-l"><input type="checkbox" id="oq-auto" onchange="post('api/qo100/auto?on=' + (this.checked ? 1 : 0)).then(ticQualite).then(tqTic)"> <b>Calage automatique</b>
-          <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
+          <span class="petit aide-texte">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
         <label style="display:block;margin-top:6px" id="oq-vb-l" hidden title="La balise médiane suivie échantillon par échantillon dans le flux I/Q : ses sautillements rapides (un LNB instable, ±25 Hz en une seconde) sont ôtés de tout le transpondeur, en continu, sans à-coup. Le calage garde l'écart lent. Utile surtout pour FT8, dont les tons sont à 6,25 Hz."><input type="checkbox" id="oq-vb" onchange="post('api/qo100/verrou?on=' + (this.checked ? 1 : 0)).then(ticQualite)"> <b>Verrouillage sur la balise</b>
-          <span id="oq-vb-etat" class="pastille coupe">coupé</span> <span class="petit">— les sautillements du LNB ôtés de tout le transpondeur</span></label>
+          <span id="oq-vb-etat" class="pastille coupe">coupé</span> <span class="petit aide-texte">— les sautillements du LNB ôtés de tout le transpondeur</span></label>
         <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
         <details style="margin-top:4px"><summary class="petit" style="cursor:pointer">À la main</summary>
           <div class="petit aide">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
@@ -4152,7 +4154,7 @@ ${SoleilQo100Js.TABLEAU}      </div>
   </div>
   <div class="carte nx-assoc" id="nx-assoc" hidden>
     <div class="t">Associer un SatMe-Node</div>
-    <div class="petit">Son adresse et le code à six chiffres qu'il a donnés à la fin de son installation (revoir le code sur le Pi : <code>journalctl -u satme-noeud | grep Code</code>).</div>
+    <div class="petit aide-texte">Son adresse et le code à six chiffres qu'il a donnés à la fin de son installation (revoir le code sur le Pi : <code>journalctl -u satme-noeud | grep Code</code>).</div>
     <div class="ligne"><input id="nx-adresse" placeholder="192.168.1.30 ou satme-node.local" aria-label="Adresse du node" style="max-width:240px">
       <input id="nx-code" placeholder="Code" aria-label="Code du node" inputmode="numeric" style="max-width:100px">
       <button class="primaire" onclick="nxAssocie()">Associer</button>
@@ -4183,7 +4185,7 @@ ${SoleilQo100Js.TABLEAU}      </div>
         <div class="nx-role"><span>Réception DATV</span><select id="nx-r-datv" aria-label="Carte de la réception DATV" onchange="nxRole('datv', this.value)"></select><span class="petit" id="nx-r-datv-e"></span></div>
         <div class="nx-role"><span>Récepteur SDR</span><select id="nx-r-sdr" aria-label="Carte prêtée comme SDR" onchange="nxRole('sdr', this.value)"></select><span class="petit" id="nx-r-sdr-e"></span></div>
         <div class="nx-role"><span>Émetteur</span><select id="nx-r-tx" aria-label="Carte de l'émetteur" onchange="nxRole('emetteur', this.value)"></select><span class="petit" id="nx-r-tx-e"></span></div>
-        <div class="petit nx-regle">Une carte ne reçoit et n'émet jamais à la fois, et ne sert pas deux réceptions en même temps.</div>
+        <div class="petit aide-texte nx-regle">Une carte ne reçoit et n'émet jamais à la fois, et ne sert pas deux réceptions en même temps.</div>
         <div id="nx-conflits"></div>
         <div class="petit" id="nx-roles-msg" aria-live="polite"></div>
         <div class="petit aide">Réception DATV : la carte avec laquelle le node reçoit au prochain démarrage (le même choix que « Récepteur » de l'onglet DATV). Récepteur SDR : la carte prêtée à ce PC (pas pendant que son flux tourne). Émetteur : changer de carte d'ici décoche « émission autorisée » sur le node ; il faut la recocher sur le node lui-même. Le node refuse le second usage tant que le premier tient la carte.</div>
@@ -4268,7 +4270,7 @@ ${SoleilQo100Js.TABLEAU}      </div>
         <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="bb60">Signal Hound BB60 (BB60C/BB60D)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="noeud" class="r-noeud">SDR du SatMe-Node (réseau)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
       <div class="ligne" id="r-fichier-l" hidden><span class="petit" style="min-width:70px">Fichier</span><b class="petit" id="r-fichier-nom" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
         <button onclick="rqOuvre(this)" title="Les enregistrements I/Q : en choisir un à rejouer">Choisir…</button></div>
-      <div class="ligne" id="r-gen-l" hidden><span class="petit" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
+      <div class="ligne" id="r-gen-l" hidden><span class="petit aide-texte" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
         <button class="sp-b" id="sp-b-gen" onclick="genOuvre(this)" title="Les signaux du générateur : où, à quel niveau, et comment les écouter">${IconesPc.svg("tune")}<span>Signaux…</span></button></div>
       <div id="r-fi-l" hidden>
         <div class="ligne"><span class="petit" id="r-fi-info" style="flex:1">La FI de l'IC-9700, démodulée ici ; centrée sur le cadran du poste.</span>
@@ -4646,7 +4648,7 @@ ${Ft8SiteJs.HTML}    </div>
     <div class="petit aide">Les cubesats en FSK ou GMSK de 1200 à 9600 bit/s, dont le « G3RUH » à 9600 bit/s : embrouilleur 1 + x¹² + x¹⁷, NRZI, trames HDLC (CRC-16) le plus souvent en AX.25. Source « Récepteur SDR » : SatMe démodule les échantillons I/Q bruts du récepteur SDR principal, pas le son : discriminateur FM, rattrapage de fréquence résiduel (±12 kHz autour du Doppler suivi par SatMe), récupération d'horloge, puis deux lectures (avec et sans embrouilleur). Source « Carte son » : la sortie 9600 d'un TS-2000 (son discriminateur, sans désaccentuation), le Doppler corrigé par la CAT ; SatMe en retire le continu, la filtre, récupère l'horloge et lit les mêmes trames (la polarité du discriminateur n'y change rien).</div>
     <div class="petit aide">Le débit vient de l'émetteur SatNOGS DB du satellite suivi (mode FSK, GFSK, GMSK, MSK et sa vitesse), ou se choisit à la main. Les trames AX.100 « mode 5 » (ASM + Golay) et les protocoles propres à un satellite ne sont pas lus. Réception seulement.</div>
     <div class="petit aide">Les trames sont gardées par passage dans le dossier de données (telemesure/paquets : une ligne JSON par trame, et un fichier KISS si coché) ; les images SSDV dans telemesure/ssdv. Les signaux du générateur d'essai et des enregistrements rejoués ne sont ni gardés ni partagés.</div>
-    <label style="display:block"><input type="checkbox" id="tp-on" onchange="tlmPost('paquets?on=' + (this.checked ? 1 : 0))"> <b>Décoder les paquets</b> <span class="petit">— récepteur SDR (hors QO-100) ou carte son</span></label>
+    <label style="display:block"><input type="checkbox" id="tp-on" onchange="tlmPost('paquets?on=' + (this.checked ? 1 : 0))"> <b>Décoder les paquets</b> <span class="petit aide-texte">— récepteur SDR (hors QO-100) ou carte son</span></label>
     <div class="ligne"><span class="petit">Source</span><select id="tp-source" style="flex:none" onchange="tlmPost('paquets/source?v=' + this.value)"><option value="sdr">Récepteur SDR (I/Q)</option><option value="son">Carte son : bande de base 9600 (TS-2000, prise ACC2)</option></select></div>
     <div id="tp-son" hidden>
       <div class="ligne"><span class="petit">Carte</span><select id="tp-carte" style="flex:1;min-width:160px" title="La carte son branchée sur la sortie 9600 du poste" onchange="tlmPost('paquets/carte?v=' + encodeURIComponent(this.value))"></select></div>
@@ -4737,13 +4739,13 @@ ${VisuSignalJs.HTML}</div>
 <div class="grille2" id="reg-origine">
   <div>
 ${DemarragePagePc.CARTES}
-    <div class="carte" id="af-carte" hidden>
+${GuidePagePc.CARTE}    <div class="carte" id="af-carte" hidden>
       <div class="t">Accord fin (clé SDR)</div>
       <div class="petit aide">Les aides de l'onglet SDR, comme sur le téléphone : elles touchent le décalage logiciel de la clé, jamais le poste.</div>
-      <label style="display:block;margin-top:8px"><input type="checkbox" id="af-loupe" onchange="post('api/sdr/accord?loupe=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Loupe</b> <span class="petit">— une seconde vue du spectre, quelques kHz autour de l'écoute</span></label>
-      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-vernier" onchange="post('api/sdr/accord?vernier=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Vernier</b> <span class="petit">— un cadran qu'on pousse : la fréquence avance de N Hz par centimètre glissé</span></label>
+      <label style="display:block;margin-top:8px"><input type="checkbox" id="af-loupe" onchange="post('api/sdr/accord?loupe=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Loupe</b> <span class="petit aide-texte">— une seconde vue du spectre, quelques kHz autour de l'écoute</span></label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-vernier" onchange="post('api/sdr/accord?vernier=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Vernier</b> <span class="petit aide-texte">— un cadran qu'on pousse : la fréquence avance de N Hz par centimètre glissé</span></label>
       <div class="ligne"><span class="petit">Rapport</span><select id="af-ratio" onchange="post('api/sdr/accord?ratio=' + this.value).then(ticSdr)"><option value="20">20 Hz / cm (fin)</option><option value="200">200 Hz / cm</option><option value="2000">2 kHz / cm (rapide)</option></select></div>
-      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-voix" onchange="post('api/sdr/accord?voix=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Caler sur la voix</b> <span class="petit">— en BLU, la voix entendue mise à sa place d'un clic</span></label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-voix" onchange="post('api/sdr/accord?voix=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Caler sur la voix</b> <span class="petit aide-texte">— en BLU, la voix entendue mise à sa place d'un clic</span></label>
     </div>
     <div class="carte" id="rq-carte" hidden>
       <div class="t">QO-100 au démarrage</div>
@@ -5255,7 +5257,7 @@ ${ConversionPagePc.CARTE}
   <button id="sb-sdr" class="sb-i" onclick="vue('sdr')" title="Le récepteur SDR (onglet SDR)"><i></i><span>SDR</span><b id="sb-sdr-t">—</b></button>
   <button id="sb-datv" class="sb-i" onclick="vue('datv')" title="Le récepteur DATV (onglet DATV)"><i></i><span>DATV</span><b id="sb-datv-t">—</b></button>
   <button id="sb-cat" class="sb-i" onclick="catPop(this)" title="Le poste : connecter ou déconnecter le CAT d'un clic (réglages : Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
-  <button id="sb-rot" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le rotor (Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
+  <button id="sb-rot" class="sb-i" onclick="rotPop(this)" title="Le rotor : connecter ou déconnecter d'un clic (réglages : Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
   <button id="sb-rec" class="sb-i" hidden onclick="hsOuvre()" title="Un enregistrement est en cours : « Son » en haut pour l'arrêter (ou la touche E)"><i></i><b id="sb-rec-t"></b></button>
   <button id="sb-bal" class="sb-i" hidden onclick="vue('sdr'); balOuvre(g('sp-b-bal'))" title="Le récepteur balaie (onglet SDR, Balayage) : cliquer pour le voir ou l'arrêter"><i></i><span>Balayage</span><b id="sb-bal-t"></b></button>
   <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
@@ -5402,6 +5404,7 @@ ${DiplomesJs.DIALOGUE}
     <div><kbd>?</kbd></div><div>Cette aide</div>
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     ${DemarragePagePc.AIDE}
+    ${GuidePagePc.AIDE}
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>S</kbd></div><div>Le son des décodeurs (en-tête « Son ») : changer de source, démarrer, arrêter, décodeurs, enregistrer</div>
     <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement). Sur l'onglet Montage, <kbd>E</kbd> sert à « Modifier » le dessin et n'enregistre pas</div>
@@ -5413,6 +5416,7 @@ ${DiplomesJs.DIALOGUE}
   </div>
 </dialog>
 ${DemarragePagePc.DIALOGUES}
+${GuidePagePc.DIALOGUES}
 <div id="man" class="man" hidden role="dialog" aria-modal="true" aria-labelledby="man-t">
   <div class="man-boite">
     <div class="man-tete"><b id="man-t">Manuel</b>${IconesPc.svg("search")}<input id="man-q" type="search" autocomplete="off" placeholder="Chercher dans le manuel (tous les mots)" aria-label="Chercher dans le manuel" aria-controls="man-res">
@@ -6128,6 +6132,7 @@ const CATS_REG = [
   { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'IC-9700 (PTT, minuterie, puissance), coupure si la page se tait, correction I/Q des émetteurs', cartes: ['Émission du poste', 'Liaison pendant', 'Correction I/Q'] },
   { id: 'demarrage', nom: 'Démarrage', ico: 'history', desc: 'Réseau, port, dossier des données, mises à jour, configuration rapide', cartes: ['Options de démarrage', 'Mise à jour', 'Configuration rapide'] },
   { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, HTTPS, mode distant, application, écran allumé', cartes: ['Accès à distance', 'HTTPS', 'Mode distant', 'Sur cet appareil'] },
+  { id: 'aide', nom: 'Aide et affichage', ico: 'tune', desc: 'Visites guidées, assistant, interface allégée', cartes: ['Aide et affichage'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer ; le déploiement sur un autre PC', cartes: ['Sauvegarde', 'Déploiement'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -6758,10 +6763,18 @@ function dessine() {
     irMontre();
   }
   if (!rotTouche && ports.length && r.port >= 0 && r.port < ports.length) g('rot-port').value = String(r.port);
+  // The mast's link as last used (the badges' « Connecter » asks it again), until the operator picks another.
+  if (!rotTouche && r.lien) {
+    g('rot-lien').value = r.simule ? 'SIM' : r.lien === 'ROTCTLD' ? 'ROTCTLD' : 'GS232';
+    if (r.baud && [...g('rot-baud').options].some(o => o.value === String(r.baud))) g('rot-baud').value = String(r.baud);
+    if (document.activeElement !== g('rot-hote') && r.hote) g('rot-hote').value = r.hote;
+    if (document.activeElement !== g('rot-tcpport') && r.tcp) g('rot-tcpport').value = String(r.tcp);
+    lienRotor();
+  }
 }
 let catTouche = false, rotTouche = false;
 ['cat-modele', 'cat-port', 'cat-baud', 'cat-port-tx', 'cat-rx-type', 'cat-tx-type', 'cat-bande'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
-['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
+['rot-port', 'rot-baud', 'rot-lien', 'rot-hote', 'rot-tcpport'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
 function reglagesRotor() {
   const b = id => g(id).checked ? 1 : 0;
   post('api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
@@ -7376,8 +7389,8 @@ function avertCat() {
 g('cat-modele').onchange = () => { avertCat(); irMontre(); };
 function catConnecte() {
   const u = catRequete();
-  if (!u) { alert('Aucun port série choisi.'); return; }
-  post(u);
+  if (!u) { cxEchec('poste', g('cat-modele').value ? 'aucun port choisi' : 'modèle non choisi'); return; }
+  cxConnecte('poste', u);
 }
 /** The connection asked, as the form stands (null: a serial rig with no port chosen). */
 function catRequete() {
@@ -7521,11 +7534,18 @@ function lienRotor() {
   g('rot-serie').style.display = l === 'GS232' ? '' : 'none';
   g('rot-tcp').style.display = l === 'ROTCTLD' ? '' : 'none';
 }
+/** « Connecter » of the rotor (Réglages, the Suivi and status bar badges): the form as it stands, nothing else (no move asked). */
 function rotConnecte() {
+  const u = rotRequete();
+  if (!u) { cxEchec('rotor', 'aucun port choisi'); return; }
+  cxConnecte('rotor', u);
+}
+/** The rotor's connection, as the form stands (null: a GS-232 with no port chosen). */
+function rotRequete() {
   const l = g('rot-lien').value;
-  if (l === 'GS232' && (!ports.length || g('rot-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
-  post('api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
-       '&port=' + enc(g('rot-port').value) + '&baud=' + g('rot-baud').value + '&hote=' + enc(v('rot-hote')) + '&tcp=' + enc(v('rot-tcpport')));
+  if (l === 'GS232' && (!ports.length || g('rot-port').value === '-1')) return null;
+  return 'api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
+       '&port=' + enc(g('rot-port').value) + '&baud=' + g('rot-baud').value + '&hote=' + enc(v('rot-hote')) + '&tcp=' + enc(v('rot-tcpport'));
 }
 g('emetteur').onchange = () => {
   if (g('emetteur').value === 'perso') { persoOuvre(); return; }
@@ -13315,7 +13335,8 @@ function tqEcoute() {
 function tqAide() {
   let n = 0, ferme = false;
   try { n = +(localStorage.getItem('tq-aide-n') || 0); ferme = localStorage.getItem('tq-aide-ferme') === '1'; localStorage.setItem('tq-aide-n', String(n + 1)); } catch (x) {}
-  g('tq-aide').hidden = ferme || n >= 8;
+  // The light interface (Réglages › Aide et affichage): never opened by itself, « ? Aide » still opens it.
+  g('tq-aide').hidden = ferme || n >= 8 || document.body.classList.contains('allegee');
 }
 function tqAideFerme() { g('tq-aide').hidden = true; try { localStorage.setItem('tq-aide-ferme', '1'); } catch (x) {} }
 // The signals the receiver hears, each judged (BLU, CW, FT8…): asked only while the cockpit is shown (asking keeps the analysis on).
@@ -16241,15 +16262,105 @@ function catPop(b) {
   popMontre(b, '<div class="aide-p"><b>Poste</b> ' + (on ? esc(c.statut || c.modele) + (c.dl ? ' · ' + mhz(c.dl) + ' MHz' : '') : 'non connecté') + '</div>' +
     (on ? '' : '<div class="aide-p">' + esc(quoi) + '</div>' + (av ? '<div class="aide-p petit">' + esc(av) + '</div>' : '')) +
     '<div class="sb-pop-l">' + (on ? '<button class="arret" onclick="popCache(); post(\'api/cat/deconnecter\')">Déconnecter</button>'
-      : catPopU ? '<button class="primaire" onclick="catPopConnecte()">Connecter</button>' : '') +
+      : '<button class="primaire" onclick="catPopConnecte()">Connecter</button>') +
     '<button onclick="popCache(); vue(\'reglages\'); montreReglages(\'materiel\')">Réglages du poste…</button></div>', true);
 }
 let catPopU = '';
 function catPopConnecte() {
   popCache();
+  // No port chosen: the window that says so (and leads to the settings).
+  if (!catPopU) { catConnecte(); return; }
   // The form moved since (a choice made in Réglages): said again, nothing sent.
-  if (!catPopU || catPopU !== catRequete()) { catPop(g('sb-cat')); return; }
-  post(catPopU);
+  if (catPopU !== catRequete()) { catPop(g('sb-cat')); return; }
+  cxConnecte('poste', catPopU);
+}
+/** The rotor's badge (Suivi, status bar): connect or disconnect it in place, as « Connecter » of Réglages does. */
+function rotPop(b) {
+  if (window.SATME_TELEPHONE) { vue('reglages'); montreReglages('materiel'); return; }
+  const r = E && E.rotor, on = !!(r && r.connecte);
+  const l = g('rot-lien'), lo = l.selectedOptions[0], po = g('rot-port').selectedOptions[0];
+  const quoi = (lo ? lo.textContent : l.value) + (l.value === 'ROTCTLD' ? ' · ' + (v('rot-hote') || '?') + ':' + (v('rot-tcpport') || '4533')
+    : l.value === 'GS232' ? (po && g('rot-port').value !== '-1' ? ' · ' + po.textContent + ' · ' + g('rot-baud').value + ' bauds' : ' · aucun port choisi') : '');
+  // Exactly what is said here is what « Connecter » asks: the form read once, now.
+  rotPopU = on ? '' : rotRequete();
+  popMontre(b, '<div class="aide-p"><b>Rotor</b> ' + (on ? esc(r.statut || 'connecté') : 'non connecté') + '</div>' +
+    (on ? '' : '<div class="aide-p">' + esc(quoi) + '</div>' +
+      '<div class="aide-p petit">' + (r && r.suit ? 'Connecter ne fait pas tourner le rotor ; « Suivre le satellite » est coché : pendant un passage, il suivra le satellite.'
+        : 'Connecter ne fait pas tourner le rotor (« Suivre le satellite » n’est pas coché).') + '</div>') +
+    '<div class="sb-pop-l">' + (on ? '<button class="arret" onclick="popCache(); post(\'api/rotor/deconnecter\')">Déconnecter</button>'
+      : '<button class="primaire" onclick="rotPopConnecte()">Connecter</button>') +
+    '<button onclick="popCache(); vue(\'reglages\'); montreReglages(\'materiel\')">Réglages du rotor…</button></div>', true);
+}
+let rotPopU = '';
+function rotPopConnecte() {
+  popCache();
+  if (!rotPopU) { rotConnecte(); return; }
+  // The form moved since: said again, nothing sent.
+  if (rotPopU !== rotRequete()) { rotPop(g('sb-rot')); return; }
+  cxConnecte('rotor', rotPopU);
+}
+// ------------------------------------------------------------------ a connection followed to its end: why it failed, in a window
+/**
+ * Sends [u] (the rig's or the rotor's « Connecter »), then waits for SatMe-PC to finish that attempt (« essaiFini »
+ * in api/etat reaching the number it answered). Failed: the window that says why and leads to the right settings.
+ * The rig connected but silent a few seconds later: said too. Nothing else is sent.
+ */
+async function cxConnecte(quoi, u) {
+  const j = await post(u);
+  const n = j && j.essai;
+  if (!n || !GD.d) return;
+  const cle = quoi === 'poste' ? 'cat' : 'rotor', fin = Date.now() + 25000;
+  while (Date.now() < fin) {
+    await new Promise(r => setTimeout(r, 500));
+    let e; try { e = await (await fetch('api/etat')).json(); } catch (x) { continue; }
+    const d = e && e[cle];
+    if (!d || !(d.essaiFini >= n)) continue;
+    if (!d.connecte) { cxEchec(quoi, String(d.statut || '').replace(/^échec : /, ''), d.diag); return; }
+    if (quoi === 'poste' && !d.simule) {
+      // A port that opens is not yet a rig that answers: its link guard says so within a few seconds.
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 750));
+        try { const e2 = await (await fetch('api/etat')).json(); if (e2.cat && e2.cat.connecte && e2.cat.muet) { cxEchec(quoi, e2.cat.liaison || e2.cat.statut || '', null, 'muet'); return; } } catch (x) {}
+      }
+    }
+    return;
+  }
+  cxEchec(quoi, '', null, 'delai');
+}
+/** What kind of failure [t] says (the server's words, French): no port, refused, not opened, silent, no model, demonstration. */
+function cxGenre(t) {
+  const x = sansAccent(String(t || '').toLowerCase());
+  if (/demonstration/.test(x)) return 'demo';
+  if (/modele non choisi/.test(x)) return 'modele';
+  if (/aucun port|aucun adaptateur|port introuvable|no device|aucun port serie/.test(x)) return 'port';
+  if (/refuse|autorise|permission|denied/.test(x)) return 'acces';
+  if (/repond|reponse|muet|silen/.test(x)) return 'muet';
+  if (/ouvr|open|interface d'un autre/.test(x)) return 'ouverture';
+  return 'autre';
+}
+let cxQuoi = 'poste';
+function cxEchec(quoi, raison, diag, genre) {
+  if (!GD.d) { annonce((quoi === 'poste' ? 'Poste : ' : 'Rotor : ') + (raison || 'pas connecté')); return; }
+  cxQuoi = quoi;
+  const k = genre || cxGenre(raison);
+  const faire = k === 'muet' ? GT('cx_muet_faire_' + quoi) : GT('cx_' + k + '_faire');
+  const d = (diag || []).filter(x => x).slice(-4);
+  txt('cx-titre', GT('cx_titre_' + quoi) + ' · ' + GT('cx_' + k));
+  g('cx-corps').innerHTML = (raison || d.length ? '<div class="gd-boite gd-attention"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + GD_ICONES.attention + '"/></svg><div><b class="gd-bt">' +
+      esc(GT('cx_raison')) + '</b><div class="cx-raison">' + esc(raison || '') + (d.length ? '<br>' + d.map(esc).join('<br>') : '') + '</div></div></div>' : '') +
+    '<div class="gd-boite gd-faire"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + GD_ICONES.faire + '"/></svg><div><b class="gd-bt">' +
+      esc(GT('cx_faire')) + '</b><div>' + esc(faire) + '</div></div></div>';
+  if (!g('cx-dlg').open) g('cx-dlg').showModal();
+}
+/** « Aller aux réglages »: Réglages › Poste et rotor, the rig's or the rotor's card brought into view and lit up. */
+function cxReglages() {
+  g('cx-dlg').close();
+  vue('reglages'); montreReglages('materiel');
+  const c = g(cxQuoi === 'poste' ? 'cat-modele' : 'rot-lien').closest('.carte');
+  if (!c) return;
+  gdDefile(c);
+  c.classList.remove('cx-eclair'); void c.offsetWidth; c.classList.add('cx-eclair');
+  setTimeout(() => c.classList.remove('cx-eclair'), 4000);
 }
 function molPop(b) {
   const j = HX.mol;
@@ -20165,6 +20276,7 @@ ${AstreRotorJs.JS}
 ${IssOeilNuJs.JS}
 ${MessagesAprsJs.JS}
 ${FrequencesJs.JS}
+${GuidePagePc.JS}
 </script>
 </body></html>
 """

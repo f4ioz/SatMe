@@ -1289,6 +1289,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
             return
         }
+        if (chemin.startsWith("/api/guide/image/")) {
+            val b = fr.f4ioz.satcombo.demo.GuidePagePc.image(chemin.substringAfterLast('/'))
+            if (b != null) envoie(sortie, "200 OK", "image/webp", b) else envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            return
+        }
         when (chemin) {
             "/", "/index.html", "/pc" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
             "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { envoie(sortie, "200 OK", "font/woff2", it) } ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
@@ -1540,6 +1545,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     station.etat.value.satellites.size, celestrakParServeur = true)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            // The guided tours in the station's language, the help texts, the two display options (GuidePagePc).
+            "/api/guide" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", guide().toString().toByteArray())
+            "/api/interface" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", interfaceJson().toString().toByteArray())
             "/api/qrz" -> {
                 // Read only (a directory lookup), so a GET; nothing changes in the station.
                 val f = carnet?.let { kotlinx.coroutines.runBlocking { it.ficheQrz(q["c"].orEmpty()) } }
@@ -2019,6 +2027,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         return JSONObject().put("ok", true)
     }
 
+    /** The two display options of Réglages › Aide et affichage, kept by SatMe-PC. */
+    private fun interfaceJson(): JSONObject = JSONObject().put("ok", true)
+        .put("assistant", station.assistant).put("allegee", station.interfaceAllegee)
+
+    /** `api/guide`: the tours, the help texts (pcg_… of Strings.kt) in the station's language, the options. */
+    private fun guide(): JSONObject {
+        val anglais = fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN
+        val textes = JSONObject()
+        fr.f4ioz.satcombo.i18n.FR.keys.filter { it.startsWith("pcg_") }.forEach { textes.put(it, fr.f4ioz.satcombo.i18n.I18n.t(it)) }
+        val v = fr.f4ioz.satcombo.demo.GuidePagePc.visites(anglais)
+        return interfaceJson().put("langue", if (anglais) "en" else "fr").put("textes", textes)
+            .put("groupes", v.getJSONArray("groupes")).put("visites", v.getJSONArray("visites"))
+    }
+
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
         if (chemin == "/api/datv/emission/reglage" && listOf("prereglage", "prereglageGarde", "prereglageRetire").any { it in q }) return prereglageDatv(chemin, q)
         val ok = JSONObject().put("ok", true)
@@ -2026,6 +2048,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         fun entier(k: String) = q[k]?.trim()?.toIntOrNull()
         when (chemin) {
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
+            "/api/interface" -> {
+                q["assistant"]?.let { station.assistant = it == "1" }
+                q["allegee"]?.let { station.interfaceAllegee = it == "1" }
+                return interfaceJson()
+            }
             "/api/emetteur" -> station.choisitEmetteur(entier("i") ?: 0)
             // « Autre fréquence… » for the satellite followed: downlink MHz, optional uplink, the rig's mode; efface=1 forgets it.
             "/api/emetteur/perso" -> {
@@ -2099,9 +2126,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/locator" -> return ok.put("ok", station.poseLocator(q["l"].orEmpty()))
             "/api/indicatif" -> station.poseIndicatif(q["c"].orEmpty())
             "/api/catalogue" -> station.rafraichisCatalogue()
-            "/api/cat/connecter" -> station.connecteCat(StationPc.ChoixCat(q["modele"].orEmpty(),
+            // The attempt's number: the page waits for « essaiFini » to reach it, then says why it failed.
+            "/api/cat/connecter" -> return ok.put("essai", station.connecteCat(StationPc.ChoixCat(q["modele"].orEmpty(),
                 port = entier("port") ?: -1, baud = entier("baud") ?: 0, portTx = entier("portTx") ?: -1,
-                rxIc705 = q["rxIc705"] == "1", txIc705 = q["txIc705"] == "1", bandeTx = entier("bandeTx") ?: 0))
+                rxIc705 = q["rxIc705"] == "1", txIc705 = q["txIc705"] == "1", bandeTx = entier("bandeTx") ?: 0)))
             "/api/cat/deconnecter" -> station.deconnecteCat()
             // The rig tuned even below the horizon: asked with « on », read without.
             "/api/emission/chien-local" -> {
@@ -2121,7 +2149,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 entier("port")?.let { rotor.setRotorUsbIndex(it) }
                 entier("baud")?.let { rotor.setRotorBaud(it) }
                 rotor.setRotorAutoPort(false)
-                rotor.connectRotor()
+                return ok.put("essai", rotor.connecteRotorNumero())
             }
             "/api/frequences/oublie" -> frequences.oublie()
             "/api/rotor/deconnecter" -> { astre.arrete(); rotor.disconnectRotor() }
@@ -3237,6 +3265,9 @@ object JsonPc {
     }
 
     fun etat(st: StationPc, carnet: CarnetPc? = null): JSONObject {
+        // The attempts finished, read before the states: a state never older than the attempt it is said to end.
+        val essaiCat = st.essaiCatFini
+        val essaiRotor = st.stationRotor.essaiConnexionFini
         val e = st.etat.value
         val r = st.stationRotor.etat.value
         val c = st.stationCat.etat.value
@@ -3272,8 +3303,9 @@ object JsonPc {
             .put("rxOl", rx?.olHz ?: 0).put("rxInv", rx?.inverse == true)
             .put("txOl", tx?.olHz ?: 0).put("txInv", tx?.inverse == true))
         o.put("conversion", conversionCat(st, dl, ul, c.descenteHz, c.monteeHz, e.catConnecte))
-        o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler, e.catMuet, e.catLiaison))
-        o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r))
+        o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler, e.catMuet, e.catLiaison)
+            .put("essaiFini", essaiCat))
+        o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r).put("essaiFini", essaiRotor))
         // The log's pass: the skeds announced for the pass under way or next, the contacts of the one under way
         // (or of the one just over, an hour after it).
         val s = e.suivi

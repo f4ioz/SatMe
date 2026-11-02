@@ -51,7 +51,7 @@ function ivDessine() {
   else h += '<table><thead><tr><th>Jour</th><th>Apparaît</th><th>Au plus haut</th><th>Disparaît</th><th>Éclat</th></tr></thead><tbody>' + l.map(v =>
     '<tr><td>' + ivJour(v.debut.t) + '</td><td>' + ivHm(v.debut.t) + ' · ' + v.debut.dir + ' ' + v.debut.el + '°</td><td>' + ivHm(v.max.t) + ' · ' + v.max.dir + ' <b>' + v.max.el + '°</b></td><td>' +
     ivHm(v.fin.t) + ' · ' + v.fin.dir + ' ' + v.fin.el + '°' + (v.ombre ? ' 🌑' : '') + '</td><td title="Magnitude estimée (plus petit : plus brillant)">' + ivMag(v.magnitude) + ' · ' + esc(v.eclat) + '</td></tr>').join('') + '</tbody></table>' +
-    '<div class="petit" style="margin-top:4px">🌑 : elle s’éteint en entrant dans l’ombre de la Terre, avant l’horizon. Magnitude estimée (−1,8 à 1000 km, mi-éclairée) : ses panneaux peuvent briller davantage.</div>';
+    '<div class="petit aide-texte" style="margin-top:4px">🌑 : elle s’éteint en entrant dans l’ombre de la Terre, avant l’horizon. Magnitude estimée (−1,8 à 1000 km, mi-éclairée) : ses panneaux peuvent briller davantage.</div>';
   if (g('iv-pop').dataset.vu !== h) { g('iv-pop').dataset.vu = h; g('iv-pop').innerHTML = h; }
 }
 function ivBascule(ev) {

@@ -23,7 +23,7 @@ object ConversionPagePc {
     const val CARTE = """
     <div class="carte" id="cv-carte">
       <div class="t">Convertisseurs et transverters</div>
-      <div class="petit">Une ligne par boîte entre l'antenne et un appareil : LNB, convertisseur descendant, transverter montant. Les fréquences s'écrivent <b>côté ciel</b> (RF) ; SatMe envoie à l'appareil la fréquence intermédiaire : <b>FI = RF − OL</b>, ou <b>OL − RF</b> quand le spectre est inversé. La <b>première ligne qui couvre</b> la fréquence gagne, appareil par appareil (clé SDR, réception du poste, émission du poste).</div>
+      <div class="petit aide-texte">Une ligne par boîte entre l'antenne et un appareil : LNB, convertisseur descendant, transverter montant. Les fréquences s'écrivent <b>côté ciel</b> (RF) ; SatMe envoie à l'appareil la fréquence intermédiaire : <b>FI = RF − OL</b>, ou <b>OL − RF</b> quand le spectre est inversé. La <b>première ligne qui couvre</b> la fréquence gagne, appareil par appareil (clé SDR, réception du poste, émission du poste).</div>
       <div class="cv-boite"><table class="cv-table" id="cv-table">
         <thead><tr><th title="Ligne utilisée ou non">Active</th><th>Nom</th><th title="Bas de la bande, côté ciel">RF de (MHz)</th><th title="Haut de la bande, côté ciel">RF à (MHz)</th><th title="Oscillateur local">OL (MHz)</th>
           <th title="Oscillateur au-dessus de la bande : FI = OL − RF, le spectre retourné">Inversé</th><th title="Devant la clé SDR (réception)">Clé SDR</th><th title="Devant la réception du poste (CAT)">CAT RX</th><th title="Devant l'émission du poste (CAT)">CAT TX</th><th>FI</th><th></th></tr></thead>
@@ -41,7 +41,7 @@ object ConversionPagePc {
     const val DIALOGUES = """
 <dialog id="cal-dlg" class="dlg-mt cal-dlg" aria-labelledby="cal-t" onclose="calFerme()">
   <div class="paire" style="margin:0;align-items:center"><b id="cal-t" style="font-size:16px">Calibrer la clé SDR</b><button class="discret" onclick="g('cal-dlg').close()" aria-label="Fermer">✕</button></div>
-  <div class="petit" style="margin-top:4px">SatMe accorde la clé SDR sur un signal dont la fréquence est connue, trouve son pic et en déduit l'erreur. Réception seulement : rien n'est émis.</div>
+  <div class="petit aide-texte" style="margin-top:4px">SatMe accorde la clé SDR sur un signal dont la fréquence est connue, trouve son pic et en déduit l'erreur. Réception seulement : rien n'est émis.</div>
   <div class="cal-grille">
     <div>
       <div class="t" style="margin-top:8px">1. La référence</div>
@@ -54,14 +54,14 @@ object ConversionPagePc {
       <div class="ligne"><button id="cal-go" onclick="calAccorde()">2. Accorder la clé</button><span class="petit" id="cal-msg"></span></div>
     </div>
     <div>
-      <div class="t" style="margin-top:8px">3. Le pic <span class="petit" style="font-weight:400">clic sur le spectre : le choisir à la main</span></div>
+      <div class="t" style="margin-top:8px">3. Le pic <span class="petit aide-texte" style="font-weight:400">clic sur le spectre : le choisir à la main</span></div>
       <canvas id="cal-sp" width="600" height="180" style="width:100%;height:180px;background:var(--creux);border-radius:8px;cursor:crosshair" onclick="calClic(event)"></canvas>
       <div class="ligne" style="margin-top:4px"><button onclick="calPic = null; calMesure()">Pic automatique</button><span class="petit" id="cal-pic"></span></div>
     </div>
   </div>
   <div class="cal-res" id="cal-res"></div>
   <details style="margin-top:8px"><summary class="petit" style="cursor:pointer">Comment ça marche</summary>
-    <div class="petit" style="margin-top:4px;line-height:1.5">Le quartz d'une clé SDR se trompe de quelques ppm à quelques dizaines de ppm (parties par million) : 30 ppm, c'est 28 kHz à 940 MHz. SatMe compare où le signal devrait être et où il apparaît : l'écart divisé par la fréquence reçue par la clé donne les ppm à corriger.<br>
+    <div class="petit aide-texte" style="margin-top:4px;line-height:1.5">Le quartz d'une clé SDR se trompe de quelques ppm à quelques dizaines de ppm (parties par million) : 30 ppm, c'est 28 kHz à 940 MHz. SatMe compare où le signal devrait être et où il apparaît : l'écart divisé par la fréquence reçue par la clé donne les ppm à corriger.<br>
     <b>Derrière un LNB</b>, l'écart mêle deux erreurs : celle de l'oscillateur du LNB (quelques kHz à quelques dizaines de kHz à 10 GHz) et celle de la clé. Une seule mesure ne peut pas les séparer : calibre d'abord la clé sur une référence terrestre (GSM, balise locale), puis mesure la balise QO-100 — ce qui reste est l'oscillateur réel du LNB, à corriger dans la ligne de la table. Un LNB verrouillé sur un GPSDO est juste : l'écart est alors celui de la clé.<br>
     <b>GSM</b> : chaque relais émet un ton pur (FCCH) 67,708 kHz au-dessus du centre de son canal, par salves : coche « garder le maximum ». Trouver un canal actif près de chez soi : un balayage de 935–960 MHz dans l'onglet SDR. Les balises QO-100 sont générées au sol depuis un GPS.</div>
   </details>

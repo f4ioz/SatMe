@@ -417,6 +417,16 @@ class StationPc(
         get() = stockage.getBoolean("pc_qrz_fiche", true)
         set(v) { stockage.edit().putBoolean("pc_qrz_fiche", v).apply() }
 
+    /** Réglages › Aide et affichage: the assistant (the next thing to do, shown on the page), off by default. */
+    var assistant: Boolean
+        get() = stockage.getBoolean("pc_assistant", false)
+        set(v) { stockage.edit().putBoolean("pc_assistant", v).apply() }
+
+    /** Réglages › Aide et affichage: the light interface (the explanation texts hidden), off by default. */
+    var interfaceAllegee: Boolean
+        get() = stockage.getBoolean("pc_interface_allegee", false)
+        set(v) { stockage.edit().putBoolean("pc_interface_allegee", v).apply() }
+
     // ---------------------------------------------------------------- the SDR dongle
 
     /** What the dongle listens to: the transmitter's downlink at rest, with its Doppler now (sky, calibration in), its mode. */
@@ -1308,7 +1318,7 @@ class StationPc(
      * CI-V, a TS-2000, an FT-817 / IC-705 pair, a TH-D72 — or a simulated
      * IC-9700 or TS-2000, nothing opened.
      */
-    fun connecteCat(modele: String, index: Int, baud: Int) = connecteCat(ChoixCat(modele, index, baud))
+    fun connecteCat(modele: String, index: Int, baud: Int): Int = connecteCat(ChoixCat(modele, index, baud))
 
     /** The adapter that answered as a TH-D72: named so from then on (it says only "CP2102" itself). */
     var cleThd72: String
@@ -1356,10 +1366,16 @@ class StationPc(
     /** The USB port the CAT was opened on (adapter key, port number) and its speed: opened again there only. */
     @Volatile private var portCat: Triple<String, Int, Int>? = null
 
-    fun connecteCat(c: ChoixCat) {
+    /** The connections asked (numbered at the request) and the last one finished: the page waits for its own, then says why it failed. */
+    private val essaisCat = java.util.concurrent.atomic.AtomicInteger()
+    @Volatile var essaiCatFini = 0; private set
+
+    /** Connects as [c] says (in the background); the attempt's number, for [essaiCatFini]. */
+    fun connecteCat(c: ChoixCat): Int {
         if (c.modele == "THD72") { derniereChoixCat = c; settings.thd72BandeTx = c.bandeTx.coerceIn(0, 1) }
+        val n = essaisCat.incrementAndGet()
         portee.launch {
-            fil.withLock {
+            try { fil.withLock {
                 deconnecteCatDedans()
                 catParReseau = false
                 choixCat = c
@@ -1470,8 +1486,13 @@ class StationPc(
                 }
                 cheminsCat = listOfNotNull(p?.chemin, pTx?.chemin).filter { it.isNotBlank() }
                 if (_etat.value.catConnecte) lanceBoucleCat()
-            }
+            } } catch (x: kotlinx.coroutines.CancellationException) { throw x
+            } catch (x: Exception) {
+                // Whatever broke (a port list that fails…), the page is told: never a silent « disconnected ».
+                change { copy(catConnecte = false, catSimule = false, catStatut = "échec : " + (x.message ?: x.javaClass.simpleName)) }
+            } finally { essaiCatFini = maxOf(essaiCatFini, n) }
         }
+        return n
     }
 
     fun deconnecteCat() { portee.launch { fil.withLock { deconnecteCatDedans() } } }

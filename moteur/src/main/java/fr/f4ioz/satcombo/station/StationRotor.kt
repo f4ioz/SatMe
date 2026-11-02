@@ -400,8 +400,19 @@ class StationRotor(
         }
     }
 
-    fun connectRotor() {
-        portee.launch { rotorGuard("rotor_connect") { connectRotorInner() } }
+    fun connectRotor() { connecteRotorNumero() }
+
+    /** The connections asked (numbered at the request) and the last one finished: SatMe-PC's page waits for its own. */
+    private val essaisConnexion = java.util.concurrent.atomic.AtomicInteger()
+    @Volatile var essaiConnexionFini = 0; private set
+
+    /** As [connectRotor]; the attempt's number, for [essaiConnexionFini]. */
+    fun connecteRotorNumero(): Int {
+        val n = essaisConnexion.incrementAndGet()
+        portee.launch {
+            try { rotorGuard("rotor_connect") { connectRotorInner() } } finally { essaiConnexionFini = maxOf(essaiConnexionFini, n) }
+        }
+        return n
     }
 
     /** A demonstration (SatMe-PC's `--demo`): the simulated mast only, whatever the link chosen (no port, no rotctld). */

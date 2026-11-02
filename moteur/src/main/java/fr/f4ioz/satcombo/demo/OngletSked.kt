@@ -43,7 +43,7 @@ object OngletSked {
     </div>
   </div>
   <div class="k-droite">
-    <div class="carte" id="k-vide"><div class="petit k-vide-t">Cherche les fenêtres communes avec une station : la première se rejoue ici, les deux ciels et la carte.</div></div>
+    <div class="carte" id="k-vide"><div class="petit aide-texte k-vide-t">Cherche les fenêtres communes avec une station : la première se rejoue ici, les deux ciels et la carte.</div></div>
     <div class="carte" id="k-anim" hidden>
       <div class="ligne" style="margin-top:0;flex-wrap:wrap">
         <span class="t" id="k-titre" style="margin:0"></span>

@@ -38,11 +38,11 @@ object SiteWebJs {
       <div id="site-web">
       <div class="petit" style="margin-top:6px">L'adresse qui reçoit. Avec <code>{type}</code>, remplacé par le genre de chaque envoi (<code>…/{type}</code> → <code>…/sstv-image</code>) ; sans, tout part à cette même adresse (le genre est dans l'en-tête <code>X-SatMe-Type</code>).</div>
       <div class="ligne"><input id="site-url" placeholder="https://example.org/satme/recevoir.php" spellcheck="false" autocomplete="off"></div>
-      <div class="petit" style="margin-top:6px">Jeton (facultatif mais conseillé) : une clé secrète que votre site vérifie, envoyée en <code>Authorization: Bearer …</code>. Elle reste sur ce PC et n'est jamais réaffichée.</div>
+      <div class="petit aide-texte" style="margin-top:6px">Jeton (facultatif mais conseillé) : une clé secrète que votre site vérifie, envoyée en <code>Authorization: Bearer …</code>. Elle reste sur ce PC et n'est jamais réaffichée.</div>
       <div class="ligne"><input id="site-jeton" type="password" placeholder="Jeton (facultatif)" autocomplete="off"><button id="site-sans-jeton" onclick="if (confirm('Ne plus envoyer de jeton ?')) sitePost('reglages', 'sansJeton=1')" hidden>Sans jeton</button></div>
       </div>
       <div id="site-dos" hidden>
-      <div class="petit" style="margin-top:6px">Un dossier où SatMe-PC écrit chaque élément (<code>type/année/id.ext</code> et sa fiche <code>.json</code>), un <code>index.json</code> et un flux <code>flux.xml</code> : pour un site statique ou un outil de synchronisation que vous avez déjà. SatMe-PC ne fait pas de FTP lui-même.</div>
+      <div class="petit aide-texte" style="margin-top:6px">Un dossier où SatMe-PC écrit chaque élément (<code>type/année/id.ext</code> et sa fiche <code>.json</code>), un <code>index.json</code> et un flux <code>flux.xml</code> : pour un site statique ou un outil de synchronisation que vous avez déjà. SatMe-PC ne fait pas de FTP lui-même.</div>
       <div class="ligne"><input id="site-dossier" placeholder="/home/moi/Nextcloud/satme" spellcheck="false" autocomplete="off"></div>
       </div>
       <div class="petit" style="margin-top:6px"><b>2. Tester</b> — une requête <code>ping</code> à l'adresse (rien n'est publié), ou un essai d'écriture dans le dossier. Prêt seulement après un essai réussi.</div>

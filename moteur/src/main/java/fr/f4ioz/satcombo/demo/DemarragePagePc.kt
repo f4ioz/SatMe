@@ -109,7 +109,7 @@ object DemarragePagePc {
   <div class="cfr-etape" data-e="4" hidden>
     <h3>Démarrage</h3>
     <div id="cfr-reseau-bloc">
-      <label style="display:block"><input type="checkbox" id="cfr-reseau" onchange="cfrReseauAvert()"> <b>Accès depuis le réseau</b> <span class="petit">— la page ouverte aux autres machines (une tablette, le PC du salon)</span></label>
+      <label style="display:block"><input type="checkbox" id="cfr-reseau" onchange="cfrReseauAvert()"> <b>Accès depuis le réseau</b> <span class="petit aide-texte">— la page ouverte aux autres machines (une tablette, le PC du salon)</span></label>
       <div class="dem-avert" id="cfr-reseau-avert" hidden></div>
       <label class="cfr-l" for="cfr-port">Port de la page</label><input id="cfr-port" type="number" min="1024" max="65534" placeholder="8090" style="max-width:110px">
       <div class="petit" style="margin-top:8px">Pris en compte au prochain démarrage de SatMe-PC. Le dossier des données et le reste : Réglages › Démarrage.</div>
@@ -144,14 +144,14 @@ object DemarragePagePc {
     </div>
     <div class="carte" id="mj-carte" hidden>
       <div class="t">Mise à jour</div>
-      <label style="display:block"><input type="checkbox" id="mj-on" onchange="mjRegle(this.checked)"> <b>Vérifier les mises à jour</b> <span class="petit">— la dernière version publiée sur GitHub, une fois par jour</span></label>
+      <label style="display:block"><input type="checkbox" id="mj-on" onchange="mjRegle(this.checked)"> <b>Vérifier les mises à jour</b> <span class="petit aide-texte">— la dernière version publiée sur GitHub, une fois par jour</span></label>
       <div class="petit aide">Une seule question à l’API publique de GitHub (sans compte), au démarrage puis chaque jour ; la réponse est gardée (mise-a-jour.json). Rien n’est téléchargé ni installé tout seul : un badge discret en haut, ses nouveautés et le bon fichier (l’installateur sous Windows, satme-pc.tar sous Linux). Une version de développement ne demande rien.</div>
       <div class="etat" id="mj-etat"></div>
       <div class="ligne"><button onclick="mjVerifie()">Vérifier maintenant</button><a class="petit" id="mj-lien" href="#" target="_blank" rel="noopener noreferrer" hidden>La page de la version</a></div>
     </div>
     <div class="carte" id="cfr-carte" hidden>
       <div class="t">Configuration rapide</div>
-      <div class="petit">L’indicatif, le locator, le nom, l’heure, la langue et le démarrage en quelques étapes, comme au premier lancement.</div>
+      <div class="petit aide-texte">L’indicatif, le locator, le nom, l’heure, la langue et le démarrage en quelques étapes, comme au premier lancement.</div>
       <div class="ligne"><button class="primaire" onclick="cfrOuvre()">Configuration rapide…</button><button onclick="qdnOuvre(true)">Quoi de neuf…</button><span class="petit" id="cfr-version"></span></div>
     </div>
     <div class="carte" id="dep-carte" hidden>
@@ -170,7 +170,7 @@ object DemarragePagePc {
       </div>
       <div class="etat" id="dep-etat"></div>
       <div class="t" style="margin-top:12px">Lancer SatMe-PC avec la session</div>
-      <div class="petit">Un fichier à installer soi-même (SatMe-PC n’installe rien) : sous Linux une unité systemd --user, sous Windows un petit lanceur à mettre dans le dossier Démarrage. Les options écrites ci-dessus y sont lues.</div>
+      <div class="petit aide-texte">Un fichier à installer soi-même (SatMe-PC n’installe rien) : sous Linux une unité systemd --user, sous Windows un petit lanceur à mettre dans le dossier Démarrage. Les options écrites ci-dessus y sont lues.</div>
       <div class="ligne"><a class="bouton" href="api/demarrage/autostart?quoi=systemd" download="satme-pc.service">⤓ satme-pc.service (Linux)</a><a class="bouton" href="api/demarrage/autostart?quoi=windows" download="SatMe-PC-demarrage.cmd">⤓ SatMe-PC-demarrage.cmd (Windows)</a>
         <button onclick="depVoir()">Voir</button></div>
       <pre class="dep-pre" id="dep-texte" hidden></pre>

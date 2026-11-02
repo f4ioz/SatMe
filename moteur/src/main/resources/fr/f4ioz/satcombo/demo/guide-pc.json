@@ -1,0 +1,1504 @@
+{
+ "version": 1,
+ "groupes": [
+  {
+   "id": "debut",
+   "titre": {
+    "fr": "Pour commencer",
+    "en": "Getting started"
+   }
+  },
+  {
+   "id": "ciel",
+   "titre": {
+    "fr": "Ciel",
+    "en": "Sky"
+   }
+  },
+  {
+   "id": "qo",
+   "titre": {
+    "fr": "QO-100",
+    "en": "QO-100"
+   }
+  },
+  {
+   "id": "tv",
+   "titre": {
+    "fr": "DATV",
+    "en": "DATV"
+   }
+  },
+  {
+   "id": "modes",
+   "titre": {
+    "fr": "Modes",
+    "en": "Modes"
+   }
+  },
+  {
+   "id": "log",
+   "titre": {
+    "fr": "Carnet",
+    "en": "Log"
+   }
+  },
+  {
+   "id": "poste",
+   "titre": {
+    "fr": "Station",
+    "en": "Station"
+   }
+  }
+ ],
+ "visites": [
+  {
+   "id": "tour",
+   "groupe": "debut",
+   "couleur": "#FFD166",
+   "image": "tour.webp",
+   "titre": {
+    "fr": "Tour rapide de SatMe-PC",
+    "en": "Quick tour of SatMe-PC"
+   },
+   "resume": {
+    "fr": "SatMe-PC en deux minutes : où sont les choses, comment suivre un passage, brancher le poste et le rotor, écouter et décoder, et où retrouver l'aide.",
+    "en": "SatMe-PC in two minutes: where things are, how to follow a pass, plug in the rig and the rotator, listen and decode, and where to find help again."
+   },
+   "etapes": [
+    {
+     "titre": {
+      "fr": "Bienvenue dans SatMe-PC",
+      "en": "Welcome to SatMe-PC"
+     },
+     "texte": {
+      "fr": "SatMe-PC suit les satellites, règle le poste et le rotor pendant les passages, écoute et décode ce qu'ils envoient (images, télémesure, FT8…) et tient le carnet.",
+      "en": "SatMe-PC follows satellites, sets the rig and the rotator during passes, listens to and decodes what they send (pictures, telemetry, FT8…) and keeps the log."
+     },
+     "onglet": "station",
+     "image": "tour.webp",
+     "but": {
+      "fr": "Savoir où cliquer pour ton premier passage.",
+      "en": "Knowing where to click for your first pass."
+     },
+     "attention": {
+      "fr": "Rien n'émet tout seul : chaque émission part d'un geste à toi. **Échap** ou le voyant **TX** rouge de l'en-tête arrêtent toute émission (ils n'arrêtent que, ne démarrent jamais rien).",
+      "en": "Nothing transmits by itself: every transmission starts from a gesture of yours. **Esc** or the red **TX** light in the header stop every transmission (they only stop, never start anything)."
+     }
+    },
+    {
+     "cible": "onglets",
+     "titre": {
+      "fr": "Les espaces de travail",
+      "en": "The workspaces"
+     },
+     "texte": {
+      "fr": "À gauche, les onglets rangés par espaces : **Ciel**, **QO-100**, **DATV**, **Modes**, **Carnet**, **Station**. Les touches **1** à **6** ouvrent chaque espace (le dernier onglet vu).",
+      "en": "On the left, the tabs grouped in workspaces: **Sky**, **QO-100**, **DATV**, **Modes**, **Log**, **Station**. Keys **1** to **6** open each workspace (its last tab)."
+     },
+     "astuce": {
+      "fr": "**[** déplie le menu pour lire le nom des onglets.",
+      "en": "**[** unfolds the menu to read the tabs' names."
+     }
+    },
+    {
+     "cible": "liste",
+     "titre": {
+      "fr": "Les prochains passages",
+      "en": "The next passes"
+     },
+     "texte": {
+      "fr": "La liste des passages des prochaines 24 heures : l'heure, l'élévation maximale, la durée. Un clic sur une ligne suit ce satellite.",
+      "en": "The passes of the next 24 hours: time, maximum elevation, duration. A click on a line follows that satellite."
+     },
+     "onglet": "station",
+     "faire": {
+      "fr": "Filtre la liste (ISS, SO-50…) ou coche **★ favoris seulement**.",
+      "en": "Filter the list (ISS, SO-50…) or tick **★ favourites only**."
+     }
+    },
+    {
+     "cible": "cherche",
+     "titre": {
+      "fr": "1. Choisir le satellite",
+      "en": "1. Choose the satellite"
+     },
+     "texte": {
+      "fr": "Tape son nom ici puis **Suivre** : sa position, son ciel, ses fréquences avec le Doppler et son prochain passage s'affichent.",
+      "en": "Type its name here then **Follow**: its position, its sky, its frequencies with Doppler and its next pass show."
+     },
+     "onglet": "station",
+     "reussi": {
+      "fr": "son nom s'affiche en gros, avec Az / El et le compte à rebours.",
+      "en": "its name shows in large, with Az / El and the countdown."
+     }
+    },
+    {
+     "cible": "s-ecran",
+     "titre": {
+      "fr": "Le ciel, la carte, le globe",
+      "en": "Sky, map, globe"
+     },
+     "texte": {
+      "fr": "La trace du passage dans ton ciel, sur la carte ou sur le globe 3D. Les boutons en haut changent de vue.",
+      "en": "The pass drawn in your sky, on the map or on the 3D globe. The buttons on top switch the view."
+     },
+     "onglet": "station"
+    },
+    {
+     "cible": "emetteur",
+     "titre": {
+      "fr": "Les fréquences, Doppler compris",
+      "en": "Frequencies, Doppler included"
+     },
+     "texte": {
+      "fr": "Choisis l'émetteur du satellite : SatMe calcule la descente (RX) et la montée (TX) corrigées du Doppler et les donne au poste connecté.",
+      "en": "Choose the satellite's transmitter: SatMe computes the downlink (RX) and uplink (TX) corrected for Doppler and sends them to the connected rig."
+     },
+     "onglet": "station",
+     "astuce": {
+      "fr": "**Calage RX** et **Décalage TX** rattrapent l'écart d'un satellite ; **Mémoriser** le garde pour lui.",
+      "en": "**RX calibration** and **TX offset** catch a satellite's drift; **Memorise** keeps it for that satellite."
+     }
+    },
+    {
+     "cible": "st-materiel",
+     "titre": {
+      "fr": "2. Connecter le poste et le rotor",
+      "en": "2. Connect the rig and the rotator"
+     },
+     "texte": {
+      "fr": "Un clic sur **Poste … non connecté** ou **Rotor … non connecté** ouvre une petite fenêtre avec **Connecter**, qui prend le modèle et le port de Réglages › Poste et rotor.",
+      "en": "A click on **Rig … not connected** or **Rotator … not connected** opens a small window with **Connect**, using the model and port from Settings › Rig and rotator."
+     },
+     "onglet": "station",
+     "image": "connecter.webp",
+     "faire": {
+      "fr": "Clique **Connecter** ; si le port manque ou ne répond pas, une fenêtre dit pourquoi et propose **Aller aux réglages**.",
+      "en": "Click **Connect**; if the port is missing or silent, a window says why and offers **Go to settings**."
+     },
+     "attention": {
+      "fr": "Connecter ne fait pas tourner le rotor ; s'il est réglé pour **Suivre le satellite**, il le suivra pendant le passage, comme avec le bouton des Réglages.",
+      "en": "Connecting does not turn the rotator; if it is set to **Follow the satellite**, it follows it during the pass, as with the Settings button."
+     },
+     "reussi": {
+      "fr": "la coche verte ✓ remplace « non connecté ».",
+      "en": "the green tick ✓ replaces « not connected »."
+     }
+    },
+    {
+     "cible": "h-son",
+     "titre": {
+      "fr": "3. Écouter et décoder",
+      "en": "3. Listen and decode"
+     },
+     "texte": {
+      "fr": "**Son** dans l'en-tête : la source des décodeurs (carte son du poste, clé SDR), les décodeurs en marche (SSTV, APRS, CW, FT8, phonie) et l'enregistrement.",
+      "en": "**Sound** in the header: the decoders' source (rig's sound card, SDR dongle), the decoders running (SSTV, APRS, CW, FT8, voice) and the recording."
+     },
+     "astuce": {
+      "fr": "**P** prépare le passage du satellite suivi : sa source, ses décodeurs, l'enregistrement (réception seulement).",
+      "en": "**P** prepares the followed satellite's pass: its source, its decoders, the recording (receive only)."
+     }
+    },
+    {
+     "cible": "v:sstv",
+     "titre": {
+      "fr": "Les images SSTV",
+      "en": "SSTV pictures"
+     },
+     "texte": {
+      "fr": "L'onglet **SSTV** montre l'image qui arrive, ligne après ligne, et la galerie des images reçues.",
+      "en": "The **SSTV** tab shows the picture arriving, line by line, and the gallery of received pictures."
+     }
+    },
+    {
+     "cible": "v:tlm",
+     "titre": {
+      "fr": "La télémesure",
+      "en": "Telemetry"
+     },
+     "texte": {
+      "fr": "L'onglet **Télémesure** décode les paquets des satellites (1200 à 9600 bit/s), le SSDV, FUNcube et la balise de QO-100.",
+      "en": "The **Telemetry** tab decodes the satellites' packets (1200 to 9600 bit/s), SSDV, FUNcube and the QO-100 beacon."
+     }
+    },
+    {
+     "cible": "v:carnet",
+     "titre": {
+      "fr": "Le carnet et le journal",
+      "en": "The log and the journal"
+     },
+     "texte": {
+      "fr": "**Carnet** : les contacts, les fiches des indicatifs, les QSL. **Journal** : chaque passage enregistré, rejoué avec son son, ses contacts et ses images.",
+      "en": "**Log**: the contacts, the callsigns' cards, the QSLs. **Journal**: every recorded pass, replayed with its sound, its contacts and its pictures."
+     },
+     "astuce": {
+      "fr": "**N** note un contact sans quitter l'onglet en cours.",
+      "en": "**N** logs a contact without leaving the current tab."
+     }
+    },
+    {
+     "cible": "sb",
+     "titre": {
+      "fr": "L'état de la station",
+      "en": "The station's state"
+     },
+     "texte": {
+      "fr": "En bas, d'un coup d'œil : SDR, DATV, poste, rotor, lien, erreurs. Vert : en marche. Un clic ouvre ce qu'il faut.",
+      "en": "At the bottom, at a glance: SDR, DATV, rig, rotator, link, errors. Green: running. A click opens what is needed."
+     }
+    },
+    {
+     "titre": {
+      "fr": "L'émission et ses garde-fous",
+      "en": "Transmitting and its safeguards"
+     },
+     "texte": {
+      "fr": "DATV, SSTV, phonie au micro, FT8, BLU par le Pluto : chaque émission a son bouton, ses limites (niveau de départ à 0, puissance plafonnée, minuterie, plan de bande, coupure si la page se tait) et s'arrête d'un geste.",
+      "en": "DATV, SSTV, voice on the microphone, FT8, SSB through the Pluto: each transmission has its own button, its limits (start level at 0, capped power, timer, band plan, cut when the page goes silent) and stops with one gesture."
+     },
+     "attention": {
+      "fr": "Rien n'émet tout seul : chaque émission part d'un geste à toi. **Échap** ou le voyant **TX** rouge de l'en-tête arrêtent toute émission (ils n'arrêtent que, ne démarrent jamais rien).",
+      "en": "Nothing transmits by itself: every transmission starts from a gesture of yours. **Esc** or the red **TX** light in the header stop every transmission (they only stop, never start anything)."
+     }
+    },
+    {
+     "cible": "h-guide",
+     "titre": {
+      "fr": "Retrouver l'aide",
+      "en": "Finding help again"
+     },
+     "texte": {
+      "fr": "**? Guide** lance la visite de l'onglet affiché. **?** donne les raccourcis et toutes les visites ; **F1** ouvre le manuel.",
+      "en": "**? Guide** starts the tour of the tab shown. **?** gives the shortcuts and every tour; **F1** opens the manual."
+     },
+     "astuce": {
+      "fr": "Réglages › Aide et affichage : l'**Assistant**, qui montre la prochaine chose à faire, et l'**Interface allégée**, qui cache les textes d'explication.",
+      "en": "Settings › Help and display: the **Assistant**, which shows the next thing to do, and the **Light interface**, which hides the explanation texts."
+     },
+     "reussi": {
+      "fr": "tu sais suivre un passage. Bon trafic !",
+      "en": "you know how to follow a pass. Good luck on the air!"
+     }
+    }
+   ]
+  },
+  {
+   "id": "station",
+   "groupe": "ciel",
+   "couleur": "#3FE0C8",
+   "onglet": "station",
+   "titre": {
+    "fr": "Suivi",
+    "en": "Tracking"
+   },
+   "resume": {
+    "fr": "L'onglet du passage : la liste des passages, le satellite suivi, ses fréquences Doppler, le poste et le rotor.",
+    "en": "The pass tab: the list of passes, the satellite followed, its Doppler frequencies, the rig and the rotator."
+   },
+   "etapes": [
+    {
+     "cible": "liste",
+     "titre": {
+      "fr": "Les passages de 24 h",
+      "en": "24 hours of passes"
+     },
+     "texte": {
+      "fr": "Chaque ligne : début, satellite, élévation maximale, durée. Un clic suit le satellite.",
+      "en": "Each line: start, satellite, maximum elevation, duration. A click follows the satellite."
+     },
+     "astuce": {
+      "fr": "**⤓ Agenda (.ics)** emporte la liste filtrée dans ton agenda.",
+      "en": "**⤓ Calendar (.ics)** takes the filtered list into your calendar."
+     }
+    },
+    {
+     "cible": "cherche",
+     "titre": {
+      "fr": "Suivre un satellite",
+      "en": "Follow a satellite"
+     },
+     "texte": {
+      "fr": "Son nom puis **Suivre**. L'étoile ☆ en fait un favori.",
+      "en": "Its name then **Follow**. The star ☆ makes it a favourite."
+     },
+     "reussi": {
+      "fr": "Az, El et le compte à rebours bougent.",
+      "en": "Az, El and the countdown move."
+     }
+    },
+    {
+     "cible": "s-ecran",
+     "titre": {
+      "fr": "Le ciel du passage",
+      "en": "The pass's sky"
+     },
+     "texte": {
+      "fr": "La trace dans ton ciel (nord en haut), la carte ou le globe ; en violet, le plan du rotor.",
+      "en": "The track in your sky (north on top), the map or the globe; in purple, the rotator's plan."
+     }
+    },
+    {
+     "cible": "emetteur",
+     "titre": {
+      "fr": "Fréquences (Doppler)",
+      "en": "Frequencies (Doppler)"
+     },
+     "texte": {
+      "fr": "L'émetteur choisi donne RX et TX corrigés ; **Doppler en pause** fige le poste.",
+      "en": "The chosen transmitter gives corrected RX and TX; **Doppler paused** freezes the rig."
+     },
+     "but": {
+      "fr": "Rester sur la fréquence du satellite sans tourner le bouton.",
+      "en": "Staying on the satellite's frequency without turning the knob."
+     }
+    },
+    {
+     "cible": "st-materiel",
+     "titre": {
+      "fr": "Poste et rotor",
+      "en": "Rig and rotator"
+     },
+     "texte": {
+      "fr": "Un clic sur un badge « non connecté » propose **Connecter** ; s'il échoue, une fenêtre colorée dit pourquoi et mène aux bons réglages.",
+      "en": "A click on a « not connected » badge offers **Connect**; if it fails, a coloured window says why and leads to the right settings."
+     },
+     "image": "echec.webp",
+     "attention": {
+      "fr": "Le rotor ne bouge que sur un clic de toi, ou pendant un passage quand « Suivre le satellite » est coché.",
+      "en": "The rotator only moves on your click, or during a pass when « Follow the satellite » is ticked."
+     }
+    },
+    {
+     "cible": "ptx",
+     "titre": {
+      "fr": "Émission IC-9700",
+      "en": "IC-9700 transmit"
+     },
+     "texte": {
+      "fr": "Quand le satellite a une montée et le poste un PTT, ce panneau donne le PTT maintenu, le micro de ce navigateur et la puissance.",
+      "en": "When the satellite has an uplink and the rig a PTT, this panel gives the held PTT, this browser's microphone and the power."
+     },
+     "attention": {
+      "fr": "Le PTT ne tient que tant que tu appuies ; minuterie et puissance au plus se règlent dans Réglages › Émission. **Échap** relâche tout.",
+      "en": "The PTT only holds while you press; timer and maximum power are set in Settings › Transmit. **Esc** releases everything."
+     }
+    }
+   ]
+  },
+  {
+   "id": "agenda",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "agenda",
+   "titre": {
+    "fr": "Agenda",
+    "en": "Agenda"
+   },
+   "resume": {
+    "fr": "Rendez-vous, mode automatique, campagnes SSTV, activités à venir et diplômes.",
+    "en": "Appointments, automatic mode, SSTV campaigns, upcoming activities and awards."
+   },
+   "etapes": [
+    {
+     "cible": "ag-p-rdv",
+     "titre": {
+      "fr": "Rendez-vous",
+      "en": "Appointments"
+     },
+     "texte": {
+      "fr": "Un passage à ne pas manquer : son satellite, sa fenêtre, une alerte avant.",
+      "en": "A pass not to miss: its satellite, its window, an alert before."
+     },
+     "pan": "ag-p-rdv"
+    },
+    {
+     "cible": "va-on",
+     "titre": {
+      "fr": "Mode automatique",
+      "en": "Automatic mode"
+     },
+     "texte": {
+      "fr": "Coché, SatMe suit tout seul les passages des satellites choisis (fréquences, rotor si « Suivre » est coché, enregistrement si voulu).",
+      "en": "Ticked, SatMe follows the chosen satellites' passes by itself (frequencies, rotator if « Follow » is ticked, recording if wanted)."
+     },
+     "pan": "ag-p-rdv",
+     "attention": {
+      "fr": "Le mode automatique reçoit seulement : il n'émet jamais.",
+      "en": "The automatic mode only receives: it never transmits."
+     }
+    },
+    {
+     "cible": "ap-zone",
+     "titre": {
+      "fr": "Campagnes SSTV · auto-pilote",
+      "en": "SSTV campaigns · autopilot"
+     },
+     "texte": {
+      "fr": "Une campagne d'images : chaque passage reçu tout seul, réception seulement.",
+      "en": "A picture campaign: each pass received by itself, receive only."
+     },
+     "pan": "ag-p-sstv"
+    }
+   ]
+  },
+  {
+   "id": "frise",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "frise",
+   "titre": {
+    "fr": "Frise",
+    "en": "Timeline"
+   },
+   "resume": {
+    "fr": "Les passages des prochaines heures, côte à côte sur une frise.",
+    "en": "The next hours' passes side by side on a timeline."
+   },
+   "etapes": [
+    {
+     "cible": "f-canvas",
+     "titre": {
+      "fr": "La frise",
+      "en": "The timeline"
+     },
+     "texte": {
+      "fr": "Les favoris, le satellite suivi et ceux de l'agenda ; un clic sur un passage le suit.",
+      "en": "Favourites, the followed satellite and the agenda's; a click on a pass follows it."
+     }
+    },
+    {
+     "cible": "f-h",
+     "titre": {
+      "fr": "La durée montrée",
+      "en": "The span shown"
+     },
+     "texte": {
+      "fr": "Plus ou moins d'heures sur la frise.",
+      "en": "More or fewer hours on the timeline."
+     }
+    }
+   ]
+  },
+  {
+   "id": "sked",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "sked",
+   "titre": {
+    "fr": "Sked",
+    "en": "Sked"
+   },
+   "resume": {
+    "fr": "Les fenêtres où toi et un correspondant voyez le même satellite.",
+    "en": "The windows where you and a partner see the same satellite."
+   },
+   "etapes": [
+    {
+     "cible": "k-loc",
+     "titre": {
+      "fr": "Le locator du correspondant",
+      "en": "The partner's locator"
+     },
+     "texte": {
+      "fr": "Tape son locator (ou un indicatif connu du carnet).",
+      "en": "Type their locator (or a callsign known to the log)."
+     },
+     "faire": {
+      "fr": "Choisis le satellite et l'élévation minimale.",
+      "en": "Choose the satellite and the minimum elevation."
+     }
+    },
+    {
+     "cible": "k-grille",
+     "titre": {
+      "fr": "Les fenêtres communes",
+      "en": "Common windows"
+     },
+     "texte": {
+      "fr": "Chaque fenêtre : début, fin, élévations des deux côtés ; un clic l'anime sur la carte.",
+      "en": "Each window: start, end, elevations on both sides; a click animates it on the map."
+     }
+    }
+   ]
+  },
+  {
+   "id": "carres",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "carres",
+   "titre": {
+    "fr": "Locators",
+    "en": "Locators"
+   },
+   "resume": {
+    "fr": "Les locators couverts par les passages : où sont les correspondants possibles.",
+    "en": "The locators covered by passes: where possible partners are."
+   },
+   "etapes": [
+    {
+     "cible": "q-carte",
+     "titre": {
+      "fr": "La carte des locators",
+      "en": "The locator map"
+     },
+     "texte": {
+      "fr": "Les carrés que le satellite couvre pendant le passage ; plus clair : plus longtemps.",
+      "en": "The squares the satellite covers during the pass; lighter: longer."
+     }
+    },
+    {
+     "cible": "q-liste",
+     "titre": {
+      "fr": "La liste",
+      "en": "The list"
+     },
+     "texte": {
+      "fr": "Les carrés, filtrables ; ceux déjà au carnet sont marqués.",
+      "en": "The squares, filterable; those already in the log are marked."
+     }
+    }
+   ]
+  },
+  {
+   "id": "carte",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "carte",
+   "titre": {
+    "fr": "Carte",
+    "en": "Map"
+   },
+   "resume": {
+    "fr": "La carte commune : satellites, APRS, sondes, avions, DATV, locators, jour et nuit.",
+    "en": "The shared map: satellites, APRS, sondes, aircraft, DATV, locators, day and night."
+   },
+   "etapes": [
+    {
+     "cible": "cg-carte",
+     "titre": {
+      "fr": "La carte",
+      "en": "The map"
+     },
+     "texte": {
+      "fr": "Glisser pour déplacer, molette pour zoomer ; un clic sur un objet le décrit.",
+      "en": "Drag to move, wheel to zoom; a click on an object describes it."
+     }
+    },
+    {
+     "cible": "cg-cercles",
+     "titre": {
+      "fr": "Les cercles",
+      "en": "The circles"
+     },
+     "texte": {
+      "fr": "Les cercles de visibilité autour de la station.",
+      "en": "The visibility circles around the station."
+     }
+    }
+   ]
+  },
+  {
+   "id": "orbites",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "orbites",
+   "titre": {
+    "fr": "Orbites",
+    "en": "Orbits"
+   },
+   "resume": {
+    "fr": "Le globe 3D et la carte des satellites choisis, leurs empreintes, un passage animé.",
+    "en": "The 3D globe and map of the chosen satellites, their footprints, an animated pass."
+   },
+   "etapes": [
+    {
+     "cible": "ob-sats",
+     "titre": {
+      "fr": "Choisir les satellites",
+      "en": "Choose satellites"
+     },
+     "texte": {
+      "fr": "Cherche et coche les satellites à montrer.",
+      "en": "Search and tick the satellites to show."
+     }
+    },
+    {
+     "cible": "ob-3d",
+     "titre": {
+      "fr": "Globe ou carte",
+      "en": "Globe or map"
+     },
+     "texte": {
+      "fr": "Le globe en 3D ou la carte plane.",
+      "en": "The 3D globe or the flat map."
+     }
+    }
+   ]
+  },
+  {
+   "id": "avions",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "avions",
+   "titre": {
+    "fr": "Avions",
+    "en": "Aircraft"
+   },
+   "resume": {
+    "fr": "ADS-B à 1090 MHz et la diffusion par les avions (réflexions).",
+    "en": "ADS-B on 1090 MHz and aircraft scatter."
+   },
+   "etapes": [
+    {
+     "cible": "av-source",
+     "titre": {
+      "fr": "La source",
+      "en": "The source"
+     },
+     "texte": {
+      "fr": "La clé SDR ou un décodeur du réseau (SBS).",
+      "en": "The SDR dongle or a network decoder (SBS)."
+     },
+     "astuce": {
+      "fr": "**Prendre la clé** la prête à l'ADS-B ; les autres usages la retrouvent ensuite.",
+      "en": "**Take the dongle** lends it to ADS-B; the other uses get it back afterwards."
+     }
+    },
+    {
+     "cible": "av-liste",
+     "titre": {
+      "fr": "Les avions",
+      "en": "The aircraft"
+     },
+     "texte": {
+      "fr": "Les avions entendus : indicatif, altitude, distance.",
+      "en": "Aircraft heard: callsign, altitude, distance."
+     }
+    }
+   ]
+  },
+  {
+   "id": "ais",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "ais",
+   "titre": {
+    "fr": "Navires",
+    "en": "Ships"
+   },
+   "resume": {
+    "fr": "AIS à 162 MHz : les navires et les balises entendus.",
+    "en": "AIS on 162 MHz: ships and beacons heard."
+   },
+   "etapes": [
+    {
+     "cible": "ai-source",
+     "titre": {
+      "fr": "La source",
+      "en": "The source"
+     },
+     "texte": {
+      "fr": "La clé SDR ou un flux NMEA.",
+      "en": "The SDR dongle or an NMEA stream."
+     }
+    },
+    {
+     "cible": "ai-liste",
+     "titre": {
+      "fr": "Les navires",
+      "en": "The ships"
+     },
+     "texte": {
+      "fr": "Nom, MMSI, cap, vitesse, distance.",
+      "en": "Name, MMSI, heading, speed, distance."
+     }
+    }
+   ]
+  },
+  {
+   "id": "espace",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "espace",
+   "titre": {
+    "fr": "Météo spatiale",
+    "en": "Space weather"
+   },
+   "resume": {
+    "fr": "Kp, flux solaire, éruptions, vent solaire, aurore.",
+    "en": "Kp, solar flux, flares, solar wind, aurora."
+   },
+   "etapes": [
+    {
+     "cible": "es-jauge",
+     "titre": {
+      "fr": "L'indice Kp",
+      "en": "The Kp index"
+     },
+     "texte": {
+      "fr": "L'agitation du champ magnétique : au-dessus de 5, tempête.",
+      "en": "How disturbed the magnetic field is: above 5, a storm."
+     }
+    },
+    {
+     "cible": "es-alertes",
+     "titre": {
+      "fr": "Les alertes",
+      "en": "Alerts"
+     },
+     "texte": {
+      "fr": "Les alertes publiées ; **voix** peut les annoncer.",
+      "en": "Published alerts; **voice** can announce them."
+     }
+    }
+   ]
+  },
+  {
+   "id": "meteor",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "meteor",
+   "titre": {
+    "fr": "METEOR",
+    "en": "METEOR"
+   },
+   "resume": {
+    "fr": "Les images LRPT des satellites METEOR-M.",
+    "en": "LRPT pictures from METEOR-M satellites."
+   },
+   "etapes": [
+    {
+     "cible": "m-prochain",
+     "titre": {
+      "fr": "Le prochain passage",
+      "en": "The next pass"
+     },
+     "texte": {
+      "fr": "Le prochain METEOR et sa fréquence.",
+      "en": "The next METEOR and its frequency."
+     }
+    },
+    {
+     "cible": "m-auto",
+     "titre": {
+      "fr": "Réception automatique",
+      "en": "Automatic reception"
+     },
+     "texte": {
+      "fr": "Coché, chaque passage est reçu et décodé tout seul (réception seulement).",
+      "en": "Ticked, each pass is received and decoded by itself (receive only)."
+     }
+    },
+    {
+     "cible": "m-chemin",
+     "titre": {
+      "fr": "Décoder un enregistrement",
+      "en": "Decode a recording"
+     },
+     "texte": {
+      "fr": "Un enregistrement d'un passage déjà fait, décodé à nouveau : l'image s'affiche ici.",
+      "en": "A recording of a past pass, decoded again: the picture shows here."
+     }
+    }
+   ]
+  },
+  {
+   "id": "sondes",
+   "groupe": "ciel",
+   "couleur": "#6F8CFF",
+   "onglet": "sondes",
+   "titre": {
+    "fr": "Sondes",
+    "en": "Radiosondes"
+   },
+   "resume": {
+    "fr": "Les radiosondes météo, reçues avec la clé SDR.",
+    "en": "Weather radiosondes, received with the SDR dongle."
+   },
+   "etapes": [
+    {
+     "cible": "s2-khz",
+     "titre": {
+      "fr": "La fréquence",
+      "en": "The frequency"
+     },
+     "texte": {
+      "fr": "La fréquence de la sonde et son modèle.",
+      "en": "The sonde's frequency and model."
+     }
+    },
+    {
+     "cible": "s2-carte",
+     "titre": {
+      "fr": "La carte",
+      "en": "The map"
+     },
+     "texte": {
+      "fr": "La trajectoire et le point de chute.",
+      "en": "The track and the landing point."
+     }
+    }
+   ]
+  },
+  {
+   "id": "qo100",
+   "groupe": "qo",
+   "couleur": "#FFB454",
+   "onglet": "qo100",
+   "image": "qo100.webp",
+   "titre": {
+    "fr": "QO-100 · le cockpit",
+    "en": "QO-100 · the cockpit"
+   },
+   "resume": {
+    "fr": "Le transpondeur étroit de QO-100 : réception, accord, calage sur la balise, mémoires, émission.",
+    "en": "QO-100's narrowband transponder: reception, tuning, beacon lock, memories, transmit."
+   },
+   "etapes": [
+    {
+     "cible": "tq-go",
+     "titre": {
+      "fr": "Démarrer la réception",
+      "en": "Start reception"
+     },
+     "texte": {
+      "fr": "Le récepteur (clé SDR ou poste) se cale sur le transpondeur.",
+      "en": "The receiver (SDR dongle or rig) settles on the transponder."
+     },
+     "reussi": {
+      "fr": "le panorama s'anime.",
+      "en": "the panorama comes alive."
+     }
+    },
+    {
+     "cible": "o-pano",
+     "titre": {
+      "fr": "Le panorama",
+      "en": "The panorama"
+     },
+     "texte": {
+      "fr": "Tout le transpondeur ; un clic sur un signal s'y accorde dans son mode.",
+      "en": "The whole transponder; a click on a signal tunes it in its mode."
+     },
+     "astuce": {
+      "fr": "Molette : ±100 Hz ; flèches ← → et ↑ ↓.",
+      "en": "Wheel: ±100 Hz; arrows ← → and ↑ ↓."
+     }
+    },
+    {
+     "cible": "tq-p-calage",
+     "titre": {
+      "fr": "Calage sur la balise",
+      "en": "Beacon lock"
+     },
+     "texte": {
+      "fr": "La balise médiane mesurée corrige la dérive du LNB.",
+      "en": "The measured middle beacon corrects the LNB drift."
+     },
+     "pan": "tq-p-calage"
+    },
+    {
+     "cible": "tq-p-tx",
+     "titre": {
+      "fr": "Émission",
+      "en": "Transmit"
+     },
+     "texte": {
+      "fr": "La montée par le Pluto ou l'IC-9700 et son convertisseur.",
+      "en": "The uplink through the Pluto or the IC-9700 and its converter."
+     },
+     "pan": "tq-p-tx",
+     "attention": {
+      "fr": "Le PTT est refusé sur une balise ou hors du plan de bande ; un signal plus fort que la balise fait baisser la puissance, LEILA entendue relâche le PTT. Rien n'émet tout seul ; **Échap** arrête.",
+      "en": "The PTT is refused on a beacon or outside the band plan; a signal stronger than the beacon lowers the power, LEILA heard releases the PTT. Nothing transmits by itself; **Esc** stops."
+     }
+    }
+   ]
+  },
+  {
+   "id": "datv",
+   "groupe": "tv",
+   "couleur": "#B07CFF",
+   "onglet": "datv",
+   "titre": {
+    "fr": "DATV",
+    "en": "DATV"
+   },
+   "resume": {
+    "fr": "La télévision numérique sur QO-100 : réception par le MiniTiouner, émission DVB-S2.",
+    "en": "Digital TV on QO-100: reception with the MiniTiouner, DVB-S2 transmit."
+   },
+   "etapes": [
+    {
+     "cible": "d-cadre",
+     "titre": {
+      "fr": "L'image reçue",
+      "en": "The picture received"
+     },
+     "texte": {
+      "fr": "La vidéo décodée, avec MER, MODCOD et débit.",
+      "en": "The decoded video, with MER, MODCOD and rate."
+     },
+     "pan": "d-p-rx"
+    },
+    {
+     "cible": "d-qual",
+     "titre": {
+      "fr": "La qualité",
+      "en": "The quality"
+     },
+     "texte": {
+      "fr": "MER, marge au-dessus du seuil, courbes : de quoi régler l'antenne et le LNB.",
+      "en": "MER, margin above threshold, curves: what you need to set the dish and the LNB."
+     },
+     "pan": "d-p-rx"
+    },
+    {
+     "cible": "e-carte",
+     "titre": {
+      "fr": "Émission",
+      "en": "Transmit"
+     },
+     "texte": {
+      "fr": "Norme, MODCOD, débit, source (mire, vidéo, caméra) : **Prévisualiser** montre ce qui partirait, sans rien émettre.",
+      "en": "Standard, MODCOD, rate, source (test card, video, camera): **Preview** shows what would go out, without transmitting."
+     },
+     "pan": "d-p-tx",
+     "image": "datv-emission.webp",
+     "attention": {
+      "fr": "Le niveau part de 0 : rien ne démarre à 0. Le gain ne dépasse jamais le maximum de Réglages › Émission ; **ÉMETTRE** est le seul départ, **ARRÊT**, **Échap** et le voyant TX arrêtent.",
+      "en": "The level starts at 0: nothing starts at 0. The gain never exceeds the maximum in Settings › Transmit; **TRANSMIT** is the only start, **STOP**, **Esc** and the TX light stop."
+     }
+    }
+   ]
+  },
+  {
+   "id": "sstv",
+   "groupe": "modes",
+   "couleur": "#FF7EB6",
+   "onglet": "sstv",
+   "image": "sstv.webp",
+   "titre": {
+    "fr": "SSTV",
+    "en": "SSTV"
+   },
+   "resume": {
+    "fr": "Les images SSTV reçues en direct, l'émission SSTV, la mire.",
+    "en": "SSTV pictures received live, SSTV transmit, the test card."
+   },
+   "etapes": [
+    {
+     "cible": "i-encours",
+     "titre": {
+      "fr": "L'image qui arrive",
+      "en": "The incoming picture"
+     },
+     "texte": {
+      "fr": "Elle se dessine ligne par ligne ; le mode et la qualité sont au-dessus.",
+      "en": "It is drawn line by line; mode and quality are above."
+     }
+    },
+    {
+     "cible": "sx-p-rx",
+     "titre": {
+      "fr": "Réception",
+      "en": "Reception"
+     },
+     "texte": {
+      "fr": "La source du son, un mode imposé, le calage de l'accord.",
+      "en": "The sound source, a forced mode, tuning help."
+     },
+     "pan": "sx-p-rx"
+    },
+    {
+     "cible": "xs-carte",
+     "titre": {
+      "fr": "Émission SSTV",
+      "en": "SSTV transmit"
+     },
+     "texte": {
+      "fr": "Une image envoyée par le Pluto ou le bladeRF.",
+      "en": "A picture sent through the Pluto or the bladeRF."
+     },
+     "pan": "sx-p-tx",
+     "attention": {
+      "fr": "**ÉMETTRE** seulement ; **Test sur charge** : sortie sur une charge 50 Ω, jamais une antenne. **Essai en intérieur** : une vraie émission, sous ton indicatif, puissance minimale. **Échap** arrête.",
+      "en": "**TRANSMIT** only; **Test on a load**: output into a 50 Ω load, never an antenna. **Indoor test**: a real transmission, under your callsign, minimum power. **Esc** stops."
+     }
+    }
+   ]
+  },
+  {
+   "id": "aprs",
+   "groupe": "modes",
+   "couleur": "#FF7EB6",
+   "onglet": "aprs",
+   "titre": {
+    "fr": "APRS",
+    "en": "APRS"
+   },
+   "resume": {
+    "fr": "Les trames APRS entendues, la carte, l'iGate et les trophées.",
+    "en": "APRS frames heard, the map, the iGate and the trophies."
+   },
+   "etapes": [
+    {
+     "cible": "aq-carte",
+     "titre": {
+      "fr": "La carte",
+      "en": "The map"
+     },
+     "texte": {
+      "fr": "Les stations entendues, leurs trajets ; par satellite ou en direct.",
+      "en": "The stations heard, their paths; through a satellite or direct."
+     }
+    },
+    {
+     "cible": "aq-liste",
+     "titre": {
+      "fr": "Les trames",
+      "en": "The frames"
+     },
+     "texte": {
+      "fr": "Chaque trame décodée, filtrable par satellite, par période, par genre.",
+      "en": "Each decoded frame, filterable by satellite, period, kind."
+     },
+     "astuce": {
+      "fr": "Plus bas, le poste **KISS**, l'**iGate** et les **trophées** (records de distance).",
+      "en": "Further down, the **KISS** radio, the **iGate** and the **trophies** (distance records)."
+     },
+     "attention": {
+      "fr": "Un message APRS ne part que sur ton clic **Envoyer** ; rien n'est émis tout seul.",
+      "en": "An APRS message only leaves on your **Send** click; nothing is sent by itself."
+     }
+    }
+   ]
+  },
+  {
+   "id": "ft8",
+   "groupe": "modes",
+   "couleur": "#FF7EB6",
+   "onglet": "ft8",
+   "titre": {
+    "fr": "FT8 / FT4",
+    "en": "FT8 / FT4"
+   },
+   "resume": {
+    "fr": "Le décodage FT8 et FT4, les messages, le radar, l'émission.",
+    "en": "FT8 and FT4 decoding, messages, the radar, transmit."
+   },
+   "etapes": [
+    {
+     "cible": "8-marche",
+     "titre": {
+      "fr": "Marche",
+      "en": "On"
+     },
+     "texte": {
+      "fr": "Le décodeur FT8 ou FT4 sur le son choisi.",
+      "en": "The FT8 or FT4 decoder on the chosen sound."
+     }
+    },
+    {
+     "cible": "8-cascade",
+     "titre": {
+      "fr": "La cascade",
+      "en": "The waterfall"
+     },
+     "texte": {
+      "fr": "Les signaux des derniers cycles ; un clic choisit la fréquence.",
+      "en": "The last cycles' signals; a click chooses the frequency."
+     }
+    },
+    {
+     "cible": "8-tableau",
+     "titre": {
+      "fr": "Les stations entendues",
+      "en": "Stations heard"
+     },
+     "texte": {
+      "fr": "Chaque station décodée (**Tableau** ou **Messages**) ; un indicatif cliqué va dans le carnet.",
+      "en": "Each decoded station (**Table** or **Messages**); a clicked callsign goes to the log."
+     }
+    },
+    {
+     "cible": "f8tx",
+     "titre": {
+      "fr": "Émission FT8",
+      "en": "FT8 transmit"
+     },
+     "texte": {
+      "fr": "Par le PTT de l'IC-9700, avec ses garde-fous.",
+      "en": "Through the IC-9700's PTT, with its safeguards."
+     },
+     "attention": {
+      "fr": "Un geste par message : pas de CQ automatique. La minuterie, le plafond de puissance, LEILA et le plan de bande restent ; **Échap** arrête.",
+      "en": "One gesture per message: no automatic CQ. The timer, the power cap, LEILA and the band plan stay; **Esc** stops."
+     }
+    }
+   ]
+  },
+  {
+   "id": "tlm",
+   "groupe": "modes",
+   "couleur": "#FF7EB6",
+   "onglet": "tlm",
+   "titre": {
+    "fr": "Télémesure",
+    "en": "Telemetry"
+   },
+   "resume": {
+    "fr": "Paquets 1200 à 9600 bit/s, SSDV, FUNcube, balise QO-100.",
+    "en": "Packets 1200 to 9600 bit/s, SSDV, FUNcube, QO-100 beacon."
+   },
+   "etapes": [
+    {
+     "cible": "tp-on",
+     "titre": {
+      "fr": "Paquets",
+      "en": "Packets"
+     },
+     "texte": {
+      "fr": "Le décodeur FSK / GMSK sur le son choisi, à son débit.",
+      "en": "The FSK / GMSK decoder on the chosen sound, at its rate."
+     },
+     "pan": "tl-p-paq"
+    },
+    {
+     "cible": "tp-trames",
+     "titre": {
+      "fr": "Les trames",
+      "en": "The frames"
+     },
+     "texte": {
+      "fr": "Chaque trame décodée, en clair quand le format est connu.",
+      "en": "Each decoded frame, readable when the format is known."
+     },
+     "pan": "tl-p-paq",
+     "astuce": {
+      "fr": "**Essai** décode un exemple, sans antenne.",
+      "en": "**Test** decodes an example, without antenna."
+     }
+    },
+    {
+     "cible": "tl-p-ssdv",
+     "titre": {
+      "fr": "Images SSDV",
+      "en": "SSDV pictures"
+     },
+     "texte": {
+      "fr": "Les images reconstituées des trames.",
+      "en": "Pictures rebuilt from frames."
+     },
+     "pan": "tl-p-ssdv"
+    }
+   ]
+  },
+  {
+   "id": "carnet",
+   "groupe": "log",
+   "couleur": "#5BD68A",
+   "onglet": "carnet",
+   "titre": {
+    "fr": "Carnet",
+    "en": "Log"
+   },
+   "resume": {
+    "fr": "Les contacts, les fiches QRZ, les QSL, les statistiques.",
+    "en": "Contacts, QRZ cards, QSLs, statistics."
+   },
+   "etapes": [
+    {
+     "cible": "c-call",
+     "titre": {
+      "fr": "Noter un contact",
+      "en": "Log a contact"
+     },
+     "texte": {
+      "fr": "L'indicatif, puis les reports ; le satellite, l'heure et le mode sont déjà remplis.",
+      "en": "The callsign, then the reports; satellite, time and mode are already filled."
+     },
+     "reussi": {
+      "fr": "le contact apparaît dans la liste.",
+      "en": "the contact shows in the list."
+     }
+    },
+    {
+     "cible": "c-qsl",
+     "titre": {
+      "fr": "QSL reçues",
+      "en": "QSLs received"
+     },
+     "texte": {
+      "fr": "Les confirmations reçues.",
+      "en": "The confirmations received."
+     }
+    }
+   ]
+  },
+  {
+   "id": "images",
+   "groupe": "log",
+   "couleur": "#5BD68A",
+   "onglet": "images",
+   "titre": {
+    "fr": "Images",
+    "en": "Pictures"
+   },
+   "resume": {
+    "fr": "Toutes les images reçues : SSTV, SSDV, Geoscan.",
+    "en": "Every picture received: SSTV, SSDV, Geoscan."
+   },
+   "etapes": [
+    {
+     "cible": "gal-slot-images",
+     "titre": {
+      "fr": "La galerie",
+      "en": "The gallery"
+     },
+     "texte": {
+      "fr": "Un clic agrandit ; filtrer par satellite ou par date.",
+      "en": "A click enlarges; filter by satellite or date."
+     }
+    }
+   ]
+  },
+  {
+   "id": "montage",
+   "groupe": "poste",
+   "couleur": "#7FD1FF",
+   "onglet": "montage",
+   "titre": {
+    "fr": "Montage",
+    "en": "Station layout"
+   },
+   "resume": {
+    "fr": "La chaîne de la station : antennes, convertisseurs, postes, câbles.",
+    "en": "The station chain: antennas, converters, rigs, cables."
+   },
+   "etapes": [
+    {
+     "cible": "mt-b-edit",
+     "titre": {
+      "fr": "Modifier",
+      "en": "Edit"
+     },
+     "texte": {
+      "fr": "**Modifier** ouvre la palette des pièces : les glisser vers le dessin, les relier.",
+      "en": "**Edit** opens the parts palette: drag them to the drawing, connect them."
+     }
+    },
+    {
+     "cible": "mt-zone",
+     "titre": {
+      "fr": "Le dessin",
+      "en": "The drawing"
+     },
+     "texte": {
+      "fr": "Ce qui reçoit et ce qui émet, relié.",
+      "en": "What receives and what transmits, connected."
+     },
+     "astuce": {
+      "fr": "**+ − 0** zooment ; **E** modifie.",
+      "en": "**+ − 0** zoom; **E** edits."
+     }
+    }
+   ]
+  },
+  {
+   "id": "sdr",
+   "groupe": "poste",
+   "couleur": "#7FD1FF",
+   "onglet": "sdr",
+   "titre": {
+    "fr": "SDR",
+    "en": "SDR"
+   },
+   "resume": {
+    "fr": "Le récepteur SDR : écoute, spectre, cascade.",
+    "en": "The SDR receiver: listening, spectrum, waterfall."
+   },
+   "etapes": [
+    {
+     "cible": "r-recepteur",
+     "titre": {
+      "fr": "Le récepteur",
+      "en": "The receiver"
+     },
+     "texte": {
+      "fr": "La clé ou le récepteur à utiliser.",
+      "en": "The dongle or receiver to use."
+     },
+     "astuce": {
+      "fr": "Le générateur d'essai donne des signaux sans antenne.",
+      "en": "The test generator gives signals without antenna."
+     }
+    },
+    {
+     "cible": "r-mhz",
+     "titre": {
+      "fr": "Fréquence et mode",
+      "en": "Frequency and mode"
+     },
+     "texte": {
+      "fr": "La fréquence, le mode, la bande passante ; **Suivre** applique le Doppler du satellite.",
+      "en": "Frequency, mode, bandwidth; **Follow** applies the satellite's Doppler."
+     }
+    }
+   ]
+  },
+  {
+   "id": "son",
+   "groupe": "poste",
+   "couleur": "#7FD1FF",
+   "onglet": "son",
+   "titre": {
+    "fr": "Son",
+    "en": "Sound"
+   },
+   "resume": {
+    "fr": "La carte son du poste et les enregistrements.",
+    "en": "The rig's sound card and the recordings."
+   },
+   "etapes": [
+    {
+     "cible": "s-carte",
+     "titre": {
+      "fr": "La carte son",
+      "en": "The sound card"
+     },
+     "texte": {
+      "fr": "La carte qui reçoit le son du poste, et son niveau.",
+      "en": "The card receiving the rig's sound, and its level."
+     },
+     "reussi": {
+      "fr": "la barre de niveau bouge.",
+      "en": "the level bar moves."
+     }
+    },
+    {
+     "cible": "s-rec",
+     "titre": {
+      "fr": "Enregistrer",
+      "en": "Record"
+     },
+     "texte": {
+      "fr": "Enregistrer le son ; **auto** enregistre chaque passage suivi.",
+      "en": "Record the sound; **auto** records every followed pass."
+     },
+     "astuce": {
+      "fr": "**E** démarre ou arrête l'enregistrement.",
+      "en": "**E** starts or stops the recording."
+     }
+    },
+    {
+     "cible": "s-liste",
+     "titre": {
+      "fr": "Les enregistrements",
+      "en": "The recordings"
+     },
+     "texte": {
+      "fr": "Les écouter, les décoder à nouveau.",
+      "en": "Listen to them, decode them again."
+     }
+    }
+   ]
+  },
+  {
+   "id": "noeud",
+   "groupe": "poste",
+   "couleur": "#7FD1FF",
+   "onglet": "noeud",
+   "titre": {
+    "fr": "SatMe-Node",
+    "en": "SatMe-Node"
+   },
+   "resume": {
+    "fr": "Le Raspberry Pi près de l'antenne : santé, cartes, services.",
+    "en": "The Raspberry Pi near the antenna: health, cards, services."
+   },
+   "etapes": [
+    {
+     "cible": "nx-assoc",
+     "titre": {
+      "fr": "Associer",
+      "en": "Pair"
+     },
+     "texte": {
+      "fr": "Son adresse et son code à six chiffres.",
+      "en": "Its address and its six-digit code."
+     }
+    },
+    {
+     "cible": "nx-tete",
+     "titre": {
+      "fr": "Sa santé",
+      "en": "Its health"
+     },
+     "texte": {
+      "fr": "Température, charge, mémoire, flux I/Q.",
+      "en": "Temperature, load, memory, I/Q stream."
+     }
+    }
+   ]
+  },
+  {
+   "id": "reglages",
+   "groupe": "poste",
+   "couleur": "#7FD1FF",
+   "onglet": "reglages",
+   "titre": {
+    "fr": "Réglages",
+    "en": "Settings"
+   },
+   "resume": {
+    "fr": "Toute la station, rangée par catégories.",
+    "en": "The whole station, sorted by categories."
+   },
+   "etapes": [
+    {
+     "cible": "reg-nav",
+     "titre": {
+      "fr": "Les catégories",
+      "en": "Categories"
+     },
+     "texte": {
+      "fr": "Ma station, Poste et rotor, Satellites, Émission…",
+      "en": "My station, Rig and rotator, Satellites, Transmit…"
+     }
+    },
+    {
+     "cible": "cat-modele",
+     "titre": {
+      "fr": "Poste et rotor",
+      "en": "Rig and rotator"
+     },
+     "texte": {
+      "fr": "Le modèle, le port et la vitesse du poste ; plus bas, le rotor.",
+      "en": "The rig's model, port and speed; below, the rotator."
+     },
+     "reglages": "materiel",
+     "attention": {
+      "fr": "Le CAT Icom lève RTS/DTR : choisis le port du poste, jamais celui d'un autre poste.",
+      "en": "The Icom CAT raises RTS/DTR: choose the rig's port, never another rig's."
+     }
+    },
+    {
+     "cible": "gd-carte",
+     "titre": {
+      "fr": "Aide et affichage",
+      "en": "Help and display"
+     },
+     "texte": {
+      "fr": "L'**Assistant** et l'**Interface allégée**, les visites guidées.",
+      "en": "The **Assistant** and the **Light interface**, the guided tours."
+     },
+     "reglages": "aide",
+     "image": "assistant.webp"
+    }
+   ]
+  }
+ ]
+}

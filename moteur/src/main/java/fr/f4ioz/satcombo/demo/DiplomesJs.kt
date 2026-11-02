@@ -226,7 +226,7 @@ function dpCarte(d) {
     const pc = Math.min(100, Math.round(100 * d.compte / d.objectif));
     h += '<div class="dp-barre" title="' + d.compte + ' / ' + d.objectif + '"><i style="width:' + pc + '%"></i></div>';
     if (d.elements.length) h += '<details><summary class="petit">' + d.elements.length + ' ' + esc(DP_GENRE[d.genre] || '') + ' : la liste</summary><div class="dp-elems">' + d.elements.map(esc).join(' ') + '</div></details>';
-    h += '<div class="petit">Contacts notés dans le carnet, pas les confirmations : l’émetteur vérifie les QSL / LoTW.</div>';
+    h += '<div class="petit aide-texte">Contacts notés dans le carnet, pas les confirmations : l’émetteur vérifie les QSL / LoTW.</div>';
   }
   if (d.remarque) h += '<div class="petit ambre">' + esc(d.remarque) + '</div>';
   h += '<details><summary class="petit">Conditions' + (d.frais ? ' et frais' : '') + '</summary><div class="petit">' + esc(d.conditions) + (d.notes ? '<br>' + esc(d.notes) : '') +
