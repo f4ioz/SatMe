@@ -223,6 +223,16 @@ class RecepteurGenesis(
         etat = etat.copy(voix = etat.voix + 1, derniereMs = now)
     }
 
+    /**
+     * The voice message being put together, ended when no packet came for [VoixGenesis.FIN_MS], or when its
+     * satellite is below the horizon or no longer followed ([AssemblageVoix.verifie]). Called on a timer: it
+     * holds when the sound stops too.
+     */
+    fun finVoix() {
+        val cx = runCatching { contexte() }.getOrNull()
+        voix.verifie(horloge()) { sat -> cx == null || (cx.enVue && cx.satellite == sat) }
+    }
+
     private fun paquet(p: Ssdv.Paquet, v: Voie) {
         val now = horloge()
         val cle = java.util.zip.CRC32().apply { update(p.brut) }.value

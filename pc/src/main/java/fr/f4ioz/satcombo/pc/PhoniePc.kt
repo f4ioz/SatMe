@@ -35,6 +35,10 @@ import kotlin.concurrent.thread
  *
  * The overs wait in a short queue: when the engine lags, the oldest goes.
  * The day's transcript is kept in `phonie/AAAA-MM-JJ.jsonl`.
+ *
+ * A GENESIS voice message ended may start the engine for itself while this
+ * is off ([seul]): nothing is listened to, the engine runs at the lowest
+ * priority and stops [SEUL_MS] after the last such message.
  */
 class PhoniePc(
     private val stockage: Stockage,
@@ -110,14 +114,24 @@ class PhoniePc(
     @Volatile var datv = false
         private set
 
-    /** Engine running: chosen, or for the DATV subtitles. */
-    val enService: Boolean get() = actif || datv
+    /**
+     * The engine runs for GENESIS voice messages alone ([transcritMessage] with `seulPermis`), « Phonie → texte »
+     * off: no sound listened to, the lowest priority, stopped [SEUL_MS] after the last.
+     */
+    @Volatile var seul = false
+        private set
+    @Volatile private var seulMs = 0L
+    /** The engine running was started for [seul] alone (at the lowest priority). */
+    @Volatile private var moteurBas = false
+
+    /** Engine running: chosen, for the DATV subtitles, or for GENESIS messages alone. */
+    val enService: Boolean get() = actif || datv || seul
 
     @Synchronized fun prendsDatv(on: Boolean) {
         if (on == datv) return
         datv = on
         capteurDatv.reinitialise(); carte.reinitialise(); sdr.reinitialise(); sourceActive = ""
-        if (on) demarre() else if (!actif) arrete()
+        if (on) demarre() else if (!actif && !seul) arrete()
     }
 
     /** The DATV reception's sound, while its subtitles are on. */
@@ -146,18 +160,24 @@ class PhoniePc(
     }
 
     /**
-     * A GENESIS voice message (HADES-SA's Codec2, made into sound) to write out, asked from the journal: queued as
-     * an over heard, kept with the day's under the source « genesis » at the message's start ([debutMs]). Only while
-     * « Phonie → texte » is on: nothing starts for it. Null when queued, else why not.
+     * A GENESIS voice message (HADES-SA's Codec2, made into sound) to write out: queued as an over heard, kept with
+     * the day's under the source « genesis » at the message's start ([debutMs]); written again, it takes the place
+     * of what was written of it. Asked from the journal, only while « Phonie → texte » is on: nothing starts for it.
+     * With [seulPermis] (a message ended, written down by itself), « Phonie → texte » off: the engine starts for it
+     * alone ([seul]), when installed. Null when queued, else why not.
      */
-    fun transcritMessage(pcm: ShortArray, rate: Int, debutMs: Long, satellite: String): String? {
-        if (!actif) return "« Phonie → texte » est coupé : le cocher (onglets SDR, QO-100 ou Carnet), puis Transcrire."
+    fun transcritMessage(pcm: ShortArray, rate: Int, debutMs: Long, satellite: String, seulPermis: Boolean = false): String? {
+        if (!actif && !seulPermis) return "« Phonie → texte » est coupé : le cocher (onglets SDR, QO-100 ou Carnet), puis Transcrire."
+        if (!actif && install.python(python) == null) return "le moteur de « Phonie → texte » n'est pas installé (Réglages › Phonie → texte)"
         if (pcm.isEmpty() || rate <= 0) return "message vide"
         val r = fr.f4ioz.satcombo.phonie.Reechantillonneur(rate)
         // A little silence after: the resampler gives its last samples out.
         val x = r.pousse(pcm) + r.pousse(FloatArray(rate / 5))
-        file.ajoute(Attente(CapteurPhonie.Piece(DecoupeVoix.Segment(0L, x, 0.0, 1.0), debutMs),
-            fr.f4ioz.satcombo.telemesure.VoixGenesis.SOURCE_PHONIE, null, satellite))
+        synchronized(this) {
+            file.ajoute(Attente(CapteurPhonie.Piece(DecoupeVoix.Segment(0L, x, 0.0, 1.0), debutMs),
+                fr.f4ioz.satcombo.telemesure.VoixGenesis.SOURCE_PHONIE, null, satellite))
+            if (!actif) { seul = true; seulMs = horloge(); demarre() }
+        }
         return null
     }
 
@@ -203,7 +223,8 @@ class PhoniePc(
 
     fun moteurProcessus(): MoteurPhonie {
         val py = install.python(python) ?: throw IllegalStateException("moteur non installé : Réglages › Phonie → texte › Installer le moteur")
-        return MoteurProcessus(install.commande(py, modele, if (repliCpu) "cpu" else calcul), install.environnement())
+        val c = install.commande(py, modele, if (repliCpu) "cpu" else calcul)
+        return MoteurProcessus(if (moteurBas) prioriteBasse(c) else c, install.environnement())
     }
 
     /** Starts the worker (when on, at SatMe-PC's start too). */
@@ -219,6 +240,7 @@ class PhoniePc(
         travail = null
         runCatching { moteur?.arrete() }
         moteur = null
+        seul = false
         file.vide(); enCours = null
         carte.reinitialise(); sdr.reinitialise(); capteurDatv.reinitialise(); sourceActive = ""
         etat = "coupé"; erreur = ""; info = ""; echecs = 0
@@ -231,6 +253,7 @@ class PhoniePc(
         while (g == generation) {
             val m: MoteurPhonie = moteur ?: (try {
                 etat = "démarrage"
+                moteurBas = !actif && !datv
                 val nouveau = fabrique(this)
                 val p = nouveau.demarre()
                 if (g != generation) { nouveau.arrete(); return }
@@ -243,10 +266,15 @@ class PhoniePc(
             } catch (e: Exception) {
                 echecs++
                 if (calcul == "auto" && !repliCpu && echecs >= 2 && (e.message ?: "").contains("arrêté")) repliCpu = true
+                // For GENESIS messages alone: not tried again and again.
+                if (seul && !actif && !datv && echecs >= 3) { arrete(); return }
                 attend(g, e.message ?: e.toString())
                 null
             }) ?: continue
-            val a = file.prend(500) ?: continue
+            // Started low for GENESIS messages alone, then « Phonie → texte » or the subtitles came: again at its usual priority.
+            if (moteurBas && (actif || datv)) { runCatching { m.arrete() }; moteur = null; continue }
+            val a = file.prend(500)
+            if (a == null) { finSeul(g); continue }
             if (g != generation) return
             enCours = a
             try {
@@ -263,8 +291,14 @@ class PhoniePc(
                 moteur = null
                 echecs++
                 attend(g, e.message ?: e.toString())
-            } finally { enCours = null }
+            } finally { enCours = null; if (seul) seulMs = horloge() }
         }
+    }
+
+    /** Running for GENESIS messages alone, none left for [SEUL_MS]: stopped. */
+    @Synchronized private fun finSeul(g: Int) {
+        if (g != generation || !seul || actif || datv || file.taille() > 0 || horloge() - seulMs < SEUL_MS) return
+        arrete()
     }
 
     private var numero = 0L
@@ -309,6 +343,8 @@ class PhoniePc(
             if (traduction.isNotEmpty()) r.langueCible else "")
         val c = synchronized(bulles) {
             chargeJour()
+            // A GENESIS message written down again (packets came to it since): this text takes the place of the last.
+            if (a.source == fr.f4ioz.satcombo.telemesure.VoixGenesis.SOURCE_PHONIE) remplace(a.source, b.t)
             val c = b.copy(id = ++idBulle)
             bulles.addLast(c)
             while (bulles.size > MAX_BULLES) bulles.removeFirst()
@@ -317,6 +353,18 @@ class PhoniePc(
             c
         }
         ecouteParole?.let { f -> runCatching { f(ParolePc.Entendu(c, pcm, gardes, r.traduction)) } }
+    }
+
+    /** The overs of [source] at [t] taken out, of the window and of the day's file. */
+    private fun remplace(source: String, t: Long) {
+        if (bulles.removeAll { it.source == source && it.t == t }) version++
+        val f = fichierJour(t)
+        if (!f.isFile) return
+        runCatching {
+            val l = f.readLines(Charsets.UTF_8)
+            val k = l.filterNot { li -> runCatching { JSONObject(li).let { it.optString("src") == source && it.optLong("t") == t } }.getOrDefault(false) }
+            if (k.size != l.size) f.writeText(k.joinToString("") { it + "\n" }, Charsets.UTF_8)
+        }
     }
 
     /** Today's overs (from the file) at the first look, so a restart shows them. */
@@ -358,7 +406,7 @@ class PhoniePc(
 
     // ------------------------------------------------------------------ the page
 
-    fun json(depuis: Long): JSONObject = JSONObject().put("present", true).put("on", actif).put("etat", if (enService) etat else "coupé")
+    fun json(depuis: Long): JSONObject = JSONObject().put("present", true).put("on", actif).put("seul", seul).put("etat", if (enService) etat else "coupé")
         .put("erreur", if (enService) erreur else "").put("datv", datv).put("info", info).put("modele", modele).put("langue", langue).put("traduire", traduire)
         .put("cible", cible).put("stTraduction", stTraduction).put("traductionErreur", if (traduire) traductionErreur else "")
         .put("paires", JSONArray(install.pairesInstallees()))
@@ -444,6 +492,14 @@ class PhoniePc(
 
     companion object {
         const val MAX_FILE = 6
+        /** The engine started for GENESIS messages alone stops this long after the last (a pass's next one reuses it). */
+        const val SEUL_MS = 120_000L
+
+        /** [c] at the lowest priority (CPU and disk), where the system allows it: the station's sound keeps its share. */
+        fun prioriteBasse(c: List<String>): List<String> {
+            if (OutilsPc.windows) return c
+            return listOfNotNull(OutilsPc.trouve("nice")?.let { listOf(it, "-n", "19") }, OutilsPc.trouve("ionice")?.let { listOf(it, "-c3") }).flatten() + c
+        }
         const val MAX_BULLES = 300
         val CALCULS = setOf("auto", "cuda", "cpu")
         val SOURCES = setOf("auto", "carte", "sdr")

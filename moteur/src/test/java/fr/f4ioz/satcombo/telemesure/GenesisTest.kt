@@ -304,6 +304,122 @@ class GenesisTest {
         } finally { dir.deleteRecursively() }
     }
 
+    // ---------------------------------------------------------------- the end of a message (written down by itself)
+
+    private fun finies(m: AssemblageVoix) = ArrayList<org.json.JSONObject>().also { l -> m.surFin = { l += it } }
+
+    @Test fun fin_de_message_par_le_delai_une_seule_fois() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            val m = AssemblageVoix(dir)
+            val l = finies(m)
+            val t0 = 1_793_588_000_000L
+            for (n in 0 until 5) m.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 450L, "HADES-SA (SpinnyONE)")
+            val dernier = t0 + 4 * 450L
+            // A fade: not ended yet.
+            m.verifie(dernier + VoixGenesis.FIN_MS - 1)
+            assertEquals(0, l.size)
+            m.verifie(dernier + VoixGenesis.FIN_MS)
+            assertEquals(1, l.size)
+            assertEquals(5, l[0].getJSONArray("recus").length())
+            assertEquals(t0, l[0].getLong("debut"))
+            // Said once, however often it is looked at.
+            m.verifie(dernier + 60_000L); m.verifie(dernier + 90_000L)
+            assertEquals(1, l.size)
+            // A repeat of a packet held is no news.
+            m.ajoute(4, VoixGenesis.envoye(c2Essai(4)), dernier + 30_000L, "HADES-SA (SpinnyONE)")
+            m.verifie(dernier + 80_000L)
+            assertEquals(1, l.size)
+            // More of it later (within SILENCE_MS): the same message, said again with them, under the same name.
+            m.ajoute(5, VoixGenesis.envoye(c2Essai(5)), dernier + 40_000L, "HADES-SA (SpinnyONE)")
+            m.verifie(dernier + 41_000L)
+            assertEquals(1, l.size)
+            m.verifie(dernier + 40_000L + VoixGenesis.FIN_MS)
+            assertEquals(2, l.size)
+            assertEquals(l[0].getString("nom"), l[1].getString("nom"))
+            assertEquals(6, l[1].getJSONArray("recus").length())
+            assertEquals(1, AssemblageVoix.liste(dir).size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun fin_de_message_par_le_suivant() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            val m = AssemblageVoix(dir)
+            val l = finies(m)
+            val t0 = 1_793_588_000_000L
+            for (n in 0 until 37) m.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 450L, "HADES-SA (SpinnyONE)")
+            assertEquals(0, l.size)
+            // The number back to 0, a few seconds on: the first one ended, at once.
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(40)), t0 + 20_000L, "HADES-SA (SpinnyONE)")
+            assertEquals(1, l.size)
+            assertEquals(37, l[0].getJSONArray("recus").length())
+            assertEquals(14.8, l[0].getDouble("duree"), 1e-9)
+            // That one has a single packet: when the next starts, it is no message, nothing is said of it.
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(41)), t0 + 30_000L, "HADES-SA (SpinnyONE)")
+            m.ajoute(1, VoixGenesis.envoye(c2Essai(42)), t0 + 30_450L, "HADES-SA (SpinnyONE)")
+            assertEquals(1, l.size)
+            // Another satellite's: a new message too.
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(43)), t0 + 31_000L, "SO-50")
+            assertEquals(2, l.size)
+            assertEquals(2, l[1].getJSONArray("recus").length())
+            // Already said: looking at it later says nothing more.
+            m.verifie(t0 + 200_000L)
+            assertEquals(2, l.size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun fin_de_message_par_la_los() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            var t = 1_793_588_000_000L
+            val a = AssemblageSsdv(null) { t }
+            val r = RecepteurGenesis(dir, a) { t }
+            var enVue = true
+            var sat = "HADES-SA"
+            r.contexte = { RecepteurGenesis.Contexte(sat, 68446, enVue = enVue) }
+            val l = finies(r.voix)
+            for (n in 0 until 3) r.voix.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t + n * 450L, "HADES-SA")
+            t += 2_000L
+            r.finVoix()
+            assertEquals(0, l.size)
+            // Below the horizon, 3 s after its last packet: ended, without waiting.
+            enVue = false
+            t += 1_000L
+            r.finVoix(); r.finVoix()
+            assertEquals(1, l.size)
+            // Another satellite followed: ended as well.
+            enVue = true
+            for (n in 0 until 2) r.voix.ajoute(n, VoixGenesis.envoye(c2Essai(n + 10)), t + n * 450L, "HADES-SA")
+            sat = "SO-50"
+            r.finVoix()
+            assertEquals(2, l.size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun fin_de_message_ni_essai_ni_paquet_seul() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            val m = AssemblageVoix(dir)
+            val l = finies(m)
+            val t0 = 1_793_588_000_000L
+            // A test (the generator, a recording replayed): never written, never said.
+            for (n in 0 until 5) m.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 450L, "Essai", essai = true)
+            m.verifie(t0 + 60_000L)
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(9)), t0 + 70_000L, "HADES-SA")
+            assertEquals(0, l.size)
+            // One packet alone: noise.
+            m.verifie(t0 + 200_000L) { false }
+            assertEquals(0, l.size)
+            // Without a folder nothing is written: nothing said either.
+            val sans = AssemblageVoix(null)
+            val l2 = finies(sans)
+            for (n in 0 until 5) sans.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 450L, "HADES-SA")
+            sans.verifie(t0 + 60_000L)
+            assertEquals(0, l2.size)
+        } finally { dir.deleteRecursively() }
+    }
+
     @Test fun voix_par_le_recepteur() {
         val fs = 24_000
         val o = (0 until 4).flatMap { n -> (Genesis.codeVoix(3, n, VoixGenesis.envoye(c2Essai(n))) + ByteArray(2) { 0xAA.toByte() }).toList() }.toByteArray()

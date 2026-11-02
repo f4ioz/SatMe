@@ -4682,7 +4682,8 @@ ${Ft8SiteJs.HTML}    </div>
     <label style="display:block"><input type="checkbox" id="bl-on" onchange="tlmPost('genesis?on=' + (this.checked ? 1 : 0))"> <b>Décoder la FSK étroite en BLU</b></label>
     <div class="ligne"><span class="petit">Son</span><select id="bl-source" style="flex:none" onchange="tlmPost('genesis/source?v=' + this.value)"><option value="carte">carte son (onglet Son : le poste en USB-D)</option><option value="sdr">récepteur SDR (en USB)</option></select></div>
     <div class="ligne"><span class="petit">Débit</span><select id="bl-profil" style="flex:none" onchange="tlmPost('genesis/profil?v=' + this.value)"><option value="">selon l’émetteur</option><option value="auto">200 et 800 bit/s à la fois</option><option value="800">800 bit/s · 1600 Hz</option><option value="200">200 bit/s · 1125 Hz</option></select>
-      <label class="petit" title="Les bits démodulés de chaque passage gardés dans telemesure/genesis (.bits, et les trames en .jsonl) : pour relire plus tard, ou étudier un format"><input type="checkbox" id="bl-capture" onchange="tlmPost('genesis/capture?on=' + (this.checked ? 1 : 0))"> capturer les bits</label></div>
+      <label class="petit" title="Les bits démodulés de chaque passage gardés dans telemesure/genesis (.bits, et les trames en .jsonl) : pour relire plus tard, ou étudier un format"><input type="checkbox" id="bl-capture" onchange="tlmPost('genesis/capture?on=' + (this.checked ? 1 : 0))"> capturer les bits</label>
+      <label class="petit" title="Chaque message vocal (Codec2) reçu pendant un passage est donné à Phonie → texte dès qu’il est fini : 20 s sans nouveau paquet, le message suivant, ou le satellite sous l’horizon. Phonie → texte coupée, son moteur (s’il est installé) tourne pour ce message seul, en priorité basse, sans rien écouter d’autre. Le texte s’écrit sous le message dans le Journal (onglet Moments du passage). Ni les essais ni les relectures"><input type="checkbox" id="bl-transcrit" onchange="tlmPost('genesis/transcrit?on=' + (this.checked ? 1 : 0))"> transcrire la voix</label></div>
     <div class="petit" id="bl-em"></div>
     <div class="paire" id="bl-etat" style="margin-top:6px"></div>
     <div class="ligne"><button id="bl-essai" onclick="tlmPost('genesis/essai')" title="Un signal fabriqué (une mire en paquets SSDV, bruit, dérive de fréquence) passé dans un décodeur à part ; rien n’est gardé">Essai</button><button class="discret" onclick="tlmPost('genesis/vide')">Effacer</button></div>
@@ -13726,7 +13727,7 @@ function blRend(b, p) {
   if (document.activeElement !== g('bl-on')) g('bl-on').checked = !!b.option;
   if (document.activeElement !== g('bl-source')) g('bl-source').value = b.source || 'carte';
   if (document.activeElement !== g('bl-profil')) g('bl-profil').value = b.choisi || '';
-  g('bl-capture').checked = !!b.captureOption; g('bl-essai').disabled = !!b.essaiEnCours; g('bl-brut').checked = tlmBrut;
+  g('bl-capture').checked = !!b.captureOption; g('bl-transcrit').checked = b.transcritOption !== false; g('bl-transcrit').parentNode.title = g('bl-transcrit').parentNode.title.split('\n')[0] + (b.transcritErreur ? '\nDernier message non transcrit : ' + b.transcritErreur : ''); g('bl-essai').disabled = !!b.essaiEnCours; g('bl-brut').checked = tlmBrut;
   const pa = g('bl-pastille'), pt = !marche ? 'coupé' : recent ? 'paquets reçus' : e.presence ? 'deux tons vus' : e.bits ? 'à l’écoute' : 'en attente du son';
   if (pa.textContent !== pt) pa.textContent = pt;
   pa.className = 'pastille ' + (marche ? 'marche' : 'coupe');

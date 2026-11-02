@@ -185,6 +185,10 @@ class TelemesurePc(
     var genesisCapture: Boolean
         get() = stockage.getBoolean(CLE_GENESIS_CAPTURE, false)
         set(v) { stockage.edit().putBoolean(CLE_GENESIS_CAPTURE, v).apply(); genesis.capture = v }
+    /** Each voice message written down by « Phonie → texte » when it ends (real receptions only); on by default. */
+    var genesisTranscrit: Boolean
+        get() = stockage.getBoolean(CLE_GENESIS_TRANSCRIT, true)
+        set(v) { stockage.edit().putBoolean(CLE_GENESIS_TRANSCRIT, v).apply(); if (!v) voixFinies.clear() }
     /** Turned on for a pass by the auto-pilot (an SSDV campaign), whatever the option. */
     @Volatile var genesisPourPassage = false
 
@@ -216,6 +220,8 @@ class TelemesurePc(
 
     init {
         genesis.capture = genesisCapture
+        // A message ended (from the sound's thread): queued, written down by [verifieVoix].
+        genesis.voix.surFin = { o -> if (genesisTranscrit && voixFinies.size < MAX_VOIX_FINIES) voixFinies.add(o) }
         genesis.contexte = {
             val s = suiviGenesis()
             RecepteurGenesis.Contexte(s?.first.orEmpty(), s?.second ?: 0, essai = sonFictif(), enVue = s != null && suiviEnVue())
@@ -290,9 +296,11 @@ class TelemesurePc(
         var trames = 0
         var voix = 0
         if (nom.endsWith(".bits")) {
+            // Its own assembler: the live message is left alone, and what is read again is not written down by itself.
+            val av = fr.f4ioz.satcombo.telemesure.AssemblageVoix(dossier)
             fr.f4ioz.satcombo.telemesure.RecepteurGenesis.relit(octets, { trames++ }, { p ->
                 paquets.assemblage.ajoute(p, horloge(), sat?.first.orEmpty(), source)
-            }) { n, o -> if (genesis.voix.ajoute(n, o, horloge(), sat?.first.orEmpty())) voix++ }
+            }) { n, o -> if (av.ajoute(n, o, horloge(), sat?.first.orEmpty())) voix++ }
         } else {
             val (pcm, rate) = fr.f4ioz.satcombo.telemesure.LectureWav.lis(octets) ?: return erreur("pas un WAV lisible (PCM 8/16/24/32 bits ou flottant)")
             // The recording's own time when its name tells it (SatMe_<sat>_yyyyMMdd_HHmmssZ.wav), now otherwise.
@@ -354,6 +362,29 @@ class TelemesurePc(
 
     // ---------------------------------------------------------------- the voice messages (Codec2)
 
+    /** A voice message (its `.json`) given to « Phonie → texte »: null when queued, else why not (set by Main). */
+    @Volatile var transcritVoix: ((JSONObject) -> String?)? = null
+    /** The live messages ended, waiting to be written down. */
+    private val voixFinies = java.util.concurrent.ConcurrentLinkedQueue<JSONObject>()
+    /** Why the last message ended was not written down ("" when it was). */
+    @Volatile var voixErreur = ""
+        private set
+
+    /**
+     * On a timer (a few seconds, low priority): the live voice message ended by time or by the satellite set
+     * ([RecepteurGenesis.finVoix]), then each message ended given to « Phonie → texte » ([transcritVoix]), once.
+     * Never from the sound's thread: making the WAV runs libcodec2.
+     */
+    fun verifieVoix() {
+        runCatching { genesis.finVoix() }
+        while (true) {
+            val o = voixFinies.poll() ?: return
+            if (!genesisTranscrit) continue
+            val f = transcritVoix ?: continue
+            voixErreur = runCatching { f(o) }.getOrElse { it.message ?: "échec" } ?: ""
+        }
+    }
+
     /** A voice message's `.c2` (playable with `c2dec 700C`). */
     fun voixC2(nom: String): File? = fr.f4ioz.satcombo.telemesure.AssemblageVoix.fichier(dossier, nom)
 
@@ -380,6 +411,7 @@ class TelemesurePc(
         val em = emetteurGenesis()
         val o = genesis.json().put("option", genesisActif).put("pourPassage", genesisPourPassage).put("source", genesisSource)
             .put("choisi", genesisProfilChoisi).put("profilNom", genesisProfil().nom).put("captureOption", genesisCapture)
+            .put("transcritOption", genesisTranscrit).put("transcritErreur", voixErreur)
             .put("essaiEnCours", essaiGenesisEnCours).put("ssdvAfsk", ssdvAfsk)
             .put("messagesVoix", JSONArray(fr.f4ioz.satcombo.telemesure.AssemblageVoix.liste(dossier, 12)))
             .put("relecture", relecture)
@@ -639,6 +671,7 @@ class TelemesurePc(
             "genesis/source" -> genesisSource = q["v"].orEmpty()
             "genesis/profil" -> genesisProfilChoisi = q["v"].orEmpty()
             "genesis/capture" -> genesisCapture = q["on"] == "1"
+            "genesis/transcrit" -> genesisTranscrit = q["on"] == "1"
             "genesis/essai" -> if (!lanceEssaiGenesis()) return erreur("un essai est déjà en cours")
             // The satellite's recordings read again (receive only): the pictures and voice they hold.
             "genesis/relire-sat" -> {
@@ -768,6 +801,9 @@ class TelemesurePc(
         const val CLE_GENESIS_SOURCE = "pc_tlm_genesis_source"
         const val CLE_GENESIS_PROFIL = "pc_tlm_genesis_profil"
         const val CLE_GENESIS_CAPTURE = "pc_tlm_genesis_capture"
+        const val CLE_GENESIS_TRANSCRIT = "pc_tlm_genesis_transcrit"
+        /** The most messages ended waiting to be written down (a pass holds a handful). */
+        const val MAX_VOIX_FINIES = 20
         const val SOURCE_CARTE = "carte"
         const val SOURCE_SDR = "sdr"
         /** The packets from a rig's 9600 output on a sound card. */

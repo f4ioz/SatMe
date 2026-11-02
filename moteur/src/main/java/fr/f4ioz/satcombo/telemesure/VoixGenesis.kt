@@ -30,7 +30,9 @@ import java.io.File
  * number starts again or after [SILENCE_MS] without voice; a number more
  * than [SAUT_MAX] past the last one is dropped (no CRC: a bit wrong in it).
  * A message is written, and listed, from [MIN_PAQUETS] packets on: noise
- * that looks like one lone voice frame is no message.
+ * that looks like one lone voice frame is no message. It has ended when the
+ * next one starts, after [FIN_MS] without a new packet, or when its satellite
+ * is no longer in view ([AssemblageVoix.surFin]).
  */
 object VoixGenesis {
     /** The size byte of a voice frame (type/address, number, 35 bytes; no CRC). */
@@ -79,6 +81,12 @@ object VoixGenesis {
     }
 
     const val SILENCE_MS = 120_000L
+    /**
+     * A message has ended after this long without a new packet. A packet takes ~0.45 s on air at 800 bit/s and
+     * ~1.7 s at 200 bit/s: 20 s is more than [SAUT_MAX] packets lost in a row even at 200 bit/s, and a packet
+     * further on than that would be dropped anyway — waiting longer would only delay its text.
+     */
+    const val FIN_MS = 20_000L
     /** The most a number may jump ahead within a message. */
     const val SAUT_MAX = 10
     /** The fewest packets a message is kept with (no CRC: one alone may be noise). */
@@ -107,6 +115,8 @@ class AssemblageVoix(private val dossier: File?) {
         val paquets = java.util.TreeMap<Int, ByteArray>()
         var dernier = debut
         var miseAJour = debut
+        /** How many packets it held when it was last said ended (0: not yet). */
+        var signales = 0
         fun manquants(): List<Int> = if (paquets.isEmpty()) emptyList() else (0..paquets.lastKey()).filter { it !in paquets }
         fun dureeS(): Double = if (paquets.isEmpty()) 0.0 else (paquets.lastKey() + 1) * VoixGenesis.MS_PAR_PAQUET / 1000.0
         /** The `.c2` bytes: packet 0 to the last, a missing one as zeros. */
@@ -124,6 +134,31 @@ class AssemblageVoix(private val dossier: File?) {
     @Volatile var courant: Message? = null; private set
     var paquets = 0; private set
 
+    /**
+     * A message ended (real, written: from [VoixGenesis.MIN_PAQUETS] packets on), its `.json`: once, and again
+     * only when packets came to it since. Called under the lock, from the sound's thread too: it must be quick.
+     */
+    @Volatile var surFin: ((JSONObject) -> Unit)? = null
+
+    /** [m] ended: said when it is worth it (not a test, written, with packets not said yet). */
+    private fun finit(m: Message?) {
+        if (m == null || m.essai || dossier == null || m.paquets.size < VoixGenesis.MIN_PAQUETS || m.paquets.size <= m.signales) return
+        m.signales = m.paquets.size
+        val f = surFin ?: return
+        runCatching { f(m.json()) }
+    }
+
+    /**
+     * The message being put together ended when no new packet came for [VoixGenesis.FIN_MS] before [t], or when
+     * [enVue] says its satellite is no longer above the horizon (or no longer the one followed). Called often.
+     */
+    @Synchronized
+    fun verifie(t: Long, enVue: (satellite: String) -> Boolean = { true }) {
+        val m = courant ?: return
+        if (m.paquets.size <= m.signales) return
+        if (t - m.miseAJour >= VoixGenesis.FIN_MS || !runCatching { enVue(m.satellite) }.getOrDefault(true)) finit(m)
+    }
+
     /** A packet [numero] heard at [t]: true when it is new (a repeat of one held is dropped). */
     @Synchronized
     fun ajoute(numero: Int, recus: ByteArray, t: Long, satellite: String, essai: Boolean = false): Boolean {
@@ -137,6 +172,8 @@ class AssemblageVoix(private val dossier: File?) {
         if (!nouveau && numero > m!!.paquets.lastKey() + VoixGenesis.SAUT_MAX) return false
         if (nouveau) {
             val f = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            // The one before has ended.
+            finit(m)
             m = Message(f.format(java.util.Date(t)) + "-" + RecepteurPaquets.nomFichier(satellite.ifBlank { "inconnu" }), satellite, t, essai)
             courant = m
         }

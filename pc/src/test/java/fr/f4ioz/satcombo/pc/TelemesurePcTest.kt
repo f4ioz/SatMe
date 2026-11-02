@@ -237,6 +237,9 @@ class TelemesurePcTest {
             IntArray(64) { it and 1 }, fs, 200.0, 1_125.0, 900.0, 14.0, 1.0)
         fr.f4ioz.satcombo.sstv.SstvSon.ecritWav(File(son, "SatMe_HADES-SA--SpinnyONE_20261102_024212Z.wav"), pcm, fs)
         fr.f4ioz.satcombo.sstv.SstvSon.ecritWav(File(son, "SatMe_RS-44_20261102_030000Z.wav"), ShortArray(fs), fs)
+        // What is read again is never written down by itself.
+        val donnes = ArrayList<org.json.JSONObject>()
+        t.transcritVoix = { donnes += it; null }
         t.enregistrements = { son.list()!!.sortedDescending() }
         t.enregistrement = { n -> File(son, File(n).name).takeIf { it.isFile } }
         assertEquals(listOf("SatMe_HADES-SA--SpinnyONE_20261102_024212Z.wav"), t.enregistrementsDe("HADES-SA (SpinnyONE)"))
@@ -257,6 +260,62 @@ class TelemesurePcTest {
         // Made into sound when python3 and libcodec2 are on this machine (silence for none of these frames).
         t.voixWav(nom)?.let { w -> assertEquals("RIFF", String(w.readBytes().copyOf(4))) }
         assertFalse(t.action("/api/telemesure/genesis/relire-sat", mapOf("sat" to "AO-7")).getBoolean("ok"))
+        t.verifieVoix()
+        assertEquals(0, donnes.size)
+    }
+
+    @Test fun `voix GENESIS - chaque message fini donne une fois a Phonie, sauf option coupee`() {
+        val dir = Files.createTempDirectory("tlm").toFile()
+        var maintenant = 1_793_588_000_000L
+        val t = TelemesurePc(stockage(), dir, null, horloge = { maintenant })
+        var enVue = true
+        t.suiviGenesis = { "HADES-SA (SpinnyONE)" to 68446 }
+        t.suiviEnVue = { enVue }
+        val donnes = ArrayList<org.json.JSONObject>()
+        t.transcritVoix = { donnes += it; null }
+        assertTrue(t.genesisTranscrit)
+        assertTrue(t.json().getJSONObject("genesis").getBoolean("transcritOption"))
+        var graine = 0
+        // A message of [n] packets (each message's own bytes: the same bytes again would be a repeat).
+        fun message(debut: Long, n: Int) {
+            graine += 50
+            for (k in 0 until n) t.genesis.voix.ajoute(k, fr.f4ioz.satcombo.telemesure.VoixGenesis.envoye(ByteArray(40) { i -> if (i % 4 == 3) 0 else (graine + k + i).toByte() }),
+                debut + k * 450L, "HADES-SA (SpinnyONE)")
+        }
+        message(maintenant, 5)
+        maintenant += 5_000L
+        t.verifieVoix()
+        assertEquals(0, donnes.size)
+        // 20 s without a packet: given once, however often looked at.
+        maintenant += fr.f4ioz.satcombo.telemesure.VoixGenesis.FIN_MS
+        t.verifieVoix(); t.verifieVoix()
+        assertEquals(1, donnes.size)
+        assertEquals(5, donnes[0].getJSONArray("recus").length())
+        assertEquals("HADES-SA (SpinnyONE)", donnes[0].getString("sat"))
+        // The next message ends this one; the LOS ends the next.
+        message(maintenant, 3)
+        message(maintenant + 2_000L, 4)
+        t.verifieVoix()
+        assertEquals(2, donnes.size)
+        enVue = false
+        t.verifieVoix()
+        assertEquals(3, donnes.size)
+        assertEquals(4, donnes[2].getJSONArray("recus").length())
+        // Why it was not written down is shown.
+        t.transcritVoix = { "moteur absent" }
+        enVue = true
+        message(maintenant + 60_000L, 2)
+        maintenant += 120_000L
+        t.verifieVoix()
+        assertEquals("moteur absent", t.json().getJSONObject("genesis").getString("transcritErreur"))
+        // The option off: nothing given.
+        t.transcritVoix = { donnes += it; null }
+        assertTrue(t.action("/api/telemesure/genesis/transcrit", mapOf("on" to "0")).getBoolean("ok"))
+        assertFalse(t.genesisTranscrit)
+        message(maintenant, 3)
+        maintenant += 60_000L
+        t.verifieVoix()
+        assertEquals(3, donnes.size)
     }
 
     @Test fun `SSDV en BLU - l'essai ne garde rien`() {

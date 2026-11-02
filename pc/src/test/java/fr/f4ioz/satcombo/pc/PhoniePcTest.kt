@@ -29,7 +29,7 @@ class PhoniePcTest {
     @After fun fin() { ouverts.forEach { it.arrete() }; dossier.deleteRecursively() }
 
     /** An engine answering [texte] for every over, after [delaiMs]; [panne]: fails the first [panne] overs as a crash. */
-    private class Faux(val texte: String, val delaiMs: Long = 0, var panne: Int = 0) : MoteurPhonie {
+    private class Faux(var texte: String, val delaiMs: Long = 0, var panne: Int = 0) : MoteurPhonie {
         var demarrages = 0; var recus = 0
         override fun demarre(): Message.Pret { demarrages++; return Message.Pret("turbo", "cpu", "int8", 0.1, "") }
         override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean): Message {
@@ -97,6 +97,52 @@ class PhoniePcTest {
         // Kept with the day of the message.
         val l = p.fichierJour(debut).readLines().map { JSONObject(it) }
         assertEquals("genesis", l.last().getString("src"))
+    }
+
+    @Test fun `un message genesis fini - phonie coupee, le moteur pour lui seul puis arrete`() {
+        val f = Faux("Hola desde HADES")
+        val p = phonie(f)
+        val pcm = ShortArray(16_000) { (8_000 * sin(2 * PI * 440 * it / 8_000.0)).toInt().toShort() }
+        val debut = horloge - 600_000L
+        // Asked from the journal while off: refused, as before.
+        assertTrue(p.transcritMessage(pcm, 8_000, debut, "HADES-SA")!!.contains("coupé"))
+        // Written down by itself, the engine not installed: nothing starts, the reason said.
+        assertTrue(p.transcritMessage(pcm, 8_000, debut, "HADES-SA", seulPermis = true)!!.contains("installé"))
+        assertEquals(0, f.demarrages)
+        assertFalse(p.seul)
+        // Installed: the engine for this message alone, « Phonie → texte » still off.
+        File(dossier, "stt/bin").mkdirs(); File(dossier, "stt/bin/python").writeText("")
+        assertEquals(null, p.transcritMessage(pcm, 8_000, debut, "HADES-SA", seulPermis = true))
+        assertFalse(p.actif)
+        assertTrue(p.seul)
+        assertTrue(attend(5_000) { p.bulles().any { it.source == "genesis" } })
+        assertEquals(1, f.demarrages)
+        assertEquals("Hola desde HADES", p.bulles().last().texte)
+        assertTrue(p.json(0).getBoolean("seul"))
+        assertFalse(p.json(0).getBoolean("on"))
+        // Nothing else is listened to meanwhile.
+        parle(p, 2)
+        Thread.sleep(300)
+        assertEquals(1, p.bulles().size)
+        // Written again (packets came to it since): its text takes the place of the first, in the window and the day's file.
+        f.texte = "Hola desde HADES-SA, saludos"
+        assertEquals(null, p.transcritMessage(pcm, 8_000, debut, "HADES-SA", seulPermis = true))
+        assertTrue(attend(5_000) { p.bulles().lastOrNull()?.texte == "Hola desde HADES-SA, saludos" })
+        assertEquals(1, p.bulles().count { it.source == "genesis" && it.t == debut })
+        val l = p.fichierJour(debut).readLines().map { JSONObject(it) }.filter { it.getString("src") == "genesis" }
+        assertEquals(listOf("Hola desde HADES-SA, saludos"), l.map { it.getString("texte") })
+        assertEquals(1, f.demarrages)
+        // None left for SEUL_MS: stopped.
+        horloge += PhoniePc.SEUL_MS + 1_000L
+        assertTrue(attend(5_000) { !p.seul })
+        assertEquals("coupé", p.json(0).getString("etat"))
+    }
+
+    @Test fun `priorite basse - la commande d'origine en dernier`() {
+        val c = listOf("/x/python", "satme_phonie.py", "--modele", "turbo")
+        val b = PhoniePc.prioriteBasse(c)
+        assertEquals(c, b.takeLast(c.size))
+        if (!OutilsPc.windows && OutilsPc.trouve("nice") != null) assertTrue(b.first().endsWith("nice") && b[2] == "19")
     }
 
     @Test fun `coupe par defaut rien ne demarre`() {

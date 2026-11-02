@@ -489,10 +489,16 @@ fun main(args: Array<String>) {
     journalWeb.sstvPc = son.sstv
     // The GENESIS voice messages of a pass: heard (made into sound by libcodec2), written down by « Phonie → texte » when asked.
     journalWeb.voixWav = { nom -> telemesure.voixWav(nom) }
-    journalWeb.transcritVoix = { o ->
+    fun transcritVoix(o: org.json.JSONObject, seul: Boolean): String? {
         val w = telemesure.voixWav(o.optString("nom"))?.let { fr.f4ioz.satcombo.sstv.SstvSon.litWav(it) }
-        if (w == null) "son du message introuvable (libcodec2 absente ?)"
-        else phonie.transcritMessage(w.first, w.second, o.optLong("debut"), o.optString("sat"))
+        return if (w == null) "son du message introuvable (libcodec2 absente ?)"
+        else phonie.transcritMessage(w.first, w.second, o.optLong("debut"), o.optString("sat"), seulPermis = seul)
+    }
+    journalWeb.transcritVoix = { o -> transcritVoix(o, false) }
+    // Each live message written down by itself when it ends (the engine for it alone when « Phonie → texte » is off).
+    telemesure.transcritVoix = { o -> transcritVoix(o, true) }
+    kotlin.concurrent.thread(isDaemon = true, name = "satme-genesis-voix", priority = Thread.MIN_PRIORITY) {
+        while (true) { Thread.sleep(5_000L); runCatching { telemesure.verifieVoix() } }
     }
     serveur.spectreJournal = spectreJournal
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)
