@@ -12,6 +12,8 @@ import fr.f4ioz.satcombo.domain.ContenuPassage
 import fr.f4ioz.satcombo.domain.JournalFt
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.ZonesNumeriques
+import fr.f4ioz.satcombo.telemesure.AssemblageVoix
+import fr.f4ioz.satcombo.telemesure.VoixGenesis
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -33,6 +35,8 @@ import java.util.concurrent.ConcurrentHashMap
  *    `telemesure/<profile>-<day>.jsonl`, of the pass's satellite;
  *  - voice: the log's contacts in a voice mode, the overs written down
  *    (`phonie/<day>.jsonl`) and the voices the recordings' zones found (`.numerique` v2); CW: the log's CW contacts;
+ *  - Codec2 voice: the GENESIS messages (`telemesure/genesis/voix/<name>.json`) of the pass's satellite, from two
+ *    packets on ([VoixGenesis.duPassage]); their overs written down are theirs, not the voice badge's;
  *  - DATV: the transport streams recorded during the pass (`SatMe_DATV_….ts`).
  *
  * Each file is read once and kept until it changes (its date and length); each
@@ -63,8 +67,8 @@ class ContenuPassagesPc(
     /** A frame of telemetry: when, of which satellite, the pictures it carried a piece of. */
     private class Trame(val t: Long, val sat: String, val norad: Int, val images: List<String>)
 
-    /** Something dated of a satellite (an over written down). */
-    private class Date(val t: Long, val sat: String)
+    /** An over written down: when, of which satellite, heard where (`src`: « genesis » for a voice message), what. */
+    private class Date(val t: Long, val sat: String, val src: String, val texte: String, val traduction: String, val langue: String)
 
     /** Everything dated of a folder, read through the files' cache, in time order; and what it was made of. */
     private class Index<T>(val l: List<T>, val t: LongArray, val marque: String)
@@ -99,7 +103,33 @@ class ContenuPassagesPc(
     private fun paroles(f: File): List<Date> = f.readLines().mapNotNull { li ->
         val o = runCatching { JSONObject(li) }.getOrNull() ?: return@mapNotNull null
         if (o.optString("texte").isBlank()) return@mapNotNull null
-        o.optLong("t").takeIf { it > 0 }?.let { Date(it, o.optString("satellite")) }
+        o.optLong("t").takeIf { it > 0 }?.let {
+            Date(it, o.optString("sat").ifBlank { o.optString("satellite") }, o.optString("src"), o.optString("texte"), o.optString("traduction"), o.optString("langue"))
+        }
+    }
+
+    private fun messageVoix(f: File): List<JSONObject> = listOf(JSONObject(f.readText()))
+
+    private fun voixIndex() = index(liste(File(donnees, AssemblageVoix.DOSSIER)) { it.name.endsWith(".json") }, ::messageVoix) { it.optLong("debut") }
+
+    private fun parolesIndex() = index(liste(File(donnees, "phonie")) { it.name.endsWith(".jsonl") }, ::paroles) { it.t }
+
+    /** A GENESIS voice message of a pass, and what « Phonie → texte » wrote of it (blank when not yet). */
+    class Voix(val message: JSONObject, val texte: String = "", val traduction: String = "", val langue: String = "")
+
+    /** The pass's voice messages ([VoixGenesis.duPassage]), oldest first, each with its over written down when there is one. */
+    fun voix(e: JournalPassage.Entree): List<Voix> = voix(e, voixIndex(), parolesIndex())
+
+    private fun voix(e: JournalPassage.Entree, vx: Index<JSONObject>, ph: Index<Date>): List<Voix> {
+        val f = JournalPassage.fenetre(e)
+        val l = vx.l.filter { VoixGenesis.duPassage(it, e.satName, f) }
+        if (l.isEmpty()) return emptyList()
+        val ecrits = dans(ph, f.first..(f.last + 60_000L)).filter { it.src == VoixGenesis.SOURCE_PHONIE }
+        return l.map { o ->
+            // Written down at the message's start (the over's time is the piece's).
+            val b = ecrits.lastOrNull { Math.abs(it.t - o.optLong("debut")) < 1_500L }
+            if (b == null) Voix(o) else Voix(o, b.texte, b.traduction, b.langue)
+        }
     }
 
     /** The APRS frames received of a day's file (`ms⇥satellite⇥frame`), their times: those sent left out. */
@@ -129,10 +159,11 @@ class ContenuPassagesPc(
     fun resumes(l: List<JournalPassage.Entree>, liens: Map<String, JournalPc.Liens>): Map<String, Map<String, Int>> {
         val tlm = index(liste(File(donnees, "telemesure/paquets")) { it.name.endsWith(".jsonl") } +
             liste(File(donnees, "telemesure")) { it.name.endsWith(".jsonl") }, ::trames) { it.t }
-        val ph = index(liste(File(donnees, "phonie")) { it.name.endsWith(".jsonl") }, ::paroles) { it.t }
+        val ph = parolesIndex()
+        val vx = voixIndex()
         val ap = index(liste(File(donnees, "aprs")) { it.name.endsWith(".txt") }, ::aprs) { it }
         val datv = liste(enregistrements) { it.name.startsWith("SatMe_DATV_") && it.name.endsWith(".ts") }.mapNotNull { debutDatv(it.name) }.sorted()
-        val commun = tlm.marque + "/" + ph.marque + "/" + ap.marque + "/" + datv.size + ":" + datv.lastOrNull()
+        val commun = tlm.marque + "/" + ph.marque + "/" + vx.marque + "/" + ap.marque + "/" + datv.size + ":" + datv.lastOrNull()
         val vus = HashSet<String>()
         val r = l.associate { e ->
             vus += e.id
@@ -152,9 +183,10 @@ class ContenuPassagesPc(
                 zones = fNum.flatMap { lu(it, emptyList(), ::zones) },
                 tramesAprs = maxOf(dans(ap, f).size, k?.trames?.size ?: 0),
                 tramesTelemesure = trames.size,
-                paroles = dans(ph, f).count { it.sat.isBlank() || JournalPassage.memeSatellite(it.sat, e.satName) },
+                paroles = dans(ph, f).count { it.src != VoixGenesis.SOURCE_PHONIE && (it.sat.isBlank() || JournalPassage.memeSatellite(it.sat, e.satName)) },
                 modesQso = k?.qsos?.map { it.mode }.orEmpty(),
                 enregistrementsDatv = datv.count { it in f },
+                messagesVoix = vx.l.count { VoixGenesis.duPassage(it, e.satName, f) },
             )
             val s = ContenuPassage.resume(x)
             resumes[e.id] = Resume(m, s)

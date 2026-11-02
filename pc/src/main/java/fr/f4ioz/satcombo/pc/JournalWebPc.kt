@@ -20,6 +20,7 @@ import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.location.Maidenhead
+import fr.f4ioz.satcombo.telemesure.AssemblageVoix
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -91,6 +92,21 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** The live SSTV, for « Réunir » (set by Main). */
     @Volatile var sstvPc: SstvPc? = null
+
+    /** A GENESIS voice message made into a WAV ([TelemesurePc.voixWav]), by its name (set by Main). */
+    @Volatile var voixWav: ((String) -> File?)? = null
+
+    /** A voice message (its `.json`) given to « Phonie → texte »: null when queued, else why not (set by Main). */
+    @Volatile var transcritVoix: ((org.json.JSONObject) -> String?)? = null
+
+    /** The pass's GENESIS voice messages for the page: name, start, last packet, length, packets, the missing ones, what was written down. */
+    private fun voixJson(e: JournalPassage.Entree): String = contenu.voix(e).joinToString(",", "[", "]") { v ->
+        val o = v.message
+        val manquants = o.optJSONArray("manquants") ?: org.json.JSONArray()
+        "{\"nom\":\"${js(o.optString("nom"))}\",\"de\":${o.optLong("debut")},\"a\":${maxOf(o.optLong("debut"), o.optLong("miseAJour"))}," +
+            "\"duree\":${o.optDouble("duree", 0.0)},\"recus\":${o.optJSONArray("recus")?.length() ?: 0},\"manquants\":$manquants," +
+            "\"texte\":\"${js(v.texte)}\",\"traduction\":\"${js(v.traduction)}\",\"langue\":\"${js(v.langue)}\"}"
+    }
 
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
@@ -229,6 +245,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     append(",\"freq\":").append(frequences(e, l).joinToString(",", "[", "]") { "[${it.first},${it.second}]" })
                     append(",\"ft\":").append(ftJson(e, l)).append(",\"ftAff\":").append(ftAffJson(e.options.ft))
                         .append(",\"siteFt\":").append(runCatching { siteFtPret() }.getOrDefault(false))
+                    append(",\"voix\":").append(voixJson(e)).append(",\"voixTexte\":").append(transcritVoix != null)
                     append(",\"doppler\":").append(station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(it, e.satName, e.debutMs, e.finMs) }
                         .orEmpty().joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                     append("}")
@@ -399,6 +416,23 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 if (j.ft.duPassage(e).isEmpty()) return json("{\"ok\":false,\"erreur\":\"aucun message FT8/FT4 gardé avec ce passage\"}")
                 val err = runCatching { publieFt(e.id) }.getOrElse { it.message ?: "échec" }
                 json(org.json.JSONObject().put("ok", err == null).put(if (err == null) "message" else "erreur", err ?: "dans la file d’envoi vers le site").toString())
+            }
+            // ---- the GENESIS voice messages of a pass (Codec2, receive only): heard, and written down on a gesture
+            "/voix" -> {
+                val c2 = AssemblageVoix.fichier(dossier, p("nom")) ?: return NON
+                if (p("format") == "c2") return ReponseWeb("200 OK", "application/octet-stream", fichier = c2,
+                    entetes = "Content-Disposition: attachment; filename=\"${c2.name}\"\r\n")
+                ReponseWeb("200 OK", "audio/wav", fichier = voixWav?.invoke(c2.nameWithoutExtension) ?: return NON)
+            }
+            "/voix/liste" -> {
+                val e = j.passage(p("id")) ?: return NON
+                json(voixJson(e))
+            }
+            "/voix/transcrit" -> {
+                if (methode != "POST") return ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
+                val o = AssemblageVoix.fichier(dossier, p("nom"), ".json")?.let { runCatching { org.json.JSONObject(it.readText()) }.getOrNull() } ?: return NON
+                val err = transcritVoix?.invoke(o) ?: if (transcritVoix == null) "absent" else null
+                json(if (err == null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(err)}\"}")
             }
             // A Doppler/CAT log (CSV), by its name.
             "/doppler" -> {

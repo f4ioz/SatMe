@@ -60,7 +60,9 @@ object PageJournal {
         "pj_ft_redecode_aide", "pj_ft_trouves", "pj_ft_en_cours", "pj_ft_n", "pj_ft_cadre_aide", "pj_ft_defaut", "pj_ft_afficher",
         "pj_ft_deux", "pj_num_titre", "pj_num_aide", "pj_num_chercher", "pj_num_chercher_aide", "pj_num_aucune", "pj_num_decoder",
         "pj_num_salves", "pj_num_rien", "pj_num_trouves", "pj_num_publier", "pj_num_publier_aide",
-        "pj_cu_tout", "pj_cu_tout_aide", "pj_cu_aide", "pj_cu_n", "pj_cu_aucun", "pj_cu_num", "pj_cu_num_long", "pj_cu_tlm_long", "pj_cu_phonie", "pj_cu_u_images", "pj_cu_u_messages", "pj_cu_u_zones", "pj_cu_u_trames", "pj_cu_u_phonie", "pj_cu_u_cw", "pj_cu_u_datv")
+        "pj_cu_tout", "pj_cu_tout_aide", "pj_cu_aide", "pj_cu_n", "pj_cu_aucun", "pj_cu_num", "pj_cu_num_long", "pj_cu_tlm_long", "pj_cu_phonie", "pj_cu_u_images", "pj_cu_u_messages", "pj_cu_u_zones", "pj_cu_u_trames", "pj_cu_u_phonie", "pj_cu_u_cw", "pj_cu_u_datv",
+        "pj_cu_voix", "pj_cu_voix_long", "pj_cu_u_voix", "pj_voix_titre", "pj_voix_aide", "pj_voix_paquets", "pj_voix_manquants",
+        "pj_voix_transcrire", "pj_voix_transcrire_aide", "pj_voix_en_cours", "pj_voix_rien", "pj_voix_c2")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -371,6 +373,7 @@ const CONTENUS = {
   FT8: ['#8C6BFF', 'FT8', 'FT8', 'cu_u_messages'], FT4: ['#D58BFF', 'FT4', 'FT4', 'cu_u_messages'],
   NUM: ['#9D6BFF', T.cu_num, T.cu_num_long, 'cu_u_zones', true], APRS: ['#4C8DFF', 'APRS', 'APRS', 'cu_u_trames'],
   TLM: ['#2EC4B6', 'TLM', T.cu_tlm_long, 'cu_u_trames'], PHONIE: ['#7CE38B', T.cu_phonie, T.cu_phonie, 'cu_u_phonie'],
+  VOIX: ['#C3F25C', T.cu_voix, T.cu_voix_long, 'cu_u_voix'],
   CW: ['#C9D4DE', 'CW', 'CW', 'cu_u_cw'], DATV: ['#E5484D', 'DATV', 'DATV', 'cu_u_datv'] };
 /** A pass's kinds and counts: the station's summary, else (the phone's list) what its counts say. */
 function contenu(p) { return p.c || { SSTV: p.i || 0, APRS: p.r || 0 }; }
@@ -818,12 +821,71 @@ function panneauMoments(p) {
       el('a', { href: url('/son', { id: P.id, n: s.n }), download: s.nom, text: '⤓ ' + s.nom }),
       el('span', { class: 'aide', text: hms(s.o + s.an) + ' · ' + duree(s.du - s.an) })])));
   }
+  // SatMe-PC: the GENESIS voice messages heard during the pass (Codec2), to listen to and to write down.
+  if (P.voix && P.voix.length) {
+    p.appendChild(el('div', { class: 'aide', text: T.voix_titre, title: T.voix_aide, style: 'margin-top:8px' }));
+    p.appendChild(el('div', { id: 'voixBloc' }));
+    dessineVoix();
+  }
   // The pass's Doppler/CAT log, when it was kept.
   if (P.doppler && P.doppler.length) {
     p.appendChild(el('div', { class: 'aide', text: T.doppler, style: 'margin-top:8px' }));
     P.doppler.forEach(n => p.appendChild(el('div', { class: 'rangee' }, [
       el('a', { href: url('/doppler', { nom: n }), download: n, text: '⤓ ' + n })])));
   }
+}
+// ------------------------------------------------------------ the GENESIS voice messages of the pass (SatMe-PC)
+// Each: its time, length, packets (the missing ones are silence in the sound), a player, and what « Phonie → texte »
+// wrote of it — asked by a gesture, the over then followed until it comes (3 min at most).
+let voixAttente = {}, voixSuivi = 0, voixErreur = {}, voixAFaire = false;
+function secondes(x) { return (Math.round(x * 10) / 10).toLocaleString(document.documentElement.lang || undefined) + ' s'; }
+function dessineVoix() {
+  const b = g('voixBloc'); if (!b || !P) return;
+  // Not redrawn under a sound playing (its player would stop): later, by the follow-up.
+  if ([...b.querySelectorAll('audio')].some(a => !a.paused)) { voixAFaire = true; return; }
+  voixAFaire = false; b.innerHTML = '';
+  P.voix.forEach(v => {
+    const total = v.recus + v.manquants.length;
+    const kids = [el('div', { class: 'rangee' }, [el('span', { class: 'h', text: hms(v.de) }),
+      el('span', { class: 'aide', text: [secondes(v.duree), tf('voix_paquets', v.recus, total),
+        v.manquants.length ? tf('voix_manquants', v.manquants.join(', ')) : ''].filter(x => x).join(' · ') }),
+      el('a', { class: 'discret', href: url('/voix', { nom: v.nom, format: 'c2' }), download: v.nom + '.c2', text: '⤓ .c2', title: T.voix_c2 })]),
+      el('audio', { controls: '', preload: 'none', src: url('/voix', { nom: v.nom }), style: 'width:100%;height:30px' })];
+    if (v.texte) {
+      kids.push(el('div', { style: 'font-style:italic;margin:2px 0', text: '« ' + v.texte + ' »' + (v.langue ? ' (' + v.langue + ')' : '') }));
+      if (v.traduction) kids.push(el('div', { class: 'aide', text: v.traduction }));
+    } else if (P.voixTexte) {
+      const r = el('div', { class: 'rangee' });
+      if (voixAttente[v.nom]) r.appendChild(el('span', { class: 'aide', text: T.voix_en_cours }));
+      else r.appendChild(el('button', { class: 'discret', text: T.voix_transcrire, title: T.voix_transcrire_aide, onclick: () => transcritVoix(v.nom) }));
+      if (voixErreur[v.nom]) r.appendChild(el('span', { class: 'aide', style: 'color:var(--rose)', text: voixErreur[v.nom] }));
+      kids.push(r);
+    }
+    b.appendChild(el('div', { style: 'margin:4px 0 8px' }, kids));
+  });
+}
+async function transcritVoix(nom) {
+  delete voixErreur[nom];
+  let j; try { j = await envoie('/voix/transcrit', { nom: nom }); } catch (x) { return; }
+  if (j.ok) voixAttente[nom] = Date.now(); else voixErreur[nom] = j.erreur || T.echec;
+  dessineVoix();
+  if (j.ok && !voixSuivi) voixSuivi = setTimeout(suisVoix, 3000);
+}
+async function suisVoix() {
+  voixSuivi = 0;
+  const ids = Object.keys(voixAttente); if ((!ids.length && !voixAFaire) || !P) return;
+  try {
+    const l = await lire('/voix/liste', { id: P.id });
+    if (Array.isArray(l) && l.length) P.voix = l;
+  } catch (x) {}
+  const now = Date.now();
+  ids.forEach(n => {
+    const v = (P.voix || []).find(x => x.nom === n);
+    if (!v || v.texte) delete voixAttente[n];
+    else if (now - voixAttente[n] > 180000) { delete voixAttente[n]; voixErreur[n] = T.voix_rien; }
+  });
+  dessineVoix();
+  if (Object.keys(voixAttente).length || voixAFaire) voixSuivi = setTimeout(suisVoix, 3000);
 }
 // ------------------------------------------------------------ a pass from nothing, and what it holds
 // Times typed in local time; sent as milliseconds.

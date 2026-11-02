@@ -76,6 +76,29 @@ class PhoniePcTest {
         return condition()
     }
 
+    @Test fun `un message vocal genesis ecrit sous sa source a son heure`() {
+        val f = Faux("En un lugar de la Mancha")
+        val p = phonie(f)
+        // A made-up message: 2 s of a tone at 8 kHz, as libcodec2 gives it.
+        val pcm = ShortArray(16_000) { (8_000 * sin(2 * PI * 440 * it / 8_000.0)).toInt().toShort() }
+        val debut = horloge - 3_600_000L
+        // Off: nothing starts for it, the reason said.
+        assertTrue(p.transcritMessage(pcm, 8_000, debut, "HADES-SA (SpinnyONE)")!!.contains("coupé"))
+        assertEquals(0, f.demarrages)
+        p.actif = true
+        assertEquals(null, p.transcritMessage(pcm, 8_000, debut, "HADES-SA (SpinnyONE)"))
+        assertTrue(attend(5_000) { p.bulles().isNotEmpty() })
+        val b = p.bulles().last()
+        assertEquals(fr.f4ioz.satcombo.telemesure.VoixGenesis.SOURCE_PHONIE, b.source)
+        assertEquals(debut, b.t)
+        assertEquals("HADES-SA (SpinnyONE)", b.satellite)
+        // Brought to 16 kHz, its whole length.
+        assertEquals(2.0, b.dureeS, 0.25)
+        // Kept with the day of the message.
+        val l = p.fichierJour(debut).readLines().map { JSONObject(it) }
+        assertEquals("genesis", l.last().getString("src"))
+    }
+
     @Test fun `coupe par defaut rien ne demarre`() {
         val f = Faux("F4IOZ")
         val p = phonie(f)

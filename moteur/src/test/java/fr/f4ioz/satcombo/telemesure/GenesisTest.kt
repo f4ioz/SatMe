@@ -279,6 +279,31 @@ class GenesisTest {
         } finally { dir.deleteRecursively() }
     }
 
+    @Test fun message_de_voix_rattache_a_son_passage() {
+        val dir = java.nio.file.Files.createTempDirectory("voix").toFile()
+        try {
+            val m = AssemblageVoix(dir)
+            val t0 = 1_793_588_000_000L
+            for (n in 0 until 3) m.ajoute(n, VoixGenesis.envoye(c2Essai(n)), t0 + n * 400L, "HADES-SA (SpinnyONE)")
+            // A lone packet later on: noise, never a message of the journal.
+            m.ajoute(0, VoixGenesis.envoye(c2Essai(7)), t0 + 300_000L, "HADES-SA (SpinnyONE)")
+            val l = AssemblageVoix.tous(dir)
+            assertEquals(1, l.size)
+            val o = l[0]
+            // The pass of the same satellite (another spelling of its name) around it: its message.
+            assertTrue(VoixGenesis.duPassage(o, "HADES-SA", (t0 - 60_000L)..(t0 + 400_000L)))
+            // A message heard until just after AOS: still the pass's.
+            assertTrue(VoixGenesis.duPassage(o, "HADES-SA (SpinnyONE)", (t0 + 500L)..(t0 + 600_000L)))
+            // Another satellite's pass at the same time, or the same satellite's earlier or later pass: not.
+            assertFalse(VoixGenesis.duPassage(o, "SO-50", (t0 - 60_000L)..(t0 + 400_000L)))
+            assertFalse(VoixGenesis.duPassage(o, "HADES-SA", (t0 - 900_000L)..(t0 - 1L)))
+            assertFalse(VoixGenesis.duPassage(o, "HADES-SA", (t0 + 801L)..(t0 + 900_000L)))
+            // One packet only, or a test: not a message.
+            assertFalse(VoixGenesis.duPassage(org.json.JSONObject(o.toString()).put("recus", org.json.JSONArray(listOf(0))), "HADES-SA", (t0 - 60_000L)..(t0 + 400_000L)))
+            assertFalse(VoixGenesis.duPassage(org.json.JSONObject(o.toString()).put("essai", true), "HADES-SA", (t0 - 60_000L)..(t0 + 400_000L)))
+        } finally { dir.deleteRecursively() }
+    }
+
     @Test fun voix_par_le_recepteur() {
         val fs = 24_000
         val o = (0 until 4).flatMap { n -> (Genesis.codeVoix(3, n, VoixGenesis.envoye(c2Essai(n))) + ByteArray(2) { 0xAA.toByte() }).toList() }.toByteArray()

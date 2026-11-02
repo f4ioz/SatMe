@@ -83,6 +83,21 @@ object VoixGenesis {
     const val SAUT_MAX = 10
     /** The fewest packets a message is kept with (no CRC: one alone may be noise). */
     const val MIN_PAQUETS = 2
+
+    /** The « Phonie → texte » source a message written out is kept under (`phonie/<day>.jsonl`, `src`). */
+    const val SOURCE_PHONIE = "genesis"
+
+    /**
+     * A message (its `.json`) heard during a journal pass: of [satellite], not a test, from [MIN_PAQUETS]
+     * packets on, its first to its last packet within [fenetre] (the pass's AOS to LOS, with its margin).
+     */
+    fun duPassage(o: JSONObject, satellite: String, fenetre: LongRange): Boolean {
+        if (o.optBoolean("essai") || (o.optJSONArray("recus")?.length() ?: 0) < MIN_PAQUETS) return false
+        if (!fr.f4ioz.satcombo.domain.JournalPassage.memeSatellite(o.optString("sat"), satellite)) return false
+        val debut = o.optLong("debut").takeIf { it > 0 } ?: return false
+        val fin = maxOf(debut, o.optLong("miseAJour"))
+        return debut <= fenetre.last && fin >= fenetre.first
+    }
 }
 
 /** Voice messages put together, written as `telemesure/genesis/voix/<UTC>-<sat>.c2` with a `.json` beside. */
@@ -150,6 +165,9 @@ class AssemblageVoix(private val dossier: File?) {
                 .sortedByDescending { it.name }.mapNotNull { runCatching { JSONObject(it.readText()) }.getOrNull() }
                 .filter { (it.optJSONArray("recus")?.length() ?: 0) >= VoixGenesis.MIN_PAQUETS }.take(max)
         }
+
+        /** Every message kept on disk (from [VoixGenesis.MIN_PAQUETS] packets on), oldest first. */
+        fun tous(dossier: File?): List<JSONObject> = liste(dossier, Int.MAX_VALUE).reversed()
 
         /** A message's `.c2` file by name (checked: no path). */
         fun fichier(dossier: File?, nom: String, ext: String = ".c2"): File? {

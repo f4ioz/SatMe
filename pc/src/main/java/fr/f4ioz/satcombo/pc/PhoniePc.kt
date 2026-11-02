@@ -145,6 +145,22 @@ class PhoniePc(
         sdr.pousse(pcm, n, rate, horloge(), squelch).forEach { ajoute(it, "sdr") }
     }
 
+    /**
+     * A GENESIS voice message (HADES-SA's Codec2, made into sound) to write out, asked from the journal: queued as
+     * an over heard, kept with the day's under the source « genesis » at the message's start ([debutMs]). Only while
+     * « Phonie → texte » is on: nothing starts for it. Null when queued, else why not.
+     */
+    fun transcritMessage(pcm: ShortArray, rate: Int, debutMs: Long, satellite: String): String? {
+        if (!actif) return "« Phonie → texte » est coupé : le cocher (onglets SDR, QO-100 ou Carnet), puis Transcrire."
+        if (pcm.isEmpty() || rate <= 0) return "message vide"
+        val r = fr.f4ioz.satcombo.phonie.Reechantillonneur(rate)
+        // A little silence after: the resampler gives its last samples out.
+        val x = r.pousse(pcm) + r.pousse(FloatArray(rate / 5))
+        file.ajoute(Attente(CapteurPhonie.Piece(DecoupeVoix.Segment(0L, x, 0.0, 1.0), debutMs),
+            fr.f4ioz.satcombo.telemesure.VoixGenesis.SOURCE_PHONIE, null, satellite))
+        return null
+    }
+
     /** True while a voice is being heard. */
     val enVoix: Boolean get() = when (sourceActive) { "carte" -> carte.enVoix; "sdr" -> sdr.enVoix; "datv" -> capteurDatv.enVoix; else -> false }
 

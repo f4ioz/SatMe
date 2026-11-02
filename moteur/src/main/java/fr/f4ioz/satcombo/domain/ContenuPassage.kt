@@ -13,7 +13,7 @@ package fr.f4ioz.satcombo.domain
  * its filter. Each count comes from what the station already wrote beside the
  * pass (pictures' sidecars, the pass's FT8/FT4 messages, the recordings'
  * digital zones and voices, the APRS and telemetry frames, the voices written down, the
- * log's contacts, the DATV recordings): nothing is decoded nor measured here.
+ * log's contacts, the DATV recordings, the GENESIS voice messages): nothing is decoded nor measured here.
  *
  * A kind is there only when its count is above zero.
  */
@@ -30,20 +30,22 @@ object ContenuPassage {
     const val TLM = "TLM"
     /** Voice: a contact logged in a voice mode, an over written down by the voice engine, a voice heard in the sound. */
     const val PHONIE = "PHONIE"
+    /** Codec2 voice messages decoded (GENESIS, HADES-SA's BBS), from 2 packets on. */
+    const val VOIX = "VOIX"
     const val CW = "CW"
     const val DATV = "DATV"
 
     /** The kinds, in the order the list shows them. */
-    val ORDRE = listOf(SSTV, SSDV, FT8, FT4, NUM, APRS, TLM, PHONIE, CW, DATV)
+    val ORDRE = listOf(SSTV, SSDV, FT8, FT4, NUM, APRS, TLM, PHONIE, VOIX, CW, DATV)
 
-    private val VOIX = setOf("FM", "SSB", "USB", "LSB", "AM", "DV", "DIGITALVOICE", "FREEDV", "C4FM", "DSTAR", "D-STAR", "DMR", "M17", "NFM", "WFM", "PHONE")
+    private val MODES_VOIX = setOf("FM", "SSB", "USB", "LSB", "AM", "DV", "DIGITALVOICE", "FREEDV", "C4FM", "DSTAR", "D-STAR", "DMR", "M17", "NFM", "WFM", "PHONE")
 
     /** What a logged contact's mode says of the pass ([PHONIE], [CW], [FT8], [FT4], [APRS], [DATV], [SSTV]), or null. */
     fun genreQso(mode: String): String? {
         val m = mode.trim().uppercase()
         return when {
             m.isEmpty() -> null
-            m in VOIX -> PHONIE
+            m in MODES_VOIX -> PHONIE
             m == "CW" || m.startsWith("CW-") -> CW
             m == "FT8" || m.endsWith("/FT8") -> FT8
             m == "FT4" || m.endsWith("/FT4") -> FT4
@@ -71,6 +73,8 @@ object ContenuPassage {
         /** The modes of the log's contacts of the pass. */
         val modesQso: List<String> = emptyList(),
         val enregistrementsDatv: Int = 0,
+        /** GENESIS voice messages heard during the pass ([fr.f4ioz.satcombo.telemesure.VoixGenesis.duPassage]). */
+        val messagesVoix: Int = 0,
     )
 
     /** The pass's kinds and their counts, in [ORDRE], only those above zero. */
@@ -95,6 +99,7 @@ object ContenuPassage {
             APRS to maxOf(x.tramesAprs, qso[APRS] ?: 0),
             TLM to x.tramesTelemesure,
             PHONIE to x.paroles + (qso[PHONIE] ?: 0) + x.zones.count { it == ZonesNumeriques.PHONIE },
+            VOIX to x.messagesVoix,
             CW to (qso[CW] ?: 0),
             DATV to x.enregistrementsDatv + (qso[DATV] ?: 0),
         )

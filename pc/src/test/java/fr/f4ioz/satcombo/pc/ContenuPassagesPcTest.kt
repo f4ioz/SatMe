@@ -14,6 +14,8 @@ import fr.f4ioz.satcombo.domain.JournalFt
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.ZonesNumeriques
 import fr.f4ioz.satcombo.plateforme.StockageMemoire
+import fr.f4ioz.satcombo.telemesure.AssemblageVoix
+import fr.f4ioz.satcombo.telemesure.VoixGenesis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -103,6 +105,82 @@ class ContenuPassagesPcTest {
     }
 
     @Test
+    fun les_messages_vocaux_genesis_vont_a_leur_passage() {
+        val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
+        val carnet = CarnetPc(st, LogStore(File(dossier, "qso_log.json")))
+        val son = SonStation(SonPc(), st, File(dossier, "enregistrements"), File(dossier, "sstv"))
+        val j = JournalPc(st, carnet, son, File(dossier, "journal"))
+        val web = JournalWebPc(j, st, dossier)
+
+        val sat = "HADES-SA (SpinnyONE)"
+        val e = JournalPassage.Entree(68446, sat, t0, t0 + 600_000L, "JN18FS")
+        val suivant = JournalPassage.Entree(68446, sat, t0 + 6_000_000L, t0 + 6_600_000L, "JN18FS")
+        // Another satellite's pass at the same time.
+        val autre = JournalPassage.Entree(44909, "RS-44", t0, t0 + 600_000L, "JN18FS")
+        listOf(e, suivant, autre).forEach { j.rangement.enregistre(it) }
+
+        // Two messages during the pass (one with a packet missing), a lone packet after (noise), all made up.
+        val c2 = { k: Int -> ByteArray(VoixGenesis.TRAMES_PAR_PAQUET * VoixGenesis.OCTETS_C2) { i -> if (i % 4 == 3) 0 else (k * 13 + i * 5 + 1).toByte() } }
+        val m = AssemblageVoix(dossier)
+        val t1 = t0 + 120_000L; val t2 = t0 + 400_000L
+        for (n in 0 until 3) m.ajoute(n, VoixGenesis.envoye(c2(n)), t1 + n * 400L, sat)
+        // (Other words: the same packet again would be a repeat of the first message.)
+        for (n in listOf(0, 2, 3)) m.ajoute(n, VoixGenesis.envoye(c2(n + 10)), t2 + n * 400L, sat)
+        m.ajoute(0, VoixGenesis.envoye(c2(9)), t0 + 6_100_000L, sat)
+        // « Phonie → texte » wrote the first one down (source genesis), and an over heard on the radio in the pass.
+        val noms = AssemblageVoix.tous(dossier).map { it.getString("nom") }
+        ecrit("phonie/2026-10-27.jsonl", listOf(
+            JSONObject().put("t", t1).put("src", VoixGenesis.SOURCE_PHONIE).put("sat", sat).put("langue", "es").put("texte", "En un lugar de la Mancha").put("traduction", "Dans un village de la Manche"),
+            JSONObject().put("t", t0 + 50_000L).put("src", "sdr").put("sat", sat).put("texte", "QRZ")).joinToString("\n") { it.toString() } + "\n")
+
+        fun liste(): Map<String, JSONObject> {
+            val l = JSONObject(String(web.sert("/liste") { "" }.corps)).getJSONArray("passages")
+            return (0 until l.length()).associate { l.getJSONObject(it).getString("id") to l.getJSONObject(it).getJSONObject("c") }
+        }
+        val c = liste()
+        assertEquals(c.toString(), 2, c.getValue(e.id).getInt("VOIX"))
+        // The message written down is the voice badge's, not the Phonie one's: the over heard alone counts there.
+        assertEquals(1, c.getValue(e.id).getInt("PHONIE"))
+        assertFalse(c.getValue(suivant.id).has("VOIX"))
+        assertFalse(c.getValue(autre.id).has("VOIX"))
+
+        // The pass's detail: each message, its packets, the missing one, what was written down.
+        val p = JSONObject(String(web.sert("/passage") { if (it == "id") e.id else "" }.corps))
+        val v = p.getJSONArray("voix")
+        assertEquals(2, v.length())
+        assertEquals(noms[0], v.getJSONObject(0).getString("nom"))
+        assertEquals(t1, v.getJSONObject(0).getLong("de"))
+        assertEquals(3, v.getJSONObject(0).getInt("recus"))
+        assertEquals("En un lugar de la Mancha", v.getJSONObject(0).getString("texte"))
+        assertEquals("es", v.getJSONObject(0).getString("langue"))
+        assertEquals("[1]", v.getJSONObject(1).getJSONArray("manquants").toString())
+        assertEquals(1.6, v.getJSONObject(1).getDouble("duree"), 1e-9)
+        assertEquals("", v.getJSONObject(1).getString("texte"))
+        assertFalse(p.getBoolean("voixTexte"))
+
+        // Heard: the WAV made from it (here a stand-in), the .c2 as received; never another file.
+        val wav = ecrit("essai.wav", "RIFF")
+        web.voixWav = { nom -> wav.takeIf { nom == noms[1] } }
+        assertEquals("200 OK", web.sert("/voix") { if (it == "nom") noms[1] else "" }.statut)
+        assertEquals(160L, web.sert("/voix") { when (it) { "nom" -> noms[1]; "format" -> "c2"; else -> "" } }.fichier?.length())
+        assertEquals("404 Not Found", web.sert("/voix") { if (it == "nom") "../qso_log" else "" }.statut)
+
+        // Written down on a gesture: the message given to « Phonie → texte », its reason when it cannot be.
+        val donnes = ArrayList<String>()
+        web.transcritVoix = { o -> donnes += o.getString("nom"); if (donnes.size > 1) "« Phonie → texte » est coupé" else null }
+        val r1 = JSONObject(String(web.sert("/voix/transcrit", { if (it == "nom") noms[1] else "" }, "POST") { false }.corps))
+        assertTrue(r1.getBoolean("ok"))
+        val r2 = JSONObject(String(web.sert("/voix/transcrit", { if (it == "nom") noms[1] else "" }, "POST") { false }.corps))
+        assertFalse(r2.getBoolean("ok")); assertTrue(r2.getString("erreur").contains("coupé"))
+        assertEquals(listOf(noms[1], noms[1]), donnes)
+        // A GET does not ask it.
+        web.sert("/voix/transcrit") { if (it == "nom") noms[1] else "" }
+        assertEquals(2, donnes.size)
+        assertTrue(JSONObject(String(web.sert("/passage") { if (it == "id") e.id else "" }.corps)).getBoolean("voixTexte"))
+        assertEquals(2, org.json.JSONArray(String(web.sert("/voix/liste") { if (it == "id") e.id else "" }.corps)).length())
+    }
+
+    @Test
     fun la_page_a_ses_pastilles_et_son_filtre() {
         val h = fr.f4ioz.satcombo.demo.PageJournal.html()
         assertTrue(h.contains("id=\"filtres\""))
@@ -110,5 +188,8 @@ class ContenuPassagesPcTest {
         assertTrue(h.contains("function retenu(p)"))
         // Every kind the station counts has its badge on the page.
         fr.f4ioz.satcombo.domain.ContenuPassage.ORDRE.forEach { assertTrue(it, h.contains("  $it: [") || h.contains(" $it: [")) }
+        // The pass's voice messages: listened to, written down on a gesture.
+        assertTrue(h.contains("function dessineVoix()"))
+        assertTrue(h.contains("'/voix/transcrit'"))
     }
 }

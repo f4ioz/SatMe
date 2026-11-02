@@ -52,6 +52,16 @@ class ContenuPassageTest {
     }
 
     @Test
+    fun un_message_vocal_genesis_a_sa_pastille_apres_la_phonie() {
+        val r = C.resume(C.Elements(paroles = 1, messagesVoix = 2, modesQso = listOf("CW")))
+        assertEquals(listOf(C.PHONIE, C.VOIX, C.CW), r.keys.toList())
+        assertEquals(2, r[C.VOIX]); assertEquals(1, r[C.PHONIE])
+        assertEquals("""{"PHONIE":1,"VOIX":2,"CW":1}""", C.json(r))
+        assertTrue(C.retenu(r, setOf(C.VOIX)))
+        assertFalse(C.retenu(C.resume(C.Elements(paroles = 1)), setOf(C.VOIX)))
+    }
+
+    @Test
     fun le_mode_d_un_contact() {
         listOf("FM", "USB", "LSB", "SSB", "AM", "C4FM", "DIGITALVOICE").forEach { assertEquals(it, C.PHONIE, C.genreQso(it)) }
         assertEquals(C.CW, C.genreQso("cw"))
