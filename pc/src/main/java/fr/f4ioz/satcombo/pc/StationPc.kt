@@ -193,7 +193,7 @@ class StationPc(
         override fun calibrationHz() = _etat.value.calibHz
         override fun decalageTxHz() = _etat.value.txShiftHz
         override fun poseDecalageTx(hz: Long) = reglageSat(txHz = hz)
-        override fun decalageRxHz() = 0L
+        override fun decalageRxHz() = ecouteGenesisHz()
         override fun afcRxHz() = afcSstvHz
         override fun modeCw() = false
         // QO-100 drives the rig itself, when asked: the Doppler loop then holds.
@@ -438,8 +438,19 @@ class StationPc(
         val rr = if (p != null && p.elevationDeg >= 0) p.rangeRateKmS else 0.0
         // Narrow data heard in SSB (SSDV, GENESIS FSK, FSK under 1200 bit/s): the dongle in USB, as the rig in USB-D.
         val mode = if (!t.isTransponder && fr.f4ioz.satcombo.domain.ModeRadio.donnees(t.mode, t.baud)) "USB" else t.mode.orEmpty()
-        return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz, mode, e.suivi?.name.orEmpty())
+        return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz + ecouteGenesisHz(), mode, e.suivi?.name.orEmpty())
     }
+
+    /**
+     * GENESIS FSK heard in USB (HADES-SA): the satellite's own oscillator
+     * wanders 0 to 1.3 kHz above its frequency (low when cold, rising as it
+     * sends), so tuned on it the lower tone grazes 0 Hz. Listening
+     * [ECOUTE_GENESIS_HZ] lower keeps it clear, the upper tone under the
+     * rig's 3 kHz filter. 0 for any other transmitter.
+     */
+    fun ecouteGenesisHz(): Long = emetteurChoisi()
+        ?.takeIf { !it.isTransponder && fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null }
+        ?.let { ECOUTE_GENESIS_HZ } ?: 0L
 
     /** The satellite followed is a METEOR-M sending LRPT pictures. */
     fun estMeteor(): Boolean = _etat.value.suivi?.let { fr.f4ioz.satcombo.meteor.RecepteurMeteor.emetLrpt(it.catalogNumber, it.name) } == true
@@ -1810,6 +1821,8 @@ class StationPc(
     }
 
     companion object {
+        /** Where the rig listens below a GENESIS transmitter's frequency ([ecouteGenesisHz]). */
+        const val ECOUTE_GENESIS_HZ = -300L
         /** The rigs the PC drives: the Icom family on CI-V, the pairs (TS-2000, FT-817 / IC-705, TH-D72), and simulators. */
         val MODELES = listOf("IC9700", "IC9100", "IC910", "TS2000", "PAIRE", "THD72", "SIM", "TS2000SIM")
         /** Driven as a pair: each leg its own rig or VFO. */

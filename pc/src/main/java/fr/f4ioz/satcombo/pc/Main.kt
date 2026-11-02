@@ -246,6 +246,7 @@ fun main(args: Array<String>) {
         t?.let { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud)!! to it.description }
     }
     telemesure.suiviGenesis = { station.etat.value.suivi?.let { it.name to it.catalogNumber } }
+    telemesure.suiviEnVue = { (station.etat.value.position?.elevationDeg ?: -90.0) > -1.0 }
     telemesure.sonFictif = { son.horsAntenne() != null }
     telemesure.enregistrement = { nom -> son.fichierEnregistrement(nom) }
     telemesure.enregistrements = { son.enregistrements().filter { it.name.endsWith(".wav") }.map { it.name } }

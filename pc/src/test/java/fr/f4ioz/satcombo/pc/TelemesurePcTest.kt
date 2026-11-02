@@ -194,7 +194,8 @@ class TelemesurePcTest {
 
     @Test fun `SSDV en BLU - coupe par defaut, un enregistrement relu donne l'image`() {
         val dir = Files.createTempDirectory("tlm").toFile()
-        val t = TelemesurePc(stockage(), dir, null)
+        // Now: an hour after the recording (a picture is looked for again within 3 days of it, not later).
+        val t = TelemesurePc(stockage(), dir, null, horloge = { 1_793_355_120_000L })
         t.suiviGenesis = { "HADES-SA" to 68446 }
         assertFalse(t.genesisActif)
         val wav = wavSo127(5)

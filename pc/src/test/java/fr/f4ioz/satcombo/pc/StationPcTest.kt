@@ -66,6 +66,23 @@ class StationPcTest {
         while (!quoi()) { check(System.currentTimeMillis() < fin) { "trop long" }; Thread.sleep(50) }
     }
 
+    /** GENESIS FSK heard in USB: the rig and the SDR listen 300 Hz below (the satellite's oscillator wanders above); 0 otherwise. */
+    @Test
+    fun ecoute_genesis_un_peu_plus_bas() {
+        val st = station()
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.emetteurs.isNotEmpty() }
+        assertEquals(0L, st.ecouteGenesisHz())
+        File(dossier, "emetteurs/25544.json").writeText("""[
+          {"description":"SSDV","mode":"FSK","baud":200,"downlink_low":436875000,"alive":true,"invert":false,"type":"Transmitter"}]""")
+        val st2 = station()
+        assertTrue(st2.suis(25544))
+        attends { st2.etat.value.emetteurs.isNotEmpty() && st2.etat.value.position != null }
+        assertEquals(StationPc.ECOUTE_GENESIS_HZ, st2.ecouteGenesisHz())
+        val e = st2.ecouteSdr()!!
+        assertEquals(-300L, e.cibleHz - fr.f4ioz.satcombo.domain.Doppler.downlink(e.reposHz, st2.etat.value.position!!.rangeRateKmS) - st2.etat.value.calibHz)
+    }
+
     /** The Doppler/CAT log: off by default, nothing written; on, the pass opens its CSV; the rig gone, it closes. */
     @Test
     fun le_journal_doppler_note_le_passage_suivi() {

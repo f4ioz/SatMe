@@ -88,11 +88,11 @@ class GenesisTest {
         return SignalFskAudio.audio(bits, fs, debit, ecart, centre, ebN0, derive, graine = graine)
     }
 
-    private fun recoit(pcm: ShortArray, fs: Int, p: RecepteurGenesis.Profil): Pair<RecepteurGenesis, AssemblageSsdv> {
+    private fun recoit(pcm: ShortArray, fs: Int, p: RecepteurGenesis.Profil, enVue: Boolean = true): Pair<RecepteurGenesis, AssemblageSsdv> {
         val a = AssemblageSsdv(null) { 1_000L }
         val r = RecepteurGenesis(null, a) { 1_000L }
         r.profil = p
-        r.contexte = { RecepteurGenesis.Contexte("HADES-SA", 68446) }
+        r.contexte = { RecepteurGenesis.Contexte("HADES-SA", 68446, enVue = enVue) }
         var k = 0
         while (k < pcm.size) { val n = minOf(4096, pcm.size - k); r.traite(pcm.copyOfRange(k, k + n), n, fs); k += n }
         return r to a
@@ -271,6 +271,10 @@ class GenesisTest {
             assertEquals(null, AssemblageVoix.fichier(dir, "../x"))
             // The number back to 0: a new message.
             m.ajoute(0, VoixGenesis.envoye(c2Essai(9)), t0 + 20_000L, "HADES-SA (SpinnyONE)")
+            // One packet alone (noise may look like one: no CRC) is neither written nor listed.
+            assertEquals(1, AssemblageVoix.liste(dir).size)
+            assertEquals(1, dir.resolve(AssemblageVoix.DOSSIER).list()!!.count { it.endsWith(".c2") })
+            m.ajoute(1, VoixGenesis.envoye(c2Essai(8)), t0 + 20_400L, "HADES-SA (SpinnyONE)")
             assertEquals(2, AssemblageVoix.liste(dir).size)
         } finally { dir.deleteRecursively() }
     }
@@ -284,5 +288,9 @@ class GenesisTest {
         assertEquals(listOf(0, 1, 2, 3), r.voix.courant!!.paquets.keys.toList())
         assertArrayEquals(c2Essai(2), r.voix.courant!!.paquets[2])
         assertTrue(r.trames.any { it.trame.type == Genesis.TYPE_CODEC2 && !it.trame.crcJuste })
+        // The satellite below the horizon: voice heard then is noise (no CRC), dropped.
+        val (r2, _) = recoit(pcm, fs, RecepteurGenesis.Profil.AUTO, enVue = false)
+        assertEquals(0, r2.etat.voix)
+        assertEquals(null, r2.voix.courant)
     }
 }

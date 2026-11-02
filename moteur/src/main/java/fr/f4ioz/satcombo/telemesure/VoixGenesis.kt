@@ -29,6 +29,8 @@ import java.io.File
  * as 40 zero bytes (muted when made into sound), a new message when the
  * number starts again or after [SILENCE_MS] without voice; a number more
  * than [SAUT_MAX] past the last one is dropped (no CRC: a bit wrong in it).
+ * A message is written, and listed, from [MIN_PAQUETS] packets on: noise
+ * that looks like one lone voice frame is no message.
  */
 object VoixGenesis {
     /** The size byte of a voice frame (type/address, number, 35 bytes; no CRC). */
@@ -79,6 +81,8 @@ object VoixGenesis {
     const val SILENCE_MS = 120_000L
     /** The most a number may jump ahead within a message. */
     const val SAUT_MAX = 10
+    /** The fewest packets a message is kept with (no CRC: one alone may be noise). */
+    const val MIN_PAQUETS = 2
 }
 
 /** Voice messages put together, written as `telemesure/genesis/voix/<UTC>-<sat>.c2` with a `.json` beside. */
@@ -124,7 +128,7 @@ class AssemblageVoix(private val dossier: File?) {
         m!!.paquets[numero] = c2
         m.dernier = t; m.miseAJour = t
         paquets++
-        if (!essai) ecrit(m)
+        if (!essai && m.paquets.size >= VoixGenesis.MIN_PAQUETS) ecrit(m)
         return true
     }
 
@@ -143,7 +147,8 @@ class AssemblageVoix(private val dossier: File?) {
         fun liste(dossier: File?, max: Int = 20): List<JSONObject> {
             val d = File(dossier ?: return emptyList(), DOSSIER)
             return d.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
-                .sortedByDescending { it.name }.take(max).mapNotNull { runCatching { JSONObject(it.readText()) }.getOrNull() }
+                .sortedByDescending { it.name }.mapNotNull { runCatching { JSONObject(it.readText()) }.getOrNull() }
+                .filter { (it.optJSONArray("recus")?.length() ?: 0) >= VoixGenesis.MIN_PAQUETS }.take(max)
         }
 
         /** A message's `.c2` file by name (checked: no path). */

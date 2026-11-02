@@ -161,6 +161,8 @@ class TelemesurePc(
     @Volatile var emetteurGenesis: () -> Pair<RecepteurGenesis.Profil, String>? = { null }
     /** The satellite followed (name, number), for the pictures. */
     @Volatile var suiviGenesis: () -> Pair<String, Int>? = { null }
+    /** The satellite followed is above the horizon (or near it). */
+    @Volatile var suiviEnVue: () -> Boolean = { true }
     /** The card's sound comes from the SDR's test generator or a replayed recording. */
     @Volatile var sonFictif: () -> Boolean = { false }
     /** A recording of the « Son » tab by its name, to be read again. */
@@ -216,7 +218,7 @@ class TelemesurePc(
         genesis.capture = genesisCapture
         genesis.contexte = {
             val s = suiviGenesis()
-            RecepteurGenesis.Contexte(s?.first.orEmpty(), s?.second ?: 0, essai = sonFictif())
+            RecepteurGenesis.Contexte(s?.first.orEmpty(), s?.second ?: 0, essai = sonFictif(), enVue = s != null && suiviEnVue())
         }
     }
 

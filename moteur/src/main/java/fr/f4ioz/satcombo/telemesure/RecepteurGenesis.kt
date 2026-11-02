@@ -67,7 +67,8 @@ class RecepteurGenesis(
         }
     }
 
-    class Contexte(val satellite: String = "", val norad: Int = 0, val essai: Boolean = false)
+    /** [enVue]: the satellite followed is above the horizon (voice heard otherwise is noise: it has no CRC). */
+    class Contexte(val satellite: String = "", val norad: Int = 0, val essai: Boolean = false, val enVue: Boolean = true)
 
     class TrameGenesis(val t: Long, val trame: Genesis.Trame, val satellite: String, val essai: Boolean, val profil: String = "")
 
@@ -212,6 +213,7 @@ class RecepteurGenesis(
     private fun voixRecue(adresse: Int, numero: Int, octets: ByteArray, v: Voie) {
         val now = horloge()
         val cx = contexteCourant
+        if (!cx.enVue && !cx.essai) return
         if (!voix.ajoute(numero, octets, now, cx.satellite, cx.essai)) return
         entendu(v)
         sonde.trame("voix Codec2", 16 + 8 + VoixGenesis.TAILLE * 8)
