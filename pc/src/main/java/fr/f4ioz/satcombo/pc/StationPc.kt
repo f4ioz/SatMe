@@ -427,6 +427,38 @@ class StationPc(
         get() = stockage.getBoolean("pc_interface_allegee", false)
         set(v) { stockage.edit().putBoolean("pc_interface_allegee", v).apply() }
 
+    /** Réglages › Aide et affichage › Apparence: setting [cle] (theme, forme, densite, interface), its default when unknown. */
+    fun apparence(cle: String): String =
+        fr.f4ioz.satcombo.demo.ApparencePagePc.valeur(cle, stockage.getString("pc_apparence_$cle", null)) ?: fr.f4ioz.satcombo.demo.ApparencePagePc.defaut(cle)
+
+    /** Sets [cle] to [v] if it is one of its values; false otherwise. */
+    fun regleApparence(cle: String, v: String?): Boolean {
+        val ok = fr.f4ioz.satcombo.demo.ApparencePagePc.valeur(cle, v) ?: return false
+        stockage.edit().putString("pc_apparence_$cle", ok).apply()
+        return true
+    }
+
+    /** The tabs' layouts (their tiles, columns, panels), each interface its own, keyed as the page names them. */
+    val dispositions: org.json.JSONObject
+        get() = runCatching { org.json.JSONObject(stockage.getString("pc_dispositions", null) ?: "{}") }.getOrDefault(org.json.JSONObject())
+
+    /** Layout [cle] kept ([json] checked), or forgotten ([json] blank): false when either is refused. */
+    fun regleDisposition(cle: String, json: String?): Boolean = synchronized(this) {
+        if (!fr.f4ioz.satcombo.demo.ApparencePagePc.CLE_DISPOSITION.matches(cle)) return false
+        val d = dispositions
+        if (json.isNullOrBlank()) d.remove(cle)
+        else {
+            val o = fr.f4ioz.satcombo.demo.ApparencePagePc.disposition(json) ?: return false
+            if (!d.has(cle) && d.length() >= 40) return false
+            d.put(cle, o)
+        }
+        stockage.edit().putString("pc_dispositions", d.toString()).apply()
+        true
+    }
+
+    /** « Disposition par défaut »: every layout forgotten. */
+    fun oublieDispositions() { stockage.edit().remove("pc_dispositions").apply() }
+
     // ---------------------------------------------------------------- the SDR dongle
 
     /** What the dongle listens to: the transmitter's downlink at rest, with its Doppler now (sky, calibration in), its mode. */

@@ -1548,6 +1548,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // The guided tours in the station's language, the help texts, the two display options (GuidePagePc).
             "/api/guide" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", guide().toString().toByteArray())
             "/api/interface" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", interfaceJson().toString().toByteArray())
+            "/api/apparence" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", apparenceJson(true).toString().toByteArray())
             "/api/qrz" -> {
                 // Read only (a directory lookup), so a GET; nothing changes in the station.
                 val f = carnet?.let { kotlinx.coroutines.runBlocking { it.ficheQrz(q["c"].orEmpty()) } }
@@ -2031,6 +2032,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private fun interfaceJson(): JSONObject = JSONObject().put("ok", true)
         .put("assistant", station.assistant).put("allegee", station.interfaceAllegee)
 
+    /** `api/apparence`: the theme, the corners, the density, the interface, the tabs' layouts; [textes]: the page's texts in the station's language. */
+    private fun apparenceJson(textes: Boolean): JSONObject {
+        val o = JSONObject().put("ok", true)
+        fr.f4ioz.satcombo.demo.ApparencePagePc.CHOIX.keys.forEach { o.put(it, station.apparence(it)) }
+        o.put("dispositions", station.dispositions)
+        if (textes) o.put("textes", fr.f4ioz.satcombo.demo.ApparencePagePc.textes(fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN))
+        return o
+    }
+
     /** `api/guide`: the tours, the help texts (pcg_… of Strings.kt) in the station's language, the options. */
     private fun guide(): JSONObject {
         val anglais = fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN
@@ -2048,6 +2058,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         fun entier(k: String) = q[k]?.trim()?.toIntOrNull()
         when (chemin) {
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
+            // The appearance: a setting, a tab's layout (json blank: its default), or every layout back to its default.
+            "/api/apparence" -> {
+                for (k in fr.f4ioz.satcombo.demo.ApparencePagePc.CHOIX.keys) q[k]?.let { if (!station.regleApparence(k, it)) return JSONObject().put("ok", false).put("erreur", "$k inconnu") }
+                q["dispo"]?.let { if (!station.regleDisposition(it, q["json"])) return JSONObject().put("ok", false).put("erreur", "disposition refusée") }
+                if (q["defaut"] == "1") station.oublieDispositions()
+                return apparenceJson(false)
+            }
             "/api/interface" -> {
                 q["assistant"]?.let { station.assistant = it == "1" }
                 q["allegee"]?.let { station.interfaceAllegee = it == "1" }

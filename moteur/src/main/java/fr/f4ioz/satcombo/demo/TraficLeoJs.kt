@@ -25,7 +25,7 @@ object TraficLeoJs {
     const val CSS = """
   .leo[hidden] { display:none; }
   .leo .t { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .leo-etat { font-size:11px; padding:1px 7px; border-radius:9px; background:var(--s3, rgba(127,127,127,.2)); }
+  .leo-etat { font-size:11px; padding:1px 7px; border-radius:var(--r2); background:var(--s3, rgba(127,127,127,.2)); }
   .leo-etat.tx { background:var(--danger); color:#fff; }
   .leo-etat.ok { background:var(--ok); color:#000; }
   .leo .leo-stop { margin-left:auto; }
@@ -43,7 +43,7 @@ object TraficLeoJs {
   .leo details { margin-top:6px; }
   .leo details > summary { cursor:pointer; font-weight:600; font-size:var(--fs-s, 13px); }
   .leo .leo-garde { color:var(--warn); }
-  .leo .leo-echange { font-family:var(--mono, monospace); background:var(--s1, rgba(127,127,127,.1)); padding:3px 6px; border-radius:6px; display:inline-block; }
+  .leo .leo-echange { font-family:var(--mono, monospace); background:var(--s1, rgba(127,127,127,.1)); padding:3px 6px; border-radius:var(--r1); display:inline-block; }
   .leo ul.leo-conseils { margin:4px 0 0 18px; padding:0; }
   .leo ul.leo-conseils li { margin:1px 0; }
   .leo .leo-prog { height:4px; background:var(--s1, rgba(127,127,127,.15)); border-radius:2px; overflow:hidden; margin-top:3px; }
@@ -51,7 +51,7 @@ object TraficLeoJs {
 """
 
     const val HTML = """
-    <div class="carte leo" id="leo-carte" hidden aria-label="Trafic satellite : émettre par les satellites en orbite basse">
+    <div class="carte leo" id="leo-carte" hidden data-tuile="leo" data-pli-nom="Trafic satellite" aria-label="Trafic satellite : émettre par les satellites en orbite basse">
       <div class="t">Trafic satellite <span class="leo-etat" id="leo-etat">—</span><span class="petit" id="leo-sat"></span>
         <button type="button" class="leo-stop" id="leo-stop" onclick="leoArret()" title="Arrêter tout de suite (Échap aussi)">■ Arrêter</button></div>
       <div class="leo-prog" id="leo-prog-l" hidden><i id="leo-prog"></i></div>

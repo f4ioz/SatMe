@@ -1,0 +1,189 @@
+{
+ "version": 1,
+ "textes": {
+  "ap_interface": {
+   "fr": "Interface",
+   "en": "Interface"
+  },
+  "ap_simple": {
+   "fr": "Simple",
+   "en": "Simple"
+  },
+  "ap_complete": {
+   "fr": "Complète",
+   "en": "Complete"
+  },
+  "ap_simple_d": {
+   "fr": "l'essentiel d'un passage",
+   "en": "what a pass needs"
+  },
+  "ap_complete_d": {
+   "fr": "tous les onglets, toutes les tuiles",
+   "en": "every tab, every tile"
+  },
+  "ap_theme": {
+   "fr": "Thème",
+   "en": "Theme"
+  },
+  "ap_th_sombre": {
+   "fr": "Sombre",
+   "en": "Dark"
+  },
+  "ap_th_clair": {
+   "fr": "Clair",
+   "en": "Light"
+  },
+  "ap_th_aurore": {
+   "fr": "Aurore",
+   "en": "Aurora"
+  },
+  "ap_th_phosphore": {
+   "fr": "Phosphore",
+   "en": "Phosphor"
+  },
+  "ap_th_sable": {
+   "fr": "Sable",
+   "en": "Sand"
+  },
+  "ap_th_auto": {
+   "fr": "Comme le système",
+   "en": "As the system"
+  },
+  "ap_theme_suivant": {
+   "fr": "Thème : le suivant (tous les réglages : Réglages › Aide et affichage)",
+   "en": "Theme: the next one (every setting: Settings › Help and display)"
+  },
+  "ap_forme": {
+   "fr": "Coins",
+   "en": "Corners"
+  },
+  "ap_arrondi": {
+   "fr": "Arrondis",
+   "en": "Rounded"
+  },
+  "ap_carre": {
+   "fr": "Carrés",
+   "en": "Square"
+  },
+  "ap_galet": {
+   "fr": "Galets",
+   "en": "Pebbles"
+  },
+  "ap_densite": {
+   "fr": "Densité",
+   "en": "Density"
+  },
+  "ap_compacte": {
+   "fr": "Compacte",
+   "en": "Compact"
+  },
+  "ap_normale": {
+   "fr": "Normale",
+   "en": "Normal"
+  },
+  "ap_aeree": {
+   "fr": "Aérée",
+   "en": "Airy"
+  },
+  "ap_defaut": {
+   "fr": "Disposition par défaut",
+   "en": "Default layout"
+  },
+  "ap_defaut_d": {
+   "fr": "Toutes les tuiles des onglets reprennent leur place, dans les deux interfaces.",
+   "en": "Every tab's tiles go back to their place, in both interfaces."
+  },
+  "ap_defaut_onglet": {
+   "fr": "Les tuiles à leur place, toutes les colonnes et tous les panneaux aux tailles d'origine (cette interface)",
+   "en": "The tiles in their place, every column and panel at its original size (this interface)"
+  },
+  "ap_defaut_fait": {
+   "fr": "Toutes les tuiles ont repris leur place.",
+   "en": "Every tile is back in its place."
+  },
+  "ap_aide": {
+   "fr": "Les tuiles se déplacent par leur poignée ⠿ (souris, doigt ou flèches du clavier) ; « ⊞ Disposition » en bas d'un onglet les retire ou les ajoute. L'émission reste rouge-orangé dans tous les thèmes. Gardé par SatMe-PC.",
+   "en": "Tiles move by their grip ⠿ (mouse, finger or the arrow keys); « ⊞ Layout » at the bottom of a tab removes or adds them. Transmission stays red-orange in every theme. Kept by SatMe-PC."
+  },
+  "ap_garde": {
+   "fr": "Gardé par SatMe-PC.",
+   "en": "Kept by SatMe-PC."
+  },
+  "ap_ici": {
+   "fr": "Gardé dans ce navigateur (SatMe-PC ne répond pas).",
+   "en": "Kept in this browser (SatMe-PC does not answer)."
+  },
+  "ap_tuiles": {
+   "fr": "Tuiles : leur colonne, ou retirée",
+   "en": "Tiles: their column, or removed"
+  },
+  "ap_col_g": {
+   "fr": "à gauche",
+   "en": "left"
+  },
+  "ap_col_m": {
+   "fr": "au milieu",
+   "en": "middle"
+  },
+  "ap_col_d": {
+   "fr": "à droite",
+   "en": "right"
+  },
+  "ap_colonne": {
+   "fr": "Colonne",
+   "en": "Column"
+  },
+  "ap_retiree": {
+   "fr": "Retirée",
+   "en": "Removed"
+  },
+  "ap_absente": {
+   "fr": "Pas affichée pour l'instant (module coupé, ou rien à montrer)",
+   "en": "Not shown for now (module off, or nothing to show)"
+  },
+  "ap_poignee": {
+   "fr": "Tirer pour déplacer la tuile (ou les flèches du clavier)",
+   "en": "Drag to move the tile (or the arrow keys)"
+  },
+  "ap_retirer": {
+   "fr": "Retirer la tuile (« ⊞ Disposition » la remet)",
+   "en": "Remove the tile (« ⊞ Layout » puts it back)"
+  },
+  "ap_ecoute": {
+   "fr": "À l'écoute",
+   "en": "Listening"
+  },
+  "ap_ecoute_changer": {
+   "fr": "Changer…",
+   "en": "Change…"
+  },
+  "ap_ecoute_absent": {
+   "fr": "Pas de son ici",
+   "en": "No sound here"
+  },
+  "ap_ecoute_arret": {
+   "fr": "Son arrêté",
+   "en": "Sound stopped"
+  },
+  "ap_ecoute_on": {
+   "fr": "À l'écoute",
+   "en": "Listening"
+  },
+  "ap_ecoute_off": {
+   "fr": "Pas à l'écoute",
+   "en": "Not listening"
+  },
+  "ap_ecoute_ouvrir": {
+   "fr": "clic : son onglet",
+   "en": "click: its tab"
+  },
+  "ap_ecoute_enr": {
+   "fr": "Enregistrement du son en cours",
+   "en": "Recording the sound"
+  },
+  "ap_disposition": {
+   "fr": "⊞ Disposition",
+   "en": "⊞ Layout"
+  }
+ }
+}

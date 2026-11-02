@@ -285,6 +285,81 @@
    ]
   },
   {
+   "id": "personnaliser",
+   "groupe": "debut",
+   "couleur": "#B07CFF",
+   "titre": {
+    "fr": "Personnaliser SatMe-PC",
+    "en": "Make SatMe-PC yours"
+   },
+   "resume": {
+    "fr": "Choisir l'interface simple ou complète, déplacer les tuiles d'un onglet, et habiller la page : thèmes, coins, densité. Tout est gardé par SatMe-PC.",
+    "en": "Choose the simple or the complete interface, move a tab's tiles, and dress the page: themes, corners, density. SatMe-PC keeps it all."
+   },
+   "etapes": [
+    {
+     "cible": "h-ui",
+     "onglet": "station",
+     "titre": {
+      "fr": "Simple ou complète",
+      "en": "Simple or complete"
+     },
+     "texte": {
+      "fr": "**Simple** montre l'essentiel d'un passage : le satellite, ses passages, le poste, le rotor, le son et ce qui se décode ; le menu ne garde que les onglets utiles. **Complète** montre tout.",
+      "en": "**Simple** shows what a pass needs: the satellite, its passes, the rig, the rotator, the sound and what is decoded; the menu keeps only the useful tabs. **Complete** shows everything."
+     },
+     "astuce": {
+      "fr": "Chaque interface garde sa propre disposition des tuiles.",
+      "en": "Each interface keeps its own layout of the tiles."
+     }
+    },
+    {
+     "cible": "st-ecoute",
+     "onglet": "station",
+     "titre": {
+      "fr": "À l'écoute",
+      "en": "Listening"
+     },
+     "texte": {
+      "fr": "Ce qu'entendent les décodeurs et lesquels écoutent (SSTV, APRS, FT8…). Un clic sur un décodeur ouvre son onglet ; « Changer… » ouvre la source du son.",
+      "en": "What the decoders hear and which ones listen (SSTV, APRS, FT8…). A click on a decoder opens its tab; « Change… » opens the sound's source."
+     }
+    },
+    {
+     "cible": "st-pli-b",
+     "onglet": "station",
+     "titre": {
+      "fr": "Les tuiles",
+      "en": "The tiles"
+     },
+     "texte": {
+      "fr": "Chaque carte est une tuile : sa poignée **⠿** (dans son titre) la déplace à la souris, au doigt ou aux flèches du clavier, vers une autre place ou une autre colonne ; **✕** la retire. **⊞ Disposition** remet une tuile retirée, choisit sa colonne, et **Disposition par défaut** remet tout en place.",
+      "en": "Each card is a tile: its grip **⠿** (in its title) moves it with the mouse, a finger or the arrow keys, to another place or column; **✕** removes it. **⊞ Layout** puts a removed tile back, chooses its column, and **Default layout** puts everything back."
+     },
+     "reussi": {
+      "fr": "La tuile reste où tu l'as posée, même après un redémarrage ou depuis un autre navigateur.",
+      "en": "The tile stays where you dropped it, even after a restart or from another browser."
+     }
+    },
+    {
+     "cible": "ap-carte",
+     "reglages": "aide",
+     "titre": {
+      "fr": "Thèmes, coins, densité",
+      "en": "Themes, corners, density"
+     },
+     "texte": {
+      "fr": "Réglages › Aide et affichage › **Apparence** : la palette (Sombre, Clair, Aurore, Phosphore, Sable, ou celle du système), les coins (arrondis, carrés, galets) et la densité (compacte, normale, aérée). Le bouton **◐** du menu passe au thème suivant.",
+      "en": "Settings › Help and display › **Appearance**: the palette (Dark, Light, Aurora, Phosphor, Sand, or the system's), the corners (rounded, square, pebbles) and the density (compact, normal, airy). The menu's **◐** button goes to the next theme."
+     },
+     "attention": {
+      "fr": "Dans tous les thèmes, l'émission reste rouge-orangé et bien visible ; **Échap** ou le voyant **TX** arrêtent toute émission.",
+      "en": "In every theme, transmission stays red-orange and plain to see; **Esc** or the **TX** light stop every transmission."
+     }
+    }
+   ]
+  },
+  {
    "id": "station",
    "groupe": "ciel",
    "couleur": "#3FE0C8",
