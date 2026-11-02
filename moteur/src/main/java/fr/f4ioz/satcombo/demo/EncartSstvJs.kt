@@ -46,13 +46,13 @@ object EncartSstvJs {
   .es-tete .es-mode { color:var(--gris); min-width:0; }
   .es-tete .es-mode b { color:var(--cyan); font-weight:600; }
   .es-tete .es-compte { margin-left:auto; font-size:14px !important; white-space:nowrap; font-variant-numeric:tabular-nums; }
-  .es-tete button { background:none; border:1px solid transparent; color:var(--gris); padding:0 6px !important; line-height:22px; border-radius:6px; cursor:pointer; }
+  .es-tete button { background:none; border:1px solid transparent; color:var(--gris); padding:0 6px !important; line-height:22px; border-radius:var(--r1); cursor:pointer; }
   .es-tete button:hover, .es-tete button:focus-visible { border-color:var(--bord); color:var(--clair); }
   .es-corps { display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:10px; align-items:start; margin-top:6px; }
   .es-corps[hidden], .es-vide[hidden] { display:none; }
   .es-ciel, .es-globe { width:150px; height:150px; display:block; }
-  .es-ciel { background:#0E1720; border-radius:8px; }
-  .es-ciel .es-pouls { fill:none; stroke:#3FE0C8; stroke-width:1.4; animation:es-pouls 2s ease-out infinite; transform-box:fill-box; transform-origin:center; }
+  .es-ciel { background:var(--creux); border-radius:var(--r2); }
+  .es-ciel .es-pouls { fill:none; stroke:var(--rx); stroke-width:1.4; animation:es-pouls 2s ease-out infinite; transform-box:fill-box; transform-origin:center; }
   @keyframes es-pouls { from { opacity:.9; transform:scale(.6); } to { opacity:0; transform:scale(1.8); } }
   @media (prefers-reduced-motion:reduce) { .es-ciel .es-pouls { animation:none; opacity:.6; } }
   .es-infos { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:3px 14px; font-size:12.5px; align-content:start; min-width:0; }

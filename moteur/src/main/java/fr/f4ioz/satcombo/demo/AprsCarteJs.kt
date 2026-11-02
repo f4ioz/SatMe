@@ -32,16 +32,16 @@ object AprsCarteJs {
   .aq-boite { position:relative; height:100%; min-height:0; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#0D2433; }
   #aq-carte { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
   .aq-outils { position:absolute; left:8px; top:8px; display:flex; flex-direction:column; gap:6px; z-index:2; }
-  .aq-outils button { width:34px; height:34px; padding:0; font-size:18px; line-height:1; background:rgba(15,22,29,.88); border:1px solid var(--ligne-forte); border-radius:8px; color:var(--texte); }
+  .aq-outils button { width:34px; height:34px; padding:0; font-size:18px; line-height:1; background:rgba(15,22,29,.88); border:1px solid var(--ligne-forte); border-radius:var(--r2); color:var(--texte); }
   .aq-outils button.on { border-color:var(--rx); color:var(--rx); }
   .aq-reglages { position:absolute; right:8px; top:8px; z-index:2; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center;
-    background:rgba(15,22,29,.86); border:1px solid var(--ligne); border-radius:8px; padding:4px 8px; font-size:var(--fs-s); color:var(--texte-2); max-width:calc(100% - 64px); }
+    background:rgba(15,22,29,.86); border:1px solid var(--ligne); border-radius:var(--r2); padding:4px 8px; font-size:var(--fs-s); color:var(--texte-2); max-width:calc(100% - 64px); }
   .aq-reglages select { padding:1px 4px; font-size:var(--fs-s); }
   .aq-legende { position:absolute; left:8px; bottom:8px; z-index:2; display:flex; gap:10px; flex-wrap:wrap; background:rgba(15,22,29,.86); border:1px solid var(--ligne);
-    border-radius:8px; padding:4px 8px; font-size:var(--fs-xs); color:var(--texte-2); max-width:calc(100% - 16px); }
+    border-radius:var(--r2); padding:4px 8px; font-size:var(--fs-xs); color:var(--texte-2); max-width:calc(100% - 16px); }
   .aq-legende i { display:inline-block; width:10px; height:10px; border-radius:50%; border:2px solid; margin-right:4px; vertical-align:-1px; }
-  .aq-attrib { position:absolute; right:6px; bottom:4px; z-index:2; font-size:10px; background:rgba(255,255,255,.8); color:#06131A; padding:0 4px; border-radius:3px; }
-  .aq-attrib a { color:#06131A; }
+  .aq-attrib { position:absolute; right:6px; bottom:4px; z-index:2; font-size:10px; background:rgba(255,255,255,.8); color:var(--sur-vif); padding:0 4px; border-radius:3px; }
+  .aq-attrib a { color:var(--sur-vif); }
   .aq-fiche { position:absolute; right:8px; top:48px; width:340px; max-height:calc(100% - 96px); overflow:auto; z-index:3; background:var(--s2); border:1px solid var(--ligne-forte);
     border-radius:var(--r3); box-shadow:var(--ombre-pop); padding:10px 12px; font-size:var(--fs-m); }
   .aq-fiche .aq-ferme { position:sticky; top:0; float:right; padding:0 8px; font-size:16px; }
@@ -49,12 +49,12 @@ object AprsCarteJs {
   .aq-fiche .aq-ligne { display:flex; gap:8px; padding:3px 0; border-top:1px solid var(--ligne); }
   .aq-fiche .aq-ligne > b { flex:none; width:96px; font-weight:500; color:var(--texte-2); font-size:var(--fs-s); }
   .aq-fiche .aq-ligne > span { min-width:0; overflow-wrap:anywhere; }
-  .aq-fiche pre { margin:2px 0 0; white-space:pre-wrap; word-break:break-all; font-family:var(--mono); font-size:11px; color:var(--texte-2); background:var(--creux); padding:6px; border-radius:6px; }
+  .aq-fiche pre { margin:2px 0 0; white-space:pre-wrap; word-break:break-all; font-family:var(--mono); font-size:11px; color:var(--texte-2); background:var(--creux); padding:6px; border-radius:var(--r1); }
   .aq-fiche a { color:var(--rx); }
   .aq-cote { display:flex; flex-direction:column; min-width:0; height:100%; min-height:0; }
   .aq-onglets { display:flex; gap:4px; margin-bottom:6px; flex:none; flex-wrap:wrap; }
-  .aq-onglets button { flex:1; padding:4px 6px; font-size:var(--fs-s); background:var(--s1); border:1px solid var(--ligne); color:var(--texte-2); border-radius:8px; white-space:nowrap; }
-  .aq-onglets button[aria-selected=true] { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .aq-onglets button { flex:1; padding:4px 6px; font-size:var(--fs-s); background:var(--s1); border:1px solid var(--ligne); color:var(--texte-2); border-radius:var(--r2); white-space:nowrap; }
+  .aq-onglets button[aria-selected=true] { border-color:var(--rx); color:var(--rx); background:color-mix(in srgb, var(--rx) 8%, transparent); }
   .aq-pan { flex:1; min-height:0; display:flex; flex-direction:column; }
   .aq-pan[hidden] { display:none; }
   .aq-pan.defile { overflow:auto; }
@@ -65,20 +65,20 @@ object AprsCarteJs {
   .aq-filtres input[type=search] { flex:1 1 140px; min-width:0; }
   .aq-filtres select { flex:none; padding:2px 4px; }
   .aq-puce { padding:2px 9px; border-radius:20px; font-size:var(--fs-s); background:var(--s1); border:1px solid var(--ligne); color:var(--texte-2); }
-  .aq-puce[aria-pressed=true] { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .aq-puce[aria-pressed=true] { border-color:var(--rx); color:var(--rx); background:color-mix(in srgb, var(--rx) 8%, transparent); }
   .aq-seg { display:inline-flex; border:1px solid var(--ligne); border-radius:20px; overflow:hidden; }
   .aq-seg button { border:0; border-radius:0; padding:2px 8px; font-size:var(--fs-s); background:var(--s1); color:var(--texte-2); }
-  .aq-seg button[aria-pressed=true] { background:rgba(63,224,200,.14); color:var(--rx); }
+  .aq-seg button[aria-pressed=true] { background:color-mix(in srgb, var(--rx) 14%, transparent); color:var(--rx); }
   .aq-liste { flex:1; overflow:auto; min-height:0; margin:0 -4px; }
-  .aq-st { display:flex; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid var(--ligne); cursor:pointer; border-radius:6px; }
+  .aq-st { display:flex; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid var(--ligne); cursor:pointer; border-radius:var(--r1); }
   .aq-st:hover { background:var(--s3); }
-  .aq-st.sel { background:rgba(63,224,200,.10); }
+  .aq-st.sel { background:color-mix(in srgb, var(--rx) 10%, transparent); }
   .aq-st svg { flex:none; }
   .aq-st .aq-m { flex:1; min-width:0; }
   .aq-st .aq-m b { font-size:var(--fs-l); }
   .aq-st .aq-m .petit { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .aq-st .aq-d { flex:none; text-align:right; font-size:var(--fs-s); color:var(--texte-2); font-variant-numeric:tabular-nums; }
-  .aq-voie { display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:10px; border:1px solid; margin-left:4px; vertical-align:1px; }
+  .aq-voie { display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:var(--r3); border:1px solid; margin-left:4px; vertical-align:1px; }
   .aq-passe { font-size:var(--fs-s); font-weight:700; color:var(--sat); padding:8px 4px 4px; border-bottom:1px solid var(--ligne); }
   .aq-vide { padding:16px 4px; color:var(--texte-2); font-size:var(--fs-s); }
   @media (max-width:1100px) {

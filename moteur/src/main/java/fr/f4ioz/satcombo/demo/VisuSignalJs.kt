@@ -35,8 +35,8 @@ object VisuSignalJs {
   #tl-p-sig > .carte { height:100%; box-sizing:border-box; display:flex; flex-direction:column; margin:0; min-height:0; }
   .vs-tete { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .vs-src { display:flex; gap:4px; flex-wrap:wrap; }
-  .vs-src button { padding:2px 9px; font-size:var(--fs-s); border-radius:12px; background:var(--s3); border:1px solid var(--ligne); color:var(--texte-2); }
-  .vs-src button.actif { background:rgba(63,224,200,.14); border-color:var(--rx); color:var(--rx); }
+  .vs-src button { padding:2px 9px; font-size:var(--fs-s); border-radius:var(--r3); background:var(--s3); border:1px solid var(--ligne); color:var(--texte-2); }
+  .vs-src button.actif { background:color-mix(in srgb, var(--rx) 14%, transparent); border-color:var(--rx); color:var(--rx); }
   .vs-src button i { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; background:var(--texte-3); vertical-align:1px; }
   .vs-src button i.vif { background:var(--ok); }
   .vs-grille { flex:1; min-height:0; display:grid; grid-template-columns:minmax(300px,1fr) minmax(380px,1.15fr); gap:12px; margin-top:8px; }
@@ -52,7 +52,7 @@ object VisuSignalJs {
   .vs-l .n { color:var(--texte-3); min-width:7ch; text-align:right; }
   .vs-l .b i { font-style:normal; }
   .vs-l .b i.s { color:#111; background:var(--warn); border-radius:2px; }
-  .vs-l .b i.t { color:var(--texte); background:rgba(63,224,200,.16); }
+  .vs-l .b i.t { color:var(--texte); background:color-mix(in srgb, var(--rx) 16%, transparent); }
   .vs-l .h { color:var(--rx); }
   .vs-l .a { color:var(--texte-3); }
   .vs-leg { display:flex; gap:12px; flex-wrap:wrap; font-size:var(--fs-xs); color:var(--texte-2); margin:6px 0 4px; }

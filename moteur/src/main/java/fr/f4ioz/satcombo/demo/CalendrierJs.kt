@@ -25,7 +25,7 @@ object CalendrierJs {
   .cld-barre { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; flex:none; }
   .cld-barre .cld-titre { font-size:var(--fs-l); font-weight:700; min-width:170px; text-transform:capitalize; }
   .cld-vues { display:inline-flex; gap:2px; }
-  .cld-vues button.actif { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .cld-vues button.actif { border-color:var(--rx); color:var(--rx); background:color-mix(in srgb, var(--rx) 8%, transparent); }
   .cld-filtres { display:inline-flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-s); color:var(--texte-2); }
   .cld-corps { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:10px; min-height:0; flex:1; }
   .cld-grille { min-height:0; display:flex; flex-direction:column; border:1px solid var(--ligne); border-radius:var(--r2); background:var(--s1); overflow:hidden; }
@@ -40,7 +40,7 @@ object CalendrierJs {
   .cld-j.passe { background:rgba(0,0,0,.12); }
   .cld-j.choisi { box-shadow:inset 0 0 0 2px var(--info); }
   .cld-n { font-size:var(--fs-s); font-weight:700; color:var(--texte-2); display:flex; justify-content:space-between; position:sticky; top:0; background:inherit; }
-  .cld-j.auj .cld-n b { background:var(--rx); color:#06231E; border-radius:9px; padding:0 6px; }
+  .cld-j.auj .cld-n b { background:var(--rx); color:#06231E; border-radius:var(--r2); padding:0 6px; }
   .cld-span { font-size:10.5px; line-height:15px; height:15px; padding:0 5px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     background:color-mix(in srgb, var(--c) 26%, transparent); border-left:3px solid var(--c); color:var(--texte); cursor:pointer; flex:none; }
   .cld-span.act { background:transparent; border:1px dashed var(--c); border-left-width:3px; color:var(--texte-2); }
@@ -68,7 +68,7 @@ object CalendrierJs {
   .cld-heures div { height:var(--h-cal, 30px); font-size:10px; color:var(--texte-3); text-align:right; padding-right:4px; box-sizing:border-box; border-top:1px solid var(--ligne); }
   .cld-col { position:relative; border-left:1px solid var(--ligne);
     background:repeating-linear-gradient(to bottom, var(--ligne) 0 1px, transparent 1px var(--h-cal, 30px)); }
-  .cld-col.auj { background-color:rgba(63,224,200,.04); }
+  .cld-col.auj { background-color:color-mix(in srgb, var(--rx) 4%, transparent); }
   .cld-col .cld-p { position:absolute; left:2px; right:2px; min-height:15px; white-space:normal; overflow:hidden; }
   .cld-now { position:absolute; left:0; right:0; height:0; border-top:2px solid var(--tx); z-index:2; pointer-events:none; }
   /* The day (and the phone): a list. */

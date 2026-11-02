@@ -41,23 +41,23 @@ object DiplomesJs {
   .dp-act { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
   .dp-img { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
   .dp-img a { position:relative; display:block; width:96px; }
-  .dp-img img { width:96px; height:72px; object-fit:cover; border-radius:6px; border:1px solid var(--ligne); display:block; }
-  .dp-img span { position:absolute; right:3px; bottom:3px; font-size:10px; background:rgba(0,0,0,.65); color:#fff; border-radius:6px; padding:0 4px; }
+  .dp-img img { width:96px; height:72px; object-fit:cover; border-radius:var(--r1); border:1px solid var(--ligne); display:block; }
+  .dp-img span { position:absolute; right:3px; bottom:3px; font-size:10px; background:rgba(0,0,0,.65); color:#fff; border-radius:var(--r1); padding:0 4px; }
   .dp-barre { height:6px; border-radius:3px; background:var(--s3); overflow:hidden; margin-top:4px; max-width:360px; }
   .dp-barre i { display:block; height:100%; background:var(--rx); }
   .dp-elems { font-family:var(--mono); font-size:var(--fs-xs); line-height:1.5; word-break:break-word; }
-  .pastille.dp-st-OBTENABLE { background:rgba(91,214,138,.2); color:var(--vert); }
-  .pastille.dp-st-EN_COURS, .pastille.dp-st-PENDANT { background:rgba(63,224,200,.14); color:var(--rx); }
+  .pastille.dp-st-OBTENABLE { background:color-mix(in srgb, var(--ok) 20%, transparent); color:var(--vert); }
+  .pastille.dp-st-EN_COURS, .pastille.dp-st-PENDANT { background:color-mix(in srgb, var(--rx) 14%, transparent); color:var(--rx); }
   .pastille.dp-st-A_VENIR { background:rgba(120,160,255,.16); color:#8fb0ff; }
-  .pastille.dp-st-DEMANDE { background:rgba(255,180,84,.2); color:var(--ambre); }
-  .pastille.dp-st-RECU { background:rgba(91,214,138,.3); color:var(--vert); }
-  .pastille.dp-st-EXPIRE, .pastille.dp-st-MANQUE, .pastille.dp-st-MASQUE { background:rgba(229,72,77,.12); color:var(--rose); }
+  .pastille.dp-st-DEMANDE { background:color-mix(in srgb, var(--warn) 20%, transparent); color:var(--ambre); }
+  .pastille.dp-st-RECU { background:color-mix(in srgb, var(--ok) 30%, transparent); color:var(--vert); }
+  .pastille.dp-st-EXPIRE, .pastille.dp-st-MANQUE, .pastille.dp-st-MASQUE { background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--rose); }
   #dp-liste { max-height:calc(100vh - 200px); overflow:auto; }
   #dp-dlg { width:min(720px,96vw); }
   #dp-dlg .dp-champs { display:grid; grid-template-columns:max-content minmax(0,1fr) max-content; gap:4px 8px; align-items:center; margin:8px 0; }
   #dp-dlg .dp-champs .v { font-family:var(--mono); word-break:break-word; }
   #dp-dlg .dp-champs .manque { color:var(--ambre); font-family:inherit; }
-  #dp-dlg pre { white-space:pre-wrap; max-height:180px; overflow:auto; background:var(--s1); padding:8px; border-radius:6px; font-size:var(--fs-xs); }
+  #dp-dlg pre { white-space:pre-wrap; max-height:180px; overflow:auto; background:var(--s1); padding:8px; border-radius:var(--r1); font-size:var(--fs-xs); }
   #dp-dlg .dp-img label { display:block; width:96px; cursor:pointer; font-size:10px; text-align:center; }
   #dp-dlg .dp-img input { margin:2px 0 0; }
   @media (max-width:640px) { #dp-dlg .dp-champs { grid-template-columns:minmax(0,1fr) max-content; } #dp-dlg .dp-champs .lib { grid-column:1 / -1; margin-top:4px; } }

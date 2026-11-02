@@ -19,12 +19,12 @@ package fr.f4ioz.satcombo.demo
 object MessagesAprsJs {
 
     const val CSS = """
-  .aq-badge { display:inline-block; min-width:16px; padding:0 5px; margin-left:3px; border-radius:9px; background:var(--ambre); color:#06131A; font-size:10px; font-weight:700; line-height:16px; }
+  .aq-badge { display:inline-block; min-width:16px; padding:0 5px; margin-left:3px; border-radius:var(--r2); background:var(--ambre); color:var(--sur-vif); font-size:10px; font-weight:700; line-height:16px; }
   .aq-badge[hidden] { display:none; }
   .aq-msgs { flex:1; overflow:auto; min-height:0; }
   .aq-msg { padding:5px 4px; border-bottom:1px solid var(--ligne); font-size:var(--fs-s); }
   .aq-msg.moi { border-left:3px solid var(--rx); padding-left:6px; }
-  .aq-msg.neuf { background:rgba(255,209,102,.07); }
+  .aq-msg.neuf { background:color-mix(in srgb, var(--sat) 7%, transparent); }
   .aq-msg .aq-mt { display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; color:var(--texte-2); }
   .aq-msg .aq-mt b { color:var(--texte); font-size:var(--fs-m); }
   .aq-msg .aq-mx { margin-top:2px; overflow-wrap:anywhere; color:var(--texte); font-size:var(--fs-m); }

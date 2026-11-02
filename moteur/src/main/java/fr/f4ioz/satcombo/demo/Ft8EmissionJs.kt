@@ -39,8 +39,8 @@ object Ft8EmissionJs {
   .f8tx-ligne label { min-width:42px; font-weight:700; cursor:pointer; white-space:nowrap; font-size:var(--fs-s); }
   .f8tx-ligne label input { margin:0 2px 0 0; }
   .f8tx-ligne input[type=text] { flex:1; min-width:0; padding:2px 6px; font-family:ui-monospace,Consolas,monospace; font-size:13px; text-transform:uppercase; }
-  .f8tx-ligne.suivant input[type=text] { border-color:var(--tx); box-shadow:0 0 0 2px rgba(255,90,54,.25); }
-  .f8tx-ligne.envoi input[type=text] { background:rgba(255,90,54,.18); }
+  .f8tx-ligne.suivant input[type=text] { border-color:var(--tx); box-shadow:0 0 0 2px color-mix(in srgb, var(--tx) 25%, transparent); }
+  .f8tx-ligne.envoi input[type=text] { background:color-mix(in srgb, var(--tx) 18%, transparent); }
   .f8tx-type { font-size:var(--fs-xs); color:var(--gris); width:58px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .f8tx-type.non { color:var(--rose); }
   .f8tx .ligne { margin:4px 0 0; gap:3px 6px; }
@@ -50,11 +50,11 @@ object Ft8EmissionJs {
   .f8tx-etat span:not(:empty) ~ span:not(:empty)::before { content:'· '; }
   .f8tx-plus { margin-top:4px; }
   .f8tx-plus > summary { cursor:pointer; font-size:var(--fs-s); color:var(--texte-2); }
-  .f8tx-qso { margin-top:4px; padding:3px 8px; border-radius:6px; background:var(--s3); font-size:var(--fs-s); }
+  .f8tx-qso { margin-top:4px; padding:3px 8px; border-radius:var(--r1); background:var(--s3); font-size:var(--fs-s); }
   .f8tx-qso b { color:var(--clair); }
   .f8tx-barre { height:4px; border-radius:2px; background:var(--s3); overflow:hidden; margin-top:4px; }
   .f8tx-barre i { display:block; height:100%; background:var(--tx); width:0; }
-  .f8tx-noter { margin-top:6px; padding:6px 8px; border:1px solid var(--vert); border-radius:8px; }
+  .f8tx-noter { margin-top:6px; padding:6px 8px; border:1px solid var(--vert); border-radius:var(--r2); }
   .f8tx-noter input { max-width:100px; }
   .f8tx-chien { font-variant-numeric:tabular-nums; }
   .f8tx-chien.bas { color:var(--rose); font-weight:700; }
@@ -67,7 +67,7 @@ object Ft8EmissionJs {
   @media (max-width: 600px) { .f8tx-bandeau { top:58px; bottom:auto; left:16px; right:16px; transform:none; padding:6px 10px; justify-content:space-between; }
     .f8tx-bandeau .petit { display:none; } }
   .f8tx-pastille.tx { background:var(--tx); color:#fff; }
-  .f8tx-pastille.arme { background:rgba(255,180,84,.22); color:var(--ambre); }
+  .f8tx-pastille.arme { background:color-mix(in srgb, var(--warn) 22%, transparent); color:var(--ambre); }
   .f8-rep { margin-left:4px; }
 """
 

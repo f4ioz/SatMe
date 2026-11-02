@@ -20,10 +20,10 @@ object DemarragePagePc {
 
     const val CSS = """
   /* ---------------------------------------------------------------- start-up: quick setup, what's new, update badge */
-  .h-maj { border-color:rgba(255,180,84,.55); color:var(--ambre); cursor:pointer; }
-  .h-maj:hover { background:rgba(255,180,84,.12); }
-  .h-portable { border-color:rgba(63,224,200,.5); color:var(--rx); font-size:var(--fs-xs); font-weight:700; letter-spacing:.4px; }
-  .dlg-dem { width:min(620px,94vw); max-height:88vh; overflow:auto; padding:14px 18px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
+  .h-maj { border-color:color-mix(in srgb, var(--warn) 55%, transparent); color:var(--ambre); cursor:pointer; }
+  .h-maj:hover { background:color-mix(in srgb, var(--warn) 12%, transparent); }
+  .h-portable { border-color:color-mix(in srgb, var(--rx) 50%, transparent); color:var(--rx); font-size:var(--fs-xs); font-weight:700; letter-spacing:.4px; }
+  .dlg-dem { width:min(620px,94vw); max-height:88vh; overflow:auto; padding:14px 18px; border-radius:var(--r3); background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   .dlg-dem h3 { margin:14px 0 4px; font-size:14px; color:var(--rx); }
   .dlg-dem h3:first-child { margin-top:0; }
   .dlg-dem ul { margin:4px 0 8px; padding-left:20px; line-height:1.5; }
@@ -39,9 +39,9 @@ object DemarragePagePc {
   .dem-tab td, .dem-tab th { padding:5px 6px; border-bottom:1px solid var(--ligne); text-align:left; vertical-align:middle; font-size:var(--fs-s); }
   .dem-tab th { color:var(--texte-3); font-weight:600; }
   .dem-v { font-family:var(--mono); font-size:var(--fs-s); word-break:break-all; }
-  .dem-src { display:inline-block; padding:0 7px; border-radius:10px; background:var(--s3); color:var(--texte-2); font-size:var(--fs-xs); white-space:nowrap; }
-  .dem-src.ligne { background:rgba(255,180,84,.15); color:var(--ambre); } .dem-src.fichier { background:rgba(63,224,200,.14); color:var(--rx); }
-  .dem-avert { margin-top:8px; padding:8px 10px; border-radius:var(--r2); background:rgba(255,180,84,.10); border:1px solid rgba(255,180,84,.45); color:var(--texte); font-size:var(--fs-s); line-height:1.5; }
+  .dem-src { display:inline-block; padding:0 7px; border-radius:var(--r3); background:var(--s3); color:var(--texte-2); font-size:var(--fs-xs); white-space:nowrap; }
+  .dem-src.ligne { background:color-mix(in srgb, var(--warn) 15%, transparent); color:var(--ambre); } .dem-src.fichier { background:color-mix(in srgb, var(--rx) 14%, transparent); color:var(--rx); }
+  .dem-avert { margin-top:8px; padding:8px 10px; border-radius:var(--r2); background:color-mix(in srgb, var(--warn) 10%, transparent); border:1px solid color-mix(in srgb, var(--warn) 45%, transparent); color:var(--texte); font-size:var(--fs-s); line-height:1.5; }
   .dep-pre { max-height:240px; overflow:auto; white-space:pre; font-family:var(--mono); font-size:var(--fs-xs); background:var(--creux); padding:8px; border-radius:var(--r1); }
   .dep-ch { max-height:260px; overflow:auto; }
 """

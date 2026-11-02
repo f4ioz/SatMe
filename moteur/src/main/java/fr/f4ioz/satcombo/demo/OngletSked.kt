@@ -77,9 +77,9 @@ object OngletSked {
     const val CSS = """  #k-grille { grid-template-columns:minmax(380px,1fr) minmax(420px,1.7fr); }
   .k-fenetres { max-height:360px; overflow:auto; }
   .k-corps { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-  #k-carte, #k-globe { flex:3; min-width:320px; height:460px; border-radius:8px; cursor:grab; touch-action:none; }
+  #k-carte, #k-globe { flex:3; min-width:320px; height:460px; border-radius:var(--r2); cursor:grab; touch-action:none; }
   .k-reglages { margin-top:8px; font-size:var(--fs-s); }
-  .k-reglages summary { cursor:pointer; color:var(--texte2, #9AA7B4); }
+  .k-reglages summary { cursor:pointer; color:var(--texte2, var(--texte-2)); }
   #k-reglages-c { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin-top:6px; }
   #k-reglages-c label { display:flex; align-items:center; gap:4px; }
   #k-reglages-c .k-montypes { flex-basis:100%; display:flex; flex-wrap:wrap; gap:2px 12px; }

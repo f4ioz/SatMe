@@ -96,7 +96,7 @@ object OngletOrbites {
   .ob-passages { flex:0 1 auto; max-height:45%; overflow:auto; display:flex; flex-direction:column; gap:3px; border-top:1px solid var(--ligne); padding-top:8px; }
   .ob-pas { display:grid; grid-template-columns:1fr auto; gap:0 8px; text-align:left; background:transparent; border:1px solid transparent; border-radius:var(--r1); padding:4px 7px; font-family:var(--mono); font-size:var(--fs-s); }
   .ob-pas:hover { border-color:var(--ligne-forte); }
-  .ob-pas[aria-pressed="true"] { border-color:var(--rx); background:rgba(63,224,200,.08); }
+  .ob-pas[aria-pressed="true"] { border-color:var(--rx); background:color-mix(in srgb, var(--rx) 8%, transparent); }
   .ob-max { color:var(--warn); font-weight:600; }
   .ob-sous { grid-column:1 / 3; color:var(--texte-3); font-size:var(--fs-xs); }
   .ob-scene { position:relative; min-height:0; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#000; }
@@ -116,8 +116,8 @@ object OngletOrbites {
   .ob-temps span { padding:0 4px; color:var(--texte); }
   .ob-cadreur { flex-basis:100%; display:flex; gap:8px; flex-wrap:wrap; }
   .ob-cadreur[hidden] { display:none; }
-  .ob-bulle { position:absolute; z-index:4; pointer-events:none; background:rgba(14,23,32,.96); border:1px solid var(--ligne-forte); border-radius:6px; padding:4px 8px; font-family:var(--mono); font-size:var(--fs-xs); white-space:nowrap; }
-  .ob-banniere { position:absolute; left:50%; top:22%; transform:translateX(-50%); z-index:2; text-align:center; pointer-events:none; font-size:clamp(22px, 3.2vw, 40px); font-weight:800; letter-spacing:.06em; color:#fff; text-shadow:0 0 18px rgba(63,224,200,.8), 0 2px 0 rgba(0,0,0,.6); white-space:nowrap; }
+  .ob-bulle { position:absolute; z-index:4; pointer-events:none; background:color-mix(in srgb, var(--creux) 96%, transparent); border:1px solid var(--ligne-forte); border-radius:var(--r1); padding:4px 8px; font-family:var(--mono); font-size:var(--fs-xs); white-space:nowrap; }
+  .ob-banniere { position:absolute; left:50%; top:22%; transform:translateX(-50%); z-index:2; text-align:center; pointer-events:none; font-size:clamp(22px, 3.2vw, 40px); font-weight:800; letter-spacing:.06em; color:#fff; text-shadow:0 0 18px color-mix(in srgb, var(--rx) 80%, transparent), 0 2px 0 rgba(0,0,0,.6); white-space:nowrap; }
   .ob-banniere small { display:block; font-family:var(--mono); font-size:var(--fs-m); font-weight:600; letter-spacing:0; color:var(--texte); text-shadow:0 1px 2px #000; margin-top:6px; }
   .ob-banniere.ob-flash { animation:ob-flash 1.4s ease-out; }
   @keyframes ob-flash { 0% { transform:translateX(-50%) scale(1.5); opacity:0; } 25% { opacity:1; } 100% { transform:translateX(-50%) scale(1); } }
@@ -127,7 +127,7 @@ object OngletOrbites {
   .ob-instruments canvas { display:block; width:100%; height:140px; }
   .ob-lecteur { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
   .ob-lecteur button, .ob-lecteur select { padding:3px 9px; font-size:var(--fs-s); }
-  .ob-jouer { background:var(--rx); color:#06131A; border-color:var(--rx); font-weight:600; }
+  .ob-jouer { background:var(--rx); color:var(--sur-vif); border-color:var(--rx); font-weight:600; }
   .ob-mode { align-self:center; margin-left:auto; font-family:var(--mono); font-size:var(--fs-s); color:var(--warn); font-weight:600; }
   .ob-mode.ob-live { color:var(--ok); }
   .ob-mesures { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-family:var(--mono); font-size:var(--fs-s); margin:0; }
@@ -206,7 +206,7 @@ object OngletOrbites {
   .ob-pb.ob-pb-off { opacity:0; }
   .ob-pb[hidden] { display:none; }
   .ob-pb .pt { position:absolute; left:-8px; top:-8px; width:16px; height:16px; border-radius:50%; background:#FFD34D; border:3px solid #0a1230; box-sizing:border-box; animation:ob-pouls 1.6s ease-in-out infinite; }
-  .ob-pb-emp .pt { background:#7CF29A; } .ob-pb-nuit .pt { background:#B48CFF; } .ob-pb-station .pt { background:#FFB454; }
+  .ob-pb-emp .pt { background:#7CF29A; } .ob-pb-nuit .pt { background:#B48CFF; } .ob-pb-station .pt { background:var(--warn); }
   .ob-pb .bx { position:absolute; left:16px; bottom:12px; width:max-content; max-width:min(280px, 36vw); background:#fff; color:#0a1230; border:3px solid #0a1230; border-radius:18px 18px 18px 4px;
     padding:7px 12px; font:700 clamp(13px, 1.15vw, 20px)/1.25 "Baloo 2", Nunito, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif; box-shadow:0 4px 0 rgba(10,18,48,.35); }
   .ob-pb.g .bx { left:auto; right:16px; border-radius:18px 18px 4px 18px; }
@@ -237,7 +237,7 @@ object OngletOrbites {
   #v-orbites.ob-th-classique.ob-tableau .ob-scene > canvas { position:relative; inset:auto; grid-column:1 / -1; grid-row:2; width:100%; height:100%; min-height:0; }
   #v-orbites.ob-th-classique.ob-tableau .ob-coin { position:static; grid-row:1; max-width:none; max-height:none; align-items:stretch; justify-content:flex-start; gap:6px; }
   #v-orbites.ob-th-classique.ob-tableau .ob-coin-hd { grid-column:2; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bg { grid-column:3; } #v-orbites.ob-th-classique.ob-tableau .ob-coin-bd { grid-column:4; }
-  #v-orbites.ob-th-classique .ob-w { background:#05080c; border:1px solid #233140; border-radius:4px; padding:6px 10px; font-family:var(--mono); font-size:calc(clamp(12px, .92vw, 17px) * var(--ob-k, 1)); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
+  #v-orbites.ob-th-classique .ob-w { background:#05080c; border:1px solid #233140; border-radius:var(--r1); padding:6px 10px; font-family:var(--mono); font-size:calc(clamp(12px, .92vw, 17px) * var(--ob-k, 1)); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; }
   #v-orbites.ob-th-classique .ob-w-t { color:#00E5FF; letter-spacing:.08em; }
   .ob-th-classique [data-w="station"] .ob-w-t { color:#FFD000; } .ob-th-classique [data-w="astres"] .ob-w-t { color:#C792FF; } .ob-th-classique [data-w="passages"] .ob-w-t { color:#7CF29A; }
   .ob-th-classique [data-w="espace"] .ob-w-t { color:#FF9F43; } .ob-th-classique [data-w="sat"] .ob-w-t { color:#FF6B9A; }
@@ -261,7 +261,7 @@ object OngletOrbites {
   #v-orbites.ob-th-nuit .ob-defile:not([hidden]) { color:#D27A6A; background:rgba(0,0,0,.6); border-top-color:rgba(255,90,60,.16); }
   /* Rétro: parchment cards, serif ink, an old map. */
   #v-orbites.ob-th-retro .ob-scene { background:#2b1d0e; }
-  #v-orbites.ob-th-retro .ob-w { background:rgba(239,224,184,.95); color:#3B2410; border:2px solid #6B3F17; border-radius:6px; text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none;
+  #v-orbites.ob-th-retro .ob-w { background:rgba(239,224,184,.95); color:#3B2410; border:2px solid #6B3F17; border-radius:var(--r1); text-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none;
     box-shadow:inset 0 0 0 3px rgba(239,224,184,1), inset 0 0 0 4px #6B3F17, 0 3px 10px rgba(0,0,0,.4); font-family:Georgia, "Times New Roman", serif; }
   #v-orbites.ob-th-retro :is(.ob-w-gros, .ob-w-mono, .ob-w-g, .ob-w-moy, .ob-w-pas .d, .ob-w-pas .m) { font-family:Georgia, "Times New Roman", serif; }
   #v-orbites.ob-th-retro .ob-w-t { color:#8A2D12; font-variant:small-caps; text-transform:none; letter-spacing:.08em; font-size:.85em; }
@@ -323,9 +323,9 @@ object OngletOrbites {
   .ob-vit-duo { display:grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.4fr); gap:1em; align-items:center; }
   .ob-vit-passage .ob-vit-gros { font-size:2.6em; } .ob-vit-passage .ob-vit-vivant { font-size:1.5em; line-height:1.15; }
   .ob-vit-contact .ob-vit-duo { grid-template-columns:minmax(0, 1fr) auto; }
-  .ob-vit-qr { width:calc(min(26vh, 20vw) * var(--vit-k, 1)); height:auto; background:#fff; border-radius:12px; border:3px solid #0a1230; }
+  .ob-vit-qr { width:calc(min(26vh, 20vw) * var(--vit-k, 1)); height:auto; background:#fff; border-radius:var(--r3); border:3px solid #0a1230; }
   .ob-vit-liste { margin:.2em 0 0; padding-left:1.1em; } .ob-vit-liste li { margin:.25em 0; }
-  .ob-vitrine .ob-photo { margin:0; } .ob-vitrine .ob-photo img, .ob-vitrine .ob-photo svg { max-height:min(34vh, 9em); border-radius:18px; }
+  .ob-vitrine .ob-photo { margin:0; } .ob-vitrine .ob-photo img, .ob-vitrine .ob-photo svg { max-height:min(34vh, 9em); border-radius:var(--r4); }
   .ob-vitrine .ob-photo figcaption { font-size:clamp(10px, .7vw, 14px); color:#4a5878; font-weight:500; }
   .ob-vit-sat .ob-photo { float:left; width:44%; margin:0 1em .4em 0; }
   .ob-vitrine .ob-fiche-t { font-size:1.5em; font-weight:800; color:#E8743B; line-height:1.1; }

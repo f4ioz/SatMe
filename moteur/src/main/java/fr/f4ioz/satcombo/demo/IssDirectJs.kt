@@ -28,26 +28,26 @@ object IssDirectJs {
     const val CSS = """
   /* ---------------------------------------------------------------- Orbites: the ISS live (IssDirectJs) */
   .iss-f { position:fixed; z-index:50; display:flex; flex-direction:column; min-width:240px; min-height:120px; box-sizing:border-box; overflow:hidden auto; overscroll-behavior:contain;
-    background:rgba(10,16,22,.97); color:var(--texte, #E6EDF3); border:1px solid var(--ligne-forte, #2c3c4a); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.55); font-size:13px; }
+    background:rgba(10,16,22,.97); color:var(--texte, #E6EDF3); border:1px solid var(--ligne-forte, #2c3c4a); border-radius:var(--r3); box-shadow:0 12px 32px rgba(0,0,0,.55); font-size:13px; }
   .iss-f[hidden] { display:none; }
-  .iss-barre { display:flex; align-items:center; gap:4px; padding:4px 4px 4px 10px; background:rgba(255,255,255,.04); border-bottom:1px solid var(--ligne, #22303c); cursor:move; touch-action:none; user-select:none; flex:none; position:sticky; top:0; z-index:2; background-color:#121b24; }
+  .iss-barre { display:flex; align-items:center; gap:4px; padding:4px 4px 4px 10px; background:rgba(255,255,255,.04); border-bottom:1px solid var(--ligne, var(--ligne)); cursor:move; touch-action:none; user-select:none; flex:none; position:sticky; top:0; z-index:2; background-color:#121b24; }
   .iss-barre .iss-t { flex:1; min-width:0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .iss-barre .iss-t i { font-style:normal; color:#FF5F5F; font-size:11px; margin-left:6px; letter-spacing:.06em; }
-  .iss-barre button { border:0; background:transparent; color:var(--texte-2, #9AA7B4); width:28px; height:26px; border-radius:6px; font-size:14px; cursor:pointer; padding:0; }
+  .iss-barre button { border:0; background:transparent; color:var(--texte-2, var(--texte-2)); width:28px; height:26px; border-radius:var(--r1); font-size:14px; cursor:pointer; padding:0; }
   .iss-barre button:hover, .iss-barre button[aria-pressed="true"] { background:var(--s3, #24323f); color:var(--texte, #fff); }
   .iss-v { position:relative; flex:1 1 auto; min-height:130px; background:#000; }
   .iss-v iframe, .iss-v video { position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; }
   .iss-hors { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:12px; text-align:center; color:#C9D4DE; background:#05080c; line-height:1.4; }
   .iss-hors[hidden] { display:none; }
-  .iss-r { padding:8px 10px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid var(--ligne, #22303c); flex:none; }
+  .iss-r { padding:8px 10px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid var(--ligne, var(--ligne)); flex:none; }
   .iss-r[hidden] { display:none; }
   .iss-r input { width:100%; box-sizing:border-box; }
   .iss-r .iss-rb { display:flex; gap:6px; flex-wrap:wrap; }
   .iss-r .iss-err { color:var(--rose, #FF5FA2); }
   .iss-i { padding:6px 10px 2px; line-height:1.4; flex:none; }
-  .iss-i b { color:var(--rx, #3FE0C8); }
-  .iss-i .iss-ch { font-family:var(--mono, ui-monospace, monospace); font-size:12px; color:var(--texte-2, #9AA7B4); }
-  .iss-i .iss-nuit { color:#B9A8FF; } .iss-i .iss-jour { color:#FFD34D; } .iss-i .iss-aube { color:#FFB454; }
+  .iss-i b { color:var(--rx, var(--rx)); }
+  .iss-i .iss-ch { font-family:var(--mono, ui-monospace, monospace); font-size:12px; color:var(--texte-2, var(--texte-2)); }
+  .iss-i .iss-nuit { color:#B9A8FF; } .iss-i .iss-jour { color:#FFD34D; } .iss-i .iss-aube { color:var(--warn); }
   .iss-i .iss-ici { color:#7CF29A; }
   .iss-i .iss-perte { color:var(--texte-3, #6E7D8B); font-size:11.5px; }
   .iss-act { display:flex; gap:6px; flex-wrap:wrap; align-items:center; padding:4px 10px 0; flex:none; }
@@ -59,7 +59,7 @@ object IssDirectJs {
   .iss-f.iss-min :is(.iss-v, .iss-r, .iss-i, .iss-act, .iss-cr, .iss-poignee) { display:none; }
   .iss-seg button[aria-pressed="true"] { color:#FF8A8A; }
   /* The dashboard's corner tile: no bar, the picture and two lines, readable from afar. */
-  .iss-f.iss-tuile { left:auto !important; right:16px; top:16px !important; width:min(30vw, 520px) !important; height:auto !important; min-width:220px; border-radius:16px; border-width:2px; }
+  .iss-f.iss-tuile { left:auto !important; right:16px; top:16px !important; width:min(30vw, 520px) !important; height:auto !important; min-width:220px; border-radius:var(--r4); border-width:2px; }
   .iss-f.iss-tuile :is(.iss-barre, .iss-r, .iss-act, .iss-poignee, .iss-ch, .iss-perte) { display:none; }
   .iss-f.iss-tuile .iss-v { flex:none; aspect-ratio:16 / 9; }
   .iss-f.iss-tuile .iss-i { font-size:clamp(13px, 1.1vw, 20px); }

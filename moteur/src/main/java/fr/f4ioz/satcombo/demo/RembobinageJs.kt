@@ -238,7 +238,7 @@ function rbSurvol(v, ev) {
   .rb-t { font-variant-numeric:tabular-nums; color:var(--ambre); font-weight:600; white-space:nowrap; }
   .rb-r { flex:1 1 90px; min-width:70px; direction:rtl; }
   .rb-d { padding:1px 8px; font-size:12px; min-height:0; }
-  .rb-i { position:absolute; pointer-events:none; background:rgba(6,19,26,.9); color:#E8F0F7; font-size:11px; padding:2px 6px; border-radius:6px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .rb-i { position:absolute; pointer-events:none; background:rgba(6,19,26,.9); color:var(--texte); font-size:11px; padding:2px 6px; border-radius:var(--r1); white-space:nowrap; font-variant-numeric:tabular-nums; }
   .wb-bande.rb-grand .wb-chute { height:160px; }
 """
 }
