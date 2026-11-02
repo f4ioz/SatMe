@@ -190,6 +190,7 @@ fun main(args: Array<String>) {
     // « Phonie → texte »: off unless chosen; the engine (a Python helper) started only then.
     val phonie = PhoniePc(station.stockage, InstallPhoniePc(dossier), File(dossier, "phonie"))
     phonie.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
+    phonie.moi = { station.settings.callsign }
     phonie.contexte = { src -> contextePhonie(station, sdr, src) }
     son.son.auditeurs += { pcm, n, rate -> phonie.ecouteCarte(pcm, n, rate) }
     sdr.ecouteVoix = { pcm, n, sq -> phonie.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, sq) }

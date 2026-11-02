@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.phonie.CapteurPhonie
 import fr.f4ioz.satcombo.phonie.DecoupeVoix
 import fr.f4ioz.satcombo.phonie.FilePhonie
 import fr.f4ioz.satcombo.phonie.FiltrePhonie
+import fr.f4ioz.satcombo.phonie.LangageOm
 import fr.f4ioz.satcombo.phonie.SourcePhonie
 import fr.f4ioz.satcombo.phonie.ProtocolePhonie.Message
 import fr.f4ioz.satcombo.plateforme.Stockage
@@ -34,7 +35,11 @@ import kotlin.concurrent.thread
  * starts.
  *
  * The overs wait in a short queue: when the engine lags, the oldest goes.
- * The day's transcript is kept in `phonie/AAAA-MM-JJ.jsonl`.
+ * The day's transcript is kept in `phonie/AAAA-MM-JJ.jsonl`. The engine is
+ * told ham radio's words before it listens, and its text is written as hams
+ * write it ([LangageOm]: spellings in letters, reports in figures, the Q
+ * code), with the user's own words from `phonie/vocabulaire.txt` (written
+ * the first time, comments only); the engine's own text is kept beside.
  *
  * A GENESIS voice message ended may start the engine for itself while this
  * is off ([seul]): nothing is listened to, the engine runs at the lowest
@@ -94,6 +99,8 @@ class PhoniePc(
 
     /** The log's callsigns (their base), read again each minute. */
     @Volatile var connus: () -> Set<String> = { emptySet() }
+    /** The station's callsign: suggested to the engine, spelt. */
+    @Volatile var moi: () -> String = { "" }
     /** The sky frequency and the satellite for a source ("carte", "sdr"), when known. */
     @Volatile var contexte: (String) -> Pair<Long?, String> = { null to "" }
     /** Each over kept, with its sound (« Traduction parlée »). */
@@ -279,7 +286,10 @@ class PhoniePc(
             enCours = a
             try {
                 val pcm = DecoupeVoix.normalise(a.piece.segment.pcm)
-                val r = m.transcrit(++numero, pcm, langue, traduire, if (traduire && cible != WHISPER) cible else "")
+                val v = vocabulaire()
+                val ind = runCatching(moi).getOrDefault("")
+                val r = m.transcrit(++numero, pcm, langue, traduire, if (traduire && cible != WHISPER) cible else "",
+                    LangageOm.prompt(langue, ind, v).also { promptEnvoye = it }, LangageOm.motsCles(ind, v))
                 if (g != generation) return
                 when (r) {
                     is Message.Reponse -> recoit(a, r, pcm)
@@ -302,6 +312,27 @@ class PhoniePc(
     }
 
     private var numero = 0L
+    /** The last prompt given to the engine: said back on silence, it was not heard. */
+    @Volatile private var promptEnvoye = ""
+
+    // ------------------------------------------------------------------ the personal vocabulary
+
+    /** The user's words and corrections (see [LangageOm.MODELE]); written the first time, comments only. */
+    val fichierVocabulaire: File get() = File(dossierJournal, "vocabulaire.txt")
+    @Volatile private var vocabulaireLu = LangageOm.Vocabulaire.VIDE
+    @Volatile private var vocabulaireMs = -1L
+
+    /** The personal vocabulary, read again when the file changed. */
+    fun vocabulaire(): LangageOm.Vocabulaire {
+        val f = fichierVocabulaire
+        if (!f.isFile) runCatching { f.parentFile.mkdirs(); f.writeText(LangageOm.MODELE, Charsets.UTF_8) }
+        val ms = f.lastModified()
+        if (ms != vocabulaireMs) {
+            vocabulaireLu = runCatching { LangageOm.litVocabulaire(f.readText(Charsets.UTF_8)) }.getOrDefault(LangageOm.Vocabulaire.VIDE)
+            vocabulaireMs = ms
+        }
+        return vocabulaireLu
+    }
 
     /** The engine failed: said, then tried again after 2, 4, 8… s (a minute at most). */
     private fun attend(g: Int, raison: String) {
@@ -326,13 +357,18 @@ class PhoniePc(
     fun derniere(): BullePhonie? = synchronized(bulles) { bulles.lastOrNull() }
 
     private fun recoit(a: Attente, r: Message.Reponse, pcm: FloatArray) {
-        val gardes = FiltrePhonie.garde(r.morceaux)
+        val prompt = promptEnvoye
+        val gardes = FiltrePhonie.garde(r.morceaux).filterNot { LangageOm.recopieDuPrompt(it.texte, prompt) }
         calculMoyenS = if (calculMoyenS == 0.0) r.calculS else calculMoyenS * 0.8 + r.calculS * 0.2
         if (traduire) traductionErreur = r.traductionErreur
         if (gardes.isEmpty()) return
-        val texte = gardes.joinToString(" ") { it.texte.trim() }.trim()
+        val brut = gardes.joinToString(" ") { it.texte.trim() }.trim()
+        // Ham radio's writing: spellings in letters, reports in figures, the Q code.
+        val v = vocabulaire()
+        val texte = runCatching { LangageOm.corrige(brut, r.langue, v) }.getOrDefault(brut)
         // Translated segment by segment: the kept ones only; else the whole over's (Whisper's).
-        val traduction = if (r.morceaux.any { it.traduction.isNotBlank() }) gardes.joinToString(" ") { it.traduction.trim() }.trim() else r.traduction.trim()
+        val traduit = if (r.morceaux.any { it.traduction.isNotBlank() }) gardes.joinToString(" ") { it.traduction.trim() }.trim() else r.traduction.trim()
+        val traduction = runCatching { LangageOm.corrige(traduit, r.langueCible.ifBlank { "en" }, v) }.getOrDefault(traduit)
         val maintenant = horloge()
         if (maintenant - connusMs > 60_000L) { connusCache = runCatching(connus).getOrDefault(emptySet()); connusMs = maintenant }
         val vus = synchronized(bulles) {
@@ -340,7 +376,7 @@ class PhoniePc(
         }
         val b = BullePhonie(0, a.piece.debutMs, a.piece.segment.dureeS, a.source, a.freqHz, a.satellite, r.langue, r.proba,
             texte, traduction, BullePhonie.confiance(gardes), r.calculS, AnalysePhonie.analyse(texte, r.langue, connusCache, vus),
-            if (traduction.isNotEmpty()) r.langueCible else "")
+            if (traduction.isNotEmpty()) r.langueCible else "", if (brut != texte) brut else "")
         val c = synchronized(bulles) {
             chargeJour()
             // A GENESIS message written down again (packets came to it since): this text takes the place of the last.
@@ -400,6 +436,7 @@ class PhoniePc(
             val trouves = b.elements.joinToString(" ") { it.valeur }
             heure.format(Date(b.t)) + " UTC" + (b.freqHz?.let { " · %.4f MHz".format(Locale.US, it / 1e6) } ?: "") +
                 (if (b.satellite.isNotBlank()) " · ${b.satellite}" else "") + " · ${b.langue}" + "\n" + b.texte + "\n" +
+                (if (b.brut.isNotBlank() && b.brut != b.texte) "  (entendu) ${b.brut}\n" else "") +
                 (if (b.traduction.isNotBlank()) "  (${b.langueCible.ifBlank { "en" }}) ${b.traduction}\n" else "") + (if (trouves.isNotBlank()) "  → $trouves\n" else "") + "\n"
         }
     }

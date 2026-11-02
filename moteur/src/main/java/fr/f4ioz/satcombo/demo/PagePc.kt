@@ -5716,7 +5716,7 @@ function phBulle(b) {
   return '<div class="ph-b" style="opacity:' + (0.55 + 0.45 * conf).toFixed(2) + ';border-left-color:' + (conf > 0.7 ? 'var(--vert)' : conf > 0.5 ? 'var(--ambre)' : 'var(--rose)') + '">' +
     '<div class="ph-t">' + hm(b.t, true) + (utc() ? ' UTC' : '') + (fr ? ' · ' + fr : '') + (b.sat ? ' · ' + esc(b.sat) : '') + ' · ' +
     (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(b.langue) + ' · ' + Math.round(b.duree) + ' s · sûr à ' + Math.round(conf * 100) + ' %</div>' +
-    '<div class="ph-x">' + h + '</div>' + (b.traduction && b.traduction !== b.texte ? '<div class="ph-tr" title="Traduction' + (b.langueCible ? ' (' + esc(b.langueCible) + ')' : '') + ', faite sur ce PC">' +
+    '<div class="ph-x"' + (b.brut ? ' title="Entendu par le moteur : ' + esc(b.brut) + '"' : '') + '>' + h + '</div>' + (b.traduction && b.traduction !== b.texte ? '<div class="ph-tr" title="Traduction' + (b.langueCible ? ' (' + esc(b.langueCible) + ')' : '') + ', faite sur ce PC">' +
     (b.langueCible && b.langueCible !== 'fr' && PH_DRAPEAU[b.langueCible] ? f8Drapeau(PH_DRAPEAU[b.langueCible]) + ' ' : '') + esc(b.traduction) + '</div>' : '') + (puces ? '<div>' + puces + '</div>' : '') + '</div>';
 }
 function phNote(call, loc, rep) {
