@@ -1973,4 +1973,37 @@ class SettingsStore(
     var convBandes: String?
         get() = prefs.getString("conv_bandes", null)
         set(v) { prefs.edit().putString("conv_bandes", v).apply() }
+
+    /**
+     * GENESIS FSK in USB (HADES-SA and AMSAT-EA's other satellites), on the
+     * phone: "SATELLITE" (the default) listens while recording a satellite
+     * whose SatNOGS transmitters say GENESIS / SSDV at 200 or 800 bit/s;
+     * "TOUJOURS" on every recording; "COUPE" never.
+     */
+    var genesisMode: String
+        get() = prefs.getString("genesis_mode", "SATELLITE")?.takeIf { it in setOf("SATELLITE", "TOUJOURS", "COUPE") } ?: "SATELLITE"
+        set(v) { prefs.edit().putString("genesis_mode", v).apply() }
+
+    /** The rate: "" as the satellite's transmitter says (AUTO otherwise), or "auto", "200", "800". */
+    var genesisProfil: String
+        get() = prefs.getString("genesis_profil", "") ?: ""
+        set(v) { prefs.edit().putString("genesis_profil", if (v in setOf("auto", "200", "800")) v else "").apply() }
+
+    /**
+     * The phone's receive-only iGate (RF → APRS-IS), off by default. Its
+     * passcode is not kept here (see the app's IGateHub): out of the backups.
+     */
+    var igateActif: Boolean
+        get() = prefs.getBoolean("igate_actif", false)
+        set(v) { prefs.edit().putBoolean("igate_actif", v).apply() }
+
+    /** « host:port », empty: the default server. */
+    var igateServeur: String
+        get() = prefs.getString("igate_serveur", "") ?: ""
+        set(v) { prefs.edit().putString("igate_serveur", v.trim()).apply() }
+
+    /** The iGate's callsign with its SSID; empty: the station's callsign. */
+    var igateIndicatif: String
+        get() = prefs.getString("igate_indicatif", "") ?: ""
+        set(v) { prefs.edit().putString("igate_indicatif", v.trim().uppercase()).apply() }
 }

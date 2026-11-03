@@ -170,6 +170,8 @@ object AprsHub {
         charge(app)
         pannes = 0
         live = AfskDemodulateur(frequence) { t ->
+            // Heard live on the air: the receive-only iGate may pass it on (it does nothing while off).
+            IGateHub.entendu(t)
             if (ajoute(app, t, System.currentTimeMillis(), sat)) {
                 _etat.value = _etat.value.copy(nouveaux = _etat.value.nouveaux + 1)
             }
@@ -234,7 +236,11 @@ object AprsHub {
     }
 
     /** A frame a KISS radio (TH-D72…) received and passed on, already decoded. */
-    fun recuDuTnc(ctx: Context, t: Trame) = recuDuPoste(ctx, t, "TNC")
+    fun recuDuTnc(ctx: Context, t: Trame) {
+        // A KISS radio's frame was heard on the air too: the iGate may pass it on.
+        IGateHub.entendu(t)
+        recuDuPoste(ctx, t, "TNC")
+    }
 
     /** A station a radio decoded itself (KISS, or an FT3D's waypoint), labelled [etiquette]. */
     fun recuDuPoste(ctx: Context, t: Trame, etiquette: String) {

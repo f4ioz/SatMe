@@ -331,6 +331,9 @@ class RecorderService : Service() {
                     if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.startLive(this, rate, sat, enregistrement = file.name)
                     if (aprs) fr.f4ioz.satcombo.aprs.AprsHub.startLive(this, rate, sat)
                     if (apt) fr.f4ioz.satcombo.apt.AptHub.startLive(this, rate, sat)
+                    // GENESIS (SO-127's SSDV and telemetry in USB): the hub decides by the satellite
+                    // (its SatNOGS transmitters) or the operator's choice; nothing decoded otherwise.
+                    runCatching { fr.f4ioz.satcombo.telemesure.GenesisHub.startLive(this, rate, sat) }
                     // Monitor (spectrum + speaker playback). Opened even with
                     // both options off, so they can be turned on mid-pass
                     // without restarting the recording.
@@ -347,6 +350,7 @@ class RecorderService : Service() {
                         if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.feedLive(p, n)
                         if (apt) fr.f4ioz.satcombo.apt.AptHub.feedLive(p, n)
                         if (aprs) fr.f4ioz.satcombo.aprs.AprsHub.feedLive(p, n)
+                        fr.f4ioz.satcombo.telemesure.GenesisHub.feedLive(p, n)
                     }
                     // Spoken header (satellite, date, locator), synthesised
                     // while the microphone already listens: see PassRecorder.
@@ -370,6 +374,7 @@ class RecorderService : Service() {
                             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
                             fr.f4ioz.satcombo.apt.AptHub.stopLive()
                             fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
+                            fr.f4ioz.satcombo.telemesure.GenesisHub.stopLive()
                             tearDownBluetooth()
                             // Armed: this window is lost, the next ones are not.
                             if (armeIntent != null) { _fenetres.value = _fenetres.value.drop(1); attendFenetreSuivante() }
@@ -490,6 +495,7 @@ class RecorderService : Service() {
             // so it only exists once the pass is over.
             fr.f4ioz.satcombo.apt.AptHub.stopLive()
             fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
+            fr.f4ioz.satcombo.telemesure.GenesisHub.stopLive()
             val startMs = _state.value.startMs
             _state.value = _state.value.copy(recording = false, autoStopMs = null)
             // Sidecar with QSO markers + export copy, off the main thread.
@@ -564,6 +570,7 @@ class RecorderService : Service() {
             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
             fr.f4ioz.satcombo.apt.AptHub.stopLive()
             fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
+            fr.f4ioz.satcombo.telemesure.GenesisHub.stopLive()
             _state.value = _state.value.copy(recording = false, autoStopMs = null)
         }
         tearDownBluetooth()

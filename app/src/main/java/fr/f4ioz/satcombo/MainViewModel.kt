@@ -69,7 +69,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS, DATV, ACTIVITES }
+enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS, DATV, ACTIVITES, GENESIS }
 
 /**
  * Fine-tuning settings, kept out of [UiState] because of the 255-register
@@ -1427,6 +1427,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 arme = f.isNotEmpty() && fr.f4ioz.satcombo.audio.RecorderService.armePar == fr.f4ioz.satcombo.audio.RecorderService.PAR_SSTV
             }
         }
+        // --- GENESIS: which satellites it listens to (their SatNOGS transmitters) ---
+        fr.f4ioz.satcombo.telemesure.GenesisHub.profilSatellite = { nom -> profilGenesis(nom) }
+        // --- the receive-only iGate, when the operator switched it on (off by default) ---
+        runCatching { fr.f4ioz.satcombo.aprs.IGateHub.init(getApplication()) }
         // --- APRS, the fun side: who we are for the trophies, the cheers, the ISS beacon ---
         fr.f4ioz.satcombo.aprs.AprsHub.joueur = {
             Triple(settings.callsign, _ui.value.observer?.latDeg, _ui.value.observer?.lonDeg)
@@ -5674,6 +5678,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(screen = Screen.APT)
     }
     fun closeApt() { _ui.value = retour() }
+
+    // ================= GENESIS (SO-127's telemetry and SSDV in USB) =================
+
+    fun openGenesis() {
+        va(Screen.GENESIS)
+        _ui.value = _ui.value.copy(screen = Screen.GENESIS)
+    }
+    fun closeGenesis() { _ui.value = retour() }
+
+    /**
+     * The satellite the recorder names → its number and the GENESIS profile of
+     * its SatNOGS transmitters (null profile: none is GENESIS), or null when
+     * unknown. Blocking (a SatNOGS download at worst): called off the capture thread.
+     */
+    private fun profilGenesis(nom: String): Pair<Int, fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil?>? {
+        val sat = _ui.value.satellites.firstOrNull { it.name == nom }
+            ?: _ui.value.satellites.firstOrNull { it.name.replace(Regex("[^A-Za-z0-9_-]"), "-") == nom }
+            ?: return null
+        val tx = runCatching { kotlinx.coroutines.runBlocking { txRepo.forSatellite(sat.catalogNumber) } }.getOrDefault(emptyList())
+        val p = tx.filter { it.alive }.firstNotNullOfOrNull { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) }
+            ?: tx.firstNotNullOfOrNull { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) }
+        return sat.catalogNumber to p
+    }
 
     // ================= SDR (RTL-SDR dongle, beta) =================
 

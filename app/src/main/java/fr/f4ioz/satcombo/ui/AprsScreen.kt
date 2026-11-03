@@ -442,6 +442,8 @@ private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode:
                 }
             }
         }
+        // Receive-only iGate (RF → APRS-IS), off by default: its own card, apart from what is sent.
+        item { CarteIGate(ui) }
         item {
             Carte(t("aprs_station_titre")) {
                 Text(t("aprs_tx_ssid"), color = TextLo, fontSize = 11.sp)
@@ -636,3 +638,86 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
         }
     }
 }
+
+// ------------------------------------------------------------------ iGate
+
+/**
+ * The receive-only iGate: switch (off by default), callsign, passcode
+ * (write only), server, and how it is doing. Nothing here transmits.
+ */
+@Composable
+private fun CarteIGate(ui: UiState) {
+    val ctx = LocalContext.current
+    val reg = remember { fr.f4ioz.satcombo.data.SettingsStore(ctx) }
+    val e by fr.f4ioz.satcombo.aprs.IGateHub.etat.collectAsState()
+    var actif by remember { mutableStateOf(reg.igateActif) }
+    var indicatif by remember { mutableStateOf(reg.igateIndicatif) }
+    var serveur by remember { mutableStateOf(reg.igateServeur) }
+    var code by remember { mutableStateOf("") }
+    var pose by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.IGateHub.passcodePose(ctx)) }
+    var erreur by remember { mutableStateOf<String?>(null) }
+    val heure = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    Carte(t("igate_titre")) {
+        Text(t("igate_desc"), color = TextLo, fontSize = 11.sp)
+        Interrupteur(t("igate_actif"), t("igate_actif_desc"), actif) {
+            actif = it; fr.f4ioz.satcombo.aprs.IGateHub.setActif(ctx, it)
+        }
+        OutlinedTextField(indicatif, { indicatif = it.uppercase().take(12) }, singleLine = true,
+            label = { Text(t("igate_indicatif"), fontSize = 12.sp) },
+            placeholder = { Text(ui.callsign.ifBlank { "F0SIM" } + "-10", fontSize = 12.sp) },
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        OutlinedTextField(code, { code = it.filter { c -> c.isDigit() }.take(5) }, singleLine = true,
+            label = { Text(if (pose) t("igate_passcode_pose") else t("igate_passcode"), fontSize = 12.sp) },
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        Text(t("igate_passcode_desc"), color = TextLo, fontSize = 11.sp)
+        OutlinedTextField(serveur, { serveur = it.trim().take(80) }, singleLine = true,
+            label = { Text(t("igate_serveur"), fontSize = 12.sp) },
+            placeholder = { Text(fr.f4ioz.satcombo.aprs.IGate.SERVEUR_DEFAUT, fontSize = 12.sp) },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = {
+                erreur = when {
+                    indicatif.isNotBlank() && !fr.f4ioz.satcombo.aprs.IGate.indicatifValide(indicatif) -> t("igate_err_indicatif")
+                    serveur.isNotBlank() && fr.f4ioz.satcombo.aprs.IGate.serveur(serveur) == null -> t("igate_err_serveur")
+                    code.isNotBlank() && !fr.f4ioz.satcombo.aprs.IGate.passcodeValide(code) -> t("igate_err_passcode")
+                    else -> null
+                }
+                if (erreur == null) {
+                    fr.f4ioz.satcombo.aprs.IGateHub.setIndicatif(ctx, indicatif)
+                    fr.f4ioz.satcombo.aprs.IGateHub.setServeur(ctx, serveur)
+                    if (code.isNotBlank()) { fr.f4ioz.satcombo.aprs.IGateHub.posePasscode(ctx, code); code = ""; pose = true }
+                }
+            }) { Text(t("igate_enregistrer"), color = Cyan, fontSize = 12.sp) }
+            if (pose) TextButton(onClick = { fr.f4ioz.satcombo.aprs.IGateHub.effacePasscode(ctx); pose = false }) {
+                Text(t("igate_passcode_effacer"), color = Magenta, fontSize = 12.sp)
+            }
+        }
+        erreur?.let { Text(it, color = Amber, fontSize = 11.sp) }
+        // How it is doing.
+        val etatTexte = when (e.phase) {
+            "manque" -> t("igate_manque_" + e.manque)
+            "connexion" -> tf("igate_etat_connexion", e.serveur)
+            "identification" -> t("igate_etat_identification")
+            "connecte" -> tf("igate_etat_connecte", e.nomServeur.ifBlank { e.serveur })
+            "non-verifie" -> t("igate_etat_non_verifie")
+            "attente" -> tf("igate_etat_attente", ((e.prochainEssaiMs - System.currentTimeMillis()) / 1000).coerceAtLeast(0))
+            else -> t("igate_etat_coupe")
+        }
+        Text(etatTexte, color = if (e.phase == "connecte") Aurora else if (e.phase == "coupe") TextLo else Amber,
+            fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        if (e.phase != "coupe") {
+            Text(tf("igate_compte", e.transmis, e.refuses.values.sum()), color = TextLo, fontSize = 11.sp)
+            e.derniers.take(3).forEach { (tm, l) ->
+                Text("↗ " + heure.format(Date(tm)) + "  " + l.take(90), color = TextHi, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+            e.derniersRefus.take(3).forEach { (tm, l, r) ->
+                Text("✕ " + heure.format(Date(tm)) + "  " + t("igate_refus_" + r.replace('-', '_')) + " · " + l.take(60),
+                    color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
+        Text(t("igate_rx_seul"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+

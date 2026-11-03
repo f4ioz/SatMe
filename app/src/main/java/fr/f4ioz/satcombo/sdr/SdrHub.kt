@@ -376,6 +376,8 @@ object SdrHub {
      */
     /** APRS decoding hooked to the dongle's audio for this run. */
     @Volatile private var aprsSdr = false
+    /** GENESIS hooked to the dongle's audio for this run (USB only: it is FSK heard in USB). */
+    @Volatile private var genesisSdr = false
 
     @Synchronized
     fun onDeviceDetached() {
@@ -384,6 +386,7 @@ object SdrHub {
             stopWorker()
             if (_state.value.sstv) runCatching { SstvHub.stopLive() }
             if (aprsSdr) { runCatching { fr.f4ioz.satcombo.aprs.AprsHub.stopLive() }; aprsSdr = false }
+            if (genesisSdr) { runCatching { fr.f4ioz.satcombo.telemesure.GenesisHub.stopLive() }; genesisSdr = false }
             _spectrum.value = FloatArray(0)
             _panorama.value = FloatArray(0)
         }
@@ -560,6 +563,9 @@ object SdrHub {
                 fr.f4ioz.satcombo.data.Extensions.APRS, st.callsign, st.extensionsCode)
         }.getOrDefault(false)
         if (aprsSdr) runCatching { fr.f4ioz.satcombo.aprs.AprsHub.startLive(app, Dsp.AUDIO_RATE, satName) }
+        // GENESIS from the dongle in USB (the hub decides by the satellite, or the operator's choice).
+        genesisSdr = mode == RxMode.USB
+        if (genesisSdr) runCatching { fr.f4ioz.satcombo.telemesure.GenesisHub.startLive(app, Dsp.AUDIO_RATE, satName) }
 
         val recFile: File? = if (record) newRecordFile(app, satName) else null
         if (recFile != null) {
@@ -780,6 +786,7 @@ object SdrHub {
                     }
                     if (mine()) runCatching { SstvHub.feedLive(pcm, produced) }
                     if (aprsSdr && mine()) runCatching { fr.f4ioz.satcombo.aprs.AprsHub.feedLive(pcm, produced) }
+                    if (genesisSdr && mine()) runCatching { fr.f4ioz.satcombo.telemesure.GenesisHub.feedLive(pcm, produced) }
                     if (SondeHub.active && mine()) {
                         runCatching { SondeHub.feedLive(pcm, produced) }
                     }
@@ -1071,6 +1078,7 @@ object SdrHub {
         stopWorker()
         if (_state.value.sstv) runCatching { SstvHub.stopLive() }
         if (aprsSdr) { runCatching { fr.f4ioz.satcombo.aprs.AprsHub.stopLive() }; aprsSdr = false }
+        if (genesisSdr) { runCatching { fr.f4ioz.satcombo.telemesure.GenesisHub.stopLive() }; genesisSdr = false }
         _spectrum.value = FloatArray(0)
         _panorama.value = FloatArray(0)
         val present = appCtx?.let { disponible(it) } ?: false

@@ -651,6 +651,8 @@ private fun FichePassage(
                     }
                 }
             }
+            // GENESIS (SO-127…): the telemetry heard and the SSDV pictures this pass added to.
+            GenesisDuPassage(e.satName, e.catnum, e.debutMs, e.finMs, ui.useUtc)
 
             if (l.signets.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
