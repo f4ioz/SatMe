@@ -64,7 +64,7 @@ object ContenuPassage {
         val imagesSsdv: Int = 0,
         val messagesFt8: Int = 0,
         val messagesFt4: Int = 0,
-        /** The recordings' zones, by their mode ([ZonesNumeriques.FT4], [ZonesNumeriques.FT8], [ZonesNumeriques.NUM], [ZonesNumeriques.PHONIE]). */
+        /** The recordings' zones, by their mode ([ZonesNumeriques.FT4], [ZonesNumeriques.FT8], [ZonesNumeriques.NUM], [ZonesNumeriques.PHONIE], GENESIS). */
         val zones: List<String> = emptyList(),
         val tramesAprs: Int = 0,
         val tramesTelemesure: Int = 0,
@@ -86,6 +86,8 @@ object ContenuPassage {
                 ZonesNumeriques.FT4 -> x.messagesFt4 == 0 && (qso[FT4] ?: 0) == 0
                 ZonesNumeriques.FT8 -> x.messagesFt8 == 0 && (qso[FT8] ?: 0) == 0
                 ZonesNumeriques.PHONIE -> false
+                // GENESIS's bursts: read when its frames or pictures were decoded (counted as such), else digital not read.
+                ZonesNumeriques.G200, ZonesNumeriques.G800, ZonesNumeriques.GENESIS -> x.tramesTelemesure == 0 && x.imagesSsdv == 0
                 else -> true
             }
         }

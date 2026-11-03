@@ -89,6 +89,8 @@ object RenduPc {
         val affFt: fr.f4ioz.satcombo.domain.JournalFt.Affichage = fr.f4ioz.satcombo.domain.JournalFt.Affichage.DEFAUT,
         /** My callsign and the pass's contacts, picked out among them. */
         val ftMoi: String = "", val ftQsos: Set<String> = emptySet(),
+        /** The SSDV pictures the pass heard packets of (GENESIS), growing packet by packet where the SSTV picture goes. */
+        val ssdv: List<SsdvPassage> = emptyList(),
     ) {
         val cadre = if (cielEntier) JournalPassage.Cadre() else JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -141,6 +143,37 @@ object RenduPc {
         var legendeSession: Triple<String, String, Boolean>? = null
         /** The caption band's height for a frame size, the same all along the video. */
         internal var bande: Pair<Pair<Int, Int>, Int>? = null
+    }
+
+    /**
+     * An SSDV picture during a pass: its name, the packets the pass heard ([recus]: time, number; time order),
+     * the count known or guessed ([total]), and the picture as the pass showed it at a time ([image]).
+     */
+    class SsdvPassage(val titre: String, val recus: List<Pair<Long, Int>>, val avant: Set<Int>, val total: Int, val image: (Long) -> BufferedImage?) {
+        val debutMs: Long get() = recus.firstOrNull()?.first ?: Long.MAX_VALUE
+        val finMs: Long get() = recus.lastOrNull()?.first ?: Long.MIN_VALUE
+        /** Packets shown at [t]: the earlier passes' and this one's by then, each once. */
+        fun nombreA(t: Long): Int = (avant + recus.filter { it.first <= t }.map { it.second }).size
+    }
+
+    /** The SSDV picture shown at [instant]: from the pass's first packet of it to the scene's end (the latest begun). */
+    fun ssdvA(l: List<SsdvPassage>, instant: Long): SsdvPassage? = l.filter { it.recus.isNotEmpty() && instant >= it.debutMs }.maxByOrNull { it.debutMs }
+
+    /** [x] at [instant] in its box [pl]: the picture, its frame, a line below it (name, packets so far). */
+    private fun ssdvDessine(g: Graphics2D, x: SsdvPassage, instant: Long, pl: CadreSstv.Place, dp: Float) {
+        val b = runCatching { x.image(instant) }.getOrNull() ?: return
+        g.color = Color(16, 20, 24); g.fill(java.awt.geom.Rectangle2D.Float(pl.x, pl.y, pl.l, pl.h))
+        g.drawImage(b, pl.x.toInt(), pl.y.toInt(), (pl.x + pl.l).toInt(), (pl.y + pl.h).toInt(), 0, 0, b.width, b.height, null)
+        val f = police(11 * dp, true); g.font = f
+        val n = x.nombreA(instant)
+        val s = "SSDV · " + x.titre + " · " + n + (if (x.total > 0) "/" + x.total else "") + " paquets"
+        val bh = 18 * dp
+        g.color = Color(5, 10, 16, 200); g.fill(java.awt.geom.Rectangle2D.Float(pl.x, pl.y + pl.h - bh, pl.l, bh))
+        // The last packet just come: its line lit a moment.
+        val vient = x.recus.lastOrNull { it.first <= instant }?.let { instant - it.first < 1_500L } == true
+        g.color = if (vient) CYAN else Color.WHITE
+        g.drawString(s, pl.x + 6 * dp, pl.y + pl.h - 5 * dp)
+        g.color = SSTV; g.stroke = BasicStroke(2.5f * dp); g.draw(java.awt.geom.Rectangle2D.Float(pl.x, pl.y, pl.l, pl.h))
     }
 
     internal fun g2(b: BufferedImage): Graphics2D = b.createGraphics().apply {
@@ -559,12 +592,15 @@ object RenduPc {
         }
         // The report's panels, where the page put them (under the picture arriving and the cards).
         sc.calque(w, haut)?.let { g.drawImage(it, 0, 0, null) }
-        if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
+        val sstvIci = if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs) else null
+        if (sstvIci != null) sstvIci.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
             val pl = placeSstv(sc.cadreSstv, w.toFloat(), haut.toFloat(), satX, dp)
             arrivee(g, bm, pl.x, pl.y, pl.l, pl.h, part, dp)
             m.fichier?.let { sc.etiquettes[it] }?.let { etiquette(g, it, pl.x + 6 * dp, pl.y + pl.h - 6 * dp, dp) }
         }
+        // No SSTV picture arriving: the SSDV picture growing as its packets come, where the SSTV picture goes.
+        else if (sc.affSstv) ssdvA(sc.ssdv, instant)?.let { x -> ssdvDessine(g, x, instant, placeSstv(sc.cadreSstv, w.toFloat(), haut.toFloat(), satX, dp), dp) }
         if (sc.affFiches) {
             val lw = minOf(w * 0.58f, 260 * dp)
             val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp

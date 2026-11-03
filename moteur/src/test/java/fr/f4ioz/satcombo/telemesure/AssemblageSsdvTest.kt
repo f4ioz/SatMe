@@ -245,4 +245,24 @@ class AssemblageSsdvTest {
         assertEquals("SATDEMO", ph.satellite)
         assertNotNull(a.json().getJSONObject(0).getJSONArray("bande"))
     }
+
+    /** Each packet's times kept (read back at start too), and the picture as only some of its packets give it. */
+    @Test fun heuresDesPaquetsEtImagePartielle() {
+        val d = dossier()
+        val a = AssemblageSsdv(d) { t0 }
+        mire.indices.filter { it < 6 }.forEach { i -> a.ajoute(mire[i], t0 + i * 10_000L, "SATDEMO") }
+        // Packet 2 heard again on the next orbit.
+        a.ajoute(mire[2], t0 + orbite, "SATDEMO")
+        val ph = a.photos().single()
+        assertEquals(t0 + 20_000L, ph.premiere(2))
+        assertEquals(listOf(t0 + 20_000L, t0 + orbite), ph.heures()[2])
+        assertNull(ph.premiere(7))
+        val relue = AssemblageSsdv(d) { t0 }.photos().single()
+        assertEquals(listOf(t0 + 20_000L, t0 + orbite), relue.heures()[2])
+        // The first two packets alone: fewer MCUs shown than with all six; none of a packet it does not hold.
+        val deux = ph.apercuDe(listOf(0, 1))!!.second!!
+        val six = ph.apercuDe((0..5).toList())!!.second!!
+        assertTrue(deux.count { it } in 1 until six.count { it })
+        assertNull(ph.apercuDe(listOf(40, 41)))
+    }
 }

@@ -148,4 +148,69 @@ class ZonesNumeriquesTest {
         assertEquals(z.toString(), listOf("PHONIE", "FT4"), z.map { it.mode })
         assertTrue(z.toString(), z[1].debutMs >= tranche(14, 7_500L) - 1_000)
     }
+
+    /**
+     * GENESIS 2-FSK at 200 bit/s heard in USB (HADES-SA, 03/11/2026): frames of 3 to 5 s every 20 s, two narrow
+     * tones 1125 Hz apart (a weak signal: only their main lines stand out), starting anywhere in the FT slots — before,
+     * their length alone made them FT4.
+     */
+    private fun genesis(dureeS: Double, debutS: Double, centre: Double, ecart: Double, debit: Double, graine: Long): FloatArray {
+        val fs = 12_000
+        val r = java.util.Random(graine)
+        val a = FloatArray((dureeS * fs).toInt()) { (r.nextGaussian() * 0.05).toFloat() }
+        var t0 = debutS; var k = 0
+        while (t0 + 5 < dureeS) {
+            val n = ((3.2 + (k % 3) * 0.6) * debit).toInt()
+            var ph = 0.0
+            val sps = fs / debit
+            val d = (t0 * fs).toInt()
+            var bit = r.nextBoolean()
+            for (i in 0 until (n * sps).toInt()) {
+                if (i % sps.toInt() == 0) bit = r.nextBoolean()
+                ph += 2 * Math.PI * (centre + (if (bit) ecart / 2 else -ecart / 2)) / fs
+                a[d + i] += (0.06 * Math.sin(ph)).toFloat()
+            }
+            t0 += 20.0; k++
+        }
+        return a
+    }
+
+    @Test
+    fun les_salves_genesis_ne_sont_pas_du_ft4() {
+        // From 3.3 s past a slot: some frames still fall in FT4's window by their start and length.
+        val a = genesis(130.0, 3.3, 1_450.0, 1_125.0, 200.0, 5)
+        val z = ZonesNumeriques.cherche(a, 12_000, origine - origine % 7_500L)
+        assertEquals(z.toString(), listOf(ZonesNumeriques.G200), z.map { it.mode })
+        assertEquals("GENESIS 200", z[0].libelle)
+        assertTrue(z.toString(), z[0].salves >= 10)
+    }
+
+    @Test
+    fun deux_stations_ft4_ecartees_de_1125_hz_restent_du_ft4() {
+        // Two stations in the same slots, 1125 Hz apart all along: FT4 by their length and slot, not GENESIS.
+        val e = (0 until 8).flatMap { k ->
+            listOf(Emission("CQ F5LMG IN88", "FT4", tranche(2 * k, 7_500L), 700.0, -6.0, 0.3),
+                Emission("CQ DH5YBE JO31", "FT4", tranche(2 * k, 7_500L), 1825.0, -6.0, 0.4))
+        }
+        val z = ZonesNumeriques.cherche(EnregistrementFt.fabrique(origine, 130.0, 12_000, e), 12_000, origine)
+        assertEquals(z.toString(), listOf("FT4"), z.map { it.mode })
+    }
+
+    @Test
+    fun le_passage_d_un_satellite_genesis_nomme_ses_zones_genesis() {
+        val l = listOf(ZonesNumeriques.Zone(origine, origine + 60_000, "FT4", 8, 200.0, 3000.0),
+            ZonesNumeriques.Zone(origine + 90_000, origine + 120_000, "NUM", 3, 900.0, 2100.0),
+            ZonesNumeriques.Zone(origine + 130_000, origine + 160_000, "PHONIE", 12, 300.0, 1400.0))
+        // Its frames heard at 200 bit/s.
+        assertEquals(listOf("GENESIS200", "GENESIS200", "PHONIE"), ZonesNumeriques.genesis(l, "200").map { it.mode })
+        // The rate not known: the one its bursts showed, else none said.
+        assertEquals(listOf("GENESIS", "GENESIS", "PHONIE"), ZonesNumeriques.genesis(l).map { it.mode })
+        assertEquals(listOf("GENESIS800", "GENESIS800"), ZonesNumeriques.genesis(listOf(l[0], l[0].copy(mode = "GENESIS800"))).map { it.mode })
+        assertEquals(listOf("GENESIS800", "PHONIE"), ZonesNumeriques.genesisModes(listOf("FT4", "PHONIE"), "800"))
+        // Kept beside the recording, read back; a v2 file (before) worked out again.
+        val g = ZonesNumeriques.genesis(l, "200")
+        assertEquals(g, ZonesNumeriques.lit(ZonesNumeriques.ecrit(g, origine), origine))
+        assertFalse(ZonesNumeriques.aJour("# SatMe zones numériques v2\n"))
+        assertTrue(ZonesNumeriques.aJour(ZonesNumeriques.ecrit(g, origine)))
+    }
 }

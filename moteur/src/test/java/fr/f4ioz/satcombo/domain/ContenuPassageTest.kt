@@ -80,4 +80,13 @@ class ContenuPassageTest {
         assertFalse(C.retenu(r, setOf(C.FT4, C.PHONIE)))
         assertFalse(C.retenu(mapOf(C.FT4 to 0), setOf(C.FT4)))
     }
+
+    @Test
+    fun les_salves_genesis_lues_ne_sont_ni_ft4_ni_numerique_non_lu() {
+        // HADES-SA, 03/11/2026: two zones of its bursts, its frames read: TLM, not « NUM 2 ».
+        val x = C.Elements(zones = listOf("GENESIS200", "GENESIS200"), tramesTelemesure = 9)
+        assertEquals(mapOf(C.TLM to 9), C.resume(x))
+        // Nothing read of them yet: digital not read.
+        assertEquals(mapOf(C.NUM to 2), C.resume(C.Elements(zones = listOf("GENESIS200", "GENESIS"))))
+    }
 }

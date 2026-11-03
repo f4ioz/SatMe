@@ -74,7 +74,7 @@ object RapportPassage {
     val GENRES = linkedMapOf(
         "QSO" to ("Contact" to "#e0459a"), "SSTV" to ("SSTV" to "#f08a24"), "APRS" to ("APRS" to "#3f86f2"),
         "FT8" to ("FT8/FT4" to "#16a37f"), "CW" to ("CW" to "#9c6ade"), "TLM" to ("Télémesure" to "#7a8b99"),
-        "PHONIE" to ("Phonie" to "#c9a400"))
+        "PHONIE" to ("Phonie" to "#c9a400"), "VOIX" to ("Voix Codec2" to "#8fbf2a"))
 
     // ------------------------------------------------------------ the quality
 
@@ -193,7 +193,7 @@ object RapportPassage {
             // ---- what came out
             append("<section><h2>Décodé pendant le passage</h2>")
             if (r.images.isNotEmpty()) {
-                append("<h3>Images SSTV</h3><div class=\"images\">")
+                append("<h3>").append(if (r.images.all { !it.legende.startsWith("SSDV") }) "Images SSTV" else "Images").append("</h3><div class=\"images\">")
                 r.images.forEach { i ->
                     append("<figure><img alt=\"").append(h(i.legende)).append("\" src=\"data:").append(i.type).append(";base64,").append(b64(i.octets)).append("\">")
                     append("<figcaption>").append(heure(i.tMs)).append(" · ").append(h(i.legende)).append("</figcaption></figure>")
@@ -213,6 +213,8 @@ object RapportPassage {
             table("APRS", "Trames APRS"); table("FT8", "FT8 / FT4"); table("CW", "CW")
             if (r.tramesTelemesure > 0) append("<h3>Télémesure</h3><p>").append(r.tramesTelemesure).append(" trame").append(if (r.tramesTelemesure > 1) "s" else "")
                 .append(", dont ").append(r.tramesTelemesureValides).append(" valide").append(if (r.tramesTelemesureValides > 1) "s" else "").append(".</p>")
+            table("TLM", "Télémesure (trames lues)")
+            table("VOIX", "Voix Codec2 (transcription)")
             table("PHONIE", "Phonie (transcription, extrait)")
             if (r.images.isEmpty() && r.tramesTelemesure == 0 && r.evenements.none { it.genre != "QSO" }) append("<p class=\"gris\">Rien de décodé.</p>")
             append("</section>")

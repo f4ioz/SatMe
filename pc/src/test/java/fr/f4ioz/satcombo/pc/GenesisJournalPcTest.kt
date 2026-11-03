@@ -101,4 +101,84 @@ class GenesisJournalPcTest {
         val d = t.detailSsdv(debut - 60_000, debut + 600_000).single()
         assertTrue(d, d.startsWith("image n° 144 partielle : 3/"))
     }
+
+    /**
+     * A pass's data for « Données du passage » and its picture growing packet by packet: three packets held from an
+     * earlier pass (one heard again now), three new ones heard 10 s apart; frames of three kinds, a BBS message.
+     */
+    @Test fun `donnees du passage - image construite paquet par paquet, trames par sorte, messagerie`() {
+        val dir = Files.createTempDirectory("genesis-d").toFile()
+        val a = fr.f4ioz.satcombo.telemesure.AssemblageSsdv(dir) { debut }
+        val archive = ArchiveGenesis(dir)
+        val sat = "HADES-SA (SpinnyONE)"
+        val paquets = Ssdv.codeImage(SignalPaquets.mire(), 320, 240, "Q0SAT", 144).map { Ssdv.recachete(it, Genesis.INDICATIF_SSDV) }
+            .mapNotNull { Ssdv.lis(it) }
+        assertTrue(paquets.size > 8)
+        val avant = debut - 2 * 3_600_000L
+        (0..2).forEach { n -> a.ajoute(paquets[n], avant + n * 10_000L, sat) }
+        val t1 = debut + 60_000L
+        (2..5).forEachIndexed { k, n ->
+            val r = a.ajoute(paquets[n], t1 + k * 10_000L, sat)
+            archive.ssdv(t1 + k * 10_000L, sat, 68446, r.photo!!.id, n, "radio", "200")
+        }
+        val temperatures = AssemblageSsdvHex("668B1F01FF747978FF6F7879FF7D")
+        archive.trame(t1 - 20_000L, sat, 68446, 2, temperatures, "radio", "200")
+        archive.trame(t1 + 100_000L, sat, 68446, 2, temperatures.copyOf().also { it[13] = 0x70 }, "radio", "200")
+        archive.trame(t1 + 5_000L, sat, 68446, 1, ByteArray(28) { (it * 7).toByte() }, "radio", "200")
+        val bbs = ByteArray(70) { ' '.code.toByte() }
+        "EA4XYZ".toByteArray().copyInto(bbs, 0); "HOLA 73".toByteArray().copyInto(bbs, 30); bbs[65] = 3
+        for (i in 66 until 70) bbs[i] = 0
+        archive.trame(t1 + 50_000L, sat, 68446, 15, bbs, "radio", "200")
+
+        val g = GenesisJournalPc({ archive }, { a })
+        val e = JournalPassage.Entree(68446, sat, debut, debut + 10 * 60_000L)
+        val x = g.etapes(e).single()
+        // Held before the pass: 0, 1 and 2 (2 heard again now); this pass's packets at the time they came.
+        assertEquals(setOf(0, 1, 2), x.avant)
+        assertEquals(listOf(t1 to 2, t1 + 10_000L to 3, t1 + 20_000L to 4, t1 + 30_000L to 5), x.recus)
+        assertEquals(setOf(0, 1, 2), x.visibles(t1 - 1))
+        assertEquals(setOf(0, 1, 2, 3), x.visibles(t1 + 15_000L))
+        assertEquals((0..5).toSet(), x.visibles(t1 + 60_000L))
+        // The picture grows: before packet 3, after it, at the end; the earlier passes' blocks darker than this one's.
+        val cle = x.cle
+        val im0 = g.imageA(e, cle, t1 - 1)!!; val im1 = g.imageA(e, cle, t1 + 15_000L)!!; val im2 = g.imageA(e, cle, t1 + 60_000L)!!
+        assertEquals(320, im0.width)
+        fun differents(p: java.awt.image.BufferedImage, q: java.awt.image.BufferedImage) =
+            (0 until 240 step 3).sumOf { y -> (0 until 320 step 3).count { xx -> p.getRGB(xx, y) != q.getRGB(xx, y) } }
+        assertTrue(differents(im0, im1) > 50)
+        assertTrue(differents(im1, im2) > 50)
+        // The same state twice: the same picture (kept).
+        assertTrue(im1 === g.imageA(e, cle, t1 + 19_000L))
+        val dans = g.image(a.photo(cle)!!, emptySet(), setOf(0, 1, 2))
+        val sombre = g.image(a.photo(cle)!!, setOf(0, 1, 2), emptySet())
+        val lum = { im: java.awt.image.BufferedImage -> (0 until 16).sumOf { yy -> (0 until 64).sumOf { xx -> im.getRGB(xx, yy) and 0xFF } } }
+        assertTrue(lum(sombre) < lum(dans))
+
+        // « Données du passage »: the counts, the frames by kind with every value, the BBS message once.
+        val j = g.json(e, false)
+        val c = j.getJSONObject("compteurs")
+        assertEquals(4, c.getInt("trames")); assertEquals(3, c.getInt("types")); assertEquals(4, c.getInt("paquets"))
+        assertEquals(3, c.getInt("nouveaux")); assertEquals("200", c.getString("debit"))
+        val gr = (0 until j.getJSONArray("groupes").length()).map { j.getJSONArray("groupes").getJSONObject(it) }
+        assertEquals(listOf(2, 1), gr.map { it.getInt("type") })
+        val temp = gr[0]
+        assertEquals("Températures", temp.getString("nom")); assertEquals(2, temp.getInt("n"))
+        assertEquals(listOf(t1 - 20_000L, t1 + 100_000L), (0 until 2).map { temp.getJSONArray("t").getLong(it) })
+        val cpu = (0 until temp.getJSONArray("champs").length()).map { temp.getJSONArray("champs").getJSONObject(it) }.first { it.getString("k") == "cpu" }
+        assertEquals("°C", cpu.getString("u"))
+        assertEquals(22.5, cpu.getJSONArray("v").getDouble(0), 0.0)
+        assertEquals(16.0, cpu.getJSONArray("v").getDouble(1), 0.0)
+        val m = j.getJSONArray("bbs").getJSONObject(0)
+        assertEquals("EA4XYZ", m.getString("de")); assertEquals("HOLA 73", m.getString("m")); assertEquals(1, j.getJSONArray("bbs").length())
+        val s = j.getJSONArray("ssdv").getJSONObject(0)
+        assertEquals(4, s.getJSONArray("recu").length()); assertEquals(3, s.getJSONArray("avant").length())
+        assertEquals(true to "200", g.resume(e))
+
+        // The video: the picture from the pass's first packet on, its count each packet once, the pace slowed meanwhile.
+        val v = RenduPc.SsdvPassage(x.titre, x.recus, x.avant, 26) { tt -> g.image(a.photo(cle)!!, x.avant, x.ici(tt)) }
+        assertEquals(null, RenduPc.ssdvA(listOf(v), t1 - 1))
+        assertTrue(RenduPc.ssdvA(listOf(v), t1 + 5_000L) === v)
+        assertEquals(3, v.nombreA(t1 - 1)); assertEquals(4, v.nombreA(t1 + 15_000L)); assertEquals(6, v.nombreA(t1 + 60_000L))
+        assertTrue(v.image(t1 + 15_000L) === im1)
+    }
 }

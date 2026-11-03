@@ -18,8 +18,10 @@ import java.io.File
  * packet the picture already held too: the pass heard it), one JSON line
  * each in `telemesure/genesis/trames/<yyyyMMdd>.jsonl` (UTC day):
  *
- *     {"t":…, "sat":"HADES-SA (SpinnyONE)", "norad":68446, "type":2, "hex":"…", "src":"radio"}
- *     {"t":…, "sat":"…", "type":10, "n":12, "ssdv":[{"cle":"<picture id>"}], "src":"radio"}
+ *     {"t":…, "sat":"HADES-SA (SpinnyONE)", "norad":68446, "type":2, "hex":"…", "src":"radio", "d":"200"}
+ *     {"t":…, "sat":"…", "type":10, "n":12, "ssdv":[{"cle":"<picture id>"}], "src":"radio", "d":"200"}
+ *
+ * (« d »: the rate it was heard at, « 200 » or « 800 » bit/s; not in the lines kept before it was.)
  *
  * The same frame (same type and bytes; the satellite's clock is in them) or
  * the same packet of the same picture within [DOUBLON_MS] is written once:
@@ -27,7 +29,9 @@ import java.io.File
  */
 class ArchiveGenesis(private val dossier: File?) {
 
-    class Entree(val t: Long, val sat: String, val norad: Int, val type: Int, val hex: String, val numero: Int, val cle: String, val src: String)
+    class Entree(val t: Long, val sat: String, val norad: Int, val type: Int, val hex: String, val numero: Int, val cle: String, val src: String,
+                 /** « 200 », « 800 » (bit/s), "" when not kept. */
+                 val debit: String = "")
 
     private val repertoire: File? get() = dossier?.let { File(it, DOSSIER) }
 
@@ -45,16 +49,18 @@ class ArchiveGenesis(private val dossier: File?) {
 
     /** A frame with a right CRC, its data descrambled: true when written (not a repeat). */
     @Synchronized
-    fun trame(t: Long, sat: String, norad: Int, type: Int, donnees: ByteArray, src: String): Boolean {
+    fun trame(t: Long, sat: String, norad: Int, type: Int, donnees: ByteArray, src: String, debit: String = ""): Boolean {
         val hex = AssemblageSsdv.hex(donnees)
-        return ecrit(t, cle(type, hex, "", 0), JSONObject().put("t", t).put("sat", sat).put("norad", norad).put("type", type).put("hex", hex).put("src", src))
+        return ecrit(t, cle(type, hex, "", 0), JSONObject().put("t", t).put("sat", sat).put("norad", norad).put("type", type).put("hex", hex).put("src", src)
+            .apply { if (debit.isNotBlank()) put("d", debit) })
     }
 
     /** An SSDV packet [numero] of picture [photo] heard (new or already held): true when written. */
     @Synchronized
-    fun ssdv(t: Long, sat: String, norad: Int, photo: String, numero: Int, src: String): Boolean =
+    fun ssdv(t: Long, sat: String, norad: Int, photo: String, numero: Int, src: String, debit: String = ""): Boolean =
         ecrit(t, cle(Genesis.TYPE_SSDV, "", photo, numero), JSONObject().put("t", t).put("sat", sat).put("norad", norad)
-            .put("type", Genesis.TYPE_SSDV).put("n", numero).put("ssdv", JSONArray().put(JSONObject().put("cle", photo))).put("src", src))
+            .put("type", Genesis.TYPE_SSDV).put("n", numero).put("ssdv", JSONArray().put(JSONObject().put("cle", photo))).put("src", src)
+            .apply { if (debit.isNotBlank()) put("d", debit) })
 
     private fun ecrit(t: Long, k: String, o: JSONObject): Boolean {
         val d = repertoire ?: return false
@@ -96,7 +102,7 @@ class ArchiveGenesis(private val dossier: File?) {
             val o = runCatching { JSONObject(ligne) }.getOrNull() ?: return null
             val t = o.optLong("t").takeIf { it > 0 } ?: return null
             val cle = o.optJSONArray("ssdv")?.optJSONObject(0)?.optString("cle").orEmpty()
-            return Entree(t, o.optString("sat"), o.optInt("norad"), o.optInt("type"), o.optString("hex"), o.optInt("n"), cle, o.optString("src"))
+            return Entree(t, o.optString("sat"), o.optInt("norad"), o.optInt("type"), o.optString("hex"), o.optInt("n"), cle, o.optString("src"), o.optString("d"))
         }
     }
 }

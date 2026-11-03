@@ -188,7 +188,10 @@ async function ftRedecode(mode, z, bt) {
 // listed with their times and kept with the pass; « Rechercher le numérique » scans the recordings again and reads every
 // zone; the pass's messages then go to the web site as the FT8 tab's 🌐 (« Publication web », by hand).
 // The voices found with them (« PHONIE ») are a green strip under the violet ones, not a zone to read.
-const NUM_COUL = '#9D6BFF', VOIX_COUL = '#7CE38B';
+const NUM_COUL = '#9D6BFF', VOIX_COUL = '#7CE38B', GEN_COUL = '#7FD0FF';
+/** A GENESIS satellite's bursts (its frames, read by its own decoder): blue, not violet, nothing for FT4/FT8 to read. */
+function numGenesis(z) { return /^GENESIS/.test(z.m || ''); }
+function numCoul(z) { return numGenesis(z) ? GEN_COUL : NUM_COUL; }
 let numZones = [], numVoix = [], numSel = null, numLignes = null, numMsg = '', numId = '';
 /** The station's zones split: the digital ones (to read) and the voices (drawn only). */
 function numRange(a) { numZones = a.filter(z => z.m !== 'PHONIE'); numVoix = a.filter(z => z.m === 'PHONIE'); }
@@ -215,9 +218,10 @@ function numDessine(x, w, h) {
   numZones.forEach(z => {
     const a = tx(z.de, w), b = tx(z.a, w); if (b < 0 || a > w) return;
     const l = Math.max(3, b - a), choisie = !!(numSel && numSel.de === z.de);
-    x.fillStyle = choisie ? 'rgba(157,107,255,.22)' : 'rgba(157,107,255,.10)'; x.fillRect(a, 4, l, h - 20);
-    x.fillStyle = NUM_COUL; x.fillRect(a, 45, l, 10);
-    if (choisie) { x.strokeStyle = NUM_COUL; x.lineWidth = 1.5; x.strokeRect(a + .75, 4.75, l - 1.5, h - 21.5); }
+    const gen = numGenesis(z);
+    x.fillStyle = gen ? (choisie ? 'rgba(127,208,255,.20)' : 'rgba(127,208,255,.08)') : (choisie ? 'rgba(157,107,255,.22)' : 'rgba(157,107,255,.10)'); x.fillRect(a, 4, l, h - 20);
+    x.fillStyle = numCoul(z); x.fillRect(a, 45, l, 10);
+    if (choisie) { x.strokeStyle = numCoul(z); x.lineWidth = 1.5; x.strokeRect(a + .75, 4.75, l - 1.5, h - 21.5); }
     if (l > 24) {
       x.save(); x.beginPath(); x.rect(a, 44, l, 12); x.clip();
       x.fillStyle = '#0B1016'; x.font = 'bold 9px system-ui'; x.textAlign = 'left';
@@ -288,8 +292,8 @@ function blocNum(p) {
     const d = el('button', { class: 'discret', text: T.num_decoder });
     d.addEventListener('click', ev => { ev.stopPropagation(); numDecode(x, d); });
     const r = el('div', { class: 'rangee num-zone' + (numSel && numSel.de === x.de ? ' choisie' : '') }, [
-      el('b', { style: 'color:' + NUM_COUL, text: x.l }),
-      el('span', { class: 'aide', text: ftHeure(x.de) + ' – ' + ftHeure(x.a) + ' UTC · ' + tf('num_salves', x.n) + ' · ' + x.bas + '–' + x.haut + ' Hz' }), d]);
+      el('b', { style: 'color:' + numCoul(x), text: x.l }),
+      el('span', { class: 'aide', text: ftHeure(x.de) + ' – ' + ftHeure(x.a) + ' UTC · ' + tf('num_salves', x.n) + ' · ' + x.bas + '–' + x.haut + ' Hz' })].concat(numGenesis(x) ? [] : [d]));
     r.addEventListener('click', () => { if (!numSel || numSel.de !== x.de) numLignes = null; numSel = x; cherche(x.de); dessineFrise(); panneau(); });
     b.appendChild(r);
   });

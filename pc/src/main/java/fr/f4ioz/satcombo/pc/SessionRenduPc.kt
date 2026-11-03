@@ -223,11 +223,12 @@ object SessionRenduPc {
         m == null || (e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS) <= m.last && e.finMs + apres.coerceIn(0L, MARGE_MAX_MS) >= m.first)
 
     /**
-     * When something is coming: each SSTV picture being received (3 s before to 3 s after),
-     * each contact of a pass with its sound recorded (its span and 3 s, or 20 s around it).
+     * When something is coming: each SSTV picture being received (3 s before to 3 s after), each SSDV picture growing
+     * (its first packet of the pass to its last, 3 s either side), each contact of a pass with its sound recorded (its
+     * span and 3 s, or 20 s around it).
      */
     fun actifs(scenes: List<RenduPc.Scene>): List<LongRange> = scenes.flatMap { sc ->
-        sc.marques.mapNotNull { m ->
+        sc.ssdv.filter { it.recus.isNotEmpty() }.map { (it.debutMs - AUTOUR_MS)..(it.finMs + AUTOUR_MS) } + sc.marques.mapNotNull { m ->
             when {
                 m.type == TypeMarque.SSTV -> (m.debutMs - AUTOUR_MS)..(m.finMs + AUTOUR_MS)
                 m.type == TypeMarque.QSO && sc.e.enregistrements.isNotEmpty() ->

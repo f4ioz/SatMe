@@ -57,6 +57,16 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         val passages = ArrayList<Passage>()
         /** Packet number → its pass, an index in [passages]. */
         internal val origine = java.util.TreeMap<Int, Int>()
+        /** Packet number → every time it was heard (first brought, then heard again), in no order. */
+        internal val heures = java.util.TreeMap<Int, MutableList<Long>>()
+
+        /** When packet [n] was first heard; null when it is not there. */
+        fun premiere(n: Int): Long? = synchronized(heures) { heures[n]?.minOrNull() }
+
+        /** Every packet and the times it was heard, a copy. */
+        fun heures(): Map<Int, List<Long>> = synchronized(heures) { heures.mapValues { it.value.sorted() } }
+
+        internal fun entendA(n: Int, t: Long) { synchronized(heures) { heures.getOrPut(n) { ArrayList(2) } += t } }
         var satellite = ""; internal set
         var miseAJour = debut; internal set
         /** The finished picture's JPEG, by its file name next to the others; null while not finished. */
@@ -108,6 +118,18 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         fun apercu(): Triple<ByteArray, BooleanArray?, Pair<Int, Int>>? = synchronized(image) {
             val j = image.jpeg() ?: return null
             Triple(j, image.mcusVues?.copyOf(), image.largeurMcu to image.hauteurMcu)
+        }
+
+        /**
+         * The picture as only the packets [numeros] give it (those of them it holds): the JPEG and which MCUs it shows
+         * for real, as [apercu]; null when none of them is there. A pass's replay shows it growing packet by packet.
+         */
+        fun apercuDe(numeros: Collection<Int>): Triple<ByteArray, BooleanArray?, Pair<Int, Int>>? {
+            val x = Ssdv.Image(indicatif, numero)
+            for (n in numeros.sorted()) image.paquet(n)?.let { x.ajoute(it) }
+            if (x.recus == 0) return null
+            val j = x.jpeg() ?: return null
+            return Triple(j, x.mcusVues?.copyOf(), x.largeurMcu to x.hauteurMcu)
         }
 
         /** Every pass that brought or heard a packet of it, in time order. */
@@ -199,6 +221,7 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         pa.debut = minOf(pa.debut, t); pa.fin = maxOf(pa.fin, t); pa.paquets++
         synchronized(pa.numeros) { pa.numeros += p.numero }
         synchronized(ph.origine) { ph.origine[p.numero] = i }
+        ph.entendA(p.numero, t)
         ph.miseAJour = maxOf(ph.miseAJour, t)
         if (satellite.isNotBlank()) ph.satellite = satellite
         return true
@@ -208,6 +231,7 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
     private fun entendu(ph: Photo, numero: Int, t: Long, satellite: String, source: String): Boolean {
         val pa = ph.passages[passage(ph, t, satellite, source)]
         if (synchronized(pa.numeros) { !pa.numeros.add(numero) }) return false
+        ph.entendA(numero, t)
         pa.debut = minOf(pa.debut, t); pa.fin = maxOf(pa.fin, t); pa.doublons++
         ph.miseAJour = maxOf(ph.miseAJour, t)
         return true

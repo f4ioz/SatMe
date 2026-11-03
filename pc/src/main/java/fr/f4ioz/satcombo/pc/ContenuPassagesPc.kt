@@ -65,8 +65,11 @@ class ContenuPassagesPc(
         return v
     }
 
-    /** A frame of telemetry: when, of which satellite, the pictures it carried a piece of. */
-    private class Trame(val t: Long, val sat: String, val norad: Int, val images: List<String>)
+    /** A frame of telemetry: when, of which satellite, the pictures it carried a piece of; a GENESIS one and its rate (« 200 », « 800 », "" not kept). */
+    private class Trame(val t: Long, val sat: String, val norad: Int, val images: List<String>, val genesis: Boolean = false, val debit: String = "")
+
+    /** Whether a pass's satellite sends GENESIS (its SatNOGS transmitter says so; set by Main): its digital zones are named so. */
+    @Volatile var satelliteGenesis: (JournalPassage.Entree) -> Boolean = { false }
 
     /** An over written down: when, of which satellite, heard where (`src`: « genesis » for a voice message), what. */
     private class Date(val t: Long, val sat: String, val src: String, val texte: String, val traduction: String, val langue: String)
@@ -91,14 +94,16 @@ class ContenuPassagesPc(
 
     private fun liste(d: File, garde: (File) -> Boolean): List<File> = (d.listFiles { f -> f.isFile && garde(f) } ?: emptyArray()).sortedBy { it.name }
 
-    private fun trames(f: File): List<Trame> = f.readLines().mapNotNull { li ->
+    private fun trames(f: File): List<Trame> = trames(f, false)
+    private fun tramesGenesis(f: File): List<Trame> = trames(f, true)
+    private fun trames(f: File, genesis: Boolean): List<Trame> = f.readLines().mapNotNull { li ->
         val o = runCatching { JSONObject(li) }.getOrNull() ?: return@mapNotNull null
         if (o.optBoolean("essai")) return@mapNotNull null
         val t = o.optLong("t").takeIf { it > 0 } ?: return@mapNotNull null
         val im = ArrayList<String>()
         o.optJSONArray("ssdv")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.optString("cle")?.takeIf { it.isNotBlank() }?.let { im += "ssdv:$it" } }
         o.opt("geoscan")?.takeIf { it != JSONObject.NULL }?.toString()?.takeIf { it.isNotBlank() }?.let { im += "geoscan:$it" }
-        Trame(t, o.optString("sat").ifBlank { o.optString("satellite") }, o.optInt("norad"), im)
+        Trame(t, o.optString("sat").ifBlank { o.optString("satellite") }, o.optInt("norad"), im, genesis, if (genesis) o.optString("d") else "")
     }
 
     private fun paroles(f: File): List<Date> = f.readLines().mapNotNull { li ->
@@ -159,13 +164,13 @@ class ContenuPassagesPc(
      */
     fun resumes(l: List<JournalPassage.Entree>, liens: Map<String, JournalPc.Liens>): Map<String, Map<String, Int>> {
         val tlm = index(liste(File(donnees, "telemesure/paquets")) { it.name.endsWith(".jsonl") } +
-            liste(File(donnees, "telemesure")) { it.name.endsWith(".jsonl") } +
-            liste(File(donnees, fr.f4ioz.satcombo.telemesure.ArchiveGenesis.DOSSIER)) { it.name.endsWith(".jsonl") }, ::trames) { it.t }
+            liste(File(donnees, "telemesure")) { it.name.endsWith(".jsonl") }, ::trames) { it.t }
+        val tlmG = index(liste(File(donnees, fr.f4ioz.satcombo.telemesure.ArchiveGenesis.DOSSIER)) { it.name.endsWith(".jsonl") }, ::tramesGenesis) { it.t }
         val ph = parolesIndex()
         val vx = voixIndex()
         val ap = index(liste(File(donnees, "aprs")) { it.name.endsWith(".txt") }, ::aprs) { it }
         val datv = liste(enregistrements) { it.name.startsWith("SatMe_DATV_") && it.name.endsWith(".ts") }.mapNotNull { debutDatv(it.name) }.sorted()
-        val commun = tlm.marque + "/" + ph.marque + "/" + vx.marque + "/" + ap.marque + "/" + datv.size + ":" + datv.lastOrNull()
+        val commun = tlm.marque + "/" + tlmG.marque + "/" + ph.marque + "/" + vx.marque + "/" + ap.marque + "/" + datv.size + ":" + datv.lastOrNull()
         val vus = HashSet<String>()
         val r = l.associate { e ->
             vus += e.id
@@ -177,12 +182,16 @@ class ContenuPassagesPc(
             resumes[e.id]?.takeIf { it.marque == m }?.let { return@associate e.id to it.resume }
             val f = JournalPassage.fenetre(e)
             val (ft8, ft4) = lu(fFt, 0 to 0, ::ft)
-            val trames = dans(tlm, f).filter { (it.norad > 0 && it.norad == e.catnum) || JournalPassage.memeSatellite(it.sat, e.satName) }
+            val trames = (dans(tlm, f) + dans(tlmG, f)).filter { (it.norad > 0 && it.norad == e.catnum) || JournalPassage.memeSatellite(it.sat, e.satName) }
+            // A GENESIS satellite's pass: its digital zones are its frames' bursts, not FT4 (files kept before they were told apart).
+            val genesis = trames.any { it.genesis } || runCatching { satelliteGenesis(e) }.getOrDefault(false)
+            val debit = trames.lastOrNull { it.debit.isNotBlank() }?.debit
+            val zonesLues = fNum.flatMap { lu(it, emptyList(), ::zones) }
             val x = ContenuPassage.Elements(
                 imagesSstv = k?.images?.size ?: 0,
                 imagesSsdv = trames.flatMap { it.images }.toSet().size,
                 messagesFt8 = ft8, messagesFt4 = ft4,
-                zones = fNum.flatMap { lu(it, emptyList(), ::zones) },
+                zones = if (genesis) ZonesNumeriques.genesisModes(zonesLues, debit) else zonesLues,
                 tramesAprs = maxOf(dans(ap, f).size, k?.trames?.size ?: 0),
                 tramesTelemesure = trames.size,
                 paroles = dans(ph, f).count { it.src != VoixGenesis.SOURCE_PHONIE && (it.sat.isBlank() || JournalPassage.memeSatellite(it.sat, e.satName)) },

@@ -50,6 +50,12 @@ class RapportPc(
     @Volatile var montre: ((JournalPassage.Entree) -> Map<String, File>)? = null
     private val dossierIq = File(dossier, "enregistrements-iq")
 
+    /**
+     * What a GENESIS satellite sent during a pass (set by Main): its frames read and its voice messages written down
+     * (events « TLM », « VOIX »), its SSDV pictures as they stand.
+     */
+    @Volatile var genesis: ((JournalPassage.Entree) -> Pair<List<Evenement>, List<RapportPassage.Image>>)? = null
+
     /** How the report's links are made: the PC's page, the single file, the ZIP. */
     enum class Forme { PAGE, FICHIER, PAQUET }
 
@@ -140,8 +146,12 @@ class RapportPc(
         ft8().filter { it.first in f && (it.first to it.second) !in vusFt8 }.forEach { evts += Evenement(it.first, "FT8", it.second, it.third) }
         // The voice written down, a short excerpt.
         evts += phonie(e, f).take(12)
-        // Telemetry frames.
-        val (tlm, tlmOk) = telemesure(e, f)
+        // Telemetry frames (GENESIS's read, one line each), its voice messages, its pictures.
+        val (gEvts, gImages) = runCatching { genesis?.invoke(e) }.getOrNull() ?: (emptyList<Evenement>() to emptyList())
+        evts += gEvts
+        val (tlm0, tlmOk0) = telemesure(e, f)
+        val nG = gEvts.count { it.genre == "TLM" }
+        val tlm = tlm0 + nG; val tlmOk = tlmOk0 + nG
         val sons = journal.morceaux(e).withIndex().map { (i, m) ->
             Fichier(m.f.name, m.f.length(), when (forme) {
                 Forme.PAGE -> "son?id=" + enc(e.id) + "&n=$i&cle=" + enc(cle); Forme.PAQUET -> "sons/" + m.f.name; Forme.FICHIER -> null
@@ -175,7 +185,7 @@ class RapportPc(
                 val choisies = runCatching { montre?.invoke(e) }.getOrNull().orEmpty()
                 im.map { (png, shot) -> (choisies[png.absolutePath] ?: png) to shot }
             }.mapNotNull { (png, shot) ->
-                vignette(png)?.let { RapportPassage.Image(shot.timeMs, shot.mode.ifBlank { "SSTV" }, "image/jpeg", it, shot.fileName) } },
+                vignette(png)?.let { RapportPassage.Image(shot.timeMs, shot.mode.ifBlank { "SSTV" }, "image/jpeg", it, shot.fileName) } } + gImages,
             contacts = l.qsos.map { RapportPassage.Contact(it.timeMs, it.callsign, it.theirLocator, it.rstSent, it.rstRcvd, it.mode, it.nom) },
             tramesTelemesure = tlm, tramesTelemesureValides = tlmOk,
             sons = sons, iq = iqs, doppler = dop,

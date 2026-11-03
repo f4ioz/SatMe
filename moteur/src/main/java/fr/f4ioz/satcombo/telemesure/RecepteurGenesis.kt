@@ -209,7 +209,7 @@ class RecepteurGenesis(
         garde(tg)
         etat = etat.copy(trames = etat.trames + 1, derniereMs = now)
         if (captureOuverte) runCatching { ecritTrame(tg, v) }
-        if (!cx.essai) runCatching { archive?.trame(now, cx.satellite, cx.norad, t.type, t.donnees, source) }
+        if (!cx.essai) runCatching { archive?.trame(now, cx.satellite, cx.norad, t.type, t.donnees, source, v.p.cle) }
     }
 
     private fun garde(tg: TrameGenesis) {
@@ -251,7 +251,7 @@ class RecepteurGenesis(
         val a = assemblage.ajoute(p, now, cx.satellite, source, cx.essai)
         val ph = a.photo
         if (!cx.essai && ph != null && a.resultat != AssemblageSsdv.Resultat.REFUSE)
-            runCatching { archive?.ssdv(now, cx.satellite, cx.norad, ph.id, p.numero, source) }
+            runCatching { archive?.ssdv(now, cx.satellite, cx.norad, ph.id, p.numero, source, v.p.cle) }
         sonde.trame("paquet SSDV", p.brut.size * 8)
         ssdvVus++
         etat = etat.copy(derniereMs = now)

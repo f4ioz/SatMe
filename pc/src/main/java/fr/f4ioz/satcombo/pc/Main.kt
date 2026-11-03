@@ -487,6 +487,8 @@ fun main(args: Array<String>) {
         kp = { serveur.espace?.etat()?.kp.orEmpty() }, ft8 = ft8Recents)
     // Its SSTV pictures as the journal chose them for the pass (as received unless chosen).
     journalWeb.rapport?.montre = { e -> journalWeb.sstv.montrees(e).mapValues { it.value.fichier } }
+    // What a GENESIS satellite sent during the pass: its frames read, its voice written down, its SSDV pictures.
+    journalWeb.rapport?.genesis = { e -> journalWeb.rapportGenesis(e) }
     journalWeb.sstvPc = son.sstv
     // The GENESIS voice messages of a pass: heard (made into sound by libcodec2), written down by « Phonie → texte » when asked.
     journalWeb.voixWav = { nom -> telemesure.voixWav(nom) }
@@ -515,6 +517,11 @@ fun main(args: Array<String>) {
         station.etat.value.satellites.firstOrNull { it.name.replace(Regex("[^A-Za-z0-9-]"), "-").trim('-') == cle }
             ?.takeIf { s -> station.emetteursDe(s.catalogNumber).any { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null } }
             ?.let { it.name to it.catalogNumber }
+    }
+    // A journal pass's satellite sends GENESIS (its SatNOGS transmitter says so): its digital zones are its frames, not FT4.
+    journalWeb.satelliteGenesis = { e ->
+        // Those already known (nothing downloaded: the list asks it of every pass).
+        e.catnum > 0 && station.emetteursConnus()[e.catnum].orEmpty().any { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null }
     }
     // Each live message written down by itself when it ends (the engine for it alone when « Phonie → texte » is off).
     telemesure.transcritVoix = { o -> transcritVoix(o, true) }

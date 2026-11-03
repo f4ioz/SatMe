@@ -29,6 +29,12 @@ import kotlin.math.log10
  * bands). Each burst is then judged by its length and where it starts in the
  * UTC slots; close bursts make a zone.
  *
+ * A GENESIS burst (AMSAT-EA's 2-FSK telemetry, heard in USB) lights two
+ * narrow lines at once, its two tones 1125 Hz apart at 200 bit/s (1600 Hz
+ * at 800 bit/s): two bursts starting and ending together that far apart are
+ * one GENESIS frame ([G200], [G800]), not two FT4 signals — its 4 to 5 s
+ * frames would pass for FT4 by their length alone.
+ *
  * What is found is a hint for the eye and a place to decode, not a decode:
  * the zone is read by the real decoders ([Ft8HorsLigne]) when asked.
  */
@@ -60,7 +66,12 @@ object ZonesNumeriques {
      */
     data class Zone(val debutMs: Long, val finMs: Long, val mode: String, val salves: Int, val basHz: Double, val hautHz: Double) {
         /** What the page writes on it. */
-        val libelle: String get() = when (mode) { NUM -> "numérique"; PHONIE -> "phonie"; else -> mode }
+        val libelle: String get() = libelle(mode)
+    }
+
+    /** What the page writes on a zone of [mode]. */
+    fun libelle(mode: String): String = when (mode) {
+        NUM -> "numérique"; PHONIE -> "phonie"; G200 -> "GENESIS 200"; G800 -> "GENESIS 800"; GENESIS -> "GENESIS"; else -> mode
     }
 
     const val FT4 = "FT4"
@@ -68,6 +79,22 @@ object ZonesNumeriques {
     const val NUM = "NUM"
     /** Not digital: voices ([voix]), kept in the same file. */
     const val PHONIE = "PHONIE"
+    /** GENESIS 2-FSK: 200 bit/s (tones 1125 Hz apart), 800 bit/s (1600 Hz), or its rate not known. */
+    const val G200 = "GENESIS200"
+    const val G800 = "GENESIS800"
+    const val GENESIS = "GENESIS"
+    /** Every mode a kept file may hold. */
+    val MODES = setOf(FT4, FT8, NUM, PHONIE, G200, G800, GENESIS)
+
+    fun estGenesis(mode: String) = mode == G200 || mode == G800 || mode == GENESIS
+
+    /** Two bursts this close at their start (ms), and at their end, are sent together… */
+    const val PAIRE_DEBUT_MS = 700L
+    const val PAIRE_FIN_MS = 1_000L
+    /** …and their centres this far apart (Hz, give or take [PAIRE_TOLERANCE_HZ]): GENESIS's two tones. */
+    const val ECART_G200_HZ = 1_125.0
+    const val ECART_G800_HZ = 1_600.0
+    const val PAIRE_TOLERANCE_HZ = 180.0
 
     /** The spectrum measured as the samples come, any rate. */
     class Mesure(val cadence: Int) {
@@ -156,7 +183,33 @@ object ZonesNumeriques {
             if (largeur > LARGEUR_MAX_HZ || etendue > ETENDUE_MAX_HZ) continue
             sortie += Salve(debut, fin, BASSE_HZ + bMin * BANDE_HZ, BASSE_HZ + (bMax + 1) * BANDE_HZ, genre(debut, fin))
         }
-        return sortie.sortedBy { it.debutMs }
+        return paires(sortie.sortedBy { it.debutMs })
+    }
+
+    private val FT = setOf(FT4, FT8)
+
+    /**
+     * GENESIS's two tones found among [s] (in time order): two bursts starting within [PAIRE_DEBUT_MS] and ending
+     * within [PAIRE_FIN_MS], their centres [ECART_G200_HZ] (or [ECART_G800_HZ]) apart, both take [G200] ([G800]) —
+     * unless both are FT4 (FT8) by their length and slot: two stations sending in the same slot.
+     */
+    fun paires(s: List<Salve>): List<Salve> {
+        val genre = s.map { it.genre }.toTypedArray()
+        for (i in s.indices) for (j in i + 1 until s.size) {
+            val a = s[i]; val b = s[j]
+            if (b.debutMs - a.debutMs > PAIRE_DEBUT_MS) break
+            if (Math.abs(a.finMs - b.finMs) > PAIRE_FIN_MS) continue
+            // Both shaped and timed as FT4 (FT8): two stations in the same slot, not one GENESIS frame.
+            if (a.genre in FT && b.genre in FT) continue
+            val ecart = Math.abs((a.basHz + a.hautHz) / 2 - (b.basHz + b.hautHz) / 2)
+            val g = when {
+                Math.abs(ecart - ECART_G200_HZ) <= PAIRE_TOLERANCE_HZ -> G200
+                Math.abs(ecart - ECART_G800_HZ) <= PAIRE_TOLERANCE_HZ -> G800
+                else -> continue
+            }
+            genre[i] = g; genre[j] = g
+        }
+        return s.mapIndexed { i, x -> if (genre[i] == x.genre) x else x.copy(genre = genre[i]) }
     }
 
     /**
@@ -289,7 +342,11 @@ object ZonesNumeriques {
     }
 
     /**
-     * The zones: bursts closer than [JOINT_MS] gathered; a zone is FT4 or FT8
+     * The zones: bursts closer than [JOINT_MS] gathered; a zone is GENESIS
+     * ([G200], [G800]) when two of its frames at least are pairs of tones
+     * ([paires]) and their bursts are no fewer than the FT-shaped others (FT4
+     * stations 1125 Hz apart in the same slot make a pair now and then, not
+     * most of the zone); FT4 or FT8
      * when at least two of its bursts say so and they are the most; NUM when
      * none does but at least three narrow bursts start on the 7.5 s grid
      * (most gaps between starts within 0.8 s of a multiple of 7.5 s); else it
@@ -303,7 +360,10 @@ object ZonesNumeriques {
         }
         return groupes.mapNotNull { g ->
             val n4 = g.count { it.genre == FT4 }; val n8 = g.count { it.genre == FT8 }
+            val g2 = g.count { it.genre == G200 }; val g8 = g.count { it.genre == G800 }
             val mode = when {
+                // Each frame is two bursts.
+                (g2 + g8) >= 4 && (g2 + g8) >= n4 + n8 -> if (g2 >= g8) G200 else G800
                 n4 >= 2 && n4 >= n8 -> FT4
                 n8 >= 2 -> FT8
                 n4 + n8 >= 1 && g.size >= 3 && cadence(g) -> if (n4 >= n8) FT4 else FT8
@@ -336,15 +396,37 @@ object ZonesNumeriques {
         "${it.debutMs - origineMs}\t${it.finMs - origineMs}\t${it.mode}\t${it.salves}\t${it.basHz.toInt()}\t${it.hautHz.toInt()}\n"
     }
 
-    const val ENTETE = "# SatMe zones numériques v2"
+    const val ENTETE = "# SatMe zones numériques v3"
 
-    /** Whether a kept file holds the voices too (v2), else it is worked out again. */
+    /**
+     * Whether a kept file is of this version, else it is worked out again: v1 had no voices, v2 took GENESIS's
+     * pairs of tones for FT4 (its zones still read meanwhile, and named again by [genesis] when the pass is a GENESIS
+     * satellite's).
+     */
     fun aJour(t: String): Boolean = t.startsWith(ENTETE)
+
+    /**
+     * The zones of a pass of a GENESIS satellite (its transmitter says so, or frames of it were decoded): a
+     * digital zone (FT4, FT8, NUM) is its GENESIS — at the rate its own bursts showed, else [debit] (« 200 »,
+     * « 800 », the frames' when known), else the rate the pass's other zones showed, else [GENESIS].
+     */
+    fun genesis(l: List<Zone>, debit: String? = null): List<Zone> {
+        val vu = l.firstOrNull { it.mode == G200 || it.mode == G800 }?.mode
+        val mode = when (debit) { "200" -> G200; "800" -> G800; else -> vu ?: GENESIS }
+        return l.map { z -> if (z.mode == FT4 || z.mode == FT8 || z.mode == NUM) z.copy(mode = mode) else z }
+    }
+
+    /** The same for the zones' modes alone (a pass's summary). */
+    fun genesisModes(l: List<String>, debit: String? = null): List<String> {
+        val vu = l.firstOrNull { it == G200 || it == G800 }
+        val mode = when (debit) { "200" -> G200; "800" -> G800; else -> vu ?: GENESIS }
+        return l.map { if (it == FT4 || it == FT8 || it == NUM) mode else it }
+    }
 
     fun lit(t: String, origineMs: Long): List<Zone> = t.lines().filter { it.isNotBlank() && !it.startsWith("#") }.mapNotNull { l ->
         val c = l.split('\t'); if (c.size < 6) return@mapNotNull null
         runCatching {
-            Zone(origineMs + c[0].toLong(), origineMs + c[1].toLong(), c[2].takeIf { it in setOf(FT4, FT8, NUM, PHONIE) } ?: NUM,
+            Zone(origineMs + c[0].toLong(), origineMs + c[1].toLong(), c[2].takeIf { it in MODES } ?: NUM,
                 c[3].toInt(), c[4].toDouble(), c[5].toDouble())
         }.getOrNull()
     }

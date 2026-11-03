@@ -108,6 +108,64 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** The read-again's progress (set by Main). */
     @Volatile var etatRelecture: (() -> org.json.JSONObject)? = null
 
+    /** Whether a pass's satellite sends GENESIS (its SatNOGS transmitter says so; set by Main). */
+    @Volatile var satelliteGenesis: (JournalPassage.Entree) -> Boolean = { false }
+    init { contenu.satelliteGenesis = { e -> satelliteGenesis(e) } }
+
+    /**
+     * The pass's digital zones and voices ([JournalPc.zones]); a GENESIS satellite's pass (its transmitter says so,
+     * or its frames were decoded) has its digital zones named GENESIS, at the rate its frames were heard at.
+     */
+    private fun zones(e: JournalPassage.Entree, refait: Boolean = false): List<fr.f4ioz.satcombo.domain.ZonesNumeriques.Zone> {
+        val z = j.zones(e, refait)
+        val g = genesis ?: return z
+        val (entendu, debit) = runCatching { g.resume(e) }.getOrDefault(false to null)
+        return if (entendu || runCatching { satelliteGenesis(e) }.getOrDefault(false)) fr.f4ioz.satcombo.domain.ZonesNumeriques.genesis(z, debit) else z
+    }
+
+    /** The pass's SSDV pictures growing packet by packet, for the video. */
+    private fun ssdvVideo(e: JournalPassage.Entree): List<RenduPc.SsdvPassage> = runCatching {
+        val g = genesis ?: return emptyList()
+        g.etapes(e).filter { it.recus.isNotEmpty() }.map { x ->
+            val total = runCatching { g.total(x.cle) }.getOrDefault(0)
+            // Its growth worked out once (not read again for each frame of the video), each state drawn once.
+            val ph = g.photo(x.cle)
+            RenduPc.SsdvPassage(x.titre, x.recus, x.avant, total) { tt -> ph?.let { g.image(it, x.avant, x.ici(tt)) } }
+        }
+    }.getOrDefault(emptyList())
+
+    /**
+     * For the pass's report: each GENESIS frame read (« TLM »: its kind, its main values; a BBS frame its messages),
+     * each voice message (« VOIX »: what was written down), each SSDV picture as the pass left it.
+     */
+    fun rapportGenesis(e: JournalPassage.Entree): Pair<List<fr.f4ioz.satcombo.domain.RapportPassage.Evenement>, List<fr.f4ioz.satcombo.domain.RapportPassage.Image>> {
+        val Ev = fr.f4ioz.satcombo.domain.RapportPassage::Evenement
+        val g = genesis ?: return emptyList<fr.f4ioz.satcombo.domain.RapportPassage.Evenement>() to emptyList()
+        val o = g.json(e, false)
+        val evts = ArrayList<fr.f4ioz.satcombo.domain.RapportPassage.Evenement>()
+        val tlm = o.getJSONArray("tlm")
+        for (i in 0 until tlm.length()) {
+            val f = tlm.getJSONObject(i)
+            val bbs = f.optJSONArray("bbs")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("de").isNotBlank() }
+                .joinToString(" · ") { it.optString("de") + " : " + it.optString("m") } }.orEmpty()
+            evts += Ev(f.getLong("t"), "TLM", f.optString("nom"), bbs.ifBlank { f.optString("resume") })
+        }
+        runCatching { contenu.voix(e) }.getOrDefault(emptyList()).forEach { v ->
+            evts += Ev(v.message.optLong("debut"), "VOIX", v.texte.ifBlank { "message de " + (v.message.optJSONArray("recus")?.length() ?: 0) + " paquets (pas encore transcrit)" },
+                listOf(v.langue, v.traduction).filter { it.isNotBlank() }.joinToString(" · "))
+        }
+        val ims = ArrayList<fr.f4ioz.satcombo.domain.RapportPassage.Image>()
+        val ss = o.getJSONArray("ssdv")
+        for (i in 0 until ss.length()) {
+            val x = ss.getJSONObject(i)
+            val b = runCatching { g.jpegA(e, x.getString("cle"), e.finMs + 120_000L) }.getOrNull() ?: continue
+            val etat = if (x.optBoolean("complete")) "complète" else "partielle " + x.optInt("recus") + "/" + x.optInt("total") + " paquets"
+            ims += fr.f4ioz.satcombo.domain.RapportPassage.Image(x.optLong("de"), "SSDV " + x.optString("titre") + " · " + etat + " · " +
+                x.optJSONArray("ici")?.length() + " entendus pendant ce passage", "image/jpeg", b, "SSDV_" + x.getString("cle") + ".jpg")
+        }
+        return evts to ims
+    }
+
     private fun genesisJson(e: JournalPassage.Entree): String = runCatching {
         genesis?.json(e, fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN)?.toString()
     }.getOrNull() ?: "{\"tlm\":[],\"ssdv\":[]}"
@@ -403,7 +461,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             // The digital zones of the pass's recordings (FT4, FT8, other narrow bursts) and its voices (PHONIE), worked out once and kept.
             "/numerique" -> {
                 val e = j.passage(p("id")) ?: return NON
-                json(zonesJson(j.zones(e)))
+                json(zonesJson(zones(e)))
             }
             // « Rechercher le numérique »: the recordings scanned again, every zone found read by the FT4 and FT8
             // decoders, what they find kept with the pass; in the background (« /travail »: « resultat » the zones).
@@ -414,8 +472,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 kotlin.concurrent.thread(name = "JournalWebPc-num", isDaemon = true) {
                     runCatching {
                         t.progres = 0.02f
-                        val toutes = j.zones(e, refait = true)
-                        val zs = toutes.filter { it.mode != fr.f4ioz.satcombo.domain.ZonesNumeriques.PHONIE }
+                        val toutes = zones(e, refait = true)
+                        // GENESIS's bursts are its frames (read by its own decoder), not FT4/FT8 to look for.
+                        val zs = toutes.filter { it.mode != fr.f4ioz.satcombo.domain.ZonesNumeriques.PHONIE && !fr.f4ioz.satcombo.domain.ZonesNumeriques.estGenesis(it.mode) }
                         t.progres = 0.1f
                         var k = 0
                         zs.forEachIndexed { i, z ->
@@ -461,6 +520,13 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             // ---- what a GENESIS satellite sent: an SSDV picture as it stands, the pass's recordings read again on a gesture
             "/ssdv" -> {
                 val c = p("img").takeIf { fr.f4ioz.satcombo.telemesure.AssemblageSsdv.idValide(it) } ?: return NON
+                // As a pass showed it at « t » (its packets heard by then bright, the earlier passes' darkened): fixed, kept.
+                val tt = p("t").toLongOrNull()
+                val e = if (tt != null) j.passage(p("id")) else null
+                if (tt != null && e != null) {
+                    val b = runCatching { genesis?.jpegA(e, c, tt) }.getOrNull() ?: return NON
+                    return ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: private, max-age=3600\r\n")
+                }
                 ReponseWeb("200 OK", "image/jpeg", ssdvImage?.invoke(c) ?: return NON, "Cache-Control: no-cache\r\n")
             }
             "/genesis" -> {
@@ -751,7 +817,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             paysage = p("format") == "paysage", vertical = p("format") == "telephone", cielEntier = p("format").isNotEmpty(),
             tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } },
             options = e.options, donnees = if (elements) runCatching { sstv.donnees(e) }.getOrNull() else null,
-            etiquettes = sstv.etiquettes(e, montrees))
+            etiquettes = sstv.etiquettes(e, montrees), ssdv = ssdvVideo(e))
     }
 
     /** The SSTV picture's place sent with a request ("auto": by itself), else the one kept. */

@@ -65,7 +65,10 @@ object PageJournal {
         "pj_voix_transcrire", "pj_voix_transcrire_aide", "pj_voix_en_cours", "pj_voix_rien", "pj_voix_c2",
         "pj_g_titre", "pj_g_aide", "pj_g_ssdv", "pj_g_ssdv_aide", "pj_g_paquets", "pj_g_estime", "pj_g_passages", "pj_g_ici", "pj_g_complete",
         "pj_g_relire", "pj_g_relire_aide", "pj_g_relecture", "pj_g_relu", "pj_g_voix", "pj_g_bbs", "pj_g_bbs_vide", "pj_g_horloge",
-        "pj_g_trames", "pj_g_serie", "pj_g_jours")
+        "pj_g_trames", "pj_g_serie", "pj_g_jours",
+        "pj_g_onglet", "pj_g_onglet_aide", "pj_g_d_titre", "pj_g_d_aide", "pj_g_c_trames", "pj_g_c_types", "pj_g_c_paquets", "pj_g_c_nouveaux",
+        "pj_g_c_voix", "pj_g_c_debit", "pj_g_agrandir", "pj_g_entiere", "pj_g_instant", "pj_g_legende_img", "pj_g_attente", "pj_g_champ",
+        "pj_g_courbe", "pj_g_aucune", "pj_g_ecouter", "pj_g_pas_transcrit", "pj_g_frise", "pj_g_fermer", "pj_g_voir", "pj_g_loupe_aide")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -244,6 +247,38 @@ object PageJournal {
   .tlmG td.v { text-align:right; font-family:ui-monospace,Consolas,monospace; white-space:nowrap; }
   .bandeG { display:flex; height:7px; border-radius:3px; overflow:hidden; margin:3px 0; background:#2A323C; }
   .bandeG i { display:block; height:100%; }
+  /* « Données du passage » (SatMe-PC): over the replay's view, everything the satellite sent; only its frames scroll. */
+  .onglets button.donnees { border-color:#7FD0FF; color:#7FD0FF; }
+  .onglets button.donnees.actif { background:#7FD0FF; color:#06131A; }
+  .bascule button.donnees { border-color:#7FD0FF; color:#7FD0FF; }
+  .bascule button.donnees.actif { background:#7FD0FF; color:#06131A; }
+  #vueDonnees { position:absolute; inset:0; z-index:6; display:none; flex-direction:column; gap:6px; background:#0B1219; padding:8px 10px; }
+  #vueDonnees .dTete { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; flex:none; padding-right:4px; }
+  #vueDonnees .dTete b { font-size:15px; }
+  #vueDonnees .dTete .fermer { margin-left:auto; }
+  .puceD { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:9px; background:#18232D; border:1px solid var(--bord); white-space:nowrap; }
+  .puceD.tlm { color:#7FD0FF; border-color:#2B5A72; } .puceD.ssdv { color:#FF8A1F; border-color:#6A4320; } .puceD.voix { color:#C3F25C; border-color:#4B5E22; }
+  #vueDonnees .dCorps { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:10px; }
+  #vueDonnees .dCol { min-height:0; overflow:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
+  @media (max-width:950px) { #vueDonnees .dCorps { grid-template-columns:1fr; overflow:auto; } #vueDonnees .dCol { overflow:visible; } }
+  .dCarte { background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:7px 8px; }
+  .dCarte h4 { margin:0 0 4px; font-size:12px; display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; }
+  .dCarte h4 span { color:var(--gris); font-weight:500; font-size:11px; }
+  .dImg { display:block; width:100%; max-height:42vh; object-fit:contain; background:#05090D; border-radius:5px; cursor:zoom-in; }
+  .dTab { overflow-x:auto; }
+  .tlmT { border-collapse:collapse; font-size:11px; }
+  .tlmT th, .tlmT td { padding:1px 6px; border-bottom:1px solid rgba(255,255,255,.06); white-space:nowrap; }
+  .tlmT th { color:var(--gris); font-weight:600; cursor:pointer; font-family:ui-monospace,Consolas,monospace; }
+  .tlmT td.v { text-align:right; font-family:ui-monospace,Consolas,monospace; }
+  .tlmT td.l, .tlmT th.l { position:sticky; left:0; background:#0E1720; text-align:left; cursor:default; font-family:inherit; white-space:normal; min-width:9em; }
+  .tlmT .ici { background:rgba(127,208,255,.13); color:#EAF6FF; }
+  .tlmT td.c { padding:0 4px; }
+  .voixD { display:flex; gap:8px; align-items:flex-start; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+  .voixD .tx { flex:1; font-size:12px; } .voixD .tx q { color:#C3F25C; } .voixD .tx .aide { margin:1px 0 0; }
+  .voixD.ici { background:rgba(195,242,92,.08); border-radius:5px; }
+  #loupe { position:fixed; inset:0; z-index:50; background:rgba(3,6,10,.92); display:none; flex-direction:column; align-items:center; justify-content:center; gap:8px; cursor:zoom-out; padding:16px; }
+  #loupe img { width:min(100%, calc((100vh - 90px) * 4 / 3)); height:auto; max-height:calc(100vh - 90px); object-fit:contain; image-rendering:auto; box-shadow:0 0 0 1px #2A3440; }
+  #loupe div { color:#CFE0EE; font-size:13px; text-align:center; }
   .commandes { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; }
   #frise { width:100%; height:86px; display:block; margin-top:5px; background:#0E1720; border-radius:7px; cursor:crosshair; }
   .aide { color:var(--gris); font-size:11px; margin:3px 0; }
@@ -461,6 +496,8 @@ async function ouvreEditeur(ids, o) {
   }
   if (!ps.length) { if (ids.length > 1) z.textContent = T.s_aucun; return; }
   ps.sort((a, b) => a.de - b.de);
+  // A pass of a GENESIS satellite opened: its data shown first (what the operator comes for).
+  if (!o.recharge && ps.length === 1 && ps[0].genesis && (ps[0].genesis.tlm.length || ps[0].genesis.ssdv.length) && onglet === 'moments') onglet = 'donnees';
   // On the PC, each satellite's elements (it is seen coming before the AOS on the globe) and the companions to choose from.
   if (window.SATME_PC) { for (const q of ps) q.tle = await elementsDe(q.sat); await favorisStation(); }
   C = null; Ccle = '';
@@ -570,9 +607,14 @@ function construitVue(z) {
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
     // The globe (SatMe-PC): the passes replayed round the Earth, their contacts and pictures at their time.
     el('canvas', { id: 'globe', title: T.globe_deplacer }),
-    el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => montreVue('ciel') }),
-      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })].concat(
-      window.SATME_PC ? [el('button', { id: 'bGlobe', text: T.vue_globe, onclick: () => montreVue('globe') })] : [])),
+    el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => { quitteDonnees(); montreVue('ciel'); } }),
+      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => { quitteDonnees(); montreVue('carte'); } })].concat(
+      window.SATME_PC ? [el('button', { id: 'bGlobe', text: T.vue_globe, onclick: () => { quitteDonnees(); montreVue('globe'); } }),
+        // What the satellite sent (GENESIS: telemetry, SSDV picture, voice), over the view.
+        el('button', { id: 'bDonnees', class: 'donnees', text: '📡 ' + T.g_onglet, title: T.g_onglet_aide, style: 'display:none',
+          onclick: () => { onglet = 'donnees'; panneau(); } })] : [])),
+    // « Données du passage »: over the view, its own frames scrolling.
+    el('div', { id: 'vueDonnees' }),
     window.SATME_PC ? choixGlobe('globeChoix', 'globeCam') : el('span'),
     el('div', { id: 'cadreSstv', title: T.sstv_cadre_aide }, [el('img', { alt: '' }),
       el('div', { class: 'vide' }, [el('b', { text: T.sstv_cadre }), el('span', { text: T.sstv_cadre_aide })]),
@@ -607,13 +649,16 @@ function construitVue(z) {
   gauche.appendChild(el('canvas', { id: 'frise' }));
   gauche.appendChild(el('div', { class: 'aide', text: T.frise_aide }));
   gauche.appendChild(el('div', { class: 'aide', id: 'friseLegende', text: T.frise_legende }));
+  gauche.appendChild(el('div', { class: 'aide', id: 'friseGenesis', text: T.g_frise, style: 'display:none' }));
   gauche.appendChild(el('div', { class: 'rangee', id: 'selection' }));
   gauche.appendChild(el('div', { id: 'sGalerie' }));
   cote.appendChild(el('div', { class: 'onglets' }, [
     el('button', { id: 'oMoments', text: T.moments, onclick: () => { onglet = 'moments'; panneau(); } }),
     el('button', { id: 'oOptions', text: T.onglet_options, onclick: () => { onglet = 'options'; panneau(); } }),
     el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
-    el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } })]));
+    el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } }),
+    el('button', { id: 'oDonnees', class: 'donnees', text: '📡 ' + T.g_onglet, title: T.g_onglet_aide, style: 'display:none',
+      onclick: () => { onglet = 'donnees'; panneau(); } })]));
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
   installeFrise(); installeCarte(); installeSstv();
   montreVue(O.vue === 'globe' && !window.SATME_PC ? 'ciel' : O.vue);
@@ -798,10 +843,13 @@ function nombreOpt(cle, lib, min, max, apres) {
 }
 function panneau() {
   if (onglet === 'rejeu') onglet = 'options';
-  ['Moments', 'Options', 'Fabriquer', 'Ajouter'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
+  if (onglet === 'donnees' && !aDonnees()) onglet = 'moments';
+  ['Moments', 'Options', 'Fabriquer', 'Ajouter', 'Donnees'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
+  majOngletDonnees();
   const p = g('panneau'); p.innerHTML = '';
   if (onglet === 'moments') panneauMoments(p); else if (onglet === 'options') panneauOptions(p);
-  else if (onglet === 'ajouter') panneauAjouter(p); else panneauExports(p);
+  else if (onglet === 'ajouter') panneauAjouter(p); else if (onglet === 'donnees') panneauDonnees(p); else panneauExports(p);
+  montreDonnees(onglet === 'donnees');
   dessineCadre(); majSstv(); majElements();
 }
 function panneauMoments(p) {
@@ -836,14 +884,10 @@ function panneauMoments(p) {
       el('a', { href: url('/son', { id: P.id, n: s.n }), download: s.nom, text: '⤓ ' + s.nom }),
       el('span', { class: 'aide', text: hms(s.o + s.an) + ' · ' + duree(s.du - s.an) })])));
   }
-  // SatMe-PC: the GENESIS voice messages heard during the pass (Codec2), to listen to and to write down.
-  if (P.voix && P.voix.length) {
-    p.appendChild(el('div', { class: 'aide', text: T.voix_titre, title: T.voix_aide, style: 'margin-top:8px' }));
-    p.appendChild(el('div', { id: 'voixBloc' }));
-    dessineVoix();
-  }
-  // SatMe-PC: what a GENESIS satellite sent (telemetry made readable, the SSDV picture put together over the passes).
-  if (P.genesis && (P.genesis.tlm.length || P.genesis.ssdv.length) || P.relire) panneauGenesis(p);
+  // SatMe-PC: what a GENESIS satellite sent (telemetry, SSDV picture, voice): all of it in « Données du passage ».
+  if (aDonnees()) p.appendChild(el('button', { class: 'primaire', style: 'margin-top:8px;width:100%', text: '📡 ' + T.g_voir + ' — ' + texteCompteurs(),
+    onclick: () => { onglet = 'donnees'; panneau(); } }));
+  else if (P.relire) panneauGenesis(p);
   // The pass's Doppler/CAT log, when it was kept.
   if (P.doppler && P.doppler.length) {
     p.appendChild(el('div', { class: 'aide', text: T.doppler, style: 'margin-top:8px' }));
@@ -946,10 +990,10 @@ function texteSsdv(s) {
   return [s.complete ? T.g_complete : tf('g_paquets', s.recus, s.total, s.pourcent) + (s.estime ? ' ' + T.g_estime : ''),
     (s.passages || []).length > 1 ? tf('g_passages', s.passages.length) : ''].filter(x => x).join(' · ');
 }
-function panneauGenesis(p) {
+function panneauGenesis(p, sansImages) {
   const G = P.genesis || { tlm: [], ssdv: [] };
   p.appendChild(el('div', { class: 'aide', text: T.g_titre + (G.tlm.length ? ' · ' + tf('g_trames', G.tlm.length) : ''), title: T.g_aide, style: 'margin-top:8px' }));
-  G.ssdv.forEach(s => {
+  if (!sansImages) G.ssdv.forEach(s => {
     p.appendChild(el('div', { class: 'aide', text: T.g_ssdv + ' · ' + (s.titre || s.cle), title: T.g_ssdv_aide }));
     p.appendChild(el('img', { src: url('/ssdv', { img: s.cle, v: s.recus }), alt: '', style: 'width:100%;max-width:360px;border-radius:5px;display:block', loading: 'lazy' }));
     p.appendChild(bandeG(s));
@@ -986,7 +1030,7 @@ async function suisRelecture() {
   if (r.enCours) { relectureSuivi = setTimeout(suisRelecture, 3000); return; }
   // Done: what the pass holds now.
   if (P) try { const q = await lire('/passage', { id: P.id }); P.genesis = q.genesis; P.voix = q.voix; S.voix = S.voix.filter(v => v.pid !== P.id)
-    .concat((q.voix || []).map(v => Object.assign({ pid: P.id }, v))).sort((a, b) => a.de - b.de); if (onglet === 'moments') panneau(); } catch (x) {}
+    .concat((q.voix || []).map(v => Object.assign({ pid: P.id }, v))).sort((a, b) => a.de - b.de); if (onglet === 'moments' || onglet === 'donnees') panneau(); } catch (x) {}
 }
 /** The voice message being said at [tt] (from its first packet heard, as long as it lasts). */
 function voixA(tt) { return (S && S.voix || []).find(v => tt >= v.de && tt < v.de + v.duree * 1000 + 300); }
@@ -1011,20 +1055,210 @@ function majGenesis() {
   const G = P.genesis || { tlm: [], ssdv: [] };
   const v = voixA(t), f = G.tlm.filter(x => x.t <= t && t - x.t < 120000).pop(), s = G.ssdv.find(x => t >= x.de);
   const cle = [v ? v.nom : '', f ? f.t : '', s ? s.cle + '#' + s.recus : ''].join('|');
-  if (b.dataset.cle === cle) return;
+  if (b.dataset.cle === cle) {
+    // The same moment: the picture grown by the packets come since.
+    const im = s && b.querySelector('img'); if (im) { chargeImg(im, ssdvSrc(s, t)); const x = g('genesisMomentTx'); if (x) x.textContent = T.g_ssdv + ' · ' + texteInstant(s, t); }
+    return;
+  }
   b.dataset.cle = cle; b.innerHTML = '';
   if (v) b.appendChild(el('div', { class: 'gv', text: '♪ ' + T.g_voix + (v.texte ? ' — « ' + v.texte + ' »' : '') }));
   if (f) { b.appendChild(el('div', {}, [el('span', { class: 'pastille', style: 'background:#7FD0FF' }), el('b', { text: f.nom })]));
     if (f.resume) b.appendChild(el('div', { class: 'nom', text: f.resume })); }
-  if (s) { b.appendChild(el('img', { src: url('/ssdv', { img: s.cle, v: s.recus }), alt: '' }));
-    b.appendChild(el('div', { class: 'nom', text: T.g_ssdv + ' · ' + texteSsdv(s) })); }
+  if (s) { const im = el('img', { alt: '', title: T.g_loupe_aide, style: 'cursor:zoom-in', onclick: () => loupe(s) }); b.appendChild(im); chargeImg(im, ssdvSrc(s, t));
+    b.appendChild(el('div', { class: 'nom', id: 'genesisMomentTx', text: T.g_ssdv + ' · ' + texteInstant(s, t) })); }
 }
 /** On the timeline: each telemetry frame a thin blue tick, each voice message green, the SSDV packets orange. */
 function friseGenesis(x, w, h) {
   const G = P.genesis || { tlm: [], ssdv: [] };
-  x.fillStyle = '#7FD0FF'; G.tlm.forEach(f => x.fillRect(tx(f.t, w) - 1, 46, 2, 10));
-  x.fillStyle = '#FF8A1F'; G.ssdv.forEach(s => x.fillRect(tx(s.de, w), 58, Math.max(3, tx(s.a, w) - tx(s.de, w)), 4));
-  x.fillStyle = '#C3F25C'; (P.voix || []).forEach(v => x.fillRect(tx(v.de, w), 46, Math.max(3, tx(v.de + v.duree * 1000, w) - tx(v.de, w)), 10));
+  // Between the marks and the digital zones' strip (its label stays readable).
+  x.fillStyle = '#7FD0FF'; G.tlm.forEach(f => x.fillRect(tx(f.t, w) - 1, 34, 2, 9));
+  // Each SSDV packet at the time it was heard (a strip from first to last when their times are not known).
+  x.fillStyle = '#FF8A1F'; G.ssdv.forEach(s => { if (s.recu && s.recu.length) s.recu.forEach(r => x.fillRect(tx(r[0], w) - 1, 57, 2, 8));
+    else x.fillRect(tx(s.de, w), 58, Math.max(3, tx(s.a, w) - tx(s.de, w)), 4); });
+  x.fillStyle = '#C3F25C'; (P.voix || []).forEach(v => x.fillRect(tx(v.de, w), 34, Math.max(3, tx(v.de + v.duree * 1000, w) - tx(v.de, w)), 9));
+}
+// ------------------------------------------------------------ « Données du passage » (SatMe-PC)
+// Everything a GENESIS satellite sent during the pass, at a glance over the replay's view: the SSDV picture large (it
+// grows packet by packet as the replay goes, as it did on the air; a click enlarges it), every telemetry frame's
+// values by kind with their units (a column per frame, the latest heard lit; a small curve when they vary), the BBS
+// messages, the voice messages with what was written down. Only its two columns scroll.
+let loupeS = null;
+function aDonnees() { const G = P && P.genesis; return !!(G && (G.tlm.length || G.ssdv.length)) || !!(P && P.voix && P.voix.length); }
+function compteursG() {
+  const G = P.genesis || { tlm: [], ssdv: [] }, c = G.compteurs || {};
+  return { trames: c.trames != null ? c.trames : G.tlm.length, types: c.types || 0, paquets: c.paquets || 0, nouveaux: c.nouveaux || 0,
+    images: G.ssdv.length, voix: (P.voix || []).length, debit: c.debit || '' };
+}
+function texteCompteurs() {
+  const c = compteursG();
+  return [c.trames ? tf('g_c_trames', c.trames) : '', c.paquets ? tf('g_c_paquets', c.paquets) : '', c.voix ? tf('g_c_voix', c.voix) : ''].filter(x => x).join(' · ');
+}
+function pucesCompteurs() {
+  const c = compteursG(), l = [];
+  if (c.trames) l.push(el('span', { class: 'puceD tlm', text: tf('g_c_trames', c.trames) + (c.types ? ' · ' + tf('g_c_types', c.types) : '') }));
+  if (c.paquets) l.push(el('span', { class: 'puceD ssdv', text: tf('g_c_paquets', c.paquets) + ' · ' + tf('g_c_nouveaux', c.nouveaux) }));
+  if (c.voix) l.push(el('span', { class: 'puceD voix', text: tf('g_c_voix', c.voix) }));
+  if (c.debit) l.push(el('span', { class: 'puceD', text: tf('g_c_debit', c.debit) }));
+  return l;
+}
+function majOngletDonnees() {
+  const ok = !!P && aDonnees(), n = ok ? compteursG() : null;
+  ['oDonnees', 'bDonnees'].forEach(id => { const b = g(id); if (!b) return;
+    b.style.display = ok ? '' : 'none';
+    if (ok) b.textContent = '📡 ' + T.g_onglet + ' · ' + (n.trames + n.paquets + n.voix); });
+  const bd = g('bDonnees'); if (bd) bd.classList.toggle('actif', onglet === 'donnees');
+}
+/** Back to the sky, the map or the globe: the data tab left for the moments. */
+function quitteDonnees() { if (onglet === 'donnees') { onglet = 'moments'; panneau(); } }
+function montreDonnees(v) {
+  const o = g('vueDonnees'); if (!o) return;
+  const montre = !!v && !!P && aDonnees();
+  o.style.display = montre ? 'flex' : 'none';
+  if (montre) dessineDonnees();
+}
+/** The side panel of the data tab: the counts, the voice messages (to hear and write down), the frames one by one. */
+function panneauDonnees(p) {
+  p.appendChild(titreBloc(T.g_d_titre));
+  p.appendChild(el('div', { class: 'aide', text: T.g_d_aide }));
+  p.appendChild(el('div', { class: 'rangee' }, pucesCompteurs()));
+  if (P.voix && P.voix.length) {
+    p.appendChild(el('div', { class: 'aide', text: T.voix_titre, title: T.voix_aide, style: 'margin-top:8px' }));
+    p.appendChild(el('div', { id: 'voixBloc' }));
+    dessineVoix();
+  }
+  if (P.genesis && (P.genesis.tlm.length || P.genesis.ssdv.length) || P.relire) panneauGenesis(p, true);
+}
+/** The packets of picture [s] shown at [tt]: the earlier passes', this pass's heard by then, the time of its last. */
+function ssdvEtat(s, tt) {
+  const r = s.recu || [], vus = new Set(s.avant || []); let n = 0, der = null;
+  for (const x of r) { if (x[0] <= tt) { n++; der = x[0]; vus.add(x[1]); } else break; }
+  // [tous]: each packet once (one held before and heard again counts once).
+  return { ici: n, avant: (s.avant || []).length, tous: vus.size, t: der, vient: der != null && tt - der < 1500 };
+}
+/** The picture as the pass showed it at [tt] (the same address as long as no packet comes: kept by the browser). */
+function ssdvSrc(s, tt) {
+  if (!s.recu) return url('/ssdv', { img: s.cle, v: s.recus });
+  const e = ssdvEtat(s, tt);
+  return url('/ssdv', { img: s.cle, id: P.id, t: e.t != null ? e.t : (s.recu.length ? s.recu[0][0] - 1 : P.de) });
+}
+/** [img] shown [src] once loaded (no blank between two states of the picture). */
+function chargeImg(img, src) {
+  if (!img || img.dataset.src === src) return;
+  img.dataset.src = src;
+  const i = new Image(); i.onload = () => { if (img.dataset.src === src) img.src = src; }; i.src = src;
+}
+function texteInstant(s, tt) {
+  if (!s.recu) return texteSsdv(s);
+  const e = ssdvEtat(s, tt);
+  if (!e.ici && s.recu.length && tt < s.recu[0][0]) return tf('g_attente', hms(s.recu[0][0])) + (e.avant ? ' · ' + tf('g_instant', hms(tt), e.avant, 0, s.total || '?') : '');
+  return tf('g_instant', hms(tt), e.tous, e.ici, s.total || '?');
+}
+/** A picture enlarged over the whole page (it goes on growing with the replay); a click closes it. */
+function loupe(s) {
+  let l = g('loupe');
+  if (!l) { l = el('div', { id: 'loupe', onclick: () => { l.style.display = 'none'; loupeS = null; } }, [el('img', { alt: '' }), el('div')]); document.body.appendChild(l); }
+  loupeS = s; l.style.display = 'flex'; majLoupe();
+}
+function majLoupe() {
+  const l = g('loupe'); if (!l || !loupeS || l.style.display === 'none' || !P) return;
+  chargeImg(l.querySelector('img'), ssdvSrc(loupeS, t));
+  l.querySelector('div').textContent = T.g_ssdv + ' · ' + (loupeS.titre || loupeS.cle) + ' · ' + texteInstant(loupeS, t) + ' — ' + T.g_legende_img;
+}
+function nombreD(v, u) { return v == null ? '—' : nombreG(v, u); }
+/** A small curve of a value along the pass's frames (numbers only; nothing when it does not vary). */
+function petiteCourbe(vs) {
+  const ok = vs.map(x => x == null ? null : +x), n = ok.filter(x => x != null);
+  if (n.length < 2) return el('span');
+  const mn = Math.min.apply(null, n), mx = Math.max.apply(null, n);
+  if (mx === mn) return el('span', { class: 'aide', text: '=' });
+  const W = 64, H = 16, d = [];
+  ok.forEach((x, i) => { if (x == null) return; d.push((d.length ? 'L' : 'M') + (i / (ok.length - 1) * W).toFixed(1) + ' ' + (H - 2 - (x - mn) / (mx - mn) * (H - 4)).toFixed(1)); });
+  const c = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H });
+  c.appendChild(sv('path', { d: d.join(' '), fill: 'none', stroke: '#7FD0FF', 'stroke-width': 1.4 }));
+  return c;
+}
+/** One kind of frame: a column per frame (its time, a click goes there), a row per value with its unit, its curve. */
+function carteGroupe(gr) {
+  const c = el('div', { class: 'dCarte', 'data-g': '1' });
+  c.appendChild(el('h4', {}, [document.createTextNode(gr.nom), el('span', { text: tf('g_trames', gr.n) + (gr.horloge != null ? ' · ' + tf('g_horloge', horlogeG(gr.horloge)) : '') })]));
+  const tete = el('tr', {}, [el('th', { class: 'l', text: T.g_champ })].concat(gr.t.map(tt => el('th', { text: hms(tt), title: T.g_aide, onclick: () => cherche(tt - 1000) })),
+    gr.t.length > 1 ? [el('th', { text: T.g_courbe })] : []));
+  const lignes = gr.champs.map(ch => el('tr', {}, [el('td', { class: 'l', text: ch.l + (ch.u ? ' (' + ch.u + ')' : '') })].concat(
+    gr.t.map((_, i) => el('td', { class: 'v', text: ch.x[i] != null ? ch.x[i] : nombreD(ch.v[i], '') }))),
+    gr.t.length > 1 ? [el('td', { class: 'c' }, [petiteCourbe(ch.v)])] : []));
+  c.appendChild(el('div', { class: 'dTab' }, [el('table', { class: 'tlmT' }, [el('thead', {}, [tete]), el('tbody', {}, lignes)])]));
+  if (gr.serie) c.appendChild(courbeG(gr.serie));
+  c._t = gr.t;
+  return c;
+}
+function carteImage(s) {
+  const c = el('div', { class: 'dCarte' });
+  c.appendChild(el('h4', {}, [document.createTextNode(T.g_ssdv + ' · ' + (s.titre || s.cle)), el('span', { text: (s.largeur ? s.largeur + '×' + s.hauteur + ' · ' : '') + texteSsdv(s) })]));
+  const im = el('img', { class: 'dImg', alt: '', title: T.g_loupe_aide, onclick: () => loupe(s) });
+  im._s = s;
+  c.appendChild(im);
+  c.appendChild(el('div', { class: 'aide dInstant', text: texteInstant(s, t) }));
+  c.appendChild(bandeG(s));
+  c.appendChild(el('div', { class: 'aide', text: tf('g_ici', (s.ici || []).length, s.nouveaux || 0) + ' · ' + T.g_legende_img }));
+  c.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'discret', text: '⤢ ' + T.g_agrandir, onclick: () => loupe(s) }),
+    el('a', { class: 'discret', href: url('/ssdv', { img: s.cle, v: s.recus }), target: '_blank', text: T.g_entiere })]));
+  chargeImg(im, ssdvSrc(s, t));
+  return c;
+}
+function carteVoix() {
+  const c = el('div', { class: 'dCarte' });
+  c.appendChild(el('h4', {}, [document.createTextNode(T.voix_titre), el('span', { text: tf('g_c_voix', P.voix.length) })]));
+  P.voix.forEach(v => {
+    const a = el('audio', { preload: 'none', src: url('/voix', { nom: v.nom }) }); a.style.display = 'none';
+    const b = el('button', { class: 'discret', text: '▶ ' + T.g_ecouter, onclick: () => { if (a.paused) { a.play().catch(() => {}); b.textContent = '⏸ ' + T.pause; } else { a.pause(); b.textContent = '▶ ' + T.g_ecouter; } } });
+    a.addEventListener('ended', () => { b.textContent = '▶ ' + T.g_ecouter; });
+    const tx = el('div', { class: 'tx' }, [el('div', {}, [el('b', { class: 'h', text: hms(v.de) + ' ', style: 'cursor:pointer', onclick: () => cherche(v.de - 1000) }),
+      v.texte ? el('q', { text: v.texte }) : el('span', { class: 'aide', text: T.g_pas_transcrit })])]);
+    if (v.traduction) tx.appendChild(el('div', { class: 'aide', text: (v.langue ? v.langue + ' → ' : '') + v.traduction }));
+    tx.appendChild(el('div', { class: 'aide', text: secondes(v.duree) + ' · ' + tf('voix_paquets', v.recus, v.recus + (v.manquants || []).length) }));
+    const r = el('div', { class: 'voixD', 'data-de': v.de, 'data-a': v.de + v.duree * 1000 }, [b, tx, a]);
+    c.appendChild(r);
+  });
+  return c;
+}
+function carteBbs(l) {
+  const c = el('div', { class: 'dCarte' });
+  c.appendChild(el('h4', {}, [document.createTextNode(T.g_bbs), el('span', { text: String(l.length) })]));
+  c.appendChild(el('table', { class: 'tlmT', style: 'width:100%' }, l.map(b => el('tr', {}, [el('td', { class: 'v', text: hms(b.t) }), el('td', {}, [el('b', { text: b.de })]),
+    el('td', { text: b.m, style: 'white-space:normal' }), el('td', { class: 'v', text: b.voix ? '♪ ' + b.voix : '' })]))));
+  return c;
+}
+/** The data view built for the pass shown. */
+function dessineDonnees() {
+  const o = g('vueDonnees'); if (!o || !P) return;
+  o.innerHTML = '';
+  const G = P.genesis || { tlm: [], ssdv: [], groupes: [], bbs: [] };
+  o.appendChild(el('div', { class: 'dTete' }, [el('b', { text: T.g_d_titre }), el('span', { class: 'aide', text: P.sat + ' · ' + jour(P.de) })]
+    .concat(pucesCompteurs()).concat([el('button', { class: 'discret fermer', text: '✕ ' + T.g_fermer, onclick: quitteDonnees })])));
+  const gauche = el('div', { class: 'dCol' }), droite = el('div', { class: 'dCol', id: 'dTlm' });
+  G.ssdv.forEach(s => gauche.appendChild(carteImage(s)));
+  if (P.voix && P.voix.length) gauche.appendChild(carteVoix());
+  if (G.bbs && G.bbs.length) gauche.appendChild(carteBbs(G.bbs));
+  (G.groupes || []).forEach(gr => droite.appendChild(carteGroupe(gr)));
+  if (!(G.groupes || []).length) droite.appendChild(el('p', { class: 'aide', text: G.tlm.length ? '' : T.g_aucune }));
+  // Nothing on the left (telemetry only): the frames take the whole width.
+  const corps = el('div', { class: 'dCorps' }, gauche.childNodes.length ? [gauche, droite] : [droite]);
+  if (!gauche.childNodes.length) corps.style.gridTemplateColumns = '1fr';
+  o.appendChild(corps);
+  o.dataset.cle = '';
+  majDonnees();
+}
+/** As the replay goes: each picture grown by the packets heard by now, the latest frame of each kind lit, the voice being said. */
+function majDonnees() {
+  majLoupe();
+  const o = g('vueDonnees'); if (!o || o.style.display === 'none' || !P) return;
+  o.querySelectorAll('img.dImg').forEach(im => { if (im._s) { chargeImg(im, ssdvSrc(im._s, t)); const x = im.parentNode.querySelector('.dInstant'); if (x) x.textContent = texteInstant(im._s, t); } });
+  o.querySelectorAll('.dCarte[data-g]').forEach(c => {
+    const ts = c._t || []; let k = -1; ts.forEach((tt, i) => { if (tt <= t) k = i; });
+    if (c.dataset.k === String(k)) return; c.dataset.k = String(k);
+    c.querySelectorAll('tr').forEach(r => Array.from(r.children).forEach((td, j) => td.classList.toggle('ici', k >= 0 && j === k + 1)));
+  });
+  o.querySelectorAll('.voixD').forEach(r => r.classList.toggle('ici', t >= +r.dataset.de && t < +r.dataset.a));
 }
 // ------------------------------------------------------------ a pass from nothing, and what it holds
 // Times typed in local time; sent as milliseconds.
@@ -1530,6 +1764,7 @@ function dessineFrise() {
       if (b > a) { x.fillStyle = '#A8EBC0'; x.fillRect(tx(a, w), h - 17, Math.max(2, tx(b, w) - tx(a, w)), 3); } });
   });
   const lg = g('friseLegende'); if (lg) lg.style.display = O.accelere || (C && O.avecSon) ? '' : 'none';
+  const lgG = g('friseGenesis'); if (lgG) lgG.style.display = aDonnees() ? '' : 'none';
   x.fillStyle = 'rgba(205,215,230,.45)'; activite.forEach(r => x.fillRect(tx(r[0], w), 36, Math.max(2, tx(r[1], w) - tx(r[0], w)), 7));
   if (P.sig.length) { x.strokeStyle = 'rgba(235,240,245,.8)'; x.lineWidth = 1.3; x.beginPath();
     P.sig.forEach((s, i) => { const px = tx(s[0], w), py = h - 18 - part(s[1]) * 22; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke(); }
@@ -1728,7 +1963,7 @@ let carteMs = 0;
 function maj() {
   if (!S || !P || !g('ecran')) return;
   majHeureContact();
-  majCiel(); majMoment(); dessineFrise(); majSstv();
+  majCiel(); majMoment(); dessineFrise(); majSstv(); majDonnees();
   // The map, redrawn a few times a second during the replay (its tiles are pictures).
   if (O.vue === 'carte' && performance.now() - carteMs > 120) { carteMs = performance.now(); dessineCarte(); }
   g('lecture').textContent = joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
