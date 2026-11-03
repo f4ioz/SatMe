@@ -496,6 +496,26 @@ fun main(args: Array<String>) {
         else phonie.transcritMessage(w.first, w.second, o.optLong("debut"), o.optString("sat"), seulPermis = seul)
     }
     journalWeb.transcritVoix = { o -> transcritVoix(o, false) }
+    // What a GENESIS satellite sent during a pass (telemetry made readable, SSDV pictures put together over the passes),
+    // and its recordings read again on a gesture (receive only: a WAV through the decoder).
+    journalWeb.genesis = telemesure.journalGenesis
+    journalWeb.ssdvImage = { c -> telemesure.jpegSsdv(mapOf("cle" to c)) }
+    journalWeb.relireGenesis = { e ->
+        val fs = e.enregistrements.mapNotNull { n -> son.fichierEnregistrement(File(n).name) ?: File(n).takeIf { it.isFile } }
+            .filter { it.name.endsWith(".wav", true) }.distinctBy { it.absolutePath }
+        when {
+            fs.isEmpty() -> "aucun enregistrement WAV pour ce passage"
+            telemesure.relitFichiers(fs, e.satName, e.catnum) -> null
+            else -> "une relecture est déjà en cours"
+        }
+    }
+    journalWeb.etatRelecture = { telemesure.etatRelecture() }
+    // A recording's satellite (its key in the file name) when it is a GENESIS one (its SatNOGS transmitter says so).
+    telemesure.genesisDe = { cle ->
+        station.etat.value.satellites.firstOrNull { it.name.replace(Regex("[^A-Za-z0-9-]"), "-").trim('-') == cle }
+            ?.takeIf { s -> station.emetteursDe(s.catalogNumber).any { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null } }
+            ?.let { it.name to it.catalogNumber }
+    }
     // Each live message written down by itself when it ends (the engine for it alone when « Phonie → texte » is off).
     telemesure.transcritVoix = { o -> transcritVoix(o, true) }
     kotlin.concurrent.thread(isDaemon = true, name = "satme-genesis-voix", priority = Thread.MIN_PRIORITY) {
@@ -665,6 +685,9 @@ fun main(args: Array<String>) {
         if (r.on && r.veut(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS)) annonces.file.propose(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS, t)
     }
     serveur.autopilote = autopilote
+    // The GENESIS recordings of the last days read again once, in the background, never near a pass of the auto-pilot.
+    telemesure.occupe = { autopilote.occupe() }
+    if (!ModeDemo.actif) telemesure.rejoueAnciens()
     portee.launch { while (true) { runCatching { autopilote.tic() }; kotlinx.coroutines.delay(1000) } }
     // « Agenda › Activités à venir »: the online sources (on by default, each one can be turned off), read at their own pace.
     val activites = if (ModeDemo.actif) ActivitesPc(station, dossier, fictives = GenerateurDemo::activites) else ActivitesPc(station, dossier)

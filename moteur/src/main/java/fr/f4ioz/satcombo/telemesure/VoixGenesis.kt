@@ -140,9 +140,17 @@ class AssemblageVoix(private val dossier: File?) {
      */
     @Volatile var surFin: ((JSONObject) -> Unit)? = null
 
+    /**
+     * A message already kept under another name (a recording read again over a pass heard live): neither written
+     * nor said ended. Null: none is.
+     */
+    @Volatile var deja: ((Message) -> Boolean)? = null
+
+    private fun dejaGarde(m: Message) = runCatching { deja?.invoke(m) == true }.getOrDefault(false)
+
     /** [m] ended: said when it is worth it (not a test, written, with packets not said yet). */
     private fun finit(m: Message?) {
-        if (m == null || m.essai || dossier == null || m.paquets.size < VoixGenesis.MIN_PAQUETS || m.paquets.size <= m.signales) return
+        if (m == null || m.essai || dossier == null || m.paquets.size < VoixGenesis.MIN_PAQUETS || m.paquets.size <= m.signales || dejaGarde(m)) return
         m.signales = m.paquets.size
         val f = surFin ?: return
         runCatching { f(m.json()) }
@@ -180,7 +188,7 @@ class AssemblageVoix(private val dossier: File?) {
         m!!.paquets[numero] = c2
         m.dernier = t; m.miseAJour = t
         paquets++
-        if (!essai && m.paquets.size >= VoixGenesis.MIN_PAQUETS) ecrit(m)
+        if (!essai && m.paquets.size >= VoixGenesis.MIN_PAQUETS && !dejaGarde(m)) ecrit(m)
         return true
     }
 
@@ -205,6 +213,15 @@ class AssemblageVoix(private val dossier: File?) {
 
         /** Every message kept on disk (from [VoixGenesis.MIN_PAQUETS] packets on), oldest first. */
         fun tous(dossier: File?): List<JSONObject> = liste(dossier, Int.MAX_VALUE).reversed()
+
+        /**
+         * Is [m] one of [gardes] (the messages on disk, [tous]) under another name: the same satellite, their spans
+         * (first to last packet) overlapping, a few seconds allowed (the live clock and a recording's differ a little)?
+         */
+        fun recouvre(m: Message, gardes: List<JSONObject>, margeMs: Long = 5_000L): Boolean = gardes.any { o ->
+            o.optString("nom") != m.nom && fr.f4ioz.satcombo.domain.JournalPassage.memeSatellite(o.optString("sat"), m.satellite) &&
+                o.optLong("debut") - margeMs <= m.miseAJour && maxOf(o.optLong("debut"), o.optLong("miseAJour")) + margeMs >= m.debut
+        }
 
         /** A message's `.c2` file by name (checked: no path). */
         fun fichier(dossier: File?, nom: String, ext: String = ".c2"): File? {

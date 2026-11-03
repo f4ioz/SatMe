@@ -62,7 +62,10 @@ object PageJournal {
         "pj_num_salves", "pj_num_rien", "pj_num_trouves", "pj_num_publier", "pj_num_publier_aide",
         "pj_cu_tout", "pj_cu_tout_aide", "pj_cu_aide", "pj_cu_n", "pj_cu_aucun", "pj_cu_num", "pj_cu_num_long", "pj_cu_tlm_long", "pj_cu_phonie", "pj_cu_u_images", "pj_cu_u_messages", "pj_cu_u_zones", "pj_cu_u_trames", "pj_cu_u_phonie", "pj_cu_u_cw", "pj_cu_u_datv",
         "pj_cu_voix", "pj_cu_voix_long", "pj_cu_u_voix", "pj_voix_titre", "pj_voix_aide", "pj_voix_paquets", "pj_voix_manquants",
-        "pj_voix_transcrire", "pj_voix_transcrire_aide", "pj_voix_en_cours", "pj_voix_rien", "pj_voix_c2")
+        "pj_voix_transcrire", "pj_voix_transcrire_aide", "pj_voix_en_cours", "pj_voix_rien", "pj_voix_c2",
+        "pj_g_titre", "pj_g_aide", "pj_g_ssdv", "pj_g_ssdv_aide", "pj_g_paquets", "pj_g_estime", "pj_g_passages", "pj_g_ici", "pj_g_complete",
+        "pj_g_relire", "pj_g_relire_aide", "pj_g_relecture", "pj_g_relu", "pj_g_voix", "pj_g_bbs", "pj_g_bbs_vide", "pj_g_horloge",
+        "pj_g_trames", "pj_g_serie", "pj_g_jours")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -233,6 +236,14 @@ object PageJournal {
   #imageMoment { width:100%; margin-top:6px; border-radius:5px; display:none; }
   #carteMoment { margin-top:6px; font-size:12px; }
   #carteMoment .nom { color:var(--gris); }
+  #genesisMoment { margin-top:6px; font-size:12px; }
+  #genesisMoment img { display:block; max-width:100%; max-height:16vh; object-fit:contain; border-radius:5px; margin-top:4px; }
+  #genesisMoment .gv { color:#C3F25C; font-weight:600; }
+  .tlmG { width:100%; border-collapse:collapse; font-size:11px; margin:2px 0 6px; }
+  .tlmG td { padding:1px 4px; border-bottom:1px solid rgba(255,255,255,.06); vertical-align:top; }
+  .tlmG td.v { text-align:right; font-family:ui-monospace,Consolas,monospace; white-space:nowrap; }
+  .bandeG { display:flex; height:7px; border-radius:3px; overflow:hidden; margin:3px 0; background:#2A323C; }
+  .bandeG i { display:block; height:100%; }
   .commandes { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; }
   #frise { width:100%; height:86px; display:block; margin-top:5px; background:#0E1720; border-radius:7px; cursor:crosshair; }
   .aide { color:var(--gris); font-size:11px; margin:3px 0; }
@@ -465,6 +476,10 @@ async function ouvreEditeur(ids, o) {
   const autour = m => m.a > m.de ? [m.de - 3000, m.a + 3000] : [m.de - 10000, m.de + 10000];
   S.actifs = S.marques.filter(m => m.k === 'SSTV' || (m.k === 'QSO' && avecSon.has(m.pid))).map(autour);
   S.ecoute = S.marques.filter(m => m.k === 'QSO' && avecSon.has(m.pid)).map(autour);
+  // SatMe-PC: the GENESIS voice messages, heard at their time (in real time, as a contact).
+  S.voix = []; ps.forEach(q => (q.voix || []).forEach(v => S.voix.push(Object.assign({ pid: q.id }, v))));
+  S.voix.sort((a, b) => a.de - b.de);
+  S.ecoute = S.ecoute.concat(S.voix.map(v => [v.de - 1000, v.de + v.duree * 1000 + 2000]));
   ps.forEach(bornesPassage); fenetresSession();
   t = o.t != null ? o.t : S.segs[0][0];
   // No margin, one pass whose recording started after its AOS: from where its sound does, not on seconds of silence.
@@ -550,7 +565,7 @@ function construitVue(z) {
   const mo = el('div', { class: 'moment' }, [
     el('div', { class: 'heure', id: 'heure' }), el('div', { class: 'val', id: 'angles' }), el('div', { class: 'val', id: 'rx' }),
     el('div', { class: 'smetre', id: 'smetre' }), el('div', { class: 'graduation', id: 'grad' }), el('div', { id: 'lectureS' }),
-    el('div', { class: 'aide', id: 'sInfo' }), el('img', { id: 'imageMoment', alt: '' }), el('div', { id: 'carteMoment' })]);
+    el('div', { class: 'aide', id: 'sInfo' }), el('img', { id: 'imageMoment', alt: '' }), el('div', { id: 'carteMoment' }), el('div', { id: 'genesisMoment' })]);
   const ecran = el('div', { class: 'ecran', id: 'ecran' }, [sv('svg', { id: 'ciel', viewBox: '0 0 440 440', preserveAspectRatio: 'xMidYMid meet' }),
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
     // The globe (SatMe-PC): the passes replayed round the Earth, their contacts and pictures at their time.
@@ -827,6 +842,8 @@ function panneauMoments(p) {
     p.appendChild(el('div', { id: 'voixBloc' }));
     dessineVoix();
   }
+  // SatMe-PC: what a GENESIS satellite sent (telemetry made readable, the SSDV picture put together over the passes).
+  if (P.genesis && (P.genesis.tlm.length || P.genesis.ssdv.length) || P.relire) panneauGenesis(p);
   // The pass's Doppler/CAT log, when it was kept.
   if (P.doppler && P.doppler.length) {
     p.appendChild(el('div', { class: 'aide', text: T.doppler, style: 'margin-top:8px' }));
@@ -886,6 +903,128 @@ async function suisVoix() {
   });
   dessineVoix();
   if (Object.keys(voixAttente).length || voixAFaire) voixSuivi = setTimeout(suisVoix, 3000);
+}
+// ------------------------------------------------------------ what a GENESIS satellite sent (SatMe-PC)
+// The telemetry frames made readable (each at the time it was heard: a click goes there, ▸ shows its values), the
+// SSDV picture as it stands put together over every pass (missing blocks hatched), the pass's recordings read again.
+let genesisOuvert = {}, relectureSuivi = 0, relectureTexte = '', voixJouee = '';
+function nombreG(v, u) {
+  if (v == null) return '—';
+  const s = (Math.round(v * 10) / 10).toLocaleString(document.documentElement.lang || undefined);
+  return u ? s + ' ' + u : s;
+}
+function valeurG(c) { return c.x != null ? c.x : nombreG(c.v, c.u); }
+function horlogeG(sec) { const j = Math.floor(sec / 86400), r = sec % 86400; return tf('g_jours', j) + ' ' + p2(Math.floor(r / 3600)) + ':' + p2(Math.floor(r / 60) % 60) + ':' + p2(r % 60); }
+function courbeG(s) {
+  const vs = s.v.map(x => x == null ? null : +x), ok = vs.filter(x => x != null);
+  if (ok.length < 2) return el('span');
+  const mn = Math.min.apply(null, ok), mx = Math.max.apply(null, ok), W = 240, H = 44, d = [];
+  vs.forEach((x, i) => { if (x == null) return; const px = i / (vs.length - 1) * W, py = H - 4 - (mx > mn ? (x - mn) / (mx - mn) : .5) * (H - 8);
+    d.push((d.length ? 'L' : 'M') + px.toFixed(1) + ' ' + py.toFixed(1)); });
+  const c = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', height: H, preserveAspectRatio: 'none' });
+  c.appendChild(sv('path', { d: d.join(' '), fill: 'none', stroke: '#7FD0FF', 'stroke-width': 1.6 }));
+  return el('div', {}, [c, el('div', { class: 'aide', text: tf('g_serie', nombreG(mn, s.u), nombreG(mx, s.u)) })]);
+}
+function tableG(f) {
+  const kids = [];
+  if (f.horloge != null) kids.push(el('div', { class: 'aide', text: tf('g_horloge', horlogeG(f.horloge)) }));
+  if (f.serie) kids.push(courbeG(f.serie));
+  if (f.bbs) {
+    const pleins = f.bbs.filter(b => b.de);
+    if (!pleins.length) kids.push(el('div', { class: 'aide', text: T.g_bbs_vide }));
+    else kids.push(el('table', { class: 'tlmG' }, pleins.map(b => el('tr', {}, [el('td', { text: b.de }), el('td', { text: b.m }), el('td', { class: 'v', text: b.voix ? '♪ ' + b.voix : '' })]))));
+  }
+  if (!f.bbs && f.champs.length) kids.push(el('table', { class: 'tlmG' }, f.champs.map(c => el('tr', {}, [el('td', { text: c.l }), el('td', { class: 'v', text: valeurG(c) })]))));
+  return el('div', {}, kids);
+}
+/** A picture's strip: each pass its colour, the missing packets dark. */
+function bandeG(s) {
+  const tot = (s.bande || []).reduce((n, r) => n + r[1], 0) || 1, cl = ['#3FE0C8', '#FFC21A', '#B98CFF', '#FF8A1F', '#4C8DFF', '#FF4FA3'];
+  return el('div', { class: 'bandeG' }, (s.bande || []).map(r => el('i', { style: 'width:' + (r[1] / tot * 100) + '%;background:' + (r[2] < 0 ? 'transparent' : cl[r[2] % cl.length]) })));
+}
+function texteSsdv(s) {
+  return [s.complete ? T.g_complete : tf('g_paquets', s.recus, s.total, s.pourcent) + (s.estime ? ' ' + T.g_estime : ''),
+    (s.passages || []).length > 1 ? tf('g_passages', s.passages.length) : ''].filter(x => x).join(' · ');
+}
+function panneauGenesis(p) {
+  const G = P.genesis || { tlm: [], ssdv: [] };
+  p.appendChild(el('div', { class: 'aide', text: T.g_titre + (G.tlm.length ? ' · ' + tf('g_trames', G.tlm.length) : ''), title: T.g_aide, style: 'margin-top:8px' }));
+  G.ssdv.forEach(s => {
+    p.appendChild(el('div', { class: 'aide', text: T.g_ssdv + ' · ' + (s.titre || s.cle), title: T.g_ssdv_aide }));
+    p.appendChild(el('img', { src: url('/ssdv', { img: s.cle, v: s.recus }), alt: '', style: 'width:100%;max-width:360px;border-radius:5px;display:block', loading: 'lazy' }));
+    p.appendChild(bandeG(s));
+    p.appendChild(el('div', { class: 'aide', text: texteSsdv(s) }));
+    p.appendChild(el('div', { class: 'aide', text: tf('g_ici', (s.ici || []).length, s.nouveaux || 0) }));
+  });
+  G.tlm.forEach((f, i) => {
+    const cleF = P.id + '#' + i, ouvert = !!genesisOuvert[cleF];
+    const det = el('div', { style: ouvert ? '' : 'display:none' }, ouvert ? [tableG(f)] : []);
+    const fl = el('button', { class: 'discret', text: ouvert ? '▾' : '▸', onclick: ev => { ev.stopPropagation();
+      genesisOuvert[cleF] = !genesisOuvert[cleF]; det.innerHTML = ''; if (genesisOuvert[cleF]) det.appendChild(tableG(f));
+      det.style.display = genesisOuvert[cleF] ? '' : 'none'; fl.textContent = genesisOuvert[cleF] ? '▾' : '▸'; } });
+    p.appendChild(el('div', { class: 'mo', onclick: () => cherche(f.t - 1000) }, [
+      el('span', { class: 'pastille', style: 'background:#7FD0FF' }), el('span', { class: 'h', text: hms(f.t) }),
+      el('span', { class: 't', text: f.nom }), el('span', { class: 'x', text: f.resume || '' }), fl]));
+    p.appendChild(det);
+  });
+  if (P.relire) {
+    p.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'discret', text: T.g_relire, title: T.g_relire_aide, onclick: relireGenesis }),
+      el('span', { class: 'aide', id: 'relectureG', text: relectureTexte })]));
+  }
+}
+async function relireGenesis() {
+  let j; try { j = await envoie('/genesis/relire', { id: P.id }); } catch (x) { return; }
+  relectureTexte = j.ok ? tf('g_relecture', 0, '…') : (j.erreur || T.echec);
+  if (g('relectureG')) g('relectureG').textContent = relectureTexte;
+  if (j.ok && !relectureSuivi) relectureSuivi = setTimeout(suisRelecture, 3000);
+}
+async function suisRelecture() {
+  relectureSuivi = 0;
+  let r; try { r = await lire('/genesis/relecture'); } catch (x) { return; }
+  relectureTexte = r.enCours ? tf('g_relecture', r.faits || 0, r.fichiers || 0) : tf('g_relu', r.trames || 0, r.voix || 0, r.nouveaux || 0);
+  if (g('relectureG')) g('relectureG').textContent = relectureTexte;
+  if (r.enCours) { relectureSuivi = setTimeout(suisRelecture, 3000); return; }
+  // Done: what the pass holds now.
+  if (P) try { const q = await lire('/passage', { id: P.id }); P.genesis = q.genesis; P.voix = q.voix; S.voix = S.voix.filter(v => v.pid !== P.id)
+    .concat((q.voix || []).map(v => Object.assign({ pid: P.id }, v))).sort((a, b) => a.de - b.de); if (onglet === 'moments') panneau(); } catch (x) {}
+}
+/** The voice message being said at [tt] (from its first packet heard, as long as it lasts). */
+function voixA(tt) { return (S && S.voix || []).find(v => tt >= v.de && tt < v.de + v.duree * 1000 + 300); }
+/** Under the replay: the voice message of the moment, heard with the pass (its recording turned down meanwhile). */
+function synchroVoix() {
+  let a = g('voixSon');
+  if (!a) { a = el('audio', { id: 'voixSon', preload: 'auto' }); a.style.display = 'none'; document.body.appendChild(a); }
+  const v = joue && O.avecSon && S && !S.trans ? voixA(t) : null, son = g('son');
+  if (son) son.volume = v ? 0.25 : 1;
+  if (!v) { if (!a.paused) a.pause(); voixJouee = ''; return; }
+  const pos = (t - v.de) / 1000;
+  if (C) chAudio(a, allureVue); else a.playbackRate = vitesse;
+  if (voixJouee !== v.nom) { voixJouee = v.nom; a.src = url('/voix', { nom: v.nom });
+    a.addEventListener('loadedmetadata', () => { a.currentTime = Math.max(0, (t - v.de) / 1000); if (C) chAudio(a, allureVue); a.play().catch(() => {}); }, { once: true }); return; }
+  if (Math.abs(a.currentTime - pos) > (C ? 0.8 * Math.max(1, allureVue) : 0.8) && pos < a.duration) a.currentTime = pos;
+  if (a.paused && pos < (a.duration || 1e9)) a.play().catch(() => {});
+}
+/** The moment's box: the voice being said, the last telemetry heard, the SSDV picture once its first packet of the pass came. */
+let ssdvVu = '';
+function majGenesis() {
+  const b = g('genesisMoment'); if (!b || !P) return;
+  const G = P.genesis || { tlm: [], ssdv: [] };
+  const v = voixA(t), f = G.tlm.filter(x => x.t <= t && t - x.t < 120000).pop(), s = G.ssdv.find(x => t >= x.de);
+  const cle = [v ? v.nom : '', f ? f.t : '', s ? s.cle + '#' + s.recus : ''].join('|');
+  if (b.dataset.cle === cle) return;
+  b.dataset.cle = cle; b.innerHTML = '';
+  if (v) b.appendChild(el('div', { class: 'gv', text: '♪ ' + T.g_voix + (v.texte ? ' — « ' + v.texte + ' »' : '') }));
+  if (f) { b.appendChild(el('div', {}, [el('span', { class: 'pastille', style: 'background:#7FD0FF' }), el('b', { text: f.nom })]));
+    if (f.resume) b.appendChild(el('div', { class: 'nom', text: f.resume })); }
+  if (s) { b.appendChild(el('img', { src: url('/ssdv', { img: s.cle, v: s.recus }), alt: '' }));
+    b.appendChild(el('div', { class: 'nom', text: T.g_ssdv + ' · ' + texteSsdv(s) })); }
+}
+/** On the timeline: each telemetry frame a thin blue tick, each voice message green, the SSDV packets orange. */
+function friseGenesis(x, w, h) {
+  const G = P.genesis || { tlm: [], ssdv: [] };
+  x.fillStyle = '#7FD0FF'; G.tlm.forEach(f => x.fillRect(tx(f.t, w) - 1, 46, 2, 10));
+  x.fillStyle = '#FF8A1F'; G.ssdv.forEach(s => x.fillRect(tx(s.de, w), 58, Math.max(3, tx(s.a, w) - tx(s.de, w)), 4));
+  x.fillStyle = '#C3F25C'; (P.voix || []).forEach(v => x.fillRect(tx(v.de, w), 46, Math.max(3, tx(v.de + v.duree * 1000, w) - tx(v.de, w)), 10));
 }
 // ------------------------------------------------------------ a pass from nothing, and what it holds
 // Times typed in local time; sent as milliseconds.
@@ -1366,6 +1505,7 @@ function majMoment() {
     cm.appendChild(el('div', {}, [el('span', { class: 'pastille', style: 'background:' + COUL[couleur(st)] }), el('b', { text: st.t })]));
     if (fi) cm.appendChild(el('div', { class: 'nom', text: [fi.nom, fi.qth, fi.pays, fi.loc].filter(v => v).join(' · ') }));
     if (st.d) cm.appendChild(el('div', { class: 'nom', text: st.d })); }
+  majGenesis();
 }
 
 // ------------------------------------------------------------ the timeline
@@ -1394,6 +1534,7 @@ function dessineFrise() {
   if (P.sig.length) { x.strokeStyle = 'rgba(235,240,245,.8)'; x.lineWidth = 1.3; x.beginPath();
     P.sig.forEach((s, i) => { const px = tx(s[0], w), py = h - 18 - part(s[1]) * 22; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke(); }
   numDessine(x, w, h);
+  friseGenesis(x, w, h);
   P.marques.forEach(m => { x.fillStyle = COULHEX[couleur(m)]; const a = tx(m.de, w), b = tx(m.a, w); x.fillRect(a, 8, Math.max(4, b - a), 24); });
   if (sel) { x.fillStyle = 'rgba(63,224,200,.18)'; x.fillRect(tx(sel[0], w), 0, tx(sel[1], w) - tx(sel[0], w), h - 16);
     x.fillStyle = '#3FE0C8'; x.fillRect(tx(sel[0], w), 0, 2, h - 16); x.fillRect(tx(sel[1], w) - 2, 0, 2, h - 16); }
@@ -1479,6 +1620,7 @@ function allureA(tt) {
 /** The sound heard here: the pass shown's recording, where the time runs in real time (as the video: never sped up nor slowed), the sound asked. */
 function ecouteIci(tt) { return !!(O.avecSon && P && !S.trans && morceauA(tt) >= 0 && (C ? chSon(C, allureVue) : allureA(tt) <= 1.0001)); }
 function synchro() {
+  synchroVoix();
   const a = g('son'), i = morceauA(t);
   if (!joue || !ecouteIci(t)) { if (!a.paused) a.pause(); return; }
   const s = P.sons[i], pos = (t - s.o) / 1000, cle = P.id + '#' + i;
@@ -1573,7 +1715,7 @@ async function majDuree() {
     (c.debut + c.fin > 0 ? ' (' + tf('duree_cartes', chDuree((c.debut + c.fin) / c.fps)) + ')' : '');
   l.forEach(x => { x.textContent = texte; });
 }
-function arrete() { joue = false; const a = g('son'); if (a && !a.paused) a.pause(); if (S && P) maj(); }
+function arrete() { joue = false; const a = g('son'); if (a && !a.paused) a.pause(); synchroVoix(); if (S && P) maj(); }
 function cherche(tt) {
   const lo = Math.min(S.segs[0][0], S.ps[0].t0), hi = Math.max(S.segs[S.segs.length - 1][1], S.ps[S.ps.length - 1].t1);
   t = Math.max(lo, Math.min(hi, tt)); S.trans = 0; S.vues = 0; if (g('sGalerie')) g('sGalerie').innerHTML = '';

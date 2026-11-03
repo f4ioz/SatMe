@@ -51,6 +51,8 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
         fun reunitPartielles(deMs: Long, aMs: Long): List<String> = emptyList()
         /** The SSDV received between [deMs] and [aMs]: packets placed, pictures they went into (an SSDV campaign). */
         fun ssdv(deMs: Long, aMs: Long): Pair<Int, Int> = 0 to 0
+        /** Each SSDV picture the pass received packets of, as it stands (« image n° 144 partielle : 22/55 paquets · 40 % »…). */
+        fun ssdvDetail(deMs: Long, aMs: Long): List<String> = emptyList()
         /** The mast parked; null when done, else why not. */
         fun parque(): String?
         /** The receive state [avant] put back: what was done. */
@@ -150,6 +152,7 @@ class PiloteSstv(private val station: Station, private val horloge: () -> Long =
         val (ssdvPaquets, ssdvImages) = if (c.chaine.ssdv) runCatching { station.ssdv(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(0 to 0) else 0 to 0
         if (c.chaine.ssdv) faits += "SSDV : " + (if (ssdvPaquets > 0) ssdvPaquets.toString() + " paquet" + (if (ssdvPaquets > 1) "s" else "") + ", " +
             ssdvImages + " image" + (if (ssdvImages > 1) "s" else "") else "aucun paquet")
+        if (c.chaine.ssdv && ssdvPaquets > 0) faits += runCatching { station.ssdvDetail(p.aosEpochMs - 60_000L, horloge()) }.getOrDefault(emptyList())
         val nb = images.size + ssdvImages
         val tx = station.emission()
         if (tx != null) faits += "état laissé tel quel : émission en cours"

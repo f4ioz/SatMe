@@ -100,6 +100,19 @@ class AutoPiloteSstvPc(
         return l
     }
 
+    /**
+     * A pass is being received, or one not cancelled starts its preparation within [margeMs] (until its LOS): heavy
+     * work in the background (recordings read again) waits — the sound of a pass must not stutter.
+     */
+    fun occupe(margeMs: Long = 5 * 60_000L): Boolean {
+        if (pilote.enCours != null) return true
+        val t = horloge()
+        return runCatching { plan() }.getOrDefault(emptyList()).any { pr ->
+            pr.statut in setOf(CampagneSstv.Statut.PREVU, CampagneSstv.Statut.EN_COURS, CampagneSstv.Statut.CHEVAUCHE) && pr.campagne.active &&
+                t in (pr.passage.aosEpochMs - pr.campagne.avantMs - margeMs)..pr.passage.losEpochMs
+        }
+    }
+
     fun plan(): List<CampagneSstv.Prevu> {
         val d = donnees
         return CampagneSstv.plan(d.campagnes, ::passages, d.historique, horloge(), pilote.enCours?.let { it.campagne.id to it.passage.aosEpochMs })
@@ -652,6 +665,7 @@ class AutoPiloteSstvPc(
         override fun reunitPartielles(deMs: Long, aMs: Long): List<String> = son?.sstv?.reunitPartielles(deMs, aMs).orEmpty()
 
         override fun ssdv(deMs: Long, aMs: Long): Pair<Int, Int> = telemesure?.bilanSsdv(deMs, aMs) ?: (0 to 0)
+        override fun ssdvDetail(deMs: Long, aMs: Long): List<String> = telemesure?.detailSsdv(deMs, aMs).orEmpty()
 
         override fun parque(): String? {
             val r = station.stationRotor

@@ -33,13 +33,18 @@ import java.io.File
  *   decoder's (the gallery, the passes put together);
  * - with [capture], the demodulated bits of each pass are written as they
  *   come (`telemesure/genesis/<pass>.bits`, MSB first, with a `.jsonl` of
- *   the frames), to study a format later — real receptions only.
+ *   the frames), to study a format later — real receptions only;
+ * - every telemetry frame and SSDV packet of a real reception goes to
+ *   [archive] ([ArchiveGenesis]): the journal shows them with their pass.
  */
 class RecepteurGenesis(
     private val dossier: File?,
     val assemblage: AssemblageSsdv,
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
+    /** Where the frames and the packets heard are kept for the journal (shared by the live receiver and the read-agains). */
+    @Volatile var archive: ArchiveGenesis? = dossier?.let { ArchiveGenesis(it) }
+
     /** A rate and its shift; [AUTO]: both demodulators at once on the same sound (the satellite alternates). */
     enum class Profil(val cle: String, val nom: String, val debit: Double, val ecartHz: Double) {
         AUTO("auto", "GENESIS 200 et 800 bit/s (les deux à la fois)", 800.0, 1_600.0),
@@ -204,6 +209,7 @@ class RecepteurGenesis(
         garde(tg)
         etat = etat.copy(trames = etat.trames + 1, derniereMs = now)
         if (captureOuverte) runCatching { ecritTrame(tg, v) }
+        if (!cx.essai) runCatching { archive?.trame(now, cx.satellite, cx.norad, t.type, t.donnees, source) }
     }
 
     private fun garde(tg: TrameGenesis) {
@@ -243,6 +249,9 @@ class RecepteurGenesis(
         entendu(v)
         val cx = contexteCourant
         val a = assemblage.ajoute(p, now, cx.satellite, source, cx.essai)
+        val ph = a.photo
+        if (!cx.essai && ph != null && a.resultat != AssemblageSsdv.Resultat.REFUSE)
+            runCatching { archive?.ssdv(now, cx.satellite, cx.norad, ph.id, p.numero, source) }
         sonde.trame("paquet SSDV", p.brut.size * 8)
         ssdvVus++
         etat = etat.copy(derniereMs = now)

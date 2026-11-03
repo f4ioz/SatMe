@@ -73,7 +73,56 @@ class AssemblageSsdvTest {
         for (k in 1 until 80 step 2) abime[k] = (abime[k].toInt() xor 0x33).toByte()
         assertNull(Ssdv.lis(abime))
         assertEquals(1, a.photos().single().recus)
-        assertEquals(1, a.photos().single().passages.size)
+        // The repeat an orbit later is that pass's share all the same (heard again, nothing new).
+        val ps = a.photos().single().passages
+        assertEquals(2, ps.size)
+        assertEquals(1 to 0, ps[0].paquets to ps[0].doublons)
+        assertEquals(0 to 1, ps[1].paquets to ps[1].doublons)
+    }
+
+    @Test fun memeImageRenvoyeeAChaquePassage() {
+        // As HADES-SA does: the same first packets of one picture, a few each pass; each pass gets its share.
+        val d = dossier()
+        val a = AssemblageSsdv(d) { t0 }
+        val passes = listOf((0..9).toList(), (5..14).toList(), (0..6).toList())
+        passes.forEachIndexed { p, l -> l.forEachIndexed { k, i -> a.ajoute(mire[i], t0 + p * orbite + k * 3_000L, "HADES-SA") } }
+        val ph = a.photos().single()
+        assertEquals(15, ph.recus)
+        assertFalse(ph.complete)
+        assertEquals(3, ph.passages.size)
+        assertEquals(listOf(10, 10, 7), ph.passages.map { it.entendus })
+        assertEquals(listOf(10, 5, 0), ph.passages.map { it.paquets })
+        assertEquals(3, ph.contributeurs().size)
+        assertEquals((0..6).toList(), ph.passages[2].numeros())
+        // The same packet twice in one pass (two decoders): counted once.
+        a.ajoute(mire[3], t0 + 2 * orbite + 30_000L, "HADES-SA")
+        assertEquals(7, ph.passages[2].entendus)
+        // Read back after a restart: the shares are still there.
+        val b = AssemblageSsdv(d) { t0 + 3 * orbite }
+        val relue = b.photo(ph.id)!!
+        assertEquals(listOf(10, 10, 7), relue.passages.map { it.entendus })
+        assertEquals(listOf(10, 5, 0), relue.passages.map { it.paquets })
+        val j = b.json(relue)
+        assertEquals(3, j.getJSONArray("passages").length())
+        assertEquals(7, j.getJSONArray("passages").getJSONObject(2).getInt("dup"))
+        // The picture as it stands: its blocks known, the others marked missing.
+        val (jpeg, vues, taille) = relue.apercu()!!
+        assertTrue(jpeg.isNotEmpty())
+        assertEquals(16 to 16, taille)
+        assertTrue(vues!!.any { it } && vues.any { !it })
+    }
+
+    @Test fun enregistrementRelusurUnPassageEntendu() {
+        // The live pass and its recording read again: one pass, not two.
+        val a = AssemblageSsdv(null) { t0 }
+        (0..5).forEach { a.ajoute(mire[it], t0 + it * 2_000L, "HADES-SA") }
+        (0..7).forEach { a.ajoute(mire[it], t0 + 500L + it * 2_000L, "HADES-SA", "enregistrement SatMe_HADES-SA_20261103_022111Z.wav") }
+        val ph = a.photos().single()
+        assertEquals(1, ph.passages.size)
+        assertEquals(8, ph.passages[0].entendus)
+        // Another station's file stays a pass of its own.
+        a.ajoute(mire[9], t0 + 1_000L, "HADES-SA", "import autre.kss")
+        assertEquals(2, ph.passages.size)
     }
 
     @Test fun numeroQuiRevientAutreImage() {

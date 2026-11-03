@@ -171,7 +171,9 @@ object SessionRenduPc {
                   /** Where a recording is (real time); null: each pass with recordings, AOS to LOS. */
                   enregistres: List<LongRange>? = null,
                   /** Where something is heard in the recordings (their measured activity); null: the whole recordings. */
-                  val entendus: List<LongRange>? = null) {
+                  val entendus: List<LongRange>? = null,
+                  /** The GENESIS voice messages (first packet to the end of their speech): with the sound, heard there in real time. */
+                  val voix: List<LongRange> = emptyList()) {
         val fenetres: List<LongRange> = scenes.map { (it.e.debutMs - avant.coerceIn(0L, MARGE_MAX_MS))..(it.e.finMs + apres.coerceIn(0L, MARGE_MAX_MS)) }
             .map { f -> morceau?.let { m -> maxOf(f.first, m.first)..minOf(f.last, m.last) } ?: f }
         /**
@@ -201,9 +203,10 @@ object SessionRenduPc {
             sc.marques.filter { it.type == TypeMarque.SSTV && it.fichier != null }.mapNotNull { m -> sc.images[m.fichier]?.let { m to it } }
         }.distinctBy { it.first.fichier }.sortedBy { it.first.finMs } }
         /** When the pace slows to [Vitesses.image]. */
-        val actifs: List<LongRange> = actifs(scenes)
+        val actifs: List<LongRange> = (actifs(scenes) + (if (son) voix else emptyList())).sortedBy { it.first }
         /** With the sound: when a contact is heard (or a real-time stretch imposed), played in real time. */
-        val ecoute: List<LongRange> = if (!son) emptyList() else imposes?.filter { it.vitesse == 1 }?.map { it.deMs..it.aMs } ?: ecoute(scenes)
+        val ecoute: List<LongRange> = if (!son) emptyList() else imposes?.filter { it.vitesse == 1 }?.map { it.deMs..it.aMs }
+            ?: (ecoute(scenes) + voix).sortedBy { it.first }
         /** The first scene's: its format (16:9, 9:16 or 3:4) and resolution for every frame. */
         val format: RenduPc.Scene? get() = scenes.firstOrNull()
         val paysage get() = scenes.firstOrNull()?.paysage ?: true
@@ -665,7 +668,26 @@ object SessionRenduPc {
      * The passes' sounds, each from its window's start ([debuts], ms) at its rate; [rate]: the
      * video's. A pass without its sound is not in [sons].
      */
-    class Son(val sons: Map<Int, fr.f4ioz.satcombo.domain.SonPassage>, val debuts: Map<Int, Long>, val rate: Int)
+    class Son(val sons: Map<Int, fr.f4ioz.satcombo.domain.SonPassage>, val debuts: Map<Int, Long>, val rate: Int,
+              /** Sounds laid over at their time (ms): the GENESIS voice messages decoded, at [rate], heard from the frame they start on. */
+              val voix: List<Pair<Long, ShortArray>> = emptyList())
+
+    /**
+     * Where each of [son]'s voices starts in the session's sound (samples from its start): at the first frame of a pass
+     * reaching its time (within [VOIX_RETARD_MS], else it fell in a stretch not shown: left out).
+     */
+    fun departsVoix(s: Session, plan: List<Trame>, son: Son): List<Pair<Long, ShortArray>> {
+        if (son.voix.isEmpty() || !s.son) return emptyList()
+        val nTitre = debut(s, 1, 1).sumOf { it.second }
+        val r = son.rate.toLong()
+        return son.voix.mapNotNull { (t, pcm) ->
+            val k = plan.indexOfFirst { it is Trame.Passe && it.t >= t }.takeIf { it >= 0 } ?: return@mapNotNull null
+            if (plan[k].t - t > VOIX_RETARD_MS) return@mapNotNull null
+            ((nTitre + k).toLong() * r / FPS) to pcm
+        }
+    }
+    /** A voice whose time the video passes by more than this (a stretch not shown) is not heard. */
+    const val VOIX_RETARD_MS = 3_000L
 
     /**
      * The session's sound as its video plays it: silence for its card, then, frame by frame, the pass's sound where it
@@ -682,9 +704,20 @@ object SessionRenduPc {
         val nb = nTitre + plan.size
         var n = 0; var dans = 0
         var cur = ShortArray(0)
+        val voix = departsVoix(s, plan, son)
         fun prepare(k: Int) {
             val l = (debut(k + 1) - debut(k)).toInt()
             cur = pistes[k - nTitre]?.takeIf { it.size == l } ?: ShortArray(l)
+            // The voices laid over (the recording under them is the pass's own sound).
+            val d0 = debut(k)
+            for ((d, pcm) in voix) {
+                if (d >= d0 + l || d + pcm.size <= d0) continue
+                if (cur === pistes[k - nTitre]) cur = cur.copyOf()
+                for (i in maxOf(0L, d - d0).toInt() until minOf(l.toLong(), d + pcm.size - d0).toInt()) {
+                    val x = cur[i] / 3 + pcm[(d0 + i - d).toInt()]
+                    cur[i] = x.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                }
+            }
         }
         prepare(0)
         return fr.f4ioz.satcombo.domain.SourcePcm { buf ->

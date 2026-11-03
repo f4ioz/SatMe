@@ -207,11 +207,29 @@ class TelemesurePc(
         var n = 0; var im = 0
         for (ph in paquets.assemblage.photos()) {
             if (ph.essai) continue
-            val k = ph.passages.toList().filter { it.fin >= deMs && it.debut <= aMs }.sumOf { it.paquets }
+            // The packets heard, new or already held: a satellite sending the same picture again still gives the pass its share.
+            val k = ph.passages.toList().filter { it.fin >= deMs && it.debut <= aMs }.sumOf { it.entendus }
             if (k > 0) { n += k; im++ }
         }
         n to im
     }.getOrDefault(0 to 0)
+
+    /**
+     * Each picture the pass between [deMs] and [aMs] heard packets of, as it stands: « image n° 144 partielle :
+     * 22/55 paquets · 40 %, réunie sur 3 passages (ce passage : 15 paquets, 0 nouveau) », or « complète ».
+     */
+    fun detailSsdv(deMs: Long, aMs: Long): List<String> = runCatching {
+        paquets.assemblage.photos().filter { !it.essai }.mapNotNull { ph ->
+            val ici = ph.passages.toList().filter { it.fin >= deMs && it.debut <= aMs }
+            val n = ici.sumOf { it.entendus }
+            if (n == 0) return@mapNotNull null
+            val (total, estime) = ph.totalEstime()
+            val etat = if (ph.complete) "complète" else "partielle : ${ph.recus}/$total paquets" + (if (estime) " (total estimé)" else "") + " · ${ph.pourcent()} %"
+            val nb = ph.contributeurs().size
+            "image n° ${ph.numero} $etat" + (if (nb > 1) ", réunie sur $nb passages" else "") +
+                " (ce passage : $n paquet" + (if (n > 1) "s" else "") + ", ${ici.sumOf { it.paquets }} nouveau" + (if (ici.sumOf { it.paquets } > 1) "x" else "") + ")"
+        }
+    }.getOrDefault(emptyList())
 
     /** The profile decoded: the operator's, or the transmitter's, both rates at once otherwise. */
     fun genesisProfil(): RecepteurGenesis.Profil = RecepteurGenesis.Profil.de(genesisProfilChoisi) ?: emetteurGenesis()?.first ?: RecepteurGenesis.Profil.AUTO
@@ -290,7 +308,7 @@ class TelemesurePc(
      * or another program's, USB audio) or a capture of bits (`.bits`). Its
      * SSDV packets join the pictures (the pass labelled with the file).
      */
-    fun relitGenesis(octets: ByteArray, nom: String, sat: Pair<String, Int>? = suiviGenesis()): JSONObject {
+    fun relitGenesis(octets: ByteArray, nom: String, sat: Pair<String, Int>? = suiviGenesis(), arret: () -> Boolean = { false }): JSONObject {
         val source = "enregistrement " + nom.substringAfterLast('/').take(60)
         val avant = paquets.assemblage.photos().sumOf { it.recus }
         var trames = 0
@@ -308,13 +326,23 @@ class TelemesurePc(
                 runCatching { java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(d)?.time }.getOrNull()
             } ?: horloge()
             var lus = 0L
-            // Its own receiver (the voice messages written beside the live ones', never a capture of bits).
+            // Its own receiver (the voice messages written beside the live ones', never a capture of bits); the frames
+            // and packets kept with the live ones' (the same pass heard live is not counted twice).
             val r = RecepteurGenesis(dossier, paquets.assemblage) { debut + lus * 1000 / rate }
+            r.archive = genesis.archive
             r.source = source
             r.profil = genesisProfil()
             r.contexte = { RecepteurGenesis.Contexte(sat?.first.orEmpty(), sat?.second ?: 0) }
+            // A voice message already kept from the live reception: not written again under another name.
+            val gardes = fr.f4ioz.satcombo.telemesure.AssemblageVoix.tous(dossier)
+            r.voix.deja = { m -> fr.f4ioz.satcombo.telemesure.AssemblageVoix.recouvre(m, gardes) }
             var k = 0
-            while (k < pcm.size) { val m = minOf(8192, pcm.size - k); r.traite(pcm.copyOfRange(k, k + m), m, rate); k += m; lus = k.toLong() }
+            while (k < pcm.size) {
+                if (arret()) return erreur("interrompu")
+                val m = minOf(8192, pcm.size - k); r.traite(pcm.copyOfRange(k, k + m), m, rate); k += m; lus = k.toLong()
+            }
+            // The last message ended (the recording's end is the pass's).
+            runCatching { r.voix.verifie(Long.MAX_VALUE / 2) }
             trames = r.etat.trames
             val apres = paquets.assemblage.photos().sumOf { it.recus }
             return JSONObject().put("ok", true).put("trames", trames).put("ssdv", r.etat.ssdv).put("nouveaux", apres - avant)
@@ -337,17 +365,23 @@ class TelemesurePc(
         }.sorted()
     }
 
-    fun relitEnregistrements(satellite: String, norad: Int): Boolean {
+    fun relitEnregistrements(satellite: String, norad: Int): Boolean =
+        relitFichiers(enregistrementsDe(satellite).mapNotNull { enregistrement(it) }, satellite, norad)
+
+    /** The relecture's state for the pages (files done, new packets, voice packets, frames; « enCours »). */
+    fun etatRelecture(): JSONObject = relecture
+
+    /** [fichiers] (WAV recordings of [satellite]) read again one after the other, in the background; false when one runs already. */
+    fun relitFichiers(fichiers: List<File>, satellite: String, norad: Int): Boolean {
         if (relecture.optBoolean("enCours")) return false
-        val noms = enregistrementsDe(satellite)
+        val noms = fichiers.sortedBy { it.name }
         relecture = JSONObject().put("enCours", true).put("sat", satellite).put("fichiers", noms.size).put("faits", 0)
             .put("nouveaux", 0).put("voix", 0).put("trames", 0)
         Thread {
             var nouveaux = 0; var voix = 0; var trames = 0; var faits = 0
             try {
-                for (n in noms) {
-                    val f = enregistrement(n) ?: continue
-                    if (f.length() > MAX_RELECTURE) continue
+                for (f in noms) {
+                    if (!f.isFile || f.length() > MAX_RELECTURE) continue
                     val r = runCatching { relitGenesis(f.readBytes(), f.name, satellite to norad) }.getOrNull()
                     faits++
                     if (r != null && r.optBoolean("ok")) { nouveaux += r.optInt("nouveaux"); voix += r.optInt("voix"); trames += r.optInt("trames") }
@@ -358,6 +392,41 @@ class TelemesurePc(
             }
         }.apply { isDaemon = true; name = "relecture-genesis"; priority = Thread.MIN_PRIORITY }.start()
         return true
+    }
+
+    /** A GENESIS satellite by a recording's satellite key (`SatMe_<key>_…`): its name and number; null when not one (set by Main). */
+    @Volatile var genesisDe: (String) -> Pair<String, Int>? = { null }
+    /** Heavy work waits: a pass of the auto-pilot near or under way (set by Main). */
+    @Volatile var occupe: () -> Boolean = { false }
+
+    /** What a GENESIS satellite sent during a journal pass (telemetry, SSDV), for the journal. */
+    val journalGenesis = GenesisJournalPc({ genesis.archive }, { paquets.assemblage })
+
+    /**
+     * The recordings of GENESIS satellites of the last [jours] days not read again yet, read again once in the
+     * background at the lowest priority (`telemesure/genesis/rejoues.txt` lists those done): the passes heard before
+     * the journal kept telemetry and before each pass got its share of an SSDV picture appear whole. Waits while a
+     * pass of the auto-pilot is near ([occupe]) and stops a file there (taken again later); a recording still being
+     * written is left for the next start.
+     */
+    fun rejoueAnciens(jours: Int = JOURS_REJEU, attenteMs: Long = 90_000L) {
+        Thread {
+            runCatching { Thread.sleep(attenteMs) }
+            val marque = File(dossier, "telemesure/genesis/rejoues.txt")
+            val faits = runCatching { marque.readLines().toMutableSet() }.getOrDefault(mutableSetOf())
+            val limite = horloge() - jours * 86_400_000L
+            for (n in runCatching { enregistrements() }.getOrDefault(emptyList()).sorted()) {
+                if (n in faits) continue
+                val cle = n.removePrefix("SatMe_").substringBeforeLast('_').substringBeforeLast('_').trim('-')
+                val sat = runCatching { genesisDe(cle) }.getOrNull() ?: continue
+                val f = enregistrement(n) ?: continue
+                if (f.lastModified() < limite || horloge() - f.lastModified() < 3 * 60_000L || f.length() > MAX_RELECTURE) continue
+                while (occupe() || relecture.optBoolean("enCours")) runCatching { Thread.sleep(60_000L) }
+                val r = runCatching { relitGenesis(f.readBytes(), f.name, sat) { occupe() } }.getOrNull()
+                if (r?.optBoolean("ok") == true) { faits += n; runCatching { marque.parentFile?.mkdirs(); marque.appendText(n + "\n") } }
+                runCatching { Thread.sleep(5_000L) }
+            }
+        }.apply { isDaemon = true; name = "rejeu-genesis"; priority = Thread.MIN_PRIORITY }.start()
     }
 
     // ---------------------------------------------------------------- the voice messages (Codec2)
@@ -517,7 +586,12 @@ class TelemesurePc(
     fun jpegSsdv(q: Map<String, String>): ByteArray? {
         // A Geoscan picture (JPEG chunks): as it stands, cut after the last chunk received.
         q["geo"]?.let { c -> return (paquets.geoscan.image(c) ?: essaiPaquets.geoscanEssai.image(c))?.jpeg() }
-        q["cle"]?.let { c -> return paquets.jpeg(c) ?: essaiPaquets.jpeg(c) }
+        q["cle"]?.let { c ->
+            val ph = paquets.assemblage.photo(c) ?: essaiPaquets.assemblage.photo(c) ?: return null
+            // Not finished: the missing blocks hatched (« brut=1 »: as decoded, mid-grey).
+            if (ph.complete || q["brut"] == "1") return ph.jpeg()
+            return ph.apercu()?.let { GenesisJournalPc.hachure(it) }
+        }
         val f = q["f"]?.takeIf { fr.f4ioz.satcombo.telemesure.GalerieTelemesure.FICHIER.matches(it) } ?: return null
         // A finished Geoscan picture is kept with the Geoscan ones (its name says it).
         val rep = if (f.startsWith("geoscan-")) "telemesure/geoscan" else "telemesure/ssdv"
@@ -810,6 +884,8 @@ class TelemesurePc(
         const val SOURCE_SON = "son"
         /** A recording read again: 400 MB (a pass at 48 kHz is some 60 MB). */
         const val MAX_RELECTURE = 400L * 1024 * 1024
+        /** How far back the recordings are read again at start ([rejoueAnciens]). */
+        const val JOURS_REJEU = 14
         /** The views' readings at most this often (~6 a second), whatever the page asks. */
         const val VISU_MIN_MS = 160L
 

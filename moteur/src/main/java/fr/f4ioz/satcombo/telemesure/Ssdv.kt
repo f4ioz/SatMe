@@ -331,6 +331,11 @@ object Ssdv {
         var dernier: Int? = null; private set
         var mcusLues = 0; private set
         var mcusTotal = 0; private set
+        /** Which MCUs the last [jpeg] read (row by row), the others grey; null before. */
+        var mcusVues: BooleanArray? = null; private set
+        /** One MCU's size in pixels (16 × 16 in the usual 2×2 sampling). */
+        val largeurMcu: Int get() = 8 * ECHANTILLONNAGE[mode].first
+        val hauteurMcu: Int get() = 8 * ECHANTILLONNAGE[mode].second
         /** When a packet last came (ms). */
         var miseAJour = 0L
 
@@ -401,6 +406,7 @@ object Ssdv {
             var lecteur: Lecteur? = null
             val dc = IntArray(3)
             var lues = 0
+            val vues = BooleanArray(total)
             for (m in 0 until total) {
                 debuts[m]?.let { p -> lecteur = Lecteur(p.numero, p.mcuDecalage * 8); dc.fill(0) }
                 val l = lecteur
@@ -412,9 +418,9 @@ object Ssdv {
                         Jpeg.lisBloc(l, dt, at, dc[c]).also { dc[c] = it[0] }
                     }
                 }.getOrNull()
-                if (blocs == null) { lecteur = null; mcus += gris } else { mcus += blocs; lues++ }
+                if (blocs == null) { lecteur = null; mcus += gris } else { mcus += blocs; lues++; vues[m] = true }
             }
-            mcusLues = lues; mcusTotal = total
+            mcusLues = lues; mcusTotal = total; mcusVues = vues
             val (qy, qc) = tables(qualite)
             return Jpeg.fichier(largeur, hauteur, hs, vs, qy, qc, mcus)
         }

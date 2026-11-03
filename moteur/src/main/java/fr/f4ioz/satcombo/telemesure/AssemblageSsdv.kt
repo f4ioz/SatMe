@@ -26,7 +26,10 @@ import java.io.File
  * - the same packet twice (two stations, a replay, both bit readings) is
  *   kept once; every packet's CRC was checked by [Ssdv.lis];
  * - each packet remembers the pass that brought it ([Passage]: a gap of
- *   [NOUVEAU_PASSAGE_MS], or another source, begins a new one);
+ *   [NOUVEAU_PASSAGE_MS], or another source, begins a new one); a packet
+ *   the picture already held is still credited to the pass that heard it
+ *   again ([Passage.doublons]): a satellite sending the same packets each
+ *   pass gives each pass its share, not « nothing »;
  * - with a [dossier], each picture's packets are written as they come
  *   (`telemesure/ssdv/paquets/<id>.jsonl`, one line a packet, read back
  *   at start); a finished picture is written once as a JPEG next to the
@@ -36,8 +39,17 @@ import java.io.File
 class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long = System::currentTimeMillis) {
 
     /** One pass's share of a picture. */
-    class Passage(val debut: Long, var fin: Long, val source: String, val satellite: String) {
+    class Passage(debut: Long, var fin: Long, val source: String, val satellite: String) {
+        var debut = debut; internal set
+        /** The packets this pass brought first. */
         var paquets = 0; internal set
+        /** The packets this pass heard that the picture already held. */
+        var doublons = 0; internal set
+        /** The packet numbers this pass heard (new or again). */
+        internal val numeros = java.util.TreeSet<Int>()
+        /** Every packet this pass heard, new or again. */
+        val entendus: Int get() = paquets + doublons
+        fun numeros(): List<Int> = synchronized(numeros) { numeros.toList() }
     }
 
     class Photo internal constructor(val id: String, val indicatif: String, val numero: Int, val debut: Long, val essai: Boolean) {
@@ -91,6 +103,15 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         }
 
         fun jpeg(): ByteArray? = image.jpeg()
+
+        /** The JPEG and which MCUs it shows for real (row by row; the others grey), for a picture drawn hatched where missing. */
+        fun apercu(): Triple<ByteArray, BooleanArray?, Pair<Int, Int>>? = synchronized(image) {
+            val j = image.jpeg() ?: return null
+            Triple(j, image.mcusVues?.copyOf(), image.largeurMcu to image.hauteurMcu)
+        }
+
+        /** Every pass that brought or heard a packet of it, in time order. */
+        fun contributeurs(): List<Passage> = passages.filter { it.entendus > 0 }.sortedBy { it.debut }
     }
 
     enum class Resultat { NOUVEAU, DOUBLON, REFUSE }
@@ -124,7 +145,11 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
             val deja = candidat.image.paquet(p.numero)
             val dernier = candidat.image.dernier
             when {
-                deja != null && deja.donnees.contentEquals(p.donnees) -> return Ajout(candidat, Resultat.DOUBLON)
+                deja != null && deja.donnees.contentEquals(p.donnees) -> {
+                    // Heard again: this pass's share all the same.
+                    if (entendu(candidat, p.numero, t, satellite, source) && !essai) ecritDoublon(candidat, p.numero, t, satellite, source)
+                    return Ajout(candidat, Resultat.DOUBLON)
+                }
                 // The same number with other bytes: the image number came round, another picture.
                 deja != null -> {}
                 // Past the end of a picture: another one.
@@ -153,18 +178,47 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
         return Photo(id, p.indicatif, p.image, t, essai).also { photos[id] = it }
     }
 
+    /** The pass of [ph] that [t] belongs to (same source, within [NOUVEAU_PASSAGE_MS]), begun when there is none. */
+    private fun passage(ph: Photo, t: Long, satellite: String, source: String): Int {
+        // The station's own pass heard live and read again from its recording: one pass.
+        val i = ph.passages.indexOfLast { (it.source == source || (locale(it.source) && locale(source))) &&
+            t - it.fin <= NOUVEAU_PASSAGE_MS && it.debut - t <= NOUVEAU_PASSAGE_MS }
+        if (i >= 0) return i
+        // In time order (a recording read again may be older than the passes heard since).
+        val k = ph.passages.indexOfFirst { it.debut > t }.let { if (it < 0) ph.passages.size else it }
+        ph.passages.add(k, Passage(t, t, source, satellite))
+        if (k < ph.passages.size - 1) synchronized(ph.origine) { for (e in ph.origine.entries) if (e.value >= k) e.setValue(e.value + 1) }
+        return k
+    }
+
     /** The packet into [ph], its pass found or begun; false when it does not fit. */
     private fun place(ph: Photo, p: Ssdv.Paquet, t: Long, satellite: String, source: String): Boolean {
         if (!ph.image.ajoute(p)) return false
-        val dernier = ph.passages.lastOrNull()
-        val i = if (dernier != null && dernier.source == source && t - dernier.fin <= NOUVEAU_PASSAGE_MS && dernier.debut - t <= NOUVEAU_PASSAGE_MS) ph.passages.size - 1
-            else { ph.passages += Passage(t, t, source, satellite); ph.passages.size - 1 }
+        val i = passage(ph, t, satellite, source)
         val pa = ph.passages[i]
-        pa.fin = maxOf(pa.fin, t); pa.paquets++
+        pa.debut = minOf(pa.debut, t); pa.fin = maxOf(pa.fin, t); pa.paquets++
+        synchronized(pa.numeros) { pa.numeros += p.numero }
         synchronized(ph.origine) { ph.origine[p.numero] = i }
         ph.miseAJour = maxOf(ph.miseAJour, t)
         if (satellite.isNotBlank()) ph.satellite = satellite
         return true
+    }
+
+    /** Packet [numero], already held, heard again at [t]: credited to its pass; false when that pass had it already. */
+    private fun entendu(ph: Photo, numero: Int, t: Long, satellite: String, source: String): Boolean {
+        val pa = ph.passages[passage(ph, t, satellite, source)]
+        if (synchronized(pa.numeros) { !pa.numeros.add(numero) }) return false
+        pa.debut = minOf(pa.debut, t); pa.fin = maxOf(pa.fin, t); pa.doublons++
+        ph.miseAJour = maxOf(ph.miseAJour, t)
+        return true
+    }
+
+    private fun ecritDoublon(ph: Photo, numero: Int, t: Long, satellite: String, source: String) {
+        val d = repertoire ?: return
+        runCatching {
+            d.mkdirs()
+            File(d, ph.id + ".jsonl").appendText(JSONObject().put("t", t).put("src", source).put("sat", satellite).put("n", numero).put("dup", true).toString() + "\n")
+        }
     }
 
     private fun ecrit(ph: Photo, p: Ssdv.Paquet, t: Long, satellite: String, source: String) {
@@ -219,6 +273,11 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
             var ph: Photo? = null
             f.forEachLine(Charsets.UTF_8) { ligne ->
                 val o = runCatching { JSONObject(ligne) }.getOrNull() ?: return@forEachLine
+                if (o.optBoolean("dup")) {
+                    // A packet heard again by a later pass.
+                    ph?.let { x -> if (x.image.paquet(o.optInt("n", -1)) != null) entendu(x, o.optInt("n"), o.optLong("t"), o.optString("sat"), o.optString("src", SOURCE_RADIO)) }
+                    return@forEachLine
+                }
                 val b = deHex(o.optString("hex")) ?: return@forEachLine
                 // The CRC checked again: a damaged line is left out.
                 val p = (if (b.size == Ssdv.TAILLE) Ssdv.lis(b) else Ssdv.lisCourt(b, 0, b.size)) ?: return@forEachLine
@@ -277,7 +336,8 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
             .put("total", t).put("estime", estime).put("pourcent", ph.pourcent()).put("manquants", if (estime) maxOf(0, t - ph.recus) else ph.manquants.size)
             .put("dernier", ph.image.dernier ?: -1).put("largeur", ph.largeur).put("hauteur", ph.hauteur).put("t", ph.miseAJour).put("debut", ph.debut)
             .put("essai", ph.essai).put("complete", ph.complete).put("fichier", ph.fichier ?: "").put("satellite", ph.satellite)
-            .put("passages", JSONArray(ph.passages.map { JSONObject().put("debut", it.debut).put("fin", it.fin).put("source", it.source).put("sat", it.satellite).put("n", it.paquets) }))
+            .put("passages", JSONArray(ph.passages.map { JSONObject().put("debut", it.debut).put("fin", it.fin).put("source", it.source).put("sat", it.satellite)
+                .put("n", it.paquets).put("dup", it.doublons).put("vus", JSONArray(it.numeros())) }))
             .put("bande", JSONArray(ph.bande().map { (a, n, i) -> JSONArray().put(a).put(n).put(i) }))
     }
 
@@ -290,6 +350,10 @@ class AssemblageSsdv(private val dossier: File?, private val horloge: () -> Long
 
         private fun jour(ms: Long) = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT)
             .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(ms))
+
+        /** Heard by this station: on the air, or read again from one of its recordings. */
+        fun locale(source: String) = source == SOURCE_RADIO || source.startsWith(SOURCE_ENREGISTREMENT)
+        const val SOURCE_ENREGISTREMENT = "enregistrement "
 
         fun nomFichier(s: String) = s.replace(Regex("[^A-Za-z0-9_-]+"), "_").trim('_').take(40).ifEmpty { "ssdv" }
 

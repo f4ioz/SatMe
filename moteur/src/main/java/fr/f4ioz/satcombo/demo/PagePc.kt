@@ -11072,7 +11072,8 @@ function galTuile(i) {
   const img = i.src ? '<img src="' + escA(i.src) + '" loading="lazy" alt="" onerror="this.outerHTML = &quot;<div class=gal-vide>Pas encore lisible : il manque des morceaux au début</div>&quot;">'
     : '<div class="gal-vide">Le début de l’image (FF D8) n’est pas encore arrivé</div>';
   const pl = n => n > 1 ? 's' : '';
-  const etat = i.complete ? '<b class="tlm-b ok">complète</b>' : ssdv ? i.recus + '/' + (i.estime ? '≈' : '') + i.total + ' paquets' + (i.manquants ? ' · ' + i.manquants + ' manquant' + pl(i.manquants) : '')
+  const etat = i.complete ? '<b class="tlm-b ok">complète</b>' : ssdv ? 'partielle ' + i.recus + '/' + (i.estime ? '≈' : '') + i.total + ' paquets · ' + (i.pourcent || 0) + ' %' +
+    (i.passages > 1 ? ' · réunie sur ' + i.passages + ' passages' : '')
     : i.morceaux + ' morceau' + (i.morceaux > 1 ? 'x' : '') + (i.manquants > 0 ? ' · ' + (Math.round(i.manquants / 102.4) / 10) + ' ko manquants' : '');
   const qui = [ssdv ? i.satellite : '', i.titre].filter(x => x).join(' · ');
   return '<a href="' + escA(i.src || '#') + '" onclick="galOuvre(' + k + '); return false" title="' + escA(qui) + '">' + img +
@@ -14042,17 +14043,17 @@ function tsImageHtml(i) {
   const bande = '<div class="ts-bande" title="Les paquets dans l’ordre, chacun de la couleur du passage qui l’a apporté ; foncé : manquant">' +
     (i.bande || []).map(r => '<span style="width:' + (r[1] * 100 / t).toFixed(3) + '%;background:' + (r[2] < 0 ? 'transparent' : TS_COUL[r[2] % TS_COUL.length]) + '"></span>').join('') + '</div>';
   const pass = '<div class="ts-pass petit">' + ps.map((s, k) => '<span title="' + escA((s.sat ? s.sat + ' · ' : '') + 'de ' + hm(s.debut) + ' à ' + hm(s.fin)) + '"><i style="background:' +
-    TS_COUL[k % TS_COUL.length] + '"></i>' + (s.source === 'radio' ? 'Passage ' + (k + 1) : esc(s.source)) + ' · ' + jourHeure(s.debut) + ' · ' + s.n + ' paq.</span>').join('') + '</div>';
+    TS_COUL[k % TS_COUL.length] + '"></i>' + (s.source === 'radio' ? 'Passage ' + (k + 1) : esc(s.source)) + ' · ' + jourHeure(s.debut) + ' · ' + s.n + ' paq.' + (s.dup ? ' (+ ' + s.dup + ' déjà reçu' + (s.dup > 1 ? 's' : '') + ')' : '') + '</span>').join('') + '</div>';
   // 🌐 to the owner's site (« Publication web »): sent again by itself as more packets come, once sent.
-  const act = '<div class="ts-act">' + (i.essai || typeof siteBouton !== 'function' ? '' : siteBouton('ssdv-image', i.cle)) + '<a class="bouton-lien" href="' + u.replace('ssdv.jpg', 'ssdv.png') + '&dl=1" download title="L’image telle qu’elle est (blocs manquants en gris), en PNG">⤓ PNG</a>' +
+  const act = '<div class="ts-act">' + (i.essai || typeof siteBouton !== 'function' ? '' : siteBouton('ssdv-image', i.cle)) + '<a class="bouton-lien" href="' + u.replace('ssdv.jpg', 'ssdv.png') + '&dl=1" download title="L’image telle qu’elle est (blocs manquants hachurés), en PNG">⤓ PNG</a>' +
     '<a class="bouton-lien" href="' + u + '&dl=1" download title="L’image telle qu’elle est, en JPEG">⤓ JPEG</a>' +
     (i.complete ? '' : '<button class="discret" onclick="tsAbandonne(' + escA(JSON.stringify(i.cle)) + ')" title="Oublier cette image en cours et ses paquets">Abandonner</button>') + '</div>';
   return '<div class="ts-img"><a href="' + u + '&v=' + i.recus + '" target="_blank"><img loading="lazy" alt="" src="' + u + '&v=' + i.recus + '"></a>' +
     '<div class="tlm-h"><span class="tlm-b ssdv">SSDV</span>' + (i.essai ? '<span class="tlm-b essai">essai</span>' : '') +
-    (i.complete ? '<span class="tlm-b ok">complète</span>' : '<span class="tlm-b encours">en cours</span>') + '<b>' + esc(i.indicatif) + ' n° ' + i.numero + '</b>' +
+    (i.complete ? '<span class="tlm-b ok">complète</span>' : '<span class="tlm-b encours">partielle</span>') + '<b>' + esc(i.indicatif) + ' n° ' + i.numero + '</b>' +
     (i.satellite ? '<span>' + esc(i.satellite) + '</span>' : '') + '<span>' + i.largeur + '×' + i.hauteur + '</span></div>' +
     '<div class="petit" style="margin-top:3px">' + tsAvance(i) + (i.manquants && !i.complete ? ' · ' + i.manquants + ' manquant' + (i.manquants > 1 ? 's' : '') : '') +
-    (ps.length > 1 ? ' · ' + ps.length + ' passages' : '') + '</div>' + bande + pass + act + '</div>';
+    (ps.length > 1 ? ' · réunie sur ' + ps.length + ' passages' : '') + '</div>' + bande + pass + act + '</div>';
 }
 function tsGeoscanHtml(i) {
   const u = 'api/telemesure/ssdv.jpg?geo=' + encodeURIComponent(i.cle) + '&v=' + i.morceaux;

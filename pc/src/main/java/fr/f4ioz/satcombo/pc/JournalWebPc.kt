@@ -99,6 +99,19 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     /** A voice message (its `.json`) given to « Phonie → texte »: null when queued, else why not (set by Main). */
     @Volatile var transcritVoix: ((org.json.JSONObject) -> String?)? = null
 
+    /** What a GENESIS satellite sent during a pass: telemetry made readable, SSDV pictures ([GenesisJournalPc]) (set by Main). */
+    @Volatile var genesis: GenesisJournalPc? = null
+    /** An SSDV picture as it stands (missing blocks hatched), by its key (set by Main). */
+    @Volatile var ssdvImage: ((String) -> ByteArray?)? = null
+    /** A pass's recordings read again by the GENESIS decoder: null when started, else why not (set by Main). */
+    @Volatile var relireGenesis: ((JournalPassage.Entree) -> String?)? = null
+    /** The read-again's progress (set by Main). */
+    @Volatile var etatRelecture: (() -> org.json.JSONObject)? = null
+
+    private fun genesisJson(e: JournalPassage.Entree): String = runCatching {
+        genesis?.json(e, fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.EN)?.toString()
+    }.getOrNull() ?: "{\"tlm\":[],\"ssdv\":[]}"
+
     /** The pass's GENESIS voice messages for the page: name, start, last packet, length, packets, the missing ones, what was written down. */
     private fun voixJson(e: JournalPassage.Entree): String = contenu.voix(e).joinToString(",", "[", "]") { v ->
         val o = v.message
@@ -107,6 +120,26 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "\"duree\":${o.optDouble("duree", 0.0)},\"recus\":${o.optJSONArray("recus")?.length() ?: 0},\"manquants\":$manquants," +
             "\"texte\":\"${js(v.texte)}\",\"traduction\":\"${js(v.traduction)}\",\"langue\":\"${js(v.langue)}\"}"
     }
+
+    /** A pass's voice messages: their start (first packet heard) and the length of their speech (ms). */
+    private fun voixDe(e: JournalPassage.Entree): List<Pair<Long, Long>> = runCatching {
+        contenu.voix(e).map { v -> v.message.optLong("debut") to Math.round(v.message.optDouble("duree", 0.0) * 1000) }
+    }.getOrDefault(emptyList())
+
+    /** A pass's voice messages made into sound at [rate] Hz, each at its start, for the video. */
+    private fun voixSon(e: JournalPassage.Entree, rate: Int): List<Pair<Long, ShortArray>> = runCatching {
+        contenu.voix(e).mapNotNull { v ->
+            val w = voixWav?.invoke(v.message.optString("nom"))?.let { fr.f4ioz.satcombo.sstv.SstvSon.litWav(it) } ?: return@mapNotNull null
+            val (pcm, de) = w
+            if (pcm.isEmpty() || de <= 0) return@mapNotNull null
+            val n = (pcm.size.toLong() * rate / de).toInt()
+            v.message.optLong("debut") to ShortArray(n) { i ->
+                val x = i.toDouble() * de / rate; val k = x.toInt().coerceAtMost(pcm.size - 1); val f = x - k
+                val b = pcm[minOf(k + 1, pcm.size - 1)]
+                (pcm[k] * (1 - f) + b * f).toInt().toShort()
+            }
+        }
+    }.getOrDefault(emptyList())
 
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
@@ -246,6 +279,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     append(",\"ft\":").append(ftJson(e, l)).append(",\"ftAff\":").append(ftAffJson(e.options.ft))
                         .append(",\"siteFt\":").append(runCatching { siteFtPret() }.getOrDefault(false))
                     append(",\"voix\":").append(voixJson(e)).append(",\"voixTexte\":").append(transcritVoix != null)
+                    append(",\"genesis\":").append(genesisJson(e)).append(",\"relire\":").append(relireGenesis != null && e.enregistrements.isNotEmpty())
                     append(",\"doppler\":").append(station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(it, e.satName, e.debutMs, e.finMs) }
                         .orEmpty().joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                     append("}")
@@ -424,6 +458,22 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     entetes = "Content-Disposition: attachment; filename=\"${c2.name}\"\r\n")
                 ReponseWeb("200 OK", "audio/wav", fichier = voixWav?.invoke(c2.nameWithoutExtension) ?: return NON)
             }
+            // ---- what a GENESIS satellite sent: an SSDV picture as it stands, the pass's recordings read again on a gesture
+            "/ssdv" -> {
+                val c = p("img").takeIf { fr.f4ioz.satcombo.telemesure.AssemblageSsdv.idValide(it) } ?: return NON
+                ReponseWeb("200 OK", "image/jpeg", ssdvImage?.invoke(c) ?: return NON, "Cache-Control: no-cache\r\n")
+            }
+            "/genesis" -> {
+                val e = j.passage(p("id")) ?: return NON
+                json(genesisJson(e))
+            }
+            "/genesis/relire" -> {
+                if (methode != "POST") return ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
+                val e = j.passage(p("id")) ?: return NON
+                val err = relireGenesis?.invoke(e) ?: if (relireGenesis == null) "absent" else null
+                json(if (err == null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(err)}\"}")
+            }
+            "/genesis/relecture" -> json((etatRelecture?.invoke() ?: org.json.JSONObject()).toString())
             "/voix/liste" -> {
                 val e = j.passage(p("id")) ?: return NON
                 json(voixJson(e))
@@ -524,7 +574,10 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     val d0 = minOf(session.fenetres[i].first, e.debutMs)
                     fr.f4ioz.satcombo.domain.SonPassage.fabrique(m, d0, maxOf(session.fenetres[i].last, e.finMs), sortie, JournalPc.decodeur)?.let { sons[i] = it; debuts[i] = d0 }
                 }
-                val son = if (sons.isEmpty()) null else SessionRenduPc.Son(sons, debuts, sons.values.first().rate)
+                // The GENESIS voice messages laid over at their time (heard even without a recording of the pass).
+                val rate = sons.values.firstOrNull()?.rate ?: 48_000
+                val voix = if (avecSon) es.flatMap { voixSon(it, rate) } else emptyList()
+                val son = if (sons.isEmpty() && voix.isEmpty()) null else SessionRenduPc.Son(sons, debuts, rate, voix)
                 when (quoi) {
                     "gif" -> SessionRenduPc.gif(session, f) { t.progres = it }
                     "image" -> SessionRenduPc.png(session, q.instant ?: es[0].debutMs, f)
@@ -573,7 +626,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             sonAccelere = q.sonAccelere, enregistres = if (!avecSon) emptyList() else es.flatMap { e ->
                 j.morceaux(e).map { m -> (m.origine + m.annonce)..(m.origine + m.dureeMs) } },
             // Held down to ×4 only where something is heard (the recordings' activity, a little around it): elsewhere the paces chosen.
-            entendus = if (!avecSon || !q.sonAccelere) null else es.flatMap { e -> j.activite(e).map { (it.first - ENTENDU_AUTOUR_MS)..(it.last + ENTENDU_AUTOUR_MS) } })
+            entendus = if (!avecSon || !q.sonAccelere) null else es.flatMap { e -> j.activite(e).map { (it.first - ENTENDU_AUTOUR_MS)..(it.last + ENTENDU_AUTOUR_MS) } },
+            // The GENESIS voice messages: heard in real time at their moment.
+            voix = if (!avecSon) emptyList() else es.flatMap { e -> voixDe(e).map { (t, d) -> (t - 1_000L)..(t + d + 2_000L) } })
     }
 
     /**

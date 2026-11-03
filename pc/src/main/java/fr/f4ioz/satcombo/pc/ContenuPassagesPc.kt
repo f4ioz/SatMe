@@ -31,8 +31,9 @@ import java.util.concurrent.ConcurrentHashMap
  *  - digital not identified: the recordings' zones (`.numerique`), only when
  *    already worked out (opening the pass or « Rechercher le numérique »);
  *  - APRS: the frames received (`aprs/<day>.txt`, the ones sent left out);
- *  - telemetry and SSDV / Geoscan pictures: `telemesure/paquets/<passage>.jsonl` and
- *    `telemesure/<profile>-<day>.jsonl`, of the pass's satellite;
+ *  - telemetry and SSDV / Geoscan pictures: `telemesure/paquets/<passage>.jsonl`,
+ *    `telemesure/<profile>-<day>.jsonl` and the GENESIS frames and packets (`telemesure/genesis/trames/<day>.jsonl`),
+ *    of the pass's satellite;
  *  - voice: the log's contacts in a voice mode, the overs written down
  *    (`phonie/<day>.jsonl`) and the voices the recordings' zones found (`.numerique` v2); CW: the log's CW contacts;
  *  - Codec2 voice: the GENESIS messages (`telemesure/genesis/voix/<name>.json`) of the pass's satellite, from two
@@ -158,7 +159,8 @@ class ContenuPassagesPc(
      */
     fun resumes(l: List<JournalPassage.Entree>, liens: Map<String, JournalPc.Liens>): Map<String, Map<String, Int>> {
         val tlm = index(liste(File(donnees, "telemesure/paquets")) { it.name.endsWith(".jsonl") } +
-            liste(File(donnees, "telemesure")) { it.name.endsWith(".jsonl") }, ::trames) { it.t }
+            liste(File(donnees, "telemesure")) { it.name.endsWith(".jsonl") } +
+            liste(File(donnees, fr.f4ioz.satcombo.telemesure.ArchiveGenesis.DOSSIER)) { it.name.endsWith(".jsonl") }, ::trames) { it.t }
         val ph = parolesIndex()
         val vx = voixIndex()
         val ap = index(liste(File(donnees, "aprs")) { it.name.endsWith(".txt") }, ::aprs) { it }
