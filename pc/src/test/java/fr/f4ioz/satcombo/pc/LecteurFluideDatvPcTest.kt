@@ -253,4 +253,41 @@ class LecteurFluideDatvPcTest {
         d.sonNavigateur(ici = false, page = false)
         assertEquals(setOf("pc", "pcFixe"), d.sorties())
     }
+
+    @Test fun `Son sur ce PC unticked - the stream made without sound, no page said to play it`() {
+        val c = LecteurFluideDatvPc.commande("ffmpeg", copie = true, tolerant = false, son = false)
+        assertTrue(c.joinToString(" ").contains("-map 0:v:0 -an"))
+        assertFalse(c.contains("0:a:0?")); assertFalse(c.contains("-c:a"))
+        var permis = false
+        val f = LecteurFluideDatvPc()
+        f.sonPermis = { permis }
+        assertFalse(f.json().getBoolean("son"))
+        permis = true
+        assertTrue(f.json().getBoolean("son"))
+    }
+
+    @Test fun `the page - the DATV setting is the one truth for the sound, its button only mutes`() {
+        val node = runCatching { ProcessBuilder("node", "--version").start().waitFor() == 0 }.getOrDefault(false)
+        org.junit.Assume.assumeTrue("node absent", node)
+        val js = tmp.newFile("fluide.js")
+        js.writeText("""
+            const store = {}; global.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+            global.window = {}; global.g = () => null; global.fetch = () => Promise.resolve({});
+            """.trimIndent() + "\n" + fr.f4ioz.satcombo.demo.LecteurFluideJs.CODE + "\n" + """
+            const r = [];
+            r.push(dflSonVoulu());            // ticked, never muted here: heard
+            dflReglage(false); r.push(dflSonVoulu());
+            dflBasculeSon(); r.push(dflSonVoulu());   // the button cannot bring it back
+            dflReglage(true); r.push(dflSonVoulu());
+            dflBasculeSon(); r.push(dflSonVoulu());   // ticked: the button mutes this browser
+            console.log(JSON.stringify(r));
+            process.exit(0);
+            """.trimIndent())
+        val p = ProcessBuilder("node", js.absolutePath).redirectErrorStream(true).start()
+        // Never held up by a timer the player's code leaves behind.
+        val garde = Thread { runCatching { Thread.sleep(20_000L); p.destroyForcibly() } }.apply { isDaemon = true; start() }
+        val out = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor(); garde.interrupt()
+        assertEquals(out, "[true,false,false,true,false]", out.lines().last())
+    }
 }

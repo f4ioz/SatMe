@@ -53,6 +53,11 @@ class LecteurFluideDatvPc(
     @Volatile var demo = false
     /** « Décodage tolérant » of the DATV tab, for the re-encoding's decoder. */
     @Volatile var tolerant: () -> Boolean = { false }
+    /**
+     * The DATV tab's « Son sur ce PC » (set by Main): unticked, no DATV sound anywhere from here — the stream is made
+     * without its sound track (ffmpeg started again when it changes) and no page is said to play it.
+     */
+    @Volatile var sonPermis: () -> Boolean = { true }
     /** Pages play the sound: (one on this PC, any). Said when it changes; « off » after a short grace. */
     @Volatile var sonNavigateur: (Boolean, Boolean) -> Unit = { _, _ -> }
 
@@ -123,6 +128,7 @@ class LecteurFluideDatvPc(
                 codecVu != null && s.codecTs != null && codecVu != s.codecTs -> "codage changé : " + s.codecTs + " → " + codecVu
                 s.init == null && t - s.debutMs > 12_000L -> "ffmpeg ne donne rien"
                 s.init != null && flux && t - s.dernierFragmentMs > 6000L -> "ffmpeg figé"
+                s.son != sonPermis() -> if (s.son) "son coupé" else "son remis"
                 else -> null
             }
             if (pourquoi != null) { s.ferme(pourquoi); encodages.remove(n); erreur = pourquoi }
@@ -148,7 +154,7 @@ class LecteurFluideDatvPc(
 
     /** The sound in the browsers: on at once, off after [GRACE_SON_MS] (a page reconnecting does not wake the PC's own). */
     private fun majSon(t: Long) {
-        val tous = clients().filter { it.son && !it.ferme }
+        val tous = if (!sonPermis()) emptyList() else clients().filter { it.son && !it.ferme }
         val local = tous.any { it.local }
         val any = tous.isNotEmpty()
         if (local || any) sonOffDepuis = t
@@ -173,7 +179,7 @@ class LecteurFluideDatvPc(
      */
     fun sert(sortie: OutputStream, id: String, local: Boolean, son: Boolean, voulu: NiveauDatvPc = NiveauDatvPc.SOURCE) {
         val n = partage.prend(SORTE, voulu)
-        try { sertNiveau(sortie, Client(id.take(40), local, son, n), voulu) } finally { partage.rend(SORTE, n) }
+        try { sertNiveau(sortie, Client(id.take(40), local, son && sonPermis(), n), voulu) } finally { partage.rend(SORTE, n) }
     }
 
     private fun sertNiveau(sortie: OutputStream, c: Client, voulu: NiveauDatvPc) {
@@ -221,7 +227,7 @@ class LecteurFluideDatvPc(
     fun son(id: String, on: Boolean): Boolean {
         val l = clients().filter { it.id == id }
         if (l.isEmpty()) return false
-        l.forEach { it.son = on }
+        l.forEach { it.son = on && sonPermis() }
         majSon(horloge())
         return true
     }
@@ -233,12 +239,14 @@ class LecteurFluideDatvPc(
         return JSONObject().put("ok", true).put("demo", demo).put("flux", horloge() - dernierBlocMs < 2000L)
             .put("enMarche", s?.init != null && s.finie.not()).put("mode", if (s == null) "" else if (s.copie) "copie" else "h264")
             .put("codecs", s?.codecs.orEmpty()).put("clients", encodages.values.sumOf { it.clients.size }).put("erreur", erreur)
-            .put("sonPc", sonLocal).put("sessions", sessions).put("niveaux", niveaux)
+            .put("sonPc", sonLocal).put("son", sonPermis()).put("sessions", sessions).put("niveaux", niveaux)
     }
 
     // ------------------------------------------------------------------ one ffmpeg
 
     private inner class Session(val ff: String, val niveau: NiveauDatvPc, val copie: Boolean, val codecTs: String?) {
+        /** Made with its sound track ([sonPermis] when started). */
+        val son = sonPermis()
         val debutMs = horloge()
         val blocs = ArrayBlockingQueue<ByteArray>(4096)
         val clients = CopyOnWriteArrayList<Client>()
@@ -254,7 +262,7 @@ class LecteurFluideDatvPc(
         private var gopOctets = 0
 
         fun lance(debut: ByteArray) {
-            val q = ProcessBuilder(commande(ff, copie, tolerant(), niveau)).redirectError(JOURNAL).start()
+            val q = ProcessBuilder(commande(ff, copie, tolerant(), niveau, son)).redirectError(JOURNAL).start()
             p = q
             if (debut.isNotEmpty()) blocs.offer(debut)
             Thread({ nourrit(q.outputStream) }, "satme-datv-fluide-ts").apply { isDaemon = true; start() }
@@ -295,7 +303,7 @@ class LecteurFluideDatvPc(
                 if (init != null) return
                 piste = pisteVideo(i)
                 drapeauxDefaut = piste?.let { drapeauxTrex(i, it) }
-                codecs = codecsInit(i) ?: "avc1.640028,mp4a.40.2"
+                codecs = codecsInit(i) ?: if (son) "avc1.640028,mp4a.40.2" else "avc1.640028"
                 init = i
             }
         }
@@ -385,13 +393,13 @@ class LecteurFluideDatvPc(
         /**
          * ffmpeg's command: the transport stream on its input, fragmented MP4 on its output — the H.264 copied
          * ([copie]), else re-encoded in H.264 (deinterlaced when the picture says it is interlaced, 720 lines at
-         * most, a key frame each second); the sound in AAC (none when the stream has none). A smaller [niveau]: always
+         * most, a key frame each second); the sound in AAC (none when the stream has none, or without [son]: « Son sur ce PC » unticked). A smaller [niveau]: always
          * re-encoded, at its size, its rate at most, its bit rate and profile.
          */
-        fun commande(ff: String, copie: Boolean, tolerant: Boolean, niveau: NiveauDatvPc = NiveauDatvPc.SOURCE): List<String> {
+        fun commande(ff: String, copie: Boolean, tolerant: Boolean, niveau: NiveauDatvPc = NiveauDatvPc.SOURCE, son: Boolean = true): List<String> {
             val a = arrayListOf(ff, "-hide_banner", "-loglevel", "error")
             a += DatvPc.lecteurEntree(tolerant)
-            a += listOf("-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0?")
+            a += listOf("-i", "pipe:0", "-map", "0:v:0") + (if (son) listOf("-map", "0:a:0?") else listOf("-an"))
             val n = niveau
             if (n == NiveauDatvPc.SOURCE && copie) a += listOf("-c:v", "copy")
             else if (n == NiveauDatvPc.SOURCE) a += listOf("-vf", "yadif=deint=interlaced,scale=-2:'min(720,ih)',format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
@@ -401,7 +409,7 @@ class LecteurFluideDatvPc(
                 "-c:v", "libx264", "-preset", n.preset, "-tune", "zerolatency", "-profile:v", n.profil, "-crf", "23",
                 "-maxrate", "${n.kbps}k", "-bufsize", "${n.kbps}k", "-g", n.ips.toString(), "-keyint_min", n.ips.toString(), "-sc_threshold", "0",
                 "-force_key_frames", "expr:gte(t,n_forced*1)")
-            a += listOf("-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000")
+            if (son) a += listOf("-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000")
             a += listOf("-max_muxing_queue_size", "1024", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof",
                 "-frag_duration", "200000", "-flush_packets", "1", "pipe:1")
             return a

@@ -32,7 +32,7 @@ package fr.f4ioz.satcombo.demo
 object LecteurFluideJs {
 
     const val CODE = """
-const DFL = { on: false, son: true, vol: 1, baisse: 1, ok: false, demo: false, id: Math.random().toString(36).slice(2, 10),
+const DFL = { on: false, son: true, reglage: true, vol: 1, baisse: 1, ok: false, demo: false, id: Math.random().toString(36).slice(2, 10),
   ctrl: null, ms: null, sb: null, file: [], joue: false, bloque: false, echecs: 0, panneJusque: 0, essaiMs: 0, etatMs: 0,
   msg: '', mode: '', retard: null, sauts: 0, pret: false, q: '', niveau: '', repli: '', flux: 0, octets: 0, debutMs: 0, attentes: 0 };
 try {
@@ -87,17 +87,29 @@ function dflCoche(on) {
   if (!on) dflArrete();
   ticDatv();
 }
-function dflSonVoulu() { return DFL.son && !DFL.bloque; }
+// One truth for the sound: « Son sur ce PC » (D.son). Unticked, nothing is heard here (the video muted, the stream asked
+// without its sound, SatMe-PC making it without); ticked, the button only mutes this browser.
+function dflSonVoulu() { return DFL.reglage && DFL.son && !DFL.bloque; }
+function dflReglage(r) {
+  if (r === DFL.reglage) return;
+  DFL.reglage = r;
+  const vid = g('d-video-f'); if (vid) vid.muted = !dflSonVoulu();
+  dflSonServeur(dflSonVoulu());
+  dflBouton();
+  // The stream asked again with or without its sound.
+  if (DFL.ctrl) { dflFin(DFL.ctrl, r ? 'lecture fluide : son remis…' : 'lecture fluide : son coupé (case « Son sur ce PC »)…'); DFL.essaiMs = 0; }
+}
 function dflSonServeur(on) {
   if (!DFL.ctrl) return;
   fetch('api/datv/fluide/son?id=' + DFL.id + '&on=' + (on ? 1 : 0), { method: 'POST' }).catch(() => {});
 }
 function dflBasculeSon() {
   const vid = g('d-video-f');
+  if (!DFL.reglage) return;
   if (DFL.bloque || !DFL.son) { DFL.son = true; DFL.bloque = false; } else DFL.son = false;
   dflPose('satme.datvFluideSon', DFL.son ? '1' : '0');
-  if (vid) { vid.muted = !DFL.son; if (DFL.son && vid.paused && DFL.ms) vid.play().catch(() => {}); }
-  dflSonServeur(DFL.son);
+  if (vid) { vid.muted = !dflSonVoulu(); if (DFL.son && vid.paused && DFL.ms) vid.play().catch(() => {}); }
+  dflSonServeur(dflSonVoulu());
   dflBouton();
 }
 function dflVolume(x) {
@@ -107,9 +119,10 @@ function dflVolume(x) {
 }
 function dflBouton() {
   const m = g('d-fl-muet'); if (!m) return;
-  const muet = !DFL.son || DFL.bloque;
+  const muet = !dflSonVoulu();
   m.textContent = muet ? '🔇' : '🔊';
-  m.title = DFL.bloque ? 'Le navigateur n’a pas laissé démarrer le son tout seul : cliquer pour l’entendre' :
+  m.disabled = !DFL.reglage;
+  m.title = !DFL.reglage ? 'Son DATV coupé : la case « Son sur ce PC » est décochée (la cocher pour l’entendre)' : DFL.bloque ? 'Le navigateur n’a pas laissé démarrer le son tout seul : cliquer pour l’entendre' :
     muet ? 'Son coupé dans ce navigateur : cliquer pour l’entendre' : 'Couper le son dans ce navigateur';
   g('d-fl-bloque').hidden = !DFL.bloque;
   g('d-fl-son').classList.toggle('bloque', DFL.bloque);
@@ -129,6 +142,7 @@ async function dflEtat() {
 /** From ticDatv: true when the fluid playing shows the picture (the JPEG one then left alone). */
 function dFlTic(D, img) {
   dflPrepare();
+  dflReglage(D.son !== false);
   if (!DFL.pret) return false;
   const t = Date.now();
   if (t - DFL.etatMs > 3000) { DFL.etatMs = t; dflEtat(); }

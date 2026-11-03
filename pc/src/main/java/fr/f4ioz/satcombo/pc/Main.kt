@@ -848,6 +848,8 @@ fun main(args: Array<String>) {
         override fun kbps(): Int = datv.etat.kbps
     }
     fluide.tolerant = { datv.decodageTolerant }
+    // « Son sur ce PC » unticked: no DATV sound from the fluid player either (the stream made without it).
+    fluide.sonPermis = { datv.reglage.son }
     fluide.sonNavigateur = { ici, page -> datv.sonNavigateur(ici, page) }
     serveur.fluideDatv = fluide
     // The JPEG stream at each browser's « Qualité », its re-encoded levels counted with the fluid playing's (two at most).
