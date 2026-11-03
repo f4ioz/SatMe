@@ -16,10 +16,19 @@ package fr.f4ioz.satcombo.datv
 class GardeImage(val figeMs: Long = 6_000L, val pauseMs: Long = 20_000L) {
     private var derniereRelanceMs = Long.MIN_VALUE / 2
 
-    /** True when the players should be started again now. */
-    fun tic(t: Long, verrouille: Boolean, kbps: Int, derniereImageMs: Long, lecteursDepuisMs: Long?): Boolean {
-        if (!verrouille || kbps < KBPS_MIN || lecteursDepuisMs == null) return false
-        if (t - maxOf(derniereImageMs, lecteursDepuisMs) < figeMs) return false
+    /**
+     * True when the players should be started again now: the picture frozen
+     * while locked with a stream, or their input not taken for [figeMs]
+     * ([entreeBloqueeDepuisMs]: since when a write waits on it, or since they
+     * started when they are gone), whatever the lock.
+     */
+    fun tic(t: Long, verrouille: Boolean, kbps: Int, derniereImageMs: Long, lecteursDepuisMs: Long?, entreeBloqueeDepuisMs: Long? = null): Boolean {
+        if (lecteursDepuisMs == null) return false
+        val bloquee = entreeBloqueeDepuisMs != null && t - entreeBloqueeDepuisMs >= figeMs
+        if (!bloquee) {
+            if (!verrouille || kbps < KBPS_MIN) return false
+            if (t - maxOf(derniereImageMs, lecteursDepuisMs) < figeMs) return false
+        }
         if (t - derniereRelanceMs < pauseMs) return false
         derniereRelanceMs = t
         relances++

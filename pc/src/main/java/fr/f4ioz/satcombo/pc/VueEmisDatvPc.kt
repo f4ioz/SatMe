@@ -153,7 +153,7 @@ class VueEmisDatvPc(
                 override val entree: OutputStream = pr.outputStream
                 override val sortie: InputStream = pr.inputStream
                 override val vivant: Boolean get() = pr.isAlive
-                override fun arrete() { runCatching { pr.outputStream.close() }; pr.destroy(); if (!pr.waitFor(2, TimeUnit.SECONDS)) pr.destroyForcibly() }
+                override fun arrete() { ArretProcessus.arrete(pr) }
             }
         }
     }

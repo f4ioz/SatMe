@@ -368,7 +368,8 @@ class VideoSitePc(
             finie = true
             runCatching { src.branche(null) }
             runCatching { tts?.close() }
-            processus?.let { p -> runCatching { p.outputStream.close() }; p.destroy(); if (!runCatching { p.waitFor(2, TimeUnit.SECONDS) }.getOrDefault(false)) p.destroyForcibly() }
+            // Never waited on its input (the feeding thread may be stuck in a write): see ArretProcessus.
+            processus?.let { p -> ArretProcessus.arrete(p, 2_000L) }
             Thread({ Thread.sleep(1500L); dossier.deleteRecursively() }, "satme-video-site-menage").apply { isDaemon = true; start() }
         }
     }

@@ -326,7 +326,8 @@ class LecteurFluideDatvPc(
             if (cause.isEmpty()) cause = raison
             finie = true
             clients.forEach { it.ferme = true }
-            p?.let { q -> runCatching { q.outputStream.close() }; q.destroy(); if (runCatching { !q.waitFor(2, TimeUnit.SECONDS) }.getOrDefault(true)) q.destroyForcibly() }
+            // Never waited on its input (the feeding thread may be stuck in a write): see ArretProcessus.
+            p?.let { q -> ArretProcessus.arrete(q) }
         }
     }
 

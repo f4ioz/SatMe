@@ -109,9 +109,9 @@ class MoteurProcessus(
     override fun arrete() {
         val p = processus ?: return
         processus = null
-        runCatching { entree?.close() }
         entree = null
-        if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) { p.destroy(); if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) p.destroyForcibly() }
+        // Its input closed for it to end cleanly, never waited on (a write may be stuck in it), then stopped.
+        ArretProcessus.fermePuisArrete(p, 1_500L, 1_500L)
     }
 
     /** Why it stopped: its exit code and the last line it wrote on stderr. */

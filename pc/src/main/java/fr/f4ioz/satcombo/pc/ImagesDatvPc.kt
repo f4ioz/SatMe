@@ -12,7 +12,6 @@ import org.json.JSONObject
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
  * The DATV tab's JPEG stream (`/api/datv/video.mjpeg`, the page's picture unless « Lecture fluide » is on), at the
@@ -165,7 +164,8 @@ class ImagesDatvPc(
 
         fun arrete() {
             fini = true
-            p?.let { q -> runCatching { q.outputStream.close() }; q.destroy(); if (runCatching { !q.waitFor(2, TimeUnit.SECONDS) }.getOrDefault(true)) q.destroyForcibly() }
+            // Never waited on its input (the feeding thread may be stuck in a write): see ArretProcessus.
+            p?.let { q -> ArretProcessus.arrete(q) }
         }
     }
 

@@ -36,6 +36,19 @@ class GardeDatvTest {
         assertFalse(h.tic(60_000, true, 1200, 0, null))
     }
 
+    @Test fun `ffmpeg qui ne prend plus le flux relance meme sans verrouillage`() {
+        val g = GardeImage(figeMs = 6000, pauseMs = 20_000)
+        // A write waiting 3 s: not yet.
+        assertFalse(g.tic(10_000, false, 0, 0, 0, 7_000))
+        // Waiting 6 s: started again, lock or not.
+        assertTrue(g.tic(13_000, false, 0, 0, 0, 7_000))
+        // Not more than once per pause.
+        assertFalse(g.tic(14_000, false, 0, 0, 0, 7_000))
+        assertEquals(1, g.relances)
+        // No players: nothing to start again.
+        assertFalse(GardeImage().tic(60_000, true, 1200, 0, null, 0))
+    }
+
     @Test fun `LongMynd relance apres un arret inattendu`() {
         val r = RelanceLongMynd(listOf(3000, 10_000, 30_000), tenuMs = 15_000)
         // Unplugged, no access: stays stopped.

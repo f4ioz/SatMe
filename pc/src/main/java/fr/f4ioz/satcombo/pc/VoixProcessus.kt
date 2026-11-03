@@ -94,9 +94,9 @@ class ProcessusLignes(private val commande: List<String>, private val environnem
     @Synchronized fun arrete() {
         val p = processus ?: return
         processus = null; pret = null
-        runCatching { entree?.close() }
         entree = null
-        if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) p.destroyForcibly()
+        // Its input closed for it to end cleanly, never waited on, then stopped (see ArretProcessus).
+        ArretProcessus.fermePuisArrete(p, 1_500L, 0L)
     }
 
     companion object {

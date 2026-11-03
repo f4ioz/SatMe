@@ -951,44 +951,46 @@ fun main(args: Array<String>) {
         BureauPc.ouvre(url)
     }
     Runtime.getRuntime().addShutdownHook(Thread {
+        // Each part given 5 s at most (30 s in all): one stuck (a lock never let go) does not keep SatMe-PC from stopping.
+        val a = ArretBorne(5_000L, 30_000L)
         // The rig's PTT released first, while the CAT still reaches it.
-        runCatching { ft8Tx.arrete("SatMe-PC fermé") }
-        runCatching { emissionPoste.arreteTout("SatMe-PC fermé") }
+        a.fais("ft8Tx.arrete") { ft8Tx.arrete("SatMe-PC fermé") }
+        a.fais("emissionPoste.arreteTout") { emissionPoste.arreteTout("SatMe-PC fermé") }
         // The Pluto's narrow band: its LO powered down.
-        runCatching { emissionBe.arreteTout("SatMe-PC fermé") }
+        a.fais("emissionBe.arreteTout") { emissionBe.arreteTout("SatMe-PC fermé") }
         // The transmitter first: its LO powered down before anything else.
-        runCatching { iq.arrete() }
-        runCatching { adsb.arrete() }
-        runCatching { ais.arrete() }
-        runCatching { emission.arrete("SatMe-PC fermé") }
+        a.fais("iq.arrete") { iq.arrete() }
+        a.fais("adsb.arrete") { adsb.arrete() }
+        a.fais("ais.arrete") { ais.arrete() }
+        a.fais("emission.arrete") { emission.arrete("SatMe-PC fermé") }
         // The DATV PTT output at rest at once (no delay to wait: the RF is off), its port let go.
-        runCatching { emission.ptt.ferme() }
+        a.fais("emission.ptt") { emission.ptt.ferme() }
         // No hackrf_transfer outlives SatMe-PC.
-        runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
-        runCatching { journal.ferme() }
-        runCatching { spectreJournal.ferme() }
+        a.fais("HackrfEmission.arreteTout") { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
+        a.fais("journal.ferme") { journal.ferme() }
+        a.fais("spectreJournal.ferme") { spectreJournal.ferme() }
         // The KISS radio put back as it was.
-        runCatching { kiss.deconnecte() }
-        runCatching { igate.arrete() }
-        runCatching { partage.arrete() }
-        runCatching { polarisation.arrete() }
-        runCatching { sdr.arrete() }
+        a.fais("kiss.deconnecte") { kiss.deconnecte() }
+        a.fais("igate.arrete") { igate.arrete() }
+        a.fais("partage.arrete") { partage.arrete() }
+        a.fais("polarisation.arrete") { polarisation.arrete() }
+        a.fais("sdr.arrete") { sdr.arrete() }
         // Nor any bladeRF-cli (the receiver's stopped just above, gently).
-        runCatching { fr.f4ioz.satcombo.sdr.Bladerf.arreteTout() }
-        runCatching { datv.arrete() }
-        runCatching { son.arreteEnregistrement(); son.son.arrete() }
-        runCatching { station.deconnecteCat() }
+        a.fais("Bladerf.arreteTout") { fr.f4ioz.satcombo.sdr.Bladerf.arreteTout() }
+        a.fais("datv.arrete") { datv.arrete() }
+        a.fais("son.arreteEnregistrement") { son.arreteEnregistrement(); son.son.arrete() }
+        a.fais("station.deconnecteCat") { station.deconnecteCat() }
         // The IC-9700's one network session handed back, or the owner is locked out a while.
-        runCatching { station.icomReseau.ferme() }
-        runCatching { station.stationRotor.disconnectRotor() }
-        runCatching { lien.arrete() }
-        runCatching { rigctld.arrete() }
-        runCatching { molette.arrete() }
-        runCatching { phonie.arrete() }
-        runCatching { parole.arrete() }
-        runCatching { assistant.arrete() }
-        runCatching { domotique.arrete() }
-        serveur.arrete()
+        a.fais("station.icomReseau") { station.icomReseau.ferme() }
+        a.fais("station.stationRotor") { station.stationRotor.disconnectRotor() }
+        a.fais("lien.arrete") { lien.arrete() }
+        a.fais("rigctld.arrete") { rigctld.arrete() }
+        a.fais("molette.arrete") { molette.arrete() }
+        a.fais("phonie.arrete") { phonie.arrete() }
+        a.fais("parole.arrete") { parole.arrete() }
+        a.fais("assistant.arrete") { assistant.arrete() }
+        a.fais("domotique.arrete") { domotique.arrete() }
+        a.fais("serveur") { serveur.arrete() }
     })
     // The server and the loops run on their own threads; this one waits.
     Thread.currentThread().join()

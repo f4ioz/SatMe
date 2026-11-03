@@ -11,7 +11,6 @@ package fr.f4ioz.satcombo.pc
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
@@ -52,9 +51,8 @@ class SonDatvPc(
     fun arrete() {
         val p = processus ?: return
         processus = null
-        runCatching { p.outputStream.close() }
-        p.destroy()
-        if (!runCatching { p.waitFor(1, TimeUnit.SECONDS) }.getOrDefault(false)) p.destroyForcibly()
+        // Never waited on its input (a write may be stuck in it): signalled, killed if need be, closed after.
+        ArretProcessus.arrete(p)
     }
 
     private fun lis(e: InputStream) {

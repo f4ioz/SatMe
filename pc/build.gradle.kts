@@ -23,6 +23,13 @@ kotlin {
 // (satme-2026.10.13.tar), and the guides and SatMe-Node's script expect satme.tar → satme/.
 val versionPc = providers.gradleProperty("satmePcVersion").getOrElse("dev")
 
+// The tests' temporary files apart: the decoders' logs (satme-datv-ffmpeg.log…) of a SatMe-PC running on this machine stay untouched.
+tasks.withType<Test>().configureEach {
+    val tmp = layout.buildDirectory.dir("tmp/tests").get().asFile
+    doFirst { tmp.mkdirs() }
+    systemProperty("java.io.tmpdir", tmp.absolutePath)
+}
+
 tasks.jar {
     manifest { attributes("Implementation-Title" to "SatMe-PC", "Implementation-Version" to versionPc) }
 }

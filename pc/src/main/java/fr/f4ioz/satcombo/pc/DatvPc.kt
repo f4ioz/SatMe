@@ -70,6 +70,10 @@ class DatvPc(
     private val lecteursLocaux: Boolean = true,
     /** The SDRs for the software receiver; null: MiniTiouner only. */
     var materiel: MaterielSdrDatv? = null,
+    /** Where ffmpeg is (the tests give a fake one). */
+    private val trouveFfmpeg: () -> String? = { RenduPc.ffmpeg() },
+    /** The watchdog of the picture and of the players' input. */
+    private val gardeFige: fr.f4ioz.satcombo.datv.GardeImage = fr.f4ioz.satcombo.datv.GardeImage(),
 ) {
     @Volatile var etat = EtatDatv(); private set
     @Volatile var reglage = lisReglage(); private set
@@ -220,25 +224,46 @@ class DatvPc(
 
     // ------------------------------------------------------------ the guards: a frozen picture, LongMynd gone by itself
 
-    private val gardeFige = fr.f4ioz.satcombo.datv.GardeImage()
     @Volatile private var derniereImageMs = 0L
     @Volatile private var lecteursDepuisMs: Long? = null
 
     /** Times the players were started again on a frozen picture (this reception). */
     val relancesImage: Int get() = gardeFige.relances
 
-    /** The picture frozen while locked and the stream flows: the players started again with the next packets. */
+    /**
+     * The picture frozen while locked and the stream flows, or ffmpeg that
+     * no longer takes the stream (a write waiting on it, or gone): the
+     * players started again with the next packets.
+     */
     private fun gardeImage(gen: Int) {
         if (!lecteursLocaux || generation != gen) return
         val e = etat
-        if (!gardeFige.tic(horloge(), e.verrouille, e.kbps, derniereImageMs, lecteursDepuisMs.takeIf { ffmpeg != null })) return
+        val f = ffmpeg
+        val depuis = lecteursDepuisMs.takeIf { f != null }
+        val bloquee = f?.let { p -> if (!p.isAlive) depuis else entrees[p.outputStream]?.bloqueeDepuisMs() }
+        if (!gardeFige.tic(horloge(), e.verrouille, e.kbps, derniereImageMs, depuis, bloquee)) return
         synchronized(this) {
             if (generation != gen) return
-            listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
+            arreteLecteurs(ffmpeg, ffplay)
             ffmpeg = null; ffplay = null; lecteursDepuisMs = null
             arreteSonTexte(); arreteSonLocal()
         }
     }
+
+    /**
+     * The players stopped without ever waiting on their input: signalled,
+     * killed if they do not go, their streams closed once gone
+     * ([ArretProcessus]); their feeding threads let go at once.
+     */
+    private fun arreteLecteurs(vararg l: Process?) {
+        for (p in l) if (p != null) { entrees.remove(p.outputStream)?.ferme(); ArretProcessus.arrete(p) }
+    }
+
+    /** Each player's input fed on its own ([EntreeLecteurPc]): one that stops reading holds nothing else. */
+    private val entrees = java.util.concurrent.ConcurrentHashMap<OutputStream, EntreeLecteurPc>()
+
+    /** The test's look at the players' processes (ffmpeg's for the pictures). */
+    internal val ffmpegLecteur: Process? get() = ffmpeg
 
     /** LongMynd started again when it stops by itself in the middle of a reception (on unless unticked). */
     var relanceAuto: Boolean
@@ -377,7 +402,7 @@ class DatvPc(
     }
 
     private fun arreteFlux() {
-        (listOf(ffmpeg, ffplay) + vlcs).forEach { p -> p?.let { runCatching { it.outputStream.close() }; it.destroy() } }
+        arreteLecteurs(ffmpeg, ffplay, *vlcs.toTypedArray())
         ffmpeg = null; ffplay = null; vlcs.clear(); typesLecteurs = null
         arreteSonTexte(); arreteSonLocal()
         enregistre(false)
@@ -518,19 +543,8 @@ class DatvPc(
      * here, or a node): the recording, the players here, the node's clients.
      */
     private inner class Reception(private val gen: Int) {
-        private val file = ArrayBlockingQueue<ByteArray>(512)
         private var octets = 0L
         private var t0 = horloge()
-
-        init {
-            // One thread writes to the players: a slow one never holds the source.
-            if (lecteursLocaux) thread(isDaemon = true, name = "satme-datv-lecteurs") {
-                while (generation == gen) {
-                    val bloc = file.poll(500, TimeUnit.MILLISECONDS) ?: continue
-                    lecteurs().forEach { o -> runCatching { o.write(bloc); o.flush() } }
-                }
-            }
-        }
 
         fun bloc(bloc: ByteArray) {
             // A block read just before a new start (the node's stream ends a read later): not mixed into the new reception.
@@ -546,7 +560,7 @@ class DatvPc(
                 if (sousTitres && ffmpeg != null && sonTexte?.enMarche != true && horloge() - essaiSonTexteMs >= 5000L) demarreSonTexte(gen)
                 if (ffmpeg != null && sonLocalVoulu() && sonLocal?.enMarche != true && horloge() - essaiSonLocalMs >= 5000L) demarreSonLocal(gen)
                 else if (sonLocal != null && !sonLocalVoulu()) arreteSonLocal()
-                if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
+                versLecteurs(bloc)
             }
             for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
             versSite?.let { f -> runCatching { f(bloc) } }
@@ -692,6 +706,17 @@ class DatvPc(
         return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream, sonTexte?.entree, sonLocal?.entree) + vlcs.map { it.outputStream }
     }
 
+    /**
+     * A block to each player, never waited for: each has its own short queue
+     * and thread ([EntreeLecteurPc]); nothing is written to a player under a
+     * lock that stopping takes. Inputs no longer in use are let go.
+     */
+    private fun versLecteurs(bloc: ByteArray) {
+        val l = lecteurs()
+        for (o in l) entrees.computeIfAbsent(o) { EntreeLecteurPc(it, "datv", 512) }.donne(bloc)
+        if (entrees.size > l.size) entrees.entries.removeIf { (o, e) -> l.none { it === o }.also { if (it) e.ferme() } }
+    }
+
     /** The streams' types the players were started on. */
     @Volatile private var typesLecteurs: Set<Int>? = null
 
@@ -708,7 +733,7 @@ class DatvPc(
         // A type not seen when they started (the list rebuilt piece by piece after a lost lock is no change).
         if (avant.containsAll(types)) return
         typesLecteurs = types
-        listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
+        arreteLecteurs(ffmpeg, ffplay)
         ffmpeg = null; ffplay = null
         arreteSonTexte(); arreteSonLocal()
     }
@@ -733,7 +758,7 @@ class DatvPc(
         essaiSonTexteMs = t
         sonTexte?.arrete()
         val e = ecouteSon ?: return
-        val ff = RenduPc.ffmpeg() ?: return
+        val ff = trouveFfmpeg() ?: return
         sonTexte = SonDatvPc(ff, ecoute = e).takeIf { it.demarre() }
     }
     @Volatile private var essaiSonTexteMs = 0L
@@ -744,7 +769,7 @@ class DatvPc(
     @Synchronized
     private fun demarreLecteurs(gen: Int) {
         if (generation != gen || ffmpeg != null) return
-        val ff = RenduPc.ffmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (" + OutilsPc.conseil("ffmpeg") + ")"); return }
+        val ff = trouveFfmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (" + OutilsPc.conseil("ffmpeg") + ")"); return }
         // The logs start again with the players.
         journalImages.reprends(); journalSon.reprends()
         val p = ProcessBuilder(listOf(ff, "-loglevel", "error") + entreeLecteur() +
@@ -776,10 +801,10 @@ class DatvPc(
         if (!on) { arreteFfplay(); if (!sonLocalVoulu()) arreteSonLocal(); return }
         // Played here with its levels: the next block starts it; played by a page on this PC: not twice.
         if (sonReglable || sonNavigateurIci) return
-        if (ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+        if (ffmpeg != null && ffplay == null && lecteursLocaux) trouveFfmpeg()?.let { demarreSon(it) }
     }
 
-    private fun arreteFfplay() { ffplay?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }; ffplay = null }
+    private fun arreteFfplay() { arreteLecteurs(ffplay); ffplay = null }
 
     // ------------------------------------------------------------ the sound played here, its levels, its volume
 
@@ -816,7 +841,7 @@ class DatvPc(
         if (reglable) arreteFfplay()
         else {
             if (!sonLocalVoulu()) arreteSonLocal()
-            if (reglage.son && !sonNavigateurIci && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+            if (reglage.son && !sonNavigateurIci && ffmpeg != null && ffplay == null && lecteursLocaux) trouveFfmpeg()?.let { demarreSon(it) }
         }
     }
 
@@ -831,7 +856,7 @@ class DatvPc(
         if (ici == sonNavigateurIci) return
         sonNavigateurIci = ici
         if (ici) arreteFfplay()
-        else if (reglage.son && !sonReglable && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+        else if (reglage.son && !sonReglable && ffmpeg != null && ffplay == null && lecteursLocaux) trouveFfmpeg()?.let { demarreSon(it) }
     }
     @Volatile var sonNavigateurIci = false; private set
     @Volatile private var sonPage = false
@@ -849,7 +874,7 @@ class DatvPc(
         if (t - essaiSonLocalMs < 5000L) return
         essaiSonLocalMs = t
         sonLocal?.arrete()
-        val ff = RenduPc.ffmpeg() ?: return
+        val ff = trouveFfmpeg() ?: return
         sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son && !sonNavigateurIci }, diffusion, horloge) { gainParole() }.takeIf { it.demarre() }
     }
 
