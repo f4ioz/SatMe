@@ -2111,6 +2111,7 @@ ${ConversionPagePc.CSS}
 ${DemarragePagePc.CSS}
 ${GuidePagePc.CSS}
 ${ApparencePagePc.CSS}
+${FenetreTxPc.CSS}
 ${IssDirectJs.CSS}
 ${IssOeilNuJs.CSS}
 ${RembobinageJs.STYLE}
@@ -2144,6 +2145,7 @@ ${rail()}
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
   <button id="h-ap" class="h-puce" hidden onclick="apMaitreBascule()" aria-pressed="false" title="Auto-pilote SSTV (Agenda › SSTV) : clic pour l'activer ou le couper. Réception seulement">🤖<span class="h-m" id="h-ap-t">Auto-pilote</span></button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
+  ${FenetreTxPc.ENTETE}
   <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span id="h-pass-ap"></span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span class="h-esp"></span>
@@ -5445,6 +5447,7 @@ ${DiplomesJs.DIALOGUE}
 </dialog>
 ${DemarragePagePc.DIALOGUES}
 ${GuidePagePc.DIALOGUES}
+${FenetreTxPc.HTML}
 <div id="man" class="man" hidden role="dialog" aria-modal="true" aria-labelledby="man-t">
   <div class="man-boite">
     <div class="man-tete"><b id="man-t">Manuel</b>${IconesPc.svg("search")}<input id="man-q" type="search" autocomplete="off" placeholder="Chercher dans le manuel (tous les mots)" aria-label="Chercher dans le manuel" aria-controls="man-res">
@@ -7615,6 +7618,8 @@ function vue(n) {
   galPlace(n);
   const ns = nsOff(n);
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== (ns ? 'v-nonsat' : 'v-' + n));
+  // The TX window: drawn on a reception tab only; leaving the reception while it transmits stops it.
+  if (typeof txfSurveille === 'function') txfSurveille();
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   navMaj(n);
@@ -18742,6 +18747,8 @@ async function pxLit() {
 /** The panel where the operator works: the QO-100 cockpit while it is shown, else the Suivi tab. */
 function pxPlace(n) {
   const p = g('ptx'), slot = g(n === 'qo100' ? 'ptx-slot-qo' : 'ptx-slot-st');
+  // In the TX window: it stays there until the window closes.
+  if (p && p.closest('#txf')) return;
   if (p && slot && p.parentElement !== slot) slot.appendChild(p);
 }
 function pxRend() {
@@ -18789,6 +18796,8 @@ function pxRend() {
 }
 async function pxAppuie() {
   if (pxTenu || !PX || g('ptx-ptt').disabled) return;
+  // No TX without an eye on the RX (the TX window's rule): the page hidden, or the window away from the reception.
+  { const r = typeof txfRefus === 'function' ? txfRefus() : ''; if (r) { txt('ptx-info', r); g('ptx-info').classList.add('avert'); return; } }
   pxTenu = true; g('ptx-ptt').classList.add('on');
   // From another machine: the session's confirmation first (asked once); then press again.
   let c = null;
@@ -19198,6 +19207,8 @@ async function bxMesure(quoi) {
 /** Keys the Pluto; [maintenu]: until clicked again (FT8, CW text); [voix]: that voice memory played, then released by SatMe. */
 async function bxAppuie(maintenu, voix) {
   if (bxTenu || !BX || g('btx-ptt').disabled) return false;
+  // No TX without an eye on the RX (the TX window's rule): the page hidden, or the window away from the reception.
+  { const r = typeof txfRefus === 'function' ? txfRefus() : ''; if (r) { txt('btx-info', r); g('btx-info').classList.add('avert'); return false; } }
   bxTenu = true; bxVerrouille = !!maintenu; g('btx-ptt').classList.add('on');
   let c = null;
   try { const r = await fetch('api/emission/controle?client=' + TX_CLIENT); if (r.ok) c = await r.json(); } catch (x) {}
@@ -20442,6 +20453,7 @@ ${MessagesAprsJs.JS}
 ${FrequencesJs.JS}
 ${ApparencePagePc.JS}
 ${GuidePagePc.JS}
+${FenetreTxPc.JS}
 </script>
 </body></html>
 """

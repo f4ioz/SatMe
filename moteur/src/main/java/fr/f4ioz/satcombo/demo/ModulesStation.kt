@@ -90,7 +90,7 @@ object ModulesStation {
         Module(DOMOTIQUE, "Home Assistant", "L’état de la station et quelques gestes sans émission (auto-pilote, réception SSTV et DATV, son) dans Home Assistant par MQTT, puis Alexa ou Google Home par Home Assistant",
             masques = listOf("#ha-carte"), avis = "Désactivé par défaut ; un broker MQTT sur votre réseau", surDemande = true),
         Module(TRAFIC, "Trafic satellite (émission)", "Émettre par les satellites en orbite basse avec l’IC-9700 : préréglages par satellite (tonalité, élévation minimale, puissance), armement de SO-50, mémoires CW et vocales, APRS par digipeater (ARISS), assistant de QSO. Chaque émission part d’un clic de l’opérateur.",
-            masques = listOf("#leo-carte"), avis = "Désactivé par défaut ; aucun profil ne l’active. Un IC-9700 connecté par CAT", surDemande = true),
+            masques = listOf("#leo-slot", "#leo-carte"), avis = "Désactivé par défaut ; aucun profil ne l’active. Un IC-9700 connecté par CAT", surDemande = true),
     )
 
     private val PAR_ID = MODULES.associateBy { it.id }

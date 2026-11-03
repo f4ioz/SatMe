@@ -51,7 +51,7 @@ object TraficLeoJs {
 """
 
     const val HTML = """
-    <div class="carte leo" id="leo-carte" hidden data-tuile="leo" data-pli-nom="Trafic satellite" aria-label="Trafic satellite : émettre par les satellites en orbite basse">
+    <div id="leo-slot" data-tuile="leo" data-pli-nom="Trafic satellite"><div class="carte leo" id="leo-carte" hidden aria-label="Trafic satellite : émettre par les satellites en orbite basse">
       <div class="t">Trafic satellite <span class="leo-etat" id="leo-etat">—</span><span class="petit" id="leo-sat"></span>
         <button type="button" class="leo-stop" id="leo-stop" onclick="leoArret()" title="Arrêter tout de suite (Échap aussi)">■ Arrêter</button></div>
       <div class="leo-prog" id="leo-prog-l" hidden><i id="leo-prog"></i></div>
@@ -102,7 +102,7 @@ object TraficLeoJs {
         <div class="petit aide">Chemin ARISS seulement. La balise ne vaut que pour le passage en cours (désarmée au LOS, page fermée, ou ARRÊT), au-dessus de 10°.</div>
       </details>
       <div class="petit aide">Chaque émission part d’un clic ; toutes les gardes du PTT de l’IC-9700 restent (minuterie, plafond, réseau), plus celles du préréglage. Rien ne part tout seul.</div>
-    </div>
+    </div></div>
 """
 
     const val CODE = """
@@ -117,6 +117,8 @@ async function leoPost(q, corps) {
 }
 function leoRegle(q) { return leoPost(q); }
 async function leoJoue(q) {
+  // No TX without an eye on the RX (the TX window's rule).
+  { const r = typeof txfRefus === 'function' ? txfRefus() : ''; if (r) { txt('leo-info', r); g('leo-info').classList.add('avert'); return; } }
   if (typeof txPeutDemarrer === 'function' && !(await txPeutDemarrer())) return;
   return leoPost('joue=1&' + q);
 }
@@ -138,7 +140,7 @@ async function leoNote() {
   txt('leo-info', j && j.ok !== false ? 'Contact noté au carnet : ' + c.toUpperCase() : 'Carnet : ' + ((j && j.erreur) || 'refusé'));
 }
 async function leoTic() {
-  const vu = !g('v-station').hidden && !g('leo-carte').hidden;
+  const vu = (!g('v-station').hidden || (!!g('leo-carte').closest('#txf') && !g('txf').hidden)) && !g('leo-carte').hidden;
   const actif = LEO && (LEO.emet || (LEO.balise && LEO.balise.armee));
   if (window.SATME_TELEPHONE || (!vu && !actif && LEO)) return;
   try { const r = await fetch('api/trafic-sat?vie=1&client=' + TX_CLIENT); if (!r.ok) return; LEO = await r.json(); } catch (x) { return; }

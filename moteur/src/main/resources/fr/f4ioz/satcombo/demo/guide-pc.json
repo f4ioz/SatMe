@@ -360,6 +360,104 @@
    ]
   },
   {
+   "id": "txf",
+   "groupe": "debut",
+   "onglet": "station",
+   "couleur": "#FF5A36",
+   "image": "txf.webp",
+   "titre": {
+    "fr": "Émettre sans quitter la réception",
+    "en": "Transmit without leaving the reception"
+   },
+   "resume": {
+    "fr": "La fenêtre d'émission : sur un satellite on émet en écoutant sa propre descente. Elle s'ouvre par-dessus la page de réception (Suivi, QO-100, SDR, Son, les décodeurs) avec le PTT, la puissance, les mémoires, l'état TX bien rouge, la minuterie et STOP ; la chute d'eau, le Doppler et les décodeurs restent vivants derrière.",
+    "en": "The TX window: on a satellite you transmit while listening to your own downlink. It opens over the reception page (Suivi, QO-100, SDR, Sound, the decoders) with the PTT, the power, the memories, the bright red TX state, the time-out and STOP; the waterfall, the Doppler and the decoders stay alive behind it."
+   },
+   "etapes": [
+    {
+     "cible": "h-txf",
+     "titre": {
+      "fr": "Le bouton « Émettre »",
+      "en": "The « Émettre » button"
+     },
+     "texte": {
+      "fr": "Dans l'en-tête, à côté du voyant **TX**. Un clic ouvre la fenêtre d'émission, un autre la ferme. Gris, il dit pourquoi au survol ou au clic : émission non activée (pas d'IC-9700 connecté en CAT, pas de Pluto réglé), ou pas sur une page de réception.",
+      "en": "In the header, beside the **TX** light. One click opens the TX window, another closes it. Grey, it says why when hovered or clicked: transmission not on (no IC-9700 connected by CAT, no Pluto set up), or not on a reception page."
+     },
+     "but": {
+      "fr": "Émettre et écouter en même temps, comme en trafic satellite (full duplex).",
+      "en": "Transmitting and listening at once, as in satellite work (full duplex)."
+     },
+     "faire": {
+      "fr": "Ouvre d'abord une page de réception (Suivi, QO-100, SDR…), puis clique **Émettre**.",
+      "en": "First open a reception page (Suivi, QO-100, SDR…), then click **Émettre**."
+     }
+    },
+    {
+     "cible": "txf",
+     "titre": {
+      "fr": "La fenêtre d'émission",
+      "en": "The TX window"
+     },
+     "image": "txf.webp",
+     "texte": {
+      "fr": "Une fenêtre flottante par-dessus la réception : un onglet par émetteur prêt — **Phonie · IC-9700** (PTT tenu, micro, puissance et préréglages), **Trafic satellite** (mémoires CW et vocales, APRS), **Pluto · QO-100** (mode, mémoires, PTT maintenu). Ce sont les panneaux habituels de SatMe, déplacés dans la fenêtre : mêmes boutons, mêmes garde-fous.",
+      "en": "A floating window over the reception: one tab per transmitter ready — **Phonie · IC-9700** (held PTT, microphone, power and presets), **Trafic satellite** (CW and voice memories, APRS), **Pluto · QO-100** (mode, memories, latched PTT). They are SatMe's usual panels, moved into the window: same buttons, same guards."
+     },
+     "astuce": {
+      "fr": "Tire la fenêtre par son titre, agrandis-la par son coin, replie-la avec ▁ : l'état TX et STOP restent visibles. Double-clic sur le titre : à sa place d'origine.",
+      "en": "Drag the window by its title, enlarge it by its corner, fold it with ▁: the TX state and STOP stay visible. Double-click on the title: back to its first place."
+     }
+    },
+    {
+     "cible": "txf-etat",
+     "titre": {
+      "fr": "RX ou ● TX, et la minuterie",
+      "en": "RX or ● TX, and the time-out"
+     },
+     "image": "txf-tx.webp",
+     "texte": {
+      "fr": "**RX** sur fond calme tant que rien n'émet ; en émission, la fenêtre entière passe au rouge-orangé, **● TX** clignote et la minuterie (TOT) décompte le temps qui reste avant le relâchement automatique.",
+      "en": "**RX** on a calm background while nothing transmits; transmitting, the whole window turns red-orange, **● TX** pulses and the time-out (TOT) counts down the time left before the automatic release."
+     },
+     "reussi": {
+      "fr": "Appuie sur PTT (en simulation pour essayer) : la fenêtre rougit et la cascade derrière continue de défiler.",
+      "en": "Press PTT (in simulation to try it): the window turns red and the waterfall behind keeps scrolling."
+     }
+    },
+    {
+     "cible": "txf-oeil",
+     "titre": {
+      "fr": "Pas de TX sans œil sur le RX",
+      "en": "No TX without an eye on the RX"
+     },
+     "texte": {
+      "fr": "Le bas de la fenêtre dit quelle réception tu as sous les yeux. La fenêtre ne s'affiche que sur une page de réception : si l'onglet du navigateur est caché, la fenêtre réduite ou une autre page ouverte pendant l'émission, SatMe repasse **aussitôt** en réception et les commandes d'émission restent grisées tant que la réception n'est pas revenue.",
+      "en": "The window's foot says which reception you have in sight. The window shows only on a reception page: if the browser tab is hidden, the window minimised or another page opened while transmitting, SatMe goes back to reception **at once** and the transmit controls stay grey until the reception is back."
+     },
+     "attention": {
+      "fr": "Jamais d'émission par la voix, l'assistant, la domotique, la planification ou l'auto-pilote : chaque émission part d'un geste à toi, dans cette fenêtre ou dans les panneaux habituels.",
+      "en": "Never a transmission by voice, the assistant, home automation, scheduling or the autopilot: every transmission starts from a gesture of yours, in this window or in the usual panels."
+     }
+    },
+    {
+     "cible": "txf-stop",
+     "titre": {
+      "fr": "STOP d'abord",
+      "en": "STOP first"
+     },
+     "texte": {
+      "fr": "**■ STOP** arrête toute émission de SatMe et revient en réception, dès l'appui. Juste après, rien dans la fenêtre ne réémet pendant un instant. Fermer la fenêtre (✕) arrête aussi ce qu'elle émettait et remet les panneaux à leur place.",
+      "en": "**■ STOP** stops every transmission of SatMe and goes back to reception, as soon as it is pressed. Right after, nothing in the window transmits again for a moment. Closing the window (✕) also stops what it was transmitting and puts the panels back in their places."
+     },
+     "attention": {
+      "fr": "**Échap** ou le voyant **TX** rouge de l'en-tête font la même chose, partout : ils n'arrêtent que, ne démarrent jamais rien.",
+      "en": "**Esc** or the red **TX** light in the header do the same, everywhere: they only stop, never start anything."
+     }
+    }
+   ]
+  },
+  {
    "id": "station",
    "groupe": "ciel",
    "couleur": "#3FE0C8",
