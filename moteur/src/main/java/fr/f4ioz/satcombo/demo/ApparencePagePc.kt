@@ -333,7 +333,7 @@ function apTextes() {
   document.querySelectorAll('[data-apt]').forEach(e => { const t = APP.textes[e.dataset.apt]; if (t) e.textContent = t; });
   apNuancier();
 }
-async function apCharge() {
+async function apparenceCharge() {
   if (window.SATME_TELEPHONE) { g('h-ui').hidden = true; g('rail-theme').hidden = true; return; }
   let j = null;
   try { const r = await fetch('api/apparence'); j = r.ok ? await r.json() : null; } catch (x) {}
@@ -378,6 +378,6 @@ function steRend() {
 }
 g('ste-decs').onclick = ev => { const b = ev.target.closest('[data-d]'); if (!b) return; if (b.dataset.o) vue(b.dataset.o); else hsBascule(); };
 setInterval(() => { if (!g('v-station').hidden) steRend(); }, 1000);
-apCharge();
+apparenceCharge();
 """
 }

@@ -69,7 +69,7 @@ object ModulesStation {
         Module("aprs", "APRS / KISS", "Les trames APRS entendues, la carte, les trophées", listOf("aprs")),
         Module("tlm", "Télémesure", "Paquets 1200 à 9600 bit/s, images SSDV, FUNcube", listOf("tlm")),
         Module("sstv", "SSTV", "Réception, émission, images, planche, auto-pilote de l’Agenda", listOf("sstv", "planche"),
-            listOf("#v-agenda .st-nav button[data-p=\"ag-p-sstv\"]"), avis = "La Planche en fait partie"),
+            avis = "La Planche en fait partie"),
         Module("orbites", "Orbites", "Le globe 3D, les empreintes, un passage animé", listOf("orbites")),
         Module("espace", "Météo spatiale", "Kp, flux solaire, éruptions, aurore", listOf("espace")),
         Module("activites", "Activités à venir", "SSTV, ARISS, SSDV, METEOR annoncés en ligne (Agenda)",
@@ -186,6 +186,13 @@ object ModulesStation {
     const val IMAGES = "images"
     val MODULES_IMAGES = setOf("sstv", "tlm")
 
-    /** The page's elements to hide: those of the modules off. */
-    fun masques(coupes: Set<String>): List<String> = MODULES.filter { it.id in coupes }.flatMap { it.masques }
+    /**
+     * Agenda › « SSTV · auto-pilote »: its campaigns are SSTV or SSDV ones (the SSDV pictures being Télémesure's), so
+     * the sub-tab leaves only when both modules are off.
+     */
+    const val AUTOPILOTE = "#v-agenda .st-nav button[data-p=\"ag-p-sstv\"]"
+
+    /** The page's elements to hide: those of the modules off; the auto-pilot's sub-tab without both SSTV and Télémesure. */
+    fun masques(coupes: Set<String>): List<String> = MODULES.filter { it.id in coupes }.flatMap { it.masques } +
+        (if (coupes.containsAll(MODULES_IMAGES)) listOf(AUTOPILOTE) else emptyList())
 }

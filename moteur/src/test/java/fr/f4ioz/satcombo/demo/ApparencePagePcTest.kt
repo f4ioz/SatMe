@@ -177,4 +177,34 @@ class ApparencePagePcTest {
         assertTrue(cibles.containsAll(listOf("h-ui", "st-pli-b", "ap-carte")))
         cibles.forEach { assertTrue(it, h.contains("id=\"$it\"")) }
     }
+
+    /**
+     * The page's scripts share one global scope: a function declared twice keeps only the last one. The appearance's
+     * loader once took the auto-pilot's name (apCharge), so Agenda › « SSTV · auto-pilote » stayed hidden (its zone
+     * never shown, its sub-tab then left out) whatever the modules.
+     */
+    @Test
+    fun aucuneFonctionDeLaPageDeclareeDeuxFois() {
+        val noms = Regex("(?m)^(?:async )?function ([A-Za-z0-9_\\$]+)\\s*\\(").findAll(h).map { it.groupValues[1] }.toList()
+        val doubles = noms.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        assertTrue("fonctions déclarées deux fois : $doubles", doubles.isEmpty())
+        val ap = h.substring(h.indexOf("async function apCharge()"))
+        assertTrue(ap.substring(0, 200).contains("api/autopilote"))
+        assertTrue(h.contains("async function apparenceCharge()"))
+    }
+
+    /**
+     * « SSTV · auto-pilote » with the station's modules (METEOR, sondes, avions, navires off): not masked; nor with SSTV
+     * off while Télémesure (SSDV campaigns) is on; masked only without both.
+     */
+    @Test
+    fun autopiloteSstvPasMasque() {
+        val ap = { c: Set<String> -> ModulesStation.masques(c).any { it.contains("ag-p-sstv") } }
+        assertFalse(ap(setOf("meteor", "sondes", "avions", "ais")))
+        assertFalse(ap(setOf("meteor", "sondes", "avions", "ais", "sstv")))
+        assertFalse(ap(setOf("tlm")))
+        assertTrue(ap(setOf("sstv", "tlm")))
+        assertTrue(h.contains("<button data-p=\"ag-p-sstv\""))
+        assertTrue(h.contains(ModulesStation.AUTOPILOTE.removePrefix("#v-agenda .st-nav button[").removeSuffix("]")))
+    }
 }
