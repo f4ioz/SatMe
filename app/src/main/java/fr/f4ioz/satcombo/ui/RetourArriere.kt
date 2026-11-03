@@ -50,6 +50,7 @@ object RetourArriere {
         FERMER_ACTIVITES,
         FERMER_FT8,
         FERMER_DATV,
+        FERMER_GENESIS,
         RETOUR_LISTE,
         QUITTER_SELECTION,
     }
@@ -88,6 +89,7 @@ object RetourArriere {
         ecran == Screen.AGENDA -> Geste.FERMER_AGENDA
         ecran == Screen.ACTIVITES -> Geste.FERMER_ACTIVITES
         ecran == Screen.DATV -> Geste.FERMER_DATV
+        ecran == Screen.GENESIS -> Geste.FERMER_GENESIS
         // Only then the sheet underneath.
         selection -> Geste.RETOUR_LISTE
         modeSelection -> Geste.QUITTER_SELECTION

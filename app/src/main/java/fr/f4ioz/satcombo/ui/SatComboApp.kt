@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Tour
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.SatelliteAlt
+import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.EventNote
@@ -211,6 +212,7 @@ fun SatComboApp(vm: MainViewModel) {
             RetourArriere.Geste.FERMER_SSTV -> vm.closeSstv()
             RetourArriere.Geste.FERMER_APRS -> vm.closeAprs()
             RetourArriere.Geste.FERMER_DATV -> vm.closeDatv()
+            RetourArriere.Geste.FERMER_GENESIS -> vm.closeGenesis()
             RetourArriere.Geste.FERMER_SDR -> vm.closeSdr()
             RetourArriere.Geste.FERMER_APT -> vm.closeApt()
             RetourArriere.Geste.FERMER_METEOR -> vm.closeMeteor()
@@ -242,6 +244,7 @@ fun SatComboApp(vm: MainViewModel) {
                     ui.screen == Screen.APRS -> AprsScreen(ui, vm)
                     ui.screen == Screen.SDR -> SdrScreen(ui, vm)
                     ui.screen == Screen.APT -> AptScreen(ui, vm)
+                    ui.screen == Screen.GENESIS -> GenesisScreen(ui, vm)
                     ui.screen == Screen.METEOR -> MeteorScreen(ui, vm)
                     ui.screen == Screen.SONDE -> SondeScreen(ui, vm)
                     ui.screen == Screen.ROTOR -> RotorScreen(ui, vm)
@@ -373,6 +376,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                             Screen.APRS -> t("aprs_titre")
                             Screen.SDR -> t("sdr_title")
                             Screen.APT -> t("apt_title")
+                            Screen.GENESIS -> t("genesis_titre")
                             Screen.METEOR -> t("meteor_titre")
                             Screen.SONDE -> t("sonde_title")
                             Screen.ROTOR -> t("rotor_title")
@@ -460,6 +464,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 RetourArriere.Geste.FERMER_SSTV -> vm::closeSstv
                 RetourArriere.Geste.FERMER_APRS -> vm::closeAprs
                 RetourArriere.Geste.FERMER_DATV -> vm::closeDatv
+                RetourArriere.Geste.FERMER_GENESIS -> vm::closeGenesis
                 RetourArriere.Geste.FERMER_SDR -> vm::closeSdr
                 RetourArriere.Geste.FERMER_APT -> vm::closeApt
                 RetourArriere.Geste.FERMER_METEOR -> vm::closeMeteor
@@ -551,6 +556,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
     val sdrOn = sdrState.running
     val aptState by fr.f4ioz.satcombo.apt.AptHub.state.collectAsState()
     val aptOn = aptState.locked
+    val genesisOn = fr.f4ioz.satcombo.telemesure.GenesisHub.etat.collectAsState().value.ecoute
     val meteorOn = fr.f4ioz.satcombo.meteor.MeteorHub.etat.collectAsState().value.verrou
     val sondeState by fr.f4ioz.satcombo.sonde.SondeHub.state.collectAsState()
     val sondeOn = sondeState.running
@@ -619,6 +625,14 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                     leadingIcon = { Icon(Icons.Default.Place, null, tint = Cyan) },
                     onClick = { open = false; vm.openAprs() })
             }
+            // GENESIS (SO-127): telemetry and SSDV pictures heard in USB.
+            DropdownMenuItem(
+                text = { Text(t("genesis_titre")) },
+                leadingIcon = {
+                    Icon(Icons.Default.Satellite, null,
+                        tint = if (genesisOn) Aurora else Cyan)
+                },
+                onClick = { open = false; vm.openGenesis() })
             if (fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions) {
                 DropdownMenuItem(
                     text = { Text(t("apt_title")) },

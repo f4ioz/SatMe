@@ -62,6 +62,7 @@ class RetourArriereTest {
             Screen.APRS to RetourArriere.Geste.FERMER_APRS,
             Screen.DATV to RetourArriere.Geste.FERMER_DATV,
             Screen.ACTIVITES to RetourArriere.Geste.FERMER_ACTIVITES,
+            Screen.GENESIS to RetourArriere.Geste.FERMER_GENESIS,
         )
         attendus.forEach { (ecran, attendu) ->
             assertEquals("écran $ecran, fiche ouverte", attendu,
@@ -71,7 +72,7 @@ class RetourArriereTest {
         }
         // If the enum grows, this test must be revisited, not bypassed.
         assertEquals("un écran a été ajouté sans passer par ici",
-            21, Screen.entries.size)
+            22, Screen.entries.size)
     }
 
     /**

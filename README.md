@@ -277,6 +277,12 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 ## The phone app, version by version
 
+### Next version (in preparation)
+
+- **GENESIS telemetry** (HADES-SA / SO-127 and AMSAT-EA's other GENESIS satellites), receive only: the 200 / 800 bit/s FSK heard in USB is decoded from the sound the phone already receives (a pass recording, the SDR dongle in USB) — only for satellites whose SatNOGS transmitters say GENESIS, or always, or never, as chosen. Power, temperatures, status, ranges, antennas, extended power, time series and BBS made readable, with their units. Menu ⋮ › GENESIS telemetry, and a link on the satellite's page.
+- **SSDV pictures put together over several passes**: the blocks still missing hatched, « 22/55 packets · 40 %, put together over 2 passes », kept from one start to the next; also in the Journal, with the pass's telemetry. A recording can be read again; a Test runs a made-up signal through the decoder. A voice message (Codec2) is noted and played on SatMe-PC.
+- **APRS: receive-only APRS-IS iGate** (APRS › Settings), off by default: what the phone hears on the air goes to APRS-IS, one way only (never from the Internet to the radio, no beacon), with the callsign, APRS-IS passcode and server you type in. No NOGATE / RFONLY, nothing that came from the Internet, no duplicates.
+
 ### 20.83
 
 - **CAT**: the rig moves to the new satellite at once (linear or FM).

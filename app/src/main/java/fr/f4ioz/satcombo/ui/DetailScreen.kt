@@ -854,6 +854,12 @@ private fun LiveTelemetry(ui: UiState, vm: MainViewModel, sat: TleEntry) {
     }
     Spacer(Modifier.height(12.dp))
     TransmittersSection(ui, vm, sat, if (above) p!!.rangeRateKmS else null)
+    // A GENESIS satellite (SO-127…): its telemetry and SSDV pictures, heard in USB while recording.
+    if (ui.transmitters.any { fr.f4ioz.satcombo.telemesure.RecepteurGenesis.Profil.pour(it.mode, it.baud) != null }) {
+        TextButton(onClick = { vm.openGenesis() }) {
+            Text(t("genesis_ouvrir"), color = Cyan, fontSize = 12.sp)
+        }
+    }
 }
 
 /** Satellite VFO panel: pick one transponder, see band limits, normal/reverse,

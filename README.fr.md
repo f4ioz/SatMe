@@ -277,6 +277,12 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 ## L'application du téléphone, version par version
 
+### Prochaine version (en préparation)
+
+- **Télémesure GENESIS** (HADES-SA / SO-127 et les autres satellites GENESIS d'AMSAT-EA), en réception seule : la FSK 200 / 800 bit/s entendue en BLU est décodée depuis le son que le téléphone reçoit déjà (enregistrement d'un passage, clé SDR en USB) — seulement pour les satellites dont les émetteurs SatNOGS disent GENESIS, ou toujours, ou jamais, au choix. Énergie, températures, état, plages, antennes, énergie détaillée, série temporelle et BBS lisibles, avec leurs unités. Menu ⋮ › Télémesure GENESIS, et un lien sur la page du satellite.
+- **Images SSDV réunies sur plusieurs passages** : les blocs encore manquants hachurés, « 22/55 paquets · 40 %, réunie sur 2 passages », gardées d'un lancement à l'autre ; aussi dans le Journal, avec la télémesure du passage. Un enregistrement se relit ; un Essai fait passer un signal fabriqué dans le décodeur. Un message vocal (Codec2) est signalé et s'écoute sur SatMe-PC.
+- **APRS : iGate APRS-IS en réception seule** (APRS › Réglages), coupé d'origine : ce que le téléphone entend sur l'air part vers APRS-IS, dans un seul sens (jamais d'Internet vers la radio, aucune balise), avec l'indicatif, le code APRS-IS et le serveur que vous saisissez. Ni NOGATE / RFONLY, ni ce qui vient d'Internet, ni doublons.
+
 ### 20.83
 
 - **CAT** : le poste se cale aussitôt sur le nouveau satellite (linéaire ou FM).
