@@ -2058,6 +2058,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         fun entier(k: String) = q[k]?.trim()?.toIntOrNull()
         when (chemin) {
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
+            // « Ne rien suivre »: no satellite followed (no Doppler, no tuning, no mast command for one).
+            "/api/suivre/rien" -> station.neSuisRien()
             // The appearance: a setting, a tab's layout (json blank: its default), or every layout back to its default.
             "/api/apparence" -> {
                 for (k in fr.f4ioz.satcombo.demo.ApparencePagePc.CHOIX.keys) q[k]?.let { if (!station.regleApparence(k, it)) return JSONObject().put("ok", false).put("erreur", "$k inconnu") }
@@ -2108,6 +2110,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
+            "/api/agenda/entre-rien" -> station.entreRien(q["on"] == "1")
             "/api/skeds/reglages" -> station.regleSkeds(q["on"]?.let { it == "1" }, q["cle"])
             "/api/sauvegarde/annule" -> sauvegarde?.annule()
             "/api/mire/joue" -> {
@@ -3306,7 +3309,7 @@ object JsonPc {
         o.put("reglageSat", JSONObject().put("calib", e.calibHz).put("tx", e.txShiftHz)
             .put("refCalib", e.refCalibHz ?: JSONObject.NULL).put("refTx", e.refTxHz ?: JSONObject.NULL))
         o.put("passagesSuivi", JSONArray(e.passagesSuivi.map { passage(it, st) }))
-        o.put("agendaSuivi", e.agendaSuivi)
+        o.put("agendaSuivi", e.agendaSuivi).put("entreRien", e.entreRien)
         o.put("agenda", fr.f4ioz.satcombo.demo.ApiCalculs.agendaJson(e.agenda, e.maintenant))
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))

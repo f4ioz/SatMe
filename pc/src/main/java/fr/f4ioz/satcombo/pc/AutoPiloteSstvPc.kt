@@ -689,17 +689,9 @@ class AutoPiloteSstvPc(
             val r = station.stationRotor
             if (avant["rotorConnecte"] == "0" && r.etat.value.rotorConnected) { r.disconnectRotor(); faits += "rotor déconnecté" }
             else avant["rotorSuit"]?.let { r.setRotorEnabled(it == "1") }
-            val n = avant["suivi"]?.toIntOrNull()
-            val e = station.etat.value
-            if (n != null && n != e.suivi?.catalogNumber) e.satellites.firstOrNull { it.catalogNumber == n }?.let { sat ->
-                val d = avant["emetteur"].orEmpty()
-                station.suis(sat) { l -> l to l.indexOfFirst { it.description == d }.coerceAtLeast(0) }
-                faits += sat.name + " suivi de nouveau"
-            } else {
-                // The same satellite (or none before): its own transmitter back in place of the campaign's frequency.
-                val d = avant["emetteur"].orEmpty()
-                e.suivi?.let { sat -> station.suis(sat) { l -> l to l.indexOfFirst { it.description == d }.coerceAtLeast(0) } }
-            }
+            // The satellite followed before back (its transmitter in place of the campaign's frequency), or none:
+            // none before, or « Entre deux passages programmés : ne rien suivre » (Agenda).
+            station.reprendApresProgramme(avant["suivi"]?.toIntOrNull(), avant["emetteur"].orEmpty())?.let { faits += it }
             son?.noteSstv = ""
             telemesure?.let { t ->
                 if (t.genesisPourPassage) {

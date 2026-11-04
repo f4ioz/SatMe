@@ -499,6 +499,10 @@
      "reussi": {
       "fr": "Az, El et le compte à rebours bougent.",
       "en": "Az, El and the countdown move."
+     },
+     "astuce": {
+      "fr": "**✕ Ne rien suivre** : plus aucun satellite suivi — ni Doppler, ni accord, ni rotor ; les passages programmés prennent toujours la main à leur heure.",
+      "en": "**✕ Ne rien suivre** (follow nothing): no satellite followed — no Doppler, tuning or rotator; programmed passes still take over on time."
      }
     },
     {
@@ -584,7 +588,11 @@
       "fr": "Un passage à ne pas manquer : son satellite, sa fenêtre, une alerte avant.",
       "en": "A pass not to miss: its satellite, its window, an alert before."
      },
-     "pan": "ag-p-rdv"
+     "pan": "ag-p-rdv",
+     "astuce": {
+      "fr": "**Entre deux passages programmés : ne rien suivre** : après un rendez-vous, une campagne ou le mode automatique, revenir à aucun satellite.",
+      "en": "**Entre deux passages programmés : ne rien suivre** (between programmed passes, follow nothing): after an appointment, a campaign or the automatic mode, back to no satellite."
+     }
     },
     {
      "cible": "va-on",

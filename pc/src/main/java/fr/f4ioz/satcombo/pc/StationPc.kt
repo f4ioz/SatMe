@@ -95,6 +95,8 @@ data class EtatPc(
     val agenda: List<fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent> = emptyList(),
     /** Follow by itself the satellite an appointment names, from 5 min before it. */
     val agendaSuivi: Boolean = true,
+    /** « Entre deux passages programmés : ne rien suivre » — after a campaign, appointment or automatic-mode pass, back to no satellite (off by default). */
+    val entreRien: Boolean = false,
     /** The satellite followed's pass just over (its contacts still shown a while). */
     val dernierPassage: SatPass? = null,
     /** The skeds announced on hams.at (Réglages: off by default, as on the phone). */
@@ -683,7 +685,7 @@ class StationPc(
         runCatching { reprendVeille() }
         stationCat.regleMaintien(settings.catHoldMs.toLong())
         change { copy(agenda = AgendaStore.purge(stockageAgenda, nowMs = horloge()),
-            agendaSuivi = stockage.getBoolean(CLE_AGENDA_SUIVI, true)) }
+            agendaSuivi = stockage.getBoolean(CLE_AGENDA_SUIVI, true), entreRien = stockage.getBoolean(CLE_ENTRE_RIEN, false)) }
         catalogue.choix = choixSources()
         change { copy(favoris = lisFavoris(), satellites = this@StationPc.catalogue.satellites(), locator = settings.manualLocator,
             indicatif = settings.callsign, observateur = observateur(), catModele = modeleDe(settings.rigModel)) }
@@ -779,6 +781,7 @@ class StationPc(
         val maintenant = horloge()
         suitAgenda(maintenant)
         suitVeille(maintenant)
+        relacheProgramme(maintenant)
         val e = _etat.value
         val sat = e.suivi
         val obs = e.observateur
@@ -851,6 +854,55 @@ class StationPc(
         dejaSuivis += rdv.id
         val sat = satDe(rdv.satName) ?: return
         if (e.suivi?.catalogNumber != sat.catalogNumber) suis(sat)
+        // Its end: the window's, else the satellite's pass under way at that instant (its LOS), else 5 min after.
+        val fin = if (rdv.isWindow) rdv.endMs + 5 * 60_000L
+            else e.passages.firstOrNull { it.catalogNumber == sat.catalogNumber && rdv.timeMs in it.aosEpochMs - 5 * 60_000L..it.losEpochMs }?.losEpochMs?.plus(60_000L)
+                ?: (rdv.timeMs + 5 * 60_000L)
+        prise = Prise(sat.catalogNumber, maxOf(fin, maintenant + 60_000L))
+    }
+
+    /** The satellite a programmed pass (appointment, automatic mode) took, and until when. */
+    private data class Prise(val catnum: Int, val finMs: Long)
+    @Volatile private var prise: Prise? = null
+
+    /**
+     * « Entre deux passages programmés : ne rien suivre »: the appointment's or
+     * the automatic mode's pass over, its satellite still followed — nothing
+     * followed any more. A hand that picked another satellite meanwhile wins.
+     */
+    private fun relacheProgramme(maintenant: Long) {
+        val p = prise ?: return
+        if (maintenant < p.finMs) return
+        prise = null
+        val e = _etat.value
+        if (e.entreRien && e.suivi?.catalogNumber == p.catnum) neSuisRien()
+    }
+
+    /** « Entre deux passages programmés : ne rien suivre », kept. */
+    fun entreRien(on: Boolean) {
+        stockage.edit().putBoolean(CLE_ENTRE_RIEN, on).apply()
+        change { copy(entreRien = on) }
+    }
+
+    /**
+     * After a campaign's pass (the SSTV auto-pilot): the satellite followed
+     * before ([catnum], its transmitter [emetteur]) back, or nothing followed
+     * when nothing was before or « entre deux passages : ne rien suivre » is on.
+     * What was done, for the auto-pilot's log; null when nothing changed.
+     */
+    fun reprendApresProgramme(catnum: Int?, emetteur: String): String? {
+        val e = _etat.value
+        if (catnum == null || e.entreRien) {
+            if (e.suivi == null) return null
+            neSuisRien()
+            return "plus aucun satellite suivi"
+        }
+        val choix = { l: List<Transmitter> -> l to l.indexOfFirst { it.description == emetteur }.coerceAtLeast(0) }
+        val avant = e.satellites.firstOrNull { it.catalogNumber == catnum }
+        if (avant != null && catnum != e.suivi?.catalogNumber) { suis(avant, emetteurVoulu = choix); return avant.name + " suivi de nouveau" }
+        // The same satellite (or one gone from the elements): its own transmitter back in place of the campaign's frequency.
+        e.suivi?.let { sat -> suis(sat, emetteurVoulu = choix) }
+        return null
     }
 
     /** A pass into the agenda (its window, AOS to LOS), or out of it when already there. */
@@ -930,6 +982,7 @@ class StationPc(
         if (fr.f4ioz.satcombo.domain.VeilleAuto.ecarte(p, veilleSuivis)) return
         veilleSuivis += k
         if (_etat.value.suivi?.catalogNumber != p.catalogNumber) suis(p.catalogNumber)
+        prise = Prise(p.catalogNumber, p.losEpochMs + fr.f4ioz.satcombo.domain.VeilleAuto.APRES_MS)
     }
 
     // ---------------------------------------------------------------- skeds
@@ -1100,6 +1153,8 @@ class StationPc(
      * frequency of its own; null: the one chosen last for it.
      */
     fun suis(sat: TleEntry, reposVoulu: Long? = null, emetteurVoulu: ((List<Transmitter>) -> Pair<List<Transmitter>, Int>)? = null) {
+        // Chosen anew (by hand, or a programmed pass that marks itself after): no programmed pass holds it any more.
+        prise = null
         stockage.edit().putInt(CLE_SATELLITE, sat.catalogNumber).apply()
         stationCat.nouveauSatellite()
         // The SSTV tuning's share belonged to the old satellite.
@@ -1187,6 +1242,24 @@ class StationPc(
         return l.firstOrNull { it.description == d } ?: l.firstOrNull()
     }
 
+    /**
+     * « Ne rien suivre »: no satellite followed — no Doppler, no tuning, no
+     * mast command for one; the rig and the mast stay where they are. Kept
+     * between two starts; choosing a satellite again follows it as before.
+     */
+    fun neSuisRien() {
+        prise = null
+        stockage.edit().putInt(CLE_SATELLITE, 0).apply()
+        stationCat.nouveauSatellite()
+        afcSstvHz = 0L
+        stationCat.oublieArmement()
+        derniereRecherche = 0L
+        derniereSuite = 0L
+        stationRotor.traceTemps = emptyList()
+        change { copy(suivi = null, position = null, passage = null, arc = emptyList(), emetteurs = emptyList(), dernierPassage = null,
+            emetteur = 0, repos = null, passagesSuivi = emptyList(), calibHz = 0L, txShiftHz = 0L, refCalibHz = null, refTxHz = null) }
+    }
+
     fun suis(catnum: Int): Boolean {
         val s = _etat.value.satellites.firstOrNull { it.catalogNumber == catnum } ?: return false
         suis(s); return true
@@ -1207,7 +1280,7 @@ class StationPc(
     /** An import changed [catnums]' lists: the followed one's read again. */
     fun relisEmetteurs(catnums: Set<Int>) {
         val s = _etat.value.suivi ?: return
-        if (s.catalogNumber in catnums) suis(s)
+        if (s.catalogNumber in catnums) { val p = prise; suis(s); prise = p }
     }
 
     fun emetteurChoisi(): Transmitter? = _etat.value.let { it.emetteurs.getOrNull(it.emetteur) }
@@ -1889,6 +1962,8 @@ class StationPc(
         /** The scale's « correction manuelle » stays within this (Hz). */
         const val CORRECTION_MAX_HZ = 50_000L
         const val CLE_AGENDA_SUIVI = "pc_agenda_suivi"
+        /** « Entre deux passages programmés : ne rien suivre ». */
+        const val CLE_ENTRE_RIEN = "pc_entre_passages_rien"
         /** « Émission par le réseau autorisée »: this PC's alone, never taken from a phone's backup. */
         const val CLE_TX_RESEAU = "pc_tx_poste_reseau"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"

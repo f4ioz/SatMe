@@ -106,6 +106,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         meteorEssayes += p.aosEpochMs
         val avant = e.suivi
         meteorAutoAvant = avant?.takeIf { it.catalogNumber != sat.catalogNumber }
+        meteorAutoRien = avant == null
         meteorAutoArme = sat.catalogNumber
         meteorAutoLos = p.losEpochMs
         station.suis(sat)
@@ -114,17 +115,26 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             // The dongle did not start: the satellite followed before put back.
             meteorAutoArme = 0
             if (avant != null && avant.catalogNumber != sat.catalogNumber) station.suis(avant)
+            else if (avant == null) station.neSuisRien()
+            meteorAutoRien = false
         }
     }
 
     /** The satellite followed before an automatic METEOR pass took over: given back after it. */
     @Volatile private var meteorAutoAvant: fr.f4ioz.satcombo.data.TleEntry? = null
 
+    /** Nothing was followed before it (« Ne rien suivre »): nothing followed after it either. */
+    @Volatile private var meteorAutoRien = false
+
     private fun rendSatellite() {
-        val avant = meteorAutoAvant ?: return
-        meteorAutoAvant = null
+        val avant = meteorAutoAvant
+        val rien = meteorAutoRien
+        meteorAutoAvant = null; meteorAutoRien = false
         // Only if the operator has not chosen another one meanwhile.
-        if (station.estMeteor()) station.suis(avant)
+        if (!station.estMeteor()) return
+        // None before, or « Entre deux passages programmés : ne rien suivre » (Agenda): none after.
+        if (rien || (avant != null && station.etat.value.entreRien)) station.neSuisRien()
+        else if (avant != null) station.suis(avant)
     }
 
     /**

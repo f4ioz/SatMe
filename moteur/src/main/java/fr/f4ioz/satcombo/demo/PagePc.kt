@@ -2122,7 +2122,7 @@ ${rail()}
   <h1>SatMe-<span class="cyan">PC</span></h1>
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
-  <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(this.classList.contains('qo') ? 'qo100' : 'station')"></button>
+  <button id="ctx-chip" class="ctx-chip" hidden onclick="ctxPop(this)"></button>
   <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
   <span id="hs-boite" class="hs-boite" hidden>
     <button id="h-son" class="h-puce" onclick="hsBascule()" aria-expanded="false" aria-controls="hs-pop" title="Ce qu'entendent les décodeurs (SSTV, FT8, CW, APRS, phonie) : changer de source, démarrer, enregistrer — touche S">${IconesPc.svg("mic")}<span class="h-m" id="h-son-t">Son</span><i class="hs-vu" aria-hidden="true"><i id="h-son-vu"></i></i><span class="hs-dec" id="h-son-d"></span></button>
@@ -2382,7 +2382,7 @@ ${rail()}
         <datalist id="tous"></datalist>
         <button onclick="choisitParNom()">Suivre</button>
       </div>
-      <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><span id="nom-ap"></span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
+      <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><span id="nom-ap"></span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><button id="rien-suivre" class="discret" hidden onclick="neRienSuivre()" title="Ne plus suivre aucun satellite : ni Doppler, ni accord, ni rotor — le poste et le rotor restent où ils sont. Les passages programmés (agenda, auto-pilote, mode automatique) prennent toujours la main à leur heure ; choisir un satellite le suit de nouveau" style="white-space:nowrap">✕ Ne rien suivre</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
 </div>
       <div class="amsat-boite ui-c" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
         <span class="amsat-pt" id="amsat-pt"></span><span class="petit" id="amsat"></span>
@@ -3084,6 +3084,7 @@ ${AprsCarteJs.HTML}
     <div class="carte">
       <div class="t">Agenda</div>
       <div class="ligne" style="margin-top:0"><label class="petit" title="Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)"><input type="checkbox" id="g-suivi" onchange="post('api/agenda/suivi?on=' + (this.checked ? 1 : 0))"> Suivre tout seul le satellite d'un rendez-vous <span class="plus" aria-hidden="true">…</span></label></div>
+      <div class="ligne" style="margin-top:0"><label class="petit" title="Après un passage de campagne (auto-pilote SSTV), d'un rendez-vous ou du mode automatique, ne revenir à aucun satellite au lieu de celui suivi avant : ni Doppler, ni accord, ni rotor entre deux passages. Décoché : le satellite d'avant est repris"><input type="checkbox" id="g-entre-rien" onchange="post('api/agenda/entre-rien?on=' + (this.checked ? 1 : 0))"> Entre deux passages programmés : ne rien suivre <span class="plus" aria-hidden="true">…</span></label></div>
       <div class="petit aide" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
     </div>
     <div class="carte" id="rdv-form">
@@ -5578,6 +5579,7 @@ let agendaVu = '';
 function dessineAgenda() {
   if (!E || !E.agenda) return;
   if (document.activeElement !== g('g-suivi')) g('g-suivi').checked = E.agendaSuivi;
+  if (document.activeElement !== g('g-entre-rien')) g('g-entre-rien').checked = !!E.entreRien;
   const cle = JSON.stringify(E.agenda);
   if (cle === agendaVu) return;
   agendaVu = cle;
@@ -6459,6 +6461,18 @@ function dessinePassages() {
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('api/suivre?catnum=' + n); }
+// « Ne rien suivre »: no satellite followed — the rig and the mast stay where they are; the programmed passes still take over.
+async function neRienSuivre() { await post('api/suivre/rien'); if (typeof annonce === 'function') annonce('Aucun satellite suivi'); tic(); }
+// The header's chip: what the log follows; for a satellite, a small menu (the Suivi tab, « Ne rien suivre »).
+function ctxPop(b) {
+  if (b.classList.contains('qo')) { vue('qo100'); return; }
+  const n = E && E.suivi ? E.suivi.nom : '';
+  popMontre(b, '<div class="aide-p"><b>' + (n ? esc(n) + '</b> · satellite suivi' : 'Aucun satellite suivi</b>') + '</div>' +
+    '<div class="aide-p petit">' + (n ? 'Le carnet, le Doppler, le poste et le rotor le suivent.'
+      : 'Ni Doppler, ni accord, ni rotor : le poste et le rotor restent où ils sont. Les passages programmés (agenda, auto-pilote, mode automatique) prennent la main à leur heure.') + '</div>' +
+    '<div class="sb-pop-l"><button onclick="popCache(); vue(\'station\')">' + (n ? 'Onglet Suivi' : 'Choisir un satellite (Suivi)') + '</button>' +
+    (n ? '<button onclick="popCache(); neRienSuivre()" title="Ni Doppler, ni accord, ni rotor jusqu’au prochain choix ou passage programmé">✕ Ne rien suivre</button>' : '') + '</div>', true);
+}
 // The carnet's satellite: the one followed, then the passes under way and to come (the Station list's), once each.
 function menuSatCarnet() {
   const m = g('c-satsel'); if (!m || document.activeElement === m) return;
@@ -6686,9 +6700,10 @@ function dessine() {
   txt('catalogue', E.catalogue);
   if (document.activeElement !== g('indicatif') && !g('indicatif').value) g('indicatif').value = E.indicatif || '';
   if (document.activeElement !== g('locator') && !g('locator').value) g('locator').value = E.locator || '';
-  txt('nom', E.suivi ? E.suivi.nom : '— choisis un passage');
+  txt('nom', E.suivi ? E.suivi.nom : '— aucun satellite suivi · choisis un passage');
   apSuivi();
   g('fav').style.display = E.suivi ? '' : 'none';
+  g('rien-suivre').hidden = !E.suivi;
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
   const amS = am ? (AMSAT[am.statut] || AMSAT.UNKNOWN) : null;
@@ -13393,8 +13408,13 @@ function tqRend() {
   // The header, whatever the tab: what the log follows.
   // The log's satellite (the rig's, the cockpit form's), not what a receiver hears in the background.
   const cv = carnetVers();
-  chip.hidden = !cv || !cv.satellite;
-  if (cv && cv.satellite) {
+  // Nothing followed (« Ne rien suivre »), nothing else worked: said all the same.
+  const rien = !(cv && cv.satellite) && !!E && !E.suivi;
+  chip.hidden = !rien && (!cv || !cv.satellite);
+  if (rien) {
+    txt('ctx-chip', '🛰 aucun satellite suivi'); chip.classList.remove('qo');
+    chip.title = 'Aucun satellite suivi : ni Doppler, ni accord, ni rotor. Clic : choisir un satellite';
+  } else if (cv && cv.satellite) {
     txt('ctx-chip', (cv.qo100 ? '📡 ' : '🛰 ') + (cv.qo100 && c.qo100 ? c.libelle : cv.satellite) + (cv.mot ? ' · ' + cv.mot : ''));
     chip.classList.toggle('qo', !!cv.qo100);
     chip.title = 'Le carnet note sur ' + cv.satellite + (cv.mot ? ' (' + cv.mot + ')' : '') + '.' +
@@ -20270,6 +20290,7 @@ function palSources() {
     if (S.sdrPresent) A('Son : récepteur SDR', 'ce qu’entendent les décodeurs (réception)', () => hsSource('sdr'));
     if (E && E.suivi) A('Préparer le passage de ' + E.suivi.nom, 'touche P · source, décodeurs, enregistrement (réception)', preparePassage);
   }
+  if (E && E.suivi) A('Ne rien suivre', 'plus de satellite suivi (' + E.suivi.nom + ') : ni Doppler, ni accord, ni rotor · aucun', neRienSuivre);
   // The rig: its popover says which model and port before anything opens.
   if (!window.SATME_TELEPHONE && E && E.cat) A(E.cat.connecte ? 'Poste : déconnecter…' : 'Poste : connecter…', 'CAT · ' + (E.cat.connecte ? E.cat.modele : 'le modèle et le port de Réglages › Poste'),
     () => setTimeout(() => catPop(g('sb-cat')), 50));
