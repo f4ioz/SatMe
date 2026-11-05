@@ -212,22 +212,44 @@ object HpsdrDecouverte {
             port = port)
     }
 
+    /** Broadcast address of every active IPv4 interface (what a Brick2 answers: it ignores 255.255.255.255 and unicast). */
+    fun adressesDiffusion(): List<InetAddress> = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList().filter { runCatching { it.isUp && !it.isLoopback }.getOrDefault(false) }
+            .flatMap { it.interfaceAddresses }.mapNotNull { it.broadcast }.distinct()
+    } catch (e: Exception) { emptyList() }
+
+    private fun adressesLocales(): Set<String> = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() }.map { it.hostAddress }.toSet()
+    } catch (e: Exception) { emptySet() }
+
     /**
-     * Asks [hote] (if any) and the broadcast address (if [diffusion] or no host) on [port]; waits [attenteMs]
+     * Asks [hote] (if any) and the broadcast addresses (if [diffusion] or no host) on [port]; waits [attenteMs]
      * for the first answer. Only ever on the operator's request: a broadcast reaches every radio of the LAN.
+     * The question leaves from source port 1024 (fallback: an ephemeral one) and also goes to the broadcast
+     * address of each active interface: the Brick2 answers only that way (checked on the real one).
      */
-    fun cherche(hote: String, port: Int, diffusion: Boolean, attenteMs: Int = 1500): Radio = try {
+    fun cherche(hote: String, port: Int, diffusion: Boolean, attenteMs: Int = 1500,
+                diffusions: () -> List<InetAddress> = ::adressesDiffusion, portSource: Int = 1024): Radio = try {
         DatagramSocket(null).use { s ->
-            s.reuseAddress = true; s.broadcast = true; s.bind(InetSocketAddress(0)); s.soTimeout = attenteMs
+            s.reuseAddress = true; s.broadcast = true
+            try { s.bind(InetSocketAddress(portSource)) } catch (e: Exception) { s.bind(InetSocketAddress(0)) }
+            s.soTimeout = attenteMs
             val p = paquet()
-            if (hote.isNotEmpty()) s.send(DatagramPacket(p, p.size, InetAddress.getByName(hote), port))
-            if (diffusion || hote.isEmpty()) s.send(DatagramPacket(p, p.size, InetAddress.getByName("255.255.255.255"), port))
+            fun envoie(a: InetAddress) { try { s.send(DatagramPacket(p, p.size, a, port)) } catch (_: Exception) { } }
+            if (hote.isNotEmpty()) envoie(InetAddress.getByName(hote))
+            if (diffusion || hote.isEmpty()) {
+                envoie(InetAddress.getByName("255.255.255.255"))
+                diffusions().forEach { envoie(it) }
+            }
+            val moi = adressesLocales()
             val b = ByteArray(1500)
             val fin = System.currentTimeMillis() + attenteMs
             var r: Radio? = null
             while (r == null && System.currentTimeMillis() < fin) {
                 val dp = DatagramPacket(b, b.size)
                 try { s.receive(dp) } catch (e: SocketTimeoutException) { break }
+                // Our own question coming back from a broadcast is not an answer.
+                if (dp.port == s.localPort && dp.address.hostAddress in moi) continue
                 r = reponse(dp.data, dp.length, dp.address.hostAddress, dp.port)
             }
             r ?: Radio(false)
