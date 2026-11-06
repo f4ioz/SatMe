@@ -7,6 +7,8 @@ et la publication GitHub prend la section de sa version.
 
 Avant de poser l'étiquette satme-pc-AAAA.MM.NN :
   1. renommer « ## Prochaine version » en « ## AAAA.MM.NN » (le numéro de l'étiquette) ;
+
+- **Statuts AMSAT : nouvelle adresse.** `www.amsat.org/status` redirige désormais vers `status.amsat.org` : la lecture des statuts, l'API et l'envoi des rapports « entendu / pas entendu » utilisent directement la nouvelle adresse (l'envoi ne suivait pas la redirection 308).
   2. remettre une section « ## Prochaine version » vide au-dessus pour la suite.
 Une section par version, la plus récente en haut, une partie « ### fr » et une
 partie « ### en ». Des listes courtes : ce que l'utilisateur voit, où cliquer.

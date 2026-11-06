@@ -164,7 +164,7 @@ object ActivitesAVenir {
         val nom = nomAmsat(a) ?: return@map a
         val vus = ecoutes[nom].orEmpty().filter { it.entendu && it.quandMs in (a.debutMs - 30 * 60_000L)..(a.finMs + 30 * 60_000L) }
         if (vus.isEmpty()) a else a.copy(confiance = Confiance.CONFIRME, ecoutes = vus.size, derniereEcouteMs = vus.maxOf { it.quandMs },
-            sources = (a.sources + Source("AMSAT (écoutes)", "https://www.amsat.org/status/")).distinctBy { it.nom })
+            sources = (a.sources + Source("AMSAT (écoutes)", "https://status.amsat.org/")).distinctBy { it.nom })
     }
 
     // ------------------------------------------------------------------ passes

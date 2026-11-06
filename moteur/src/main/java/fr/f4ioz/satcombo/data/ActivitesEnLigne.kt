@@ -62,7 +62,7 @@ class ActivitesEnLigne(
         AMSAT_F("AMSAT-F", "https://site.amsat-f.org/feed/", 6 * H, "https://site.amsat-f.org/"),
         SATNOGS_M23("SatNOGS · METEOR-M2-3", "https://network.satnogs.org/api/observations/?norad_cat_id=57166&status=good", 12 * H, "https://network.satnogs.org/"),
         SATNOGS_M24("SatNOGS · METEOR-M2-4", "https://network.satnogs.org/api/observations/?norad_cat_id=59051&status=good", 12 * H, "https://network.satnogs.org/"),
-        AMSAT("AMSAT (écoutes)", "https://www.amsat.org/status/api/v1/sat_info.php?hours=24&name=", 30 * 60_000L, "https://www.amsat.org/status/");
+        AMSAT("AMSAT (écoutes)", "https://status.amsat.org/api/v1/sat_info.php?hours=24&name=", 30 * 60_000L, "https://status.amsat.org/");
     }
 
     /** What the owner switched on: the whole and each kind of source. */

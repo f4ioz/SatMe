@@ -26,7 +26,7 @@ data class AmsatReport(
 )
 
 /**
- * Scrapes https://www.amsat.org/status/ — the crowd-sourced "is this bird
+ * Scrapes https://status.amsat.org/ — the crowd-sourced "is this bird
  * actually being heard right now" page. Complements SatNOGS (which says a sat
  * is alive, not whether it's live this week). Results are cached to disk so the
  * last-known status is available offline.
@@ -38,7 +38,7 @@ class AmsatStatusRepository(
 ) {
 
     companion object {
-        private const val URL = "https://www.amsat.org/status/"
+        private const val URL = "https://status.amsat.org/"
         const val CACHE_FILE = "amsat_status.json"
         private const val FRESH_MS = 1 * 60 * 60 * 1000L  // 1 h
         private fun defaultClient() = OkHttpClient.Builder()

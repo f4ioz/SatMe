@@ -33,7 +33,7 @@ object AmsatSubmit {
         NOT_HEARD("Not Heard")
     }
 
-    private const val ENDPOINT = "https://www.amsat.org/status/submit.php"
+    private const val ENDPOINT = "https://status.amsat.org/submit.php"
 
     private val client = OkHttpClient.Builder()
         .callTimeout(20, TimeUnit.SECONDS)
