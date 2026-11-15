@@ -4,15 +4,14 @@
 
 SatMe-PC suit les satellites radioamateurs depuis votre ordinateur (Linux, Windows, Raspberry Pi) : passages, pointage, Doppler, carnet de trafic, décodage SSTV / SSDV / FT8 / APRS / télémesure / CW en réception, DATV QO-100. Il s'utilise dans le navigateur, sur ce PC ou sur votre réseau. Une application Android existe aussi : [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-## Dernière version : 2026.11.5
+## Dernière version : 2026.11.6
 
-- **FT4 / FT8 sur satellite, bien plus complet** : « Contact en cours » (la frise du QSO), file « Qui m'appelle » classée (nouveau pays, temps restant avant le LOS), stations déjà notées retirées des listes, **LOS** de chaque station, carte et radar avec la trace du satellite, préréglages de fréquence **TX + RX** modifiables (RS-44 FT4), calage de l'émission d'après son propre signal reçu.
-- **Journal** : les indicatifs FT4/FT8 sur la carte et le globe, les **liaisons entre les stations par le satellite**, le tableau **« Contacts et CQ »** (CSV, en images, en carte de fin de vidéo).
-- **APRS OTA** ([aprsota.org](https://aprsota.org/)) : un assistant PING → CQ → CHASE → position → QSL, un clic pour une trame.
-- **EME** : largeur du Doppler et libration, séparations Lune–Soleil et Lune–Sgr A\*, STOP partout ; **Mes satellites** (TLE/OMM collé, émetteurs à la main) et le groupe « extra » du serveur GP.
-- **Station** : interrupteur général « Tout déverrouiller » (décoché au démarrage), barre du haut allégée, le poste lu même sans satellite suivi, rotor **S.A.T. (CSN)**, liste des passages 1 000 fois plus rapide avec SatNOGS coché.
+- **Horloge de bureau AWTRIX (Ulanzi TC001)** comme afficheur de la station (module facultatif, coupé d'origine) : passage et compte à rebours, fréquence, contacts du jour, les mascottes ; affichage seul, sans son.
+- **Suivi** : la liste des passages s'affiche instantanément même avec SatNOGS coché (elle mettait plus de 20 s) ; un satellite suivi ne démarre plus sur un préréglage FT4 ; un même satellite sous deux numéros n'apparaît qu'une fois ; fiche RS-90 (Luča-1).
+- **FT4 / FT8** : « Caler mon émission », contact en cours, file « Qui m'appelle », stations déjà notées, **LOS** de chaque station ; **Journal** : liaisons par le satellite et tableau « Contacts et CQ » ; **APRS OTA** ; **EME**.
+- Les notes complètes de la version sont reprises : ce qui avait été omis de la 2026.11.5 y figure.
 
-Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.5).
+Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.6).
 
 ## Télécharger
 
@@ -40,15 +39,14 @@ Olivier Gouyen, **F4IOZ** : [f4ioz.fr](https://f4ioz.fr) · [Issues](https://git
 
 SatMe-PC tracks amateur radio satellites from your computer (Linux, Windows, Raspberry Pi): passes, pointing, Doppler, logbook, and receive-only decoding of SSTV / SSDV / FT8 / APRS / telemetry / CW, plus QO-100 DATV. It runs in your browser, on this PC or across your network. An Android app exists too: [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-### Latest version: 2026.11.5
+### Latest version: 2026.11.6
 
-- **FT4 / FT8 on satellites, much fuller**: « Current contact » (the QSO's strip), a ranked « Who is calling me » list (new country, time left before LOS), stations already logged taken out of the lists, each station's **LOS**, a map and radar with the satellite's track, editable **TX + RX** frequency presets (RS-44 FT4), and transmit timing aligned from your own received signal.
-- **Journal**: FT4/FT8 callsigns on the map and the globe, the **links between stations through the satellite**, the **« Contacts and CQs »** table (CSV, as pictures, as a video end card).
-- **APRS OTA** ([aprsota.org](https://aprsota.org/)): a PING → CQ → CHASE → position → QSL assistant, one click per frame.
-- **EME**: Doppler width and libration, Moon–Sun and Moon–Sgr A\* separations, STOP everywhere; **My satellites** (pasted TLE/OMM, transmitters by hand) and the GP server's « extra » group.
-- **Station**: a master « Unlock all » switch (unticked at start), a lighter top bar, the rig read even with no satellite followed, the **S.A.T. (CSN)** rotator, a passes list 1,000 times faster with SatNOGS ticked.
+- **AWTRIX desk clock (Ulanzi TC001)** as the station's display (optional module, off by default): pass countdown, frequency, the day's contacts, the mascots; display only, no sound.
+- **Tracking**: the passes list appears instantly even with SatNOGS ticked (it took over 20 s); a satellite followed no longer starts on an FT4 preset; one satellite under two numbers shows once; RS-90 (Luča-1) card.
+- **FT4 / FT8**: « Align my transmission », current contact, « Who is calling me » list, stations already logged, each station's **LOS**; **Journal**: links through the satellite and the « Contacts and CQs » table; **APRS OTA**; **EME**.
+- The release notes are complete: what was left out of 2026.11.5 is in them.
 
-Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.5).
+Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.6).
 
 ### Download
 
