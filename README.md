@@ -4,14 +4,13 @@
 
 SatMe-PC suit les satellites radioamateurs depuis votre ordinateur (Linux, Windows, Raspberry Pi) : passages, pointage, Doppler, carnet de trafic, décodage SSTV / SSDV / FT8 / APRS / télémesure / CW en réception, DATV QO-100. Il s'utilise dans le navigateur, sur ce PC ou sur votre réseau. Une application Android existe aussi : [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-## Dernière version : 2026.11.6
+## Dernière version : 2026.11.7
 
-- **Horloge de bureau AWTRIX (Ulanzi TC001)** comme afficheur de la station (module facultatif, coupé d'origine) : passage et compte à rebours, fréquence, contacts du jour, les mascottes ; affichage seul, sans son.
-- **Suivi** : la liste des passages s'affiche instantanément même avec SatNOGS coché (elle mettait plus de 20 s) ; un satellite suivi ne démarre plus sur un préréglage FT4 ; un même satellite sous deux numéros n'apparaît qu'une fois ; fiche RS-90 (Luča-1).
-- **FT4 / FT8** : « Caler mon émission », contact en cours, file « Qui m'appelle », stations déjà notées, **LOS** de chaque station ; **Journal** : liaisons par le satellite et tableau « Contacts et CQ » ; **APRS OTA** ; **EME**.
-- Les notes complètes de la version sont reprises : ce qui avait été omis de la 2026.11.5 y figure.
+- **FT4 / FT8 et phonie** : tant que FT4 écoute, le poste est tenu en mode données et la voix ne passait plus par le micro. Un bouton **🎙 Phonie** relâche le mode données ; une grande fenêtre **« Tu parles ? »** apparaît sur n'importe quel onglet quand vous appuyez sur le PTT du poste (IC-9700) ou à la fin du passage.
+- **Horloge AWTRIX (Ulanzi TC001)** dédiée à la station : heure et date de SatMe, **en UTC ou en heure locale**, logo animé, applications d'origine retirées. Fin des redémarrages en boucle de l'horloge (icônes abîmées au dépôt).
+- Toujours là depuis la 2026.11.6 : liste des passages instantanée avec SatNOGS, « Caler mon émission », file « Qui m'appelle », Journal (liaisons par le satellite, tableau « Contacts et CQ »), APRS OTA, EME.
 
-Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.6).
+Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.7).
 
 ## Télécharger
 
@@ -39,14 +38,13 @@ Olivier Gouyen, **F4IOZ** : [f4ioz.fr](https://f4ioz.fr) · [Issues](https://git
 
 SatMe-PC tracks amateur radio satellites from your computer (Linux, Windows, Raspberry Pi): passes, pointing, Doppler, logbook, and receive-only decoding of SSTV / SSDV / FT8 / APRS / telemetry / CW, plus QO-100 DATV. It runs in your browser, on this PC or across your network. An Android app exists too: [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-### Latest version: 2026.11.6
+### Latest version: 2026.11.7
 
-- **AWTRIX desk clock (Ulanzi TC001)** as the station's display (optional module, off by default): pass countdown, frequency, the day's contacts, the mascots; display only, no sound.
-- **Tracking**: the passes list appears instantly even with SatNOGS ticked (it took over 20 s); a satellite followed no longer starts on an FT4 preset; one satellite under two numbers shows once; RS-90 (Luča-1) card.
-- **FT4 / FT8**: « Align my transmission », current contact, « Who is calling me » list, stations already logged, each station's **LOS**; **Journal**: links through the satellite and the « Contacts and CQs » table; **APRS OTA**; **EME**.
-- The release notes are complete: what was left out of 2026.11.5 is in them.
+- **FT4 / FT8 and voice**: while FT4 listens, the rig is held in data mode and your voice no longer went through the microphone. A **🎙 Phonie** button lets go of the data mode; a big **"Are you talking?"** window shows on any tab when you key the rig's PTT (IC-9700) or when the pass is over.
+- **AWTRIX clock (Ulanzi TC001)** dedicated to the station: SatMe's own time and date, **in UTC or local time**, an animated logo, the clock's own apps taken off. No more restart loop on the clock (damaged icons at upload).
+- Still there since 2026.11.6: an instant passes list with SatNOGS, « Align my transmission », the « Who is calling me » list, the Journal (links through the satellite, the « Contacts and CQs » table), APRS OTA, EME.
 
-Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.6).
+Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.7).
 
 ### Download
 
