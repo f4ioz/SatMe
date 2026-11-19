@@ -4,16 +4,17 @@
 
 SatMe-PC suit les satellites radioamateurs depuis votre ordinateur (Linux, Windows, Raspberry Pi) : passages, pointage, Doppler, carnet de trafic, décodage SSTV / SSDV / FT8 / APRS / télémesure / CW en réception, DATV QO-100. Il s'utilise dans le navigateur, sur ce PC ou sur votre réseau. Une application Android existe aussi : [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-## Dernière version : 2026.11.8
+## Dernière version : 2026.11.9
 
-- **Horloge AWTRIX (Ulanzi TC001) dédiée à SatMe** : l'écran de l'horloge est émulé en direct dans Réglages › Interfaces, avec ses options (ce qui s'affiche, style et vitesse du texte, durée de chaque application, profil « station »).
-- **FT4 / FT8** : un clic sur une station et le contact se déroule (message, report, R-report, RR73, 73, note au carnet) ; barre de commande toujours visible au bas de l'onglet ; badges **LOS** colorés selon le temps restant ; affichage **Par conversations** ; « Répondre » suit le message reçu.
-- **Calage automatique de la fréquence d'émission FT4/FT8** sur un satellite (coché d'origine, bouton « 0 Hz ») : à essayer, pas encore vérifié en réel.
-- **Plus de verrous d'émission sur SatMe-PC** : plus de mot ARMER ni d'interrupteur « Tout déverrouiller ». Restent STOP/Échap, les plafonds de puissance, les bandes, les minuteries et l'indicatif des Réglages ; pour travailler en automatique (FT8/FT4, APRS), on coche **Émission automatique**.
-- **Journal** : un **logo ou une photo** incrusté sur le film (vidéo, GIF, image) et des **sous-titres** de l'audio entendu, écrits hors ligne par « Phonie → texte » (sous-titres : à essayer, pas encore vérifiés en réel).
-- Depuis la 2026.11.7 : le mode données FT4 ne gêne plus la phonie (bouton **🎙 Phonie**, fenêtre « Tu parles ? »).
+- **Journal (film)** : deux repères **début / fin** du passage (le reste file en accéléré, sans son), **intros animées** avec Gamma, Kepler, Doppler ou le Trio, baisse du bruit de fond par un vrai squelch, zones vides ou à ×1 modifiables à la main, musique qui ne change plus la durée.
+- **Sous-titres** : audio nettoyé avant transcription, traduction ligne par ligne, défilement vers le haut comme un générique, lignes calées au mot près (« ham radio » n'est plus traduit par « jambon »).
+- **CW** : F1 envoie la mémoire F1 ; **fiche du correspondant** en surimpression, avec les contacts du passage en cours et l'alerte de doublon.
+- **FT4 / FT8 sur satellite** : recalage rapide de l'émission, ton qui vise tout de suite la colonne du correspondant, indicateur « centre de l'activité », journal des émissions.
+- **Puissance du poste** lue par la CAT et **Puissance max (W)** : au-delà, plus aucune émission.
+- **CAT** : la molette du poste n'est plus ramenée en arrière par le Doppler ; **rotor** connecté automatiquement à la sélection d'un passage ; **horloge AWTRIX** : page « passage » fixe (élévation et temps avant le LOS).
+- **Moteurs d'IA installés en un clic** (lecture des numéros SSTV, musique du Journal, illustration de planche), avec progression, reprise et désinstallation.
 
-Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.8).
+Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.9).
 
 ### En images
 
@@ -58,16 +59,17 @@ Olivier Gouyen, **F4IOZ** : [f4ioz.fr](https://f4ioz.fr) · [Issues](https://git
 
 SatMe-PC tracks amateur radio satellites from your computer (Linux, Windows, Raspberry Pi): passes, pointing, Doppler, logbook, and receive-only decoding of SSTV / SSDV / FT8 / APRS / telemetry / CW, plus QO-100 DATV. It runs in your browser, on this PC or across your network. An Android app exists too: [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-### Latest version: 2026.11.8
+### Latest version: 2026.11.9
 
-- **AWTRIX clock (Ulanzi TC001) dedicated to SatMe**: the clock's screen is emulated live in Settings › Interfaces, with its options (what is shown, text style and speed, duration of each app, « station » profile).
-- **FT4 / FT8**: click a station and the contact runs by itself (message, report, R-report, RR73, 73, log note); the command bar is always visible at the foot of the tab; **LOS** badges coloured by the time left; a **Par conversations** (by conversation) view; « Répondre » follows the message received.
-- **Automatic FT4/FT8 transmit-frequency alignment** on a satellite (ticked by default, « 0 Hz » button): to be tried, not yet checked on the air.
-- **No more transmit locks on SatMe-PC**: no ARMER word and no « Unlock everything » switch any more. What stays: STOP/Esc, the power caps, bands, timers and the settings' callsign; to work automatically (FT8/FT4, APRS) you tick **Émission automatique**.
-- **Journal**: a **logo or a photo** laid over the film (video, GIF, picture) and **subtitles** of the audio heard, written offline by « Phonie → texte » (subtitles: to be tried, not yet checked on the air).
-- Since 2026.11.7: the FT4 data mode no longer gets in the way of voice (**🎙 Phonie** button, « Are you talking? » window).
+- **Journal (film)**: **start / end** markers for the pass (the rest is sped up, silent), **animated intros** with Gamma, Kepler, Doppler or the Trio, background-noise reduction with a real squelch, hand-editable empty or ×1 zones, music that no longer changes the length.
+- **Subtitles**: audio cleaned before transcription, line-by-line translation, scrolling up like film credits, lines aligned to the word (« ham radio » is no longer translated as « jambon »).
+- **CW**: F1 sends memory F1; a floating **correspondent card** with the contacts of the current pass and a duplicate alert.
+- **FT4 / FT8 on satellite**: fast transmit re-alignment, tone that aims straight at the correspondent's column, « centre of activity » indicator, transmit log.
+- **Radio power** read over CAT and **Max power (W)**: above it, no transmission at all.
+- **CAT**: the radio's dial is no longer pushed back by Doppler; **rotor** connected automatically when you select a pass; **AWTRIX clock**: fixed « pass » page (elevation and time to LOS).
+- **AI engines installed in one click** (SSTV number reading, Journal music, board illustration), with progress, resume and uninstall.
 
-Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.8).
+Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.9).
 
 ### In pictures
 
