@@ -4,30 +4,36 @@
 
 SatMe-PC suit les satellites radioamateurs depuis votre ordinateur (Linux, Windows, Raspberry Pi) : passages, pointage, Doppler, carnet de trafic, décodage SSTV / SSDV / FT8 / APRS / télémesure / CW en réception, DATV QO-100. Il s'utilise dans le navigateur, sur ce PC ou sur votre réseau. Une application Android existe aussi : [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-## Dernière version : 2026.11.9
+## Dernière version : 2026.11.10
 
-- **Journal (film)** : deux repères **début / fin** du passage (le reste file en accéléré, sans son), **intros animées** avec Gamma, Kepler, Doppler ou le Trio, baisse du bruit de fond par un vrai squelch, zones vides ou à ×1 modifiables à la main, musique qui ne change plus la durée.
-- **Sous-titres** : audio nettoyé avant transcription, traduction ligne par ligne, défilement vers le haut comme un générique, lignes calées au mot près (« ham radio » n'est plus traduit par « jambon »).
-- **CW** : F1 envoie la mémoire F1 ; **fiche du correspondant** en surimpression, avec les contacts du passage en cours et l'alerte de doublon.
-- **FT4 / FT8 sur satellite** : recalage rapide de l'émission, ton qui vise tout de suite la colonne du correspondant, indicateur « centre de l'activité », journal des émissions.
-- **Puissance du poste** lue par la CAT et **Puissance max (W)** : au-delà, plus aucune émission.
-- **CAT** : la molette du poste n'est plus ramenée en arrière par le Doppler ; **rotor** connecté automatiquement à la sélection d'un passage ; **horloge AWTRIX** : page « passage » fixe (élévation et temps avant le LOS).
-- **Moteurs d'IA installés en un clic** (lecture des numéros SSTV, musique du Journal, illustration de planche), avec progression, reprise et désinstallation.
+- **Carnet** : les **lieux de la station** (récupérés de Wavelog ou saisis à la main), une barre des lieux et des **filtres** au-dessus des contacts (mode, satellite, année, pays, doublons), une vue **Pays** et un carnet **Fun** en chiffres.
+- **FT4 / FT8** : un contact noté reçoit **nom et ville** de l'annuaire, comme en phonie ; FT4 sur RS-44 passe à **435,611 MHz**.
+- **APRS** : des **défis** à chaque passage, « **Qui sera là ?** », un **album** avec passeport des pays, la **télémesure en graphiques**, les **chemins par satellite**, un assistant de contact par l'ISS. Rien ne part sans votre clic.
+- **Planning** : une vue **Frise**, une ligne par satellite.
+- **Station** : la carte son est retrouvée par son nom après un redémarrage ; la puissance de l'IC-9700 est lue sur la bonne bande en mode satellite.
 
-Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.9).
+Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.10).
 
 ### En images
 
 <p>
-<img src="docs/images/pc-horloge-awtrix.webp" width="49%" alt="Réglages › Interfaces : l'écran de l'horloge AWTRIX émulé en direct, avec ses options">
+<img src="docs/images/pc-carnet-lieux.webp" width="49%" alt="Carnet : la barre des lieux de la station, les filtres et la liste des contacts">
+<img src="docs/images/pc-carnet-fun.webp" width="49%" alt="Carnet, vue Fun : jour record, plus longue série, heure favorite, stations les plus contactées">
+</p>
+<p>
+<img src="docs/images/pc-aprs-defis.webp" width="49%" alt="APRS : la carte des stations et les défis du passage, avec « Qui sera là ? »">
+<img src="docs/images/pc-aprs-telemesure.webp" width="49%" alt="APRS : la télémesure d'une station en graphiques et l'album d'aventures">
+</p>
+<p>
 <img src="docs/images/pc-ft4-qso.webp" width="49%" alt="Onglet FT4/FT8 : un contact qui se déroule, barre de commande en bas, badges LOS">
+<img src="docs/images/pc-cw-onglet.webp" width="49%" alt="Onglet CW : le décodeur, les notes entendues et les mémoires d'émission">
 </p>
 <p>
-<img src="docs/images/pc-ft4-conversations.webp" width="49%" alt="Onglet FT4/FT8 : vue Par conversations, un contact terminé de CQ à 73">
-<img src="docs/images/pc-sstv-direct.webp" width="49%" alt="Onglet SSTV : une image reçue en direct, ligne par ligne">
+<img src="docs/images/pc-eme-lune.webp" width="49%" alt="Onglet EME : le suivi de la Lune, ses fenêtres, la dégradation et le Doppler de l'écho">
+<img src="docs/images/pc-planning-frise.webp" width="49%" alt="Onglet Planning : la frise des passages, une ligne par satellite avec les arcs d'élévation">
 </p>
 <p>
-<img src="docs/images/pc-sstv-galerie.webp" width="49%" alt="Onglet Images : la galerie des images SSTV et SSDV reçues">
+<img src="docs/images/pc-journal-liste.webp" width="49%" alt="Journal : la liste des passages enregistrés, avec une pastille par type de contenu">
 <img src="docs/images/pc-journal-film-logo.webp" width="49%" alt="Journal › Options : logo incrusté sur le film et sous-titres">
 </p>
 
@@ -59,30 +65,36 @@ Olivier Gouyen, **F4IOZ** : [f4ioz.fr](https://f4ioz.fr) · [Issues](https://git
 
 SatMe-PC tracks amateur radio satellites from your computer (Linux, Windows, Raspberry Pi): passes, pointing, Doppler, logbook, and receive-only decoding of SSTV / SSDV / FT8 / APRS / telemetry / CW, plus QO-100 DATV. It runs in your browser, on this PC or across your network. An Android app exists too: [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-### Latest version: 2026.11.9
+### Latest version: 2026.11.10
 
-- **Journal (film)**: **start / end** markers for the pass (the rest is sped up, silent), **animated intros** with Gamma, Kepler, Doppler or the Trio, background-noise reduction with a real squelch, hand-editable empty or ×1 zones, music that no longer changes the length.
-- **Subtitles**: audio cleaned before transcription, line-by-line translation, scrolling up like film credits, lines aligned to the word (« ham radio » is no longer translated as « jambon »).
-- **CW**: F1 sends memory F1; a floating **correspondent card** with the contacts of the current pass and a duplicate alert.
-- **FT4 / FT8 on satellite**: fast transmit re-alignment, tone that aims straight at the correspondent's column, « centre of activity » indicator, transmit log.
-- **Radio power** read over CAT and **Max power (W)**: above it, no transmission at all.
-- **CAT**: the radio's dial is no longer pushed back by Doppler; **rotor** connected automatically when you select a pass; **AWTRIX clock**: fixed « pass » page (elevation and time to LOS).
-- **AI engines installed in one click** (SSTV number reading, Journal music, board illustration), with progress, resume and uninstall.
+- **Log**: the **station's places** (read from Wavelog or typed by hand), a places bar and **filters** above the contacts (mode, satellite, year, country, repeats), a **Countries** view and a **Fun** page of figures.
+- **FT4 / FT8**: a logged contact gets its **name and town** from the callsign directory, as in phone; FT4 on RS-44 moves to **435.611 MHz**.
+- **APRS**: **challenges** on every pass, "**Who will be there?**", an **album** with a passport of countries, **telemetry as graphs**, **paths per satellite**, a contact assistant through the ISS. Nothing leaves without your click.
+- **Planning**: a **timeline** view, one line per satellite.
+- **Station**: the sound card is found by its name after a reboot; the IC-9700's power is read on the right band in satellite mode.
 
-Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.9).
+Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.10).
 
 ### In pictures
 
 <p>
-<img src="docs/images/pc-horloge-awtrix.webp" width="49%" alt="Settings › Interfaces: the AWTRIX clock's screen emulated live, with its options">
+<img src="docs/images/pc-carnet-lieux.webp" width="49%" alt="Log: the bar of the station's places, the filters and the contact list">
+<img src="docs/images/pc-carnet-fun.webp" width="49%" alt="Log, Fun view: record day, longest run, favourite hour, most worked stations">
+</p>
+<p>
+<img src="docs/images/pc-aprs-defis.webp" width="49%" alt="APRS: the map of stations and the pass challenges, with 'Who will be there?'">
+<img src="docs/images/pc-aprs-telemesure.webp" width="49%" alt="APRS: a station's telemetry as graphs and the adventure album">
+</p>
+<p>
 <img src="docs/images/pc-ft4-qso.webp" width="49%" alt="FT4/FT8 tab: a contact running, command bar at the bottom, LOS badges">
+<img src="docs/images/pc-cw-onglet.webp" width="49%" alt="CW tab: the decoder, the notes heard and the transmit memories">
 </p>
 <p>
-<img src="docs/images/pc-ft4-conversations.webp" width="49%" alt="FT4/FT8 tab: the Par conversations view, a finished contact from CQ to 73">
-<img src="docs/images/pc-sstv-direct.webp" width="49%" alt="SSTV tab: a picture being received live, line by line">
+<img src="docs/images/pc-eme-lune.webp" width="49%" alt="EME tab: Moon tracking, its windows, the degradation and the echo's Doppler">
+<img src="docs/images/pc-planning-frise.webp" width="49%" alt="Planning tab: the timeline of passes, one line per satellite with elevation arcs">
 </p>
 <p>
-<img src="docs/images/pc-sstv-galerie.webp" width="49%" alt="Images tab: the gallery of received SSTV and SSDV pictures">
+<img src="docs/images/pc-journal-liste.webp" width="49%" alt="Journal: the list of recorded passes, with a chip per kind of content">
 <img src="docs/images/pc-journal-film-logo.webp" width="49%" alt="Journal › Options: logo over the film and subtitles">
 </p>
 
