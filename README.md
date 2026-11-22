@@ -4,15 +4,16 @@
 
 SatMe-PC suit les satellites radioamateurs depuis votre ordinateur (Linux, Windows, Raspberry Pi) : passages, pointage, Doppler, carnet de trafic, décodage SSTV / SSDV / FT8 / APRS / télémesure / CW en réception, DATV QO-100. Il s'utilise dans le navigateur, sur ce PC ou sur votre réseau. Une application Android existe aussi : [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-## Dernière version : 2026.11.10
+## Dernière version : 2026.11.11
 
+- **Nouveau dans la 2026.11.11** : une **mission d'initiation** « Premier contact par l'ISS », sept étapes guidées (à cocher dans *Réglages › Modules*, elle n'émet jamais rien) ; le chemin d'une trame APRS n'affiche plus deux étoiles après un relais.
 - **Carnet** : les **lieux de la station** (récupérés de Wavelog ou saisis à la main), une barre des lieux et des **filtres** au-dessus des contacts (mode, satellite, année, pays, doublons), une vue **Pays** et un carnet **Fun** en chiffres.
 - **FT4 / FT8** : un contact noté reçoit **nom et ville** de l'annuaire, comme en phonie ; FT4 sur RS-44 passe à **435,611 MHz**.
 - **APRS** : des **défis** à chaque passage, « **Qui sera là ?** », un **album** avec passeport des pays, la **télémesure en graphiques**, les **chemins par satellite**, un assistant de contact par l'ISS. Rien ne part sans votre clic.
 - **Planning** : une vue **Frise**, une ligne par satellite.
 - **Station** : la carte son est retrouvée par son nom après un redémarrage ; la puissance de l'IC-9700 est lue sur la bonne bande en mode satellite.
 
-Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.10).
+Le détail est dans la [page de la version](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.11).
 
 ### En images
 
@@ -65,15 +66,16 @@ Olivier Gouyen, **F4IOZ** : [f4ioz.fr](https://f4ioz.fr) · [Issues](https://git
 
 SatMe-PC tracks amateur radio satellites from your computer (Linux, Windows, Raspberry Pi): passes, pointing, Doppler, logbook, and receive-only decoding of SSTV / SSDV / FT8 / APRS / telemetry / CW, plus QO-100 DATV. It runs in your browser, on this PC or across your network. An Android app exists too: [Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo).
 
-### Latest version: 2026.11.10
+### Latest version: 2026.11.11
 
+- **New in 2026.11.11**: a **starter mission** "First contact through the ISS", seven guided steps (to tick in *Réglages › Modules*; it never transmits); an APRS frame's path no longer shows two stars after a relay.
 - **Log**: the **station's places** (read from Wavelog or typed by hand), a places bar and **filters** above the contacts (mode, satellite, year, country, repeats), a **Countries** view and a **Fun** page of figures.
 - **FT4 / FT8**: a logged contact gets its **name and town** from the callsign directory, as in phone; FT4 on RS-44 moves to **435.611 MHz**.
 - **APRS**: **challenges** on every pass, "**Who will be there?**", an **album** with a passport of countries, **telemetry as graphs**, **paths per satellite**, a contact assistant through the ISS. Nothing leaves without your click.
 - **Planning**: a **timeline** view, one line per satellite.
 - **Station**: the sound card is found by its name after a reboot; the IC-9700's power is read on the right band in satellite mode.
 
-Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.10).
+Details are on the [release page](https://github.com/f4ioz/SatMe/releases/tag/satme-pc-2026.11.11).
 
 ### In pictures
 
